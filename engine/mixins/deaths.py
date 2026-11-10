@@ -30,6 +30,7 @@ from ..destruction_events import (RESOLVING, announce_destroyed,
 from ..delayed_triggers import fire_delayed_triggers
 from ..events import emit, trigger_subject_matches
 from ..faces import whole_card
+from ..graveyard_order import CARD_IN_GRAVEYARD
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..oracle_types import EVENT_SUBJECT_LAST_KNOWN
@@ -172,11 +173,27 @@ class DeathsMixin:
             # down. The token branch is deliberately outside this: CR 111.7
             # keeps a token's card out of the pile while leaving it something
             # that died.
-            if not self.put_card_into_graveyard(
+            landed = self.put_card_into_graveyard(
                 owner, permanent.card, from_zone="battlefield",
                 from_battlefield=permanent,
-            ):
+            )
+            if not landed:
                 return False
+        # **The card in the graveyard**, which is what every reader below that
+        # goes looking for "it" there asks for (CR 400.7): the object the pile
+        # now holds — a new one when the pile already held this card's object
+        # (``put_card_into_graveyard``) — and the permanent's own card for a
+        # token, whose card reaches no pile and so is found nowhere.
+        graveyard_card = permanent.card if is_token else landed
+        # …and kept on the permanent, for a holder made **before** this
+        # arrival that will ask later: an ability whose cost sacrificed its own
+        # source (Tempest Efreet), a trigger whose source this death binned.
+        # Each was made about the permanent's card, and reads "this card"
+        # through ``graveyard_order.graveyard_object_of``. Only where the two
+        # differ, so a death into a pile that never held the card's object
+        # writes nothing.
+        if graveyard_card is not permanent.card:
+            permanent.metadata[CARD_IN_GRAVEYARD] = graveyard_card
         # "Whenever a land is put into a graveyard from the battlefield…"
         # (Dingus Egg). Announced here, on the one seam every land death
         # already passes through, not from the destruction paths: it used to be
@@ -320,7 +337,7 @@ class DeathsMixin:
             self._enqueue_triggered_ability(
                 controller_index=self.players.index(player),
                 source_permanent=permanent,
-                card=permanent.card,
+                card=graveyard_card,
                 instruction=trig.instruction,
                 effect_kind=trig.effect_kind,
                 ability_text=trig.source_line,
@@ -379,7 +396,7 @@ class DeathsMixin:
             ):
                 damager.metadata.setdefault(
                     "damaged_creatures_that_died_this_turn", []
-                ).append(permanent.card)
+                ).append(graveyard_card)
             # The seat this move is being made for, handed down because the
             # layer-2 read below cannot always answer: the destruction paths
             # disagree about whether the permanent is removed from the
@@ -389,10 +406,11 @@ class DeathsMixin:
             # already treat as the controller (the loses-the-game check, and the
             # `controller_index` every dies-trigger is enqueued under).
             self._fire_creature_dies_triggers(
-                permanent, self.players.index(player)
+                permanent, self.players.index(player),
+                graveyard_card=graveyard_card,
             )
         self._fire_permanent_dies_triggers(
-            permanent, self.players.index(player)
+            permanent, self.players.index(player), graveyard_card=graveyard_card,
         )
         # "When that creature dies this turn, …" (Reincarnation). A delayed
         # ability (CR 603.7) belongs to no permanent, so neither of the scans
@@ -716,7 +734,8 @@ class DeathsMixin:
         return observers
 
     def _fire_permanent_dies_triggers(
-        self, dead_permanent: Permanent, last_known_seat: int | None = None
+        self, dead_permanent: Permanent, last_known_seat: int | None = None,
+        *, graveyard_card=None,
     ) -> None:
         """"Whenever <noun phrase> is put into a graveyard from the
         battlefield" — any permanent type, narrowed by the printed phrase
@@ -826,7 +845,15 @@ class DeathsMixin:
                         # the creature-death context has carried since Puppet
                         # Master, recorded here because this fire site is where
                         # a non-creature permanent's death is announced.
-                        "dead_card": dead_permanent.card,
+                        #
+                        # *graveyard_card* is the object the pile holds, which
+                        # differs from the permanent's card when the pile
+                        # already held that object (CR 400.7,
+                        # ``put_card_into_graveyard``).
+                        "dead_card": (
+                            dead_permanent.card if graveyard_card is None
+                            else graveyard_card
+                        ),
                         # "…you gain life equal to **its toughness**" (Grim
                         # Feast). Last known information (CR 603.10 / 608.2h):
                         # the number the permanent had on the battlefield, so a
@@ -869,7 +896,8 @@ class DeathsMixin:
         self._enqueue_triggered_batch(events)
 
     def _fire_creature_dies_triggers(
-        self, dead_permanent: Permanent, last_known_seat: int | None = None
+        self, dead_permanent: Permanent, last_known_seat: int | None = None,
+        *, graveyard_card=None,
     ) -> None:
         """Put "whenever a creature dies" triggers (e.g. Soul Net) onto the stack.
 
@@ -902,7 +930,12 @@ class DeathsMixin:
             # list of `CardDefinition`, two copies of a card are the same
             # immutable object, and a name match would find whichever entry came
             # first. The identity is what locates the one that just died.
-            "dead_card": dead_permanent.card,
+            # *graveyard_card*, when the caller has it, is the object the
+            # pile holds — a new one when the pile already held this card's
+            # (CR 400.7, ``put_card_into_graveyard``).
+            "dead_card": (
+                dead_permanent.card if graveyard_card is None else graveyard_card
+            ),
             # "…loses life equal to **its power** and you gain life equal to
             # **its toughness**" (Death Watch). Last known information
             # (CR 603.10 / 608.2h): the numbers the creature had on the

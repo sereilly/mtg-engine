@@ -602,6 +602,27 @@ OUTSIDE_GAME_DRAW_SPEC = ChoiceSpec(
     default_at_arm=True,
 )
 
+OPPONENT_LIBRARY_DRAW_SPEC = ChoiceSpec(
+    # "If a player would draw a card, that player exiles the top card of one
+    # of their opponents' libraries face down instead." (Shared Fate.) Which
+    # opponent, asked of a drawer with more than one; registered as the draw
+    # offers above are and for their reasons: the draw that armed it was
+    # consumed, the answer and the default run through one resolver, and a
+    # non-interactive seat takes the stated default where it stands.
+    "opponent_library_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="opponent_library_draw_confirm",
+    prompt_key="opponent_library_draw",
+    blocked_detail=(
+        "choose whose library you exile the top card of instead of drawing "
+        "before other actions"
+    ),
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
 RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_SPEC = ChoiceSpec(
     "return_from_graveyard_instead_of_draw",
     resolve=_resolve_replacement,

@@ -35,6 +35,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .ai_scratch_copy import _scratch, held_for_an_answer, mid_resolution
+from .ai_player_control import served_seat
 from .ai_standing import CARD_WORTH, standing_swing, standings, swing_worth
 from .ai_weighed_cast import permitted_casts
 from .text_changes import spell_text_card
@@ -496,7 +497,11 @@ def position_digest(game) -> dict:
     return {
         "seats": seats,
         "game": {
-            key: repr(_ledger_entries(value) if key == "damage_ledger" else value)
+            key: repr(
+                _ledger_entries(value) if key == "damage_ledger"
+                else _untap_lock_entries(game, value) if key == "untap_step_locks"
+                else value
+            )
             for key, value in vars(game).items()
             if key not in _GAME_BOOKKEEPING
         },
@@ -521,6 +526,33 @@ def _permission_entries(game) -> list:
             rest, None if cards is None else sorted(card.name for card in cards),
         ))
     return sorted(entries, key=repr)
+
+
+def _untap_lock_entries(game, locks) -> list:
+    """The untap-step locks (``engine/untap_step_locks.py``) as what each one
+    holds down on the board now: ``(seat, steps, permanent ids)`` for every
+    lock binding at least one permanent of that seat.
+
+    A lock is a record on the game, so it changed ``vars(game)`` on every
+    resolution, whatever it bound — and a "Creatures target player controls
+    don't untap …" (Misstep) aimed at a board with no creature then read as a
+    lasting change, so the AI cast it into nothing (MRD W2G4's sim
+    differential: the per-permanent marker it replaced changed nothing there,
+    and the AI never cast it). Read as what it binds, a lock over nothing is
+    no change, and one over a creature is the change the marker was.
+    """
+    from .subject_filters import subject_matches
+
+    entries = []
+    for lock in locks or ():
+        bound = sorted(
+            permanent.permanent_id
+            for permanent in game.controlled_by(lock.seat)
+            if subject_matches(game, permanent, lock.described, observer=lock.observer)
+        )
+        if bound:
+            entries.append((lock.seat, lock.steps, tuple(bound)))
+    return sorted(entries)
 
 
 def _ledger_entries(ledger):
@@ -1018,8 +1050,12 @@ def _rehearse(
             clone, seat, untouched["could_cast"], spell_name,
         )
         reading = _measured(clone, through_combat=through_combat)
-        now = standing_swing(untouched["now"], reading["now"], seat)
-        lasting = standing_swing(untouched["lasting"], reading["lasting"], seat)
+        # Weighed for the seat that makes *seat*'s decisions (CR 723.5): itself,
+        # unless another player controls it this turn (Mindslaver), whose
+        # standing a choice made for it is then measured by.
+        served = served_seat(game, seat)
+        now = standing_swing(untouched["now"], reading["now"], served)
+        lasting = standing_swing(untouched["lasting"], reading["lasting"], served)
         # The zone the spell's own trip starts in: the hand it is spent from,
         # or the one a permission let it be cast out of; none for a card the
         # seat does not hold.

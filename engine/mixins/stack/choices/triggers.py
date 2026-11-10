@@ -955,6 +955,29 @@ class TriggerChoicesMixin:
                     ][: ceiling - len(several)]
                 if several:
                     return self._resolve_trigger_targets(choice, several)
+            # "Whenever a player casts a red spell, you may pay {3}. If you do,
+            # untap target permanent." (the Mirage Talismans); "…you may untap
+            # target artifact" (Dross Scorpion). An untap is worth a **state**
+            # as well as a seat: an untapped permanent gains nothing from it.
+            # The first candidate on the wanted side was the Talisman itself,
+            # untapped, and its controller paid {3} to untap it beside a tapped
+            # Hill Giant. A tapped one on that side first
+            # (``ai_target_sides.untap_target_order``); where none is, the offer
+            # order below, and the price is then declined as buying nothing
+            # (``ai_prompt_readers.offered_untap_changes_nothing``).
+            from ....ai_target_sides import untap_target_order, untaps_its_target
+
+            if wanted and untaps_its_target(getattr(item, "ability_instruction", None)):
+                tapped = untap_target_order([
+                    permanent for target in targets
+                    if target.get("kind") == "permanent" and target.get("seat") in wanted
+                    for permanent in (self.permanent_by_id(target.get("permanent_id")),)
+                    if permanent is not None
+                ])
+                if tapped:
+                    return self._resolve_trigger_target(
+                        choice, permanent_id=tapped[0].permanent_id
+                    )
             for target in targets:
                 if target.get("kind") == "permanent" and target.get("seat") in wanted:
                     return self._resolve_trigger_target(

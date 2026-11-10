@@ -30,12 +30,26 @@ from ..hand_locks import expire_hand_locks
 from ..land_play_allowance import clear_turn_land_play_effects
 from ..counter_conditions import clear_next_spell_promises
 from ..spell_prohibitions import clear_turn_spell_prohibitions
+from ..player_control import asks_a_person, begin_controlled_turn, decider_of
 from ..game_types import SimulationResult
 from ._constants import phases_after
 from ..refusals import refuse
 
 
 class TurnManagementMixin:
+    # -- Who decides for a seat (CR 723, engine/player_control.py) ---------
+
+    def decider_of(self, seat: int) -> int:
+        """The seat making *seat*'s choices and decisions right now: its
+        controller during a turn another player controls (CR 723.5), else
+        itself."""
+        return decider_of(self, seat)
+
+    def asks_a_person(self, seat: int) -> bool:
+        """Whether a person is asked *seat*'s decisions right now — the
+        one membership question about ``interactive_seats``."""
+        return asks_a_person(self, seat)
+
     def select_starting_player(
         self, rng: random.Random | None = None
     ) -> int:
@@ -291,6 +305,10 @@ class TurnManagementMixin:
         # decided after the turn has begun, and the ordinal records beginnings.
         self.seat_turn_counts[player_index] = self.seat_turn_counts.get(player_index, 0) + 1
         self.active_player_index = player_index
+        # CR 723.1: a control from an earlier turn ends as this one begins,
+        # and one waiting for this seat's next turn actually taken starts
+        # (the skipped turns were spent before this hook, CR 723.1b).
+        begin_controlled_turn(self, player_index)
         self.lands_played_this_turn[player_index] = 0
         # "…this turn" (Summer Bloom, Solfatara). Both records are about the
         # turn that has just ended, so they go here beside the count they

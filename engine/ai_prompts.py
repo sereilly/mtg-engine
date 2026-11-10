@@ -31,7 +31,7 @@ from __future__ import annotations
 from .ai_target_sides import ability_target_side, spell_seat_side, spell_target_side
 from .ai_rehearsal import deliberating, rehearse, rehearsing
 from .ai_standing import permanent_worth
-from .ai_prompt_readers import offer_trade, TollLoss, toll_branch_loss
+from .ai_prompt_readers import offer_trade, offers_a_hand_imprint, TollLoss, toll_branch_loss
 from .ai_valuation import offer_buys_a_drawback_to_its_source
 from .game import Game
 from .models import CardDefinition, Permanent
@@ -872,7 +872,16 @@ def offer_trade_is_worth_taking(
       standing and once onto the seat's (``ai_standing.permanent_worth``,
       read as the board will be once the turn is over) — and never for a
       target the seat already controls or that has gone.
+    * **A card from hand for an imprint** (Chrome Mox, Isochron Scepter, Soul
+      Foundry — ``ai_prompt_readers.offers_a_hand_imprint``): taken. The
+      source's linked ability is the card (CR 607.2a), and with nothing
+      exiled it does nothing for the rest of the game: declining keeps one
+      card and turns a permanent the seat paid for into a blank. Which card
+      goes is the pick's (``_default_exile_from_hand_choice``: the lowest mana
+      value the phrase admits).
     """
+    if offers_a_hand_imprint(entry.get("_on_accept") or (), entry.get("_source_permanent")):
+        return True
     trade = offer_trade(entry.get("_on_accept") or ())
     if trade is None:
         return None
@@ -899,6 +908,55 @@ def offer_trade_is_worth_taking(
     if (trade.price, trade.purchase) == ("card", "untap_source"):
         return False
     return None
+
+
+#: Condition kinds whose answer is **settled before the offer is put**: each
+#: reads a record an earlier step of the same resolution wrote, and nothing
+#: the offered action does can change it. "…guesses whether a card with that
+#: name is in your hand. You may reveal your hand. If you do and your opponent
+#: guessed wrong, draw a card." (Liar's Pendulum.) Only a kind listed here is
+#: read ahead of the action — a condition about what the action itself does
+#: ("if you sacrifice a Goblin this way") cannot be, and asking it early would
+#: be answering a question the action has not posed yet.
+_SETTLED_CONDITION_KINDS = frozenset({"named_card_guess_was"})
+
+
+def offer_purchase_settled_against(game: Game, entry: dict) -> bool:
+    """Whether everything a "you may A. If you do and C, B." offer buys is
+    gated behind conditions already settled — and settled against.
+
+    Liar's Pendulum's reveal buys a card only when the guess was wrong; with
+    the guess right, revealing shows the hand for nothing, and "take gifts"
+    read a free reveal as a gift and showed it every time. The condition is
+    the guess prompt's record, written before the offer was made, so a seat
+    nobody asks may read it: it is that seat's own hand and an announced
+    guess. Answers False — the standing policy — for an offer with a price, a
+    decline branch, or any purchase not wholly behind a settled condition.
+    """
+    if (
+        entry.get("cost") or entry.get("life_cost")
+        or entry.get("cost_alternatives") or entry.get("_on_decline")
+    ):
+        return False
+    context = entry.get("_context")
+    accept = list(entry.get("_on_accept") or ())
+    purchase = accept[int(entry.get("_action_count", 0) or 0):]
+    if context is None or not purchase:
+        return False
+    from .handlers.control_flow import evaluate_condition
+
+    for step in purchase:
+        payload = getattr(step, "payload", None) or {}
+        condition = payload.get("condition") or {}
+        if (
+            getattr(step, "kind", None) != "if_then"
+            or payload.get("else")
+            or condition.get("kind") not in _SETTLED_CONDITION_KINDS
+        ):
+            return False
+        if evaluate_condition(game, context, condition):
+            return False
+    return True
 
 
 def offer_buys_own_drawback(game: Game, player_index: int, entry: dict) -> bool:
@@ -1016,7 +1074,7 @@ def copy_offer_answer(game: Game, choice) -> "tuple[bool, str] | None":
     entry = choice.data
     if not _accept_copies_this_spell(entry.get("_on_accept")):
         return None
-    if choice.player_index not in game.interactive_seats:
+    if not game.asks_a_person(choice.player_index):
         from .ai_prompt_picks import copy_offer_pick
 
         taken = copy_offer_pick(game, choice)

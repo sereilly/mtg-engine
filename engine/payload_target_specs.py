@@ -894,6 +894,14 @@ def player_pronoun_spec(word) -> dict | None:
     return dict(spec) if spec is not None else None
 
 
+def _controlled_player_spec(payload: dict) -> dict | None:
+    """"You control **target player** during that player's next turn."
+    (Mindslaver, CR 723.) The seat controlled is the ability's one target,
+    read off the printed pronoun so a "target opponent" printing would be
+    narrowed by the picker as well as by the gate."""
+    return player_pronoun_spec(payload.get("player"))
+
+
 def _forced_sacrifice_spec(payload: dict) -> dict | None:
     """Who a "sacrifices a creature" effect asks is what decides whether it
     targets at all.
@@ -1334,6 +1342,13 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # ``targets`` key — a row that answered only the seat would have taken that
     # card's prompt away.
     "skip_next_untap": _matching_sweep_spec,
+    # …and the same sentence read as a lock on the targeted player's step
+    # (Misstep, Exhaustion, Mana Vapors — ``lowering.untap_restrictions.
+    # _targeted_seat_step_lock``): the seat rides the noun phrase's
+    # ``controller`` key, so "target opponent" announces an opponent only.
+    # Blinding Beam's "target player's next untap step" carries no such key
+    # and falls through to its ``targets`` description, as it did unrowed.
+    "lock_next_untap_step": _matching_sweep_spec,
     # Corrosion's rust counters: the same printed noun phrase as Simoon's, so
     # the same reader — what is being *chosen* is a seat, whatever the sweep
     # then does to that seat's permanents.
@@ -1377,6 +1392,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # ``"target"`` recipient raises a picker.
     "set_life_total": _player_recipient_spec,
     "grant_extra_turn": _extra_turn_spec,
+    "control_player_next_turn": _controlled_player_spec,
     "skip_next_step": _skipped_seat_spec,
     # Moment of Silence names a seat the same way Fatigue does, so it derives
     # the same picker: the spec is about what is being *chosen*, not about

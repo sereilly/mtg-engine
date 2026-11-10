@@ -24,11 +24,12 @@ from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...color_changes import carry_spell_color_change
 from ...destruction_events import destruction_finished
-from ...enter_effects import copy_on_enter_type
+from ...enter_effects import COPY_DECLINED, copy_on_enter_type
 from ...events import emit
 from ...face_down import revealed_as_it_moves
 from ...faces import whole_card
 from ...flashback import leaves_stack_to_exile
+from ...graveyard_order import graveyard_object_of
 from ...game_types import (OracleExecutionContext, OracleStateMachine, StackItem,
                            as_target_slots, first_target_id, single_slot)
 from ...handlers.control_flow import evaluate_condition
@@ -426,7 +427,17 @@ class StackResolutionMixin:
         return OracleExecutionContext(
             caster=self.players[item.caster_index],
             target=self.players[target_idx],
-            card=item.card,
+            # "This card", once the ability's source has died: the object its
+            # graveyard holds for it (CR 400.7), which is a new one when a
+            # graveyard already held the card's. The item was made about the
+            # permanent's card — before its cost sacrificed it (Tempest
+            # Efreet), or before a state-based action binned it (an Aura's
+            # "return this to its owner's hand") — and an identity search for
+            # that card would find the older copy. Unchanged for a source still
+            # on the battlefield, a token, an item already about the landed
+            # object (a dies trigger), and an item about some other card.
+            card=graveyard_object_of(item.source_permanent, item.card)
+            if item.source_permanent is not None else item.card,
             target_permanent_index=as_target_slots(target_permanent_index),
             target_permanent_id=target_permanent_id,
             about_permanent_id=item.about_permanent_id,
@@ -1164,7 +1175,14 @@ class StackResolutionMixin:
             # ``target_permanent_ids`` and no slot recorded nothing here, and
             # a Clone aimed at a Brass Herald copied whatever creature came
             # first on the board (a Soul Warden).
-            if (
+            #
+            # **A declined copy is a choice too** (``enter_effects.
+            # COPY_DECLINED``): "You can choose not to copy anything", and a
+            # cast that said so entered as a copy of the first creature on the
+            # board all the same, because no target read as "nobody chose".
+            if (choices or {}).get(COPY_DECLINED):
+                permanent.metadata[COPY_DECLINED] = True
+            elif (
                 target_permanent_index is not None
                 or first_target_id(target_permanent_id) is not None
             ):

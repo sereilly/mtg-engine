@@ -35,6 +35,7 @@ from .draws import (DISCARD_INSTEAD_OF_DRAW_TEXT, DOUBLE_DRAW_TEXT,
                     RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT, SKIP_DRAW_TEXT,
                     draw_becomes_counter)
 from .life_gain import gains_no_life_instead_line
+from .opponent_library_draws import OPPONENT_LIBRARY_DRAW_TEXT
 from .permanents import (EXILE_UNCAST_CREATURE_TEXT, EXTRA_PLUS1_COUNTER_TEXT,
                          LANDS_CANT_ENTER_TEXT, LAND_EQUILIBRIUM_TEXT,
                          counters_instead_of_untap)
@@ -168,6 +169,10 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # printed sentences, because the interceptor performs both — the exile,
     # and CR 104.3e behind a graveyard that cannot pay.
     (DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT, ""),
+    # _exile_opponent_top_instead_of_drawing (Shared Fate): the phrase is the
+    # whole line — every seat's draw, the opponent chosen, the card exiled
+    # face down into its owner's exile and linked with its exiler.
+    (OPPONENT_LIBRARY_DRAW_TEXT, ""),
 )
 
 

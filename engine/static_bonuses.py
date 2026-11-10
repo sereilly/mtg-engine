@@ -429,7 +429,7 @@ def _protection_list(text: str) -> list[str] | None:
     """
     from .keywords import protection_quality
 
-    words = [part.strip() for part in re.split(r",|and from|and", text)]
+    words = [part.strip() for part in re.split(r",|\band from\b|\band\b", text)]
     words = [word for word in words if word]
     if not words or any(protection_quality(word) is None for word in words):
         return None

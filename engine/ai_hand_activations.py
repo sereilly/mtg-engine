@@ -31,6 +31,7 @@ from .ai_rehearsal import Rehearsal, deliberating, rehearse
 from .ai_standing import spare_land_find_price
 from .ai_actions import HandActivationAction
 from .ai_scoring import SWING_CAP, _score_activation, _worth_proposing
+from .ai_player_control import plays_for_another
 
 
 def choose_hand_activation_action(
@@ -71,6 +72,10 @@ def choose_hand_activation_action(
     -1/-1 at the end of the opponent's turn. A plain cycle — a card out and
     a card in — is never one there, and keeps its main phase.
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, player_index):
+        return None
     with deliberating():
         return _choose_hand_activation_action(
             game, player_index, at_instant_speed=at_instant_speed,

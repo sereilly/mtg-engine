@@ -84,7 +84,7 @@ class DividedDamageWaitMixin:
         assigned afresh.
         """
         active = self.active_player_index
-        if active not in self.interactive_seats:
+        if not self.asks_a_person(active):
             return []
         if seat is not None and seat != active:
             return []

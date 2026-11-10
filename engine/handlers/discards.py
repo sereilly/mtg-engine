@@ -282,7 +282,7 @@ def _ask_seat_to_discard(
     if count <= 0:
         game.log.append(f"{player.name} has no cards to discard")
         return
-    if inline_default and seat not in game.interactive_seats:
+    if inline_default and not game.asks_a_person(seat):
         took: list = []
         weighed: dict = {}
         # One event: a discard an opponent causes can put the card onto the
@@ -420,7 +420,9 @@ def _resolve_one_discard(
         if not discarded_onto_battlefield(
             game, player, card, game.discard_cause_seat(cause_seat)
         ) and not exile_madness_card(game, player, card):
-            game.put_card_into_graveyard(player, card)
+            # The object the graveyard now holds is what "that card" names
+            # from here on (CR 400.7, ``put_card_into_graveyard``).
+            card = game.put_card_into_graveyard(player, card) or card
             game.log.append(f"{player.name} discarded {card.name}")
         if took is not None:
             took.append(card)

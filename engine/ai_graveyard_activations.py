@@ -47,6 +47,7 @@ from .cost_pickers import spec_is_a_cost
 from .game import Game
 from .oracle import compile_card_oracle
 from .targeting import spec_roles
+from .ai_player_control import plays_for_another
 
 #: How many of a targeted ability's legal objects one decision rehearses: the
 #: most valuable on the side its effect wants first (`_target_choices`).
@@ -98,6 +99,10 @@ def choose_graveyard_activation_action(
     One deliberation: every candidate is weighed against the same table with
     nothing activated. Ties keep graveyard order, so a seeded run reproduces.
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, seat):
+        return None
     with deliberating():
         best: GraveyardActivationAction | None = None
         for graveyard_index, card, ability_index, ability in graveyard_abilities(game, seat):

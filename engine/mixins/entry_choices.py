@@ -411,7 +411,7 @@ class EntryChoicesMixin:
         if not opponents:
             return
         default_seat = opponents[0]
-        if len(opponents) > 1 and controller in self.interactive_seats:
+        if len(opponents) > 1 and self.asks_a_person(controller):
             # Nothing stamped: a person is choosing who chooses, and the
             # permanent waits on its way for both answers (CR 614.12a,
             # ``_stamps_entry_default``).

@@ -1,5 +1,11 @@
 ﻿let sessionId = null;
 let seat = null;
+// The seat this browser **joined** as. `seat` is the seat it acts and views
+// as, which differs only while this person controls another player's turn
+// (CR 723, Mindslaver): then it follows the server's `act_as`
+// (`followActingSeat`). Presence, the event stream and a rematch vote are
+// always this seat's.
+let homeSeat = null;
 let currentState = null;
 let stateSyncSource = null;
 let pendingActivation = null;
@@ -29,6 +35,12 @@ let pendingDiscardCost = null;
 // one permanent at a time; these name a *set*, so they get a toggle list with a
 // confirm. The answer rides `cost_permanent_ids`.
 let pendingPermanentCost = null;
+// "Remove **a counter** from a permanent you control" (Power Conduit): any
+// kind pays, and where the permanent chosen holds two or more kinds, which one
+// comes off is the payer's choice (CR 601.2b through 602.2b). The open
+// question — `{pending, picked, kinds}`, the cost step it interrupted — whose
+// answer rides the activation as `cost_counter_kind`.
+let pendingCounterKindChoice = null;
 // The cost an activation has already announced while the rest of it — an X, a
 // target, the mana — is still being asked: the cards picked to discard, the
 // creatures picked to tap. CR 602.2b announces the cost before CR 601.2c's
@@ -112,6 +124,15 @@ let pendingCastZoneWay = null;
 // while the madness trigger resolves (CR 608.2g), which is why it is not the
 // `cast` route: there is no priority to hold and no timing to check.
 let pendingMadnessCast = null;
+// The same arrangement for a copy-cast offer (CR 707.12: "You may copy the
+// exiled card. If you do, you may cast the copy without paying its mana
+// cost." — Isochron Scepter, Spellweaver Helix): the exile slot of the card
+// the copy is made from, while the ordinary cast chain collects its targets,
+// X and mode. Every `cast` body that chain sends goes out as
+// `copy_cast_confirm` with `accept: true` (`carryCopyCastAnswer`). The copy
+// is made and cast while the ability resolves, so there is no priority to
+// hold and no mana cost to pay.
+let pendingCopyCast = null;
 // What a cast still owes in MANA once it has announced its printed alternative
 // cost (CR 118.9d: cost increases apply to an alternative cost too) — the
 // offer's `mana_owed`, "" when it owes none, null when no alternative cost
@@ -185,6 +206,10 @@ let autoPassTurnEndEnabled = false;
 let autoPassTurnEndInFlight = false;
 let autoPassTurnEndRequestedStateKey = "";
 let autoPassMode = null;
+// The turn End Turn was pressed in: its auto-pass ends with that turn, so
+// pressing it in your own turn does not also pass through the next turn
+// when that is a turn you control (CR 723, `turnIsDrivenHere`).
+let autoPassTurnNumber = null;
 let holdPriorityActive = false;
 // Click-held stack item, or null. Tracked as {bottomOffset, sig} rather than
 // an array index: the serialized stack is top-first, so responses cast while
@@ -648,6 +673,25 @@ function blockAssignmentRejectionReason(state = currentState, blockerIdx, attack
     const attackerBattlefield = state.players?.[state.current_turn]?.battlefield;
     const attackerCard = Array.isArray(attackerBattlefield) ? attackerBattlefield[attackerIdx] : null;
     return `${blockerCard.name} can't block ${attackerCard?.name || "that attacker"}.`;
+  }
+  // CR 509.1b: "can't be blocked by more than one creature" (Stalking Tiger,
+  // Vorrac Battlehorns) — every pairing is legal alone, so the pair list says
+  // nothing; the server's per-attacker ceiling (`combat.blocker_ceilings`)
+  // does. Counted over the draft's *other* blockers, so moving a blocker or
+  // un-toggling one is never refused.
+  const ceiling = (Array.isArray(combat.blocker_ceilings) ? combat.blocker_ceilings : [])
+    .find((entry) => Number(entry.attacker_index) === Number(attackerIdx));
+  if (ceiling && Number.isInteger(Number(ceiling.max_blockers))) {
+    const already = Object.entries(combatBlockerDraft).filter(([blocker, attackers]) => (
+      Number(blocker) !== Number(blockerIdx)
+      && (Array.isArray(attackers) ? attackers : [attackers]).map(Number).includes(Number(attackerIdx))
+    )).length;
+    const max = Number(ceiling.max_blockers);
+    if (already + 1 > max) {
+      const attackerCard = state.players?.[state.current_turn]?.battlefield?.[attackerIdx];
+      return `${attackerCard?.name || "That attacker"} can't be blocked by more than `
+        + `${max === 1 ? "one creature" : `${max} creatures`} — remove a blocker from it first.`;
+    }
   }
   return "";
 }
@@ -1264,7 +1308,8 @@ function openStateSyncStream() {
   // The seat rides on the stream so the server knows who is connected: this
   // stream staying closed past the grace period is what marks the seat
   // disconnected. Spectators (seat null) send none.
-  const seatParam = Number.isInteger(seat) ? `?seat=${seat}` : "";
+  const presenceSeat = Number.isInteger(homeSeat) ? homeSeat : seat;
+  const seatParam = Number.isInteger(presenceSeat) ? `?seat=${presenceSeat}` : "";
   const source = new EventSource(`/api/sessions/${sessionId}/events${seatParam}`);
   source.addEventListener("state", (event) => {
     // The server changed something: the next re-ask need not wait.
@@ -1308,6 +1353,7 @@ function resetToSetup(message = "Session not found. Start a new game.") {
   closeStateSyncStream();
   sessionId = null;
   seat = null;
+  homeSeat = null;
   currentState = null;
   previousLifeBySeat = {};
   aiAutoStepInFlight = false;
@@ -1403,17 +1449,20 @@ function hasBlockingPromptForAutoPass(state = currentState) {
   // wire, one it then accepted on the empty stack that followed).
   if (state?.waiting_on_prompt) return true;
   if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
-  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
+  return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingAbilityCostChoice || pendingCounterKindChoice || pendingChannel || pendingAttackTarget);
 }
 
 function shouldAutoPassUntilTurnEnd(state = currentState) {
   if (!state || seat === null) return false;
   if (!autoPassTurnEndEnabled) return false;
+  // Through `typeof` for the reason sendAction gives (CR 723's helper).
+  const drivenHere = typeof turnIsDrivenHere === "function"
+    ? turnIsDrivenHere(state) : state.current_turn === seat;
   if (autoPassMode === "self") {
-    return state.current_turn === seat;
+    return drivenHere;
   }
   if (autoPassMode === "opponent") {
-    return state.current_turn !== seat;
+    return !drivenHere;
   }
   return false;
 }
@@ -1797,7 +1846,7 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     seat === state.current_turn &&
     !Number.isInteger(state.priority_player)
   ) {
-    const seatTypes = state.seat_types || {};
+    const seatTypes = state.decider_types || state.seat_types || {};
     const defender = combat.defending_player_index;
     const noAttackers = !Array.isArray(combat.attackers) || combat.attackers.length === 0;
     const defenderIsAi = Number.isInteger(defender) ? seatTypes[defender] === "ai" : true;
@@ -1868,7 +1917,10 @@ function shouldAutoStepAi(state = currentState) {
   // Hold the AI while a human player is disconnected: the game is waiting for
   // them to rejoin, and every remaining client is behind the blocking dialog.
   if (blockingDisconnectSeats(state).length > 0) return false;
-  const seatTypes = state?.seat_types || {};
+  // Who *decides* for the active seat (`decider_types`, CR 723.5): a person
+  // controlling an AI seat's turn plays it, and an AI controlling a person's
+  // turn is stepped from that person's browser.
+  const seatTypes = state?.decider_types || state?.seat_types || {};
   if (seatTypes?.[state?.current_turn] !== "ai") return false;
   // In AI vs AI, respect the manual toggle; in human vs AI always auto-step.
   if (shouldShowAiControls(state)) {
@@ -1957,9 +2009,20 @@ function activatedAbilityText(card) {
 // line (engine/equipment.py), in the printed line's position. Mirroring the
 // rewrite here keeps this parser's ability_index in step with the engine's.
 const EQUIP_LINE_RE = /^equip(?:\s+([a-z][a-z' -]*?))?\s+((?:\{[^{}]+\})+)$/i;
+// "Equip—Pay 3 life." (Nightmare Lash): a non-mana equip cost behind an em
+// dash, `engine/equipment._EQUIP_DASH_LINE`'s spelling. Its reminder text
+// carries a colon ("(Pay 3 life: Attach …)"), so read whole by the generic
+// splitter the cost came out as "Equip—Pay 3 life. (Pay 3 life".
+const EQUIP_DASH_LINE_RE = /^equip\s*[—–]\s*([^{}:]+)$/i;
 
 function expandEquipLine(line) {
   const stripped = line.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim().replace(/\.$/, "");
+  const dashed = stripped.match(EQUIP_DASH_LINE_RE);
+  if (dashed) {
+    // The cost as printed, first letter up, as the engine's rewrite spells it.
+    const cost = dashed[1].trim();
+    return `${cost.charAt(0).toUpperCase()}${cost.slice(1)}: Attach this permanent to target creature you control. Activate only as a sorcery.`;
+  }
   const m = stripped.match(EQUIP_LINE_RE);
   if (!m) return null;
   const quality = (m[1] || "").trim();
@@ -2098,6 +2161,45 @@ function getActivatedAbilityCost(card, abilityIndex = null) {
     ? options[abilityIndex]
     : options[0];
   return (chosen.cost || "").trim();
+}
+
+// The mana ability `abilityIndex` will charge **now**, where a tax or a
+// reduction in force moved it off the printed cost — the server's answer
+// (`ability_prices`, web/offers.ability_price: Auriok Steelshaper's "Equip
+// costs you pay cost {1} less" makes Leonin Scimitar's equip {0}) — or null
+// where it costs as printed.
+function abilityPriceNow(card, abilityIndex = null) {
+  const prices = Array.isArray(card?.ability_prices) ? card.ability_prices : null;
+  if (!prices) return null;
+  const price = prices[Number.isInteger(abilityIndex) ? abilityIndex : 0];
+  return typeof price === "string" ? price : null;
+}
+
+// The activation cost as it will be charged: the printed cost with its mana
+// replaced by `abilityPriceNow`'s, every other part ({T}, a sacrifice) kept.
+// What the "Pay activation cost" step shows and gates on — the printed {1}
+// opened a payment step for a free equip.
+function chargedActivationCost(card, abilityIndex = null) {
+  const printed = getActivatedAbilityCost(card, abilityIndex);
+  const price = abilityPriceNow(card, abilityIndex);
+  if (price === null) return printed;
+  const isMana = (part) => /^(?:\{(?:\d+|[WUBRGC])\})+$/i.test(part);
+  const parts = printed.split(",").map((part) => part.trim()).filter(Boolean);
+  const rest = parts.filter((part) => !isMana(part));
+  const free = price === "{0}";
+  if (free && rest.length) return rest.join(", ");
+  return [price, ...rest].join(", ");
+}
+
+// A menu button's cost: the printed cost, and — where the server says the
+// charge moved — the charge, with the printed one named after it. (Struck
+// through, the printed symbols read as a second price: a line through a mana
+// image does not show.)
+function abilityCostShownHtml(card, printedCost, abilityIndex) {
+  const price = abilityPriceNow(card, abilityIndex);
+  if (price === null) return renderSymbolsInline(printedCost);
+  return `${renderSymbolsInline(chargedActivationCost(card, abilityIndex))}`
+    + ` <span class="prompt-subnote">(printed ${renderSymbolsInline(printedCost)})</span>`;
 }
 
 // The mana the insufficient-mana auto-tap flow must actually pay. For casting
@@ -3905,6 +4007,17 @@ function getMadnessCastInfo(state = currentState) {
   return info;
 }
 
+// CR 707.12's offer (web/prompt_board.py `copy_cast`): cast a copy of an
+// exiled card without paying its mana cost — Isochron Scepter's imprinted
+// instant, Spellweaver Helix's other sorcery. The card the copy is made from
+// is at `exile_seat` / `exile_index`; only the seat offered it is asked.
+function getCopyCastInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.copy_cast;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Deflection: "Change the target of target spell with a single target." The
 // candidates are heterogeneous -- whatever that spell could legally have
 // chosen -- so the label says which kind each one is.
@@ -4951,6 +5064,7 @@ function beginPendingHandCast(card, handIndex = null) {
   pendingCastFromZone = null;
   pendingCastZoneWay = null;
   pendingMadnessCast = null;
+  pendingCopyCast = null;
   pendingCastAlternativeOwed = null;
   pendingCastCost = null;
   pendingCastOffers = null;
@@ -4983,6 +5097,7 @@ function clearPendingHandCast() {
   pendingCastFromZone = null;
   pendingCastZoneWay = null;
   pendingMadnessCast = null;
+  pendingCopyCast = null;
   pendingCastAlternativeOwed = null;
   pendingCastCost = null;
   pendingCastOffers = null;
@@ -5021,7 +5136,7 @@ function isAnyPromptActive(state = currentState) {
   if (getBodyChoiceInfo(state)) return true;
   if (getEntryExileInfo(state) || getEntryRevealInfo(state)) return true;
   if (getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state)) return true;
-  if (getMadnessCastInfo(state)) return true;
+  if (getMadnessCastInfo(state) || getCopyCastInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
@@ -5046,7 +5161,7 @@ function isAnyPromptActive(state = currentState) {
   if (getRagingRiverInfo(state)) return true;
   if (getCamouflageInfo(state)) return true;
   if (shouldShowPriorityPrompt(state)) return true;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return true;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingAutoTap || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingAbilityCostChoice || pendingCounterKindChoice || pendingChannel || pendingAttackTarget) return true;
 
   const hasValidAttackers = getValidAttackerIndices(state).length > 0;
   const hasValidBlockers = getValidBlockerAssignments(state).length > 0;
@@ -5058,7 +5173,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getSkipDrawInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getOutsideGamePickInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getEntryRevealInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getMadnessCastInfo(state) || getCopyCastInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getExiledCardReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getOrderTriggersInfo(state) || getTargetGroupOrderInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -5254,7 +5369,7 @@ async function confirmPendingAttackTarget(targetSeat) {
 
 async function handlePriorityPromptOk() {
   if (!currentState || seat === null) return false;
-  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget) return false;
+  if (pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingAbilityCostChoice || pendingCounterKindChoice || pendingChannel || pendingAttackTarget) return false;
   if (!shouldShowPriorityPrompt(currentState)) return false;
   await sendAction({ seat, action: "pass_priority" });
   updateActionHint("Passed priority.");
@@ -8169,6 +8284,117 @@ function applyMadnessCastPrompt(info) {
   });
 }
 
+// CR 707.12's offer. The card the copy will be made from, as the payload has
+// it: the viewer's own exile carries its cast spec (serialized for casting
+// from exile); another seat's pile does not, so its spec is asked for.
+function copyCastExiledCard(info, state = currentState) {
+  const exile = state?.players?.[info?.exile_seat]?.exile || [];
+  const card = Number.isInteger(info?.exile_index) ? exile[info.exile_index] : null;
+  return card && typeof card === "object" ? card : null;
+}
+
+// The way the copy is cast: free of its mana cost (CR 118.9 through the
+// offer's permission, which the server opens only when the offer is taken),
+// so its price is {0} and an X in that mana cost is 0 (CR 107.3b) — the
+// X prompt is not asked for it.
+function copyCastWay(info) {
+  return {
+    keyword: "copy", alternative_cost: false, free: true, land: false,
+    price: "{0}", cost: "without paying its mana cost",
+    source: info?.source_name || "a copy effect",
+  };
+}
+
+// "Cast it": the ordinary cast chain on the exiled card — its targets, mode
+// and division, asked exactly as a hand cast asks them — every body of which
+// goes out as `copy_cast_confirm` (`carryCopyCastAnswer`).
+async function beginCopyCast(info) {
+  let card = copyCastExiledCard(info);
+  if (!card) {
+    updateActionHint(`${info.card_name || "The card"} is no longer in exile, so no copy can be made.`, true);
+    return;
+  }
+  if (!card.target_spec && sessionId && seat !== null) {
+    // Another seat's exile: the card carries no spec for this caster.
+    try {
+      const params = new URLSearchParams({
+        card_name: info.card_name || normalizeCardName(card), seat: String(seat), from_zone: "exile",
+      });
+      const resp = await fetch(`/api/sessions/${sessionId}/card_target_spec?${params}`);
+      if (resp.ok) {
+        const payload = await resp.json();
+        card = { ...card, target_spec: payload.target_spec, modes: payload.modes || card.modes,
+          modes_at_least: payload.modes_at_least ?? card.modes_at_least };
+      }
+    } catch { /* the engine still refuses a cast that names nothing it needs */ }
+  }
+  if (xLivesInManaCost(card) && card.target_spec) {
+    card = { ...card, target_spec: { ...card.target_spec, announces_x: false } };
+  }
+  beginZoneCast(card, "exile", null, copyCastWay(info), { copyCastSlot: info.exile_index });
+}
+
+function applyCopyCastPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const card = copyCastExiledCard(info);
+  const cardName = info.card_name || normalizeCardName(card) || "the exiled card";
+  const source = info.source_name || "an ability";
+  title.textContent = `Cast a copy — ${cardName}`;
+  body.textContent = info.prompt
+    || `Cast a copy of ${cardName} without paying its mana cost (${source})?`;
+  const owner = Number.isInteger(info.exile_seat) && info.exile_seat !== seat
+    ? `${currentState?.players?.[info.exile_seat]?.name || "Another player"}'s exile`
+    : "your exile";
+  const slot = Number.isInteger(info.exile_index) ? info.exile_index + 1 : null;
+  steps.innerHTML = [
+    `<div id="copyCastCardSlot" class="prompt-card-row"></div>`,
+    `<div>${escapeHtml(source)} offers a copy of ${escapeHtml(cardName)}, in ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}.</div>`,
+    "<div>The copy is made in exile and cast now, while the ability resolves — no mana cost. "
+      + "Its targets and modes are chosen next; a copy you don't cast is never made.</div>",
+    `<div class="prompt-choice-row">` +
+      `<button type="button" class="prompt-choice-btn" id="copyCastBtn">Cast a copy of ${escapeHtml(cardName)}</button>` +
+      `<button type="button" class="prompt-choice-btn" id="copyCastDeclineBtn">Don't cast it</button>` +
+    `</div>`,
+  ].join("");
+  const imageUri = normalizeImageUri(card);
+  if (card && imageUri) {
+    const img = document.createElement("img");
+    img.src = imageUri;
+    img.alt = cardName;
+    img.title = card.oracle_text || cardName;
+    img.style.cssText = "width: 140px; border-radius: 7px; display: block; margin: 4px 0;";
+    img.addEventListener("mouseenter", () => showCardPreview(card));
+    img.addEventListener("mouseleave", () => scheduleHidePreview());
+    document.getElementById("copyCastCardSlot")?.appendChild(img);
+  }
+  document.getElementById("copyCastBtn")?.addEventListener("click", () => {
+    beginCopyCast(info).catch((e) => updateActionHint(e.message, true));
+  });
+  document.getElementById("copyCastDeclineBtn")?.addEventListener("click", async () => {
+    try {
+      await sendAction({ seat, action: "copy_cast_confirm", accept: false });
+      updateActionHint(`You did not cast a copy of ${cardName}.`);
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  });
+}
+
 // The madness cast was refused for mana: the announcement (its targets, X,
 // division) is kept on `pendingAutoTap.actionBody`, and this asks the player
 // to tap for it and send it again. Not the Auto-Tap dialog — its plan is drawn
@@ -8182,7 +8408,12 @@ function applyMadnessPaymentPrompt(pending, autoTapBtn) {
   const me = getCurrentPlayerState();
   const pool = me?.mana_pool || {};
   const price = pendingCastZoneWay?.price || (pending.card && pending.card.mana_cost) || "";
-  title.textContent = `Pay the madness cost — ${pending.cardName}`;
+  // A copy cast (CR 707.12) owes no mana cost; what is refused for mana is
+  // an additional cost's, and the same hand-tapping answers it.
+  const copying = pendingCopyCast !== null;
+  title.textContent = copying
+    ? `Pay the additional cost — a copy of ${pending.cardName}`
+    : `Pay the madness cost — ${pending.cardName}`;
   setSymbolsHtml(
     body,
     `Tap lands for ${price} by clicking them, then press Cast. ` +
@@ -10244,6 +10475,34 @@ function applyFlipAgainPrompt(info) {
   customOkBtn.disabled = true;
 
   title.textContent = `${info.card_name} \u2014 flip again?`;
+  // "Flip a coin until you lose a flip or choose to stop flipping." (Fiery
+  // Gambit.) There is no stake: the decision is how far the run of wins has
+  // got (`flips_won`), and what each count buys is on the card, shown here
+  // from the spell on the stack. Game of Chaos sends a stake and no count.
+  if (Number.isInteger(info.flips_won)) {
+    const n = info.flips_won;
+    const spell = (currentState?.stack || []).find(
+      // A stack object names its card under `card` (and `label`).
+      (item) => item && typeof item === "object"
+        && (item.card?.name || item.label || item.name) === info.card_name,
+    );
+    body.textContent = `You have won ${n} flip${n === 1 ? "" : "s"} in a row. `
+      + "Flip again to win more, or stop now — a lost flip ends the run.";
+    const text = spell?.oracle_text || spell?.card?.oracle_text || "";
+    steps.innerHTML =
+      (text ? `<div class="prompt-subnote">${escapeHtml(text)}</div>` : "") +
+      '<div class="prompt-choice-column">' +
+      '<button type="button" class="prompt-choice-btn" data-flip-again="1">Flip again</button>' +
+      `<button type="button" class="prompt-choice-btn" data-flip-stop="1">Stop at ${n} win${n === 1 ? "" : "s"}</button>` +
+      "</div>";
+    steps.querySelector("[data-flip-again]")?.addEventListener("click", async () => {
+      await sendAction({ seat, action: "flip_again_confirm", accept: true });
+    });
+    steps.querySelector("[data-flip-stop]")?.addEventListener("click", async () => {
+      await sendAction({ seat, action: "flip_again_confirm", accept: false });
+    });
+    return;
+  }
   body.textContent = `The next flip is for ${info.stake} life.`;
   steps.innerHTML =
     '<div class="prompt-choice-column">' +
@@ -11304,6 +11563,13 @@ const SEARCH_DESTINATION_WORDS = {
   // "…put that card on top" (Vampiric Tutor) and "put those cards on top in
   // any order" (Insidious Dreams): a place, which "Choose a card." never said.
   library_top: { into: "on top of your library", button: "Put on Top" },
+  // "Search your library for a nonland card **and reveal it**." (Grim
+  // Reminder.) The find goes nowhere — it is shown to everyone and stays in
+  // the library for the shuffle — so the sentence is a verb, not a place
+  // (`lead`, read by `searchSubtitle`).
+  revealed: {
+    into: "", lead: "to reveal (it stays in your library)", button: "Reveal It",
+  },
 };
 const SEARCH_DESTINATION_FALLBACK = { into: "", button: "Confirm" };
 
@@ -11347,6 +11613,7 @@ function searchDestinationWords(destination, entersTapped, ownerName = null, fro
 // "Choose a card to put onto the battlefield." / "Choose a card." when the
 // destination is one this build has no phrasing for.
 function searchSubtitle(lead, words) {
+  if (words.lead) return `${lead} ${words.lead}.`;
   return words.into ? `${lead} to put ${words.into}.` : `${lead}.`;
 }
 
@@ -14037,6 +14304,13 @@ function renderActivationPrompt() {
     applyMadnessCastPrompt(madnessInfo);
     return;
   }
+  // The copy-cast offer, on the same terms: it owns the panel until its cast
+  // starts, and a cancelled or refused cast hands it back, still owed.
+  const copyCastInfo = getCopyCastInfo();
+  if (copyCastInfo && pendingCopyCast === null) {
+    applyCopyCastPrompt(copyCastInfo);
+    return;
+  }
 
   const retargetChoiceInfo = getRetargetChoiceInfo();
   if (retargetChoiceInfo) {
@@ -14309,7 +14583,7 @@ function renderActivationPrompt() {
     return;
   }
 
-  if (pendingAutoTap && pendingMadnessCast !== null) {
+  if (pendingAutoTap && (pendingMadnessCast !== null || pendingCopyCast !== null)) {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
@@ -14365,6 +14639,39 @@ function renderActivationPrompt() {
     // carry mana symbols, and a way the board cannot pay for is marked rather
     // than disabled: the click is still answered, by the engine, with why.
     const zoneWayChoice = !!pendingModalChoice.zoneWayChoice;
+    const entwineAsk = pendingModalChoice.entwine && !pendingModalChoice.entwine.declined
+      ? pendingModalChoice.entwine : null;
+    if (entwineAsk) {
+      // CR 702.42a, before any mode: pay the entwine cost and choose them all,
+      // or choose one as printed.
+      const refusal = entwineRefusal(pendingModalChoice);
+      const price = entwinePriceHtml(entwineAsk.offer);
+      // Mana is paid "more"; a non-mana price ("sacrifice three lands") is
+      // its own sentence.
+      const manaPrice = /\{/.test(entwineAsk.offer.symbols || "");
+      title.textContent = `Entwine ${pendingModalChoice.cardName}?`;
+      setSymbolsHtml(
+        body,
+        (manaPrice
+          ? `Entwine — pay ${entwineAsk.offer.symbols} more to choose every mode, `
+          : `Entwine — also ${entwineAsk.offer.symbols} to choose every mode, `)
+        + "or choose one mode as printed.",
+      );
+      steps.innerHTML = [
+        ...pendingModalChoice.modes.map((mode) => `<div>• ${escapeHtml(mode.label)}</div>`),
+        refusal ? `<div class="ability-prohibition-note">${escapeHtml(`Can't entwine: ${refusal}.`)}</div>` : "",
+        '<div class="prompt-choice-column">'
+          + `<button type="button" class="prompt-choice-btn" data-entwine="take"${refusal ? " disabled" : ""}>`
+          + `Entwine — choose all ${pendingModalChoice.modes.length} modes (${manaPrice ? `+${price}` : `and ${price}`})</button>`
+          + '<button type="button" class="prompt-choice-btn" data-entwine="decline">Choose one mode</button>'
+          + "</div>",
+      ].join("");
+      okBtn.disabled = true;
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.disabled = false;
+      customOkBtn.disabled = true;
+      return;
+    }
     title.textContent = zoneWayChoice
       ? `Cast how — ${pendingModalChoice.cardName}`
       : faceChoice
@@ -14462,6 +14769,25 @@ function renderActivationPrompt() {
     steps.innerHTML = `<div class="prompt-choice-column">${cardButtons}${confirmRow}</div>`;
     document.getElementById("discardCostConfirmBtn")?.addEventListener("click", confirmDiscardCost);
     okBtn.disabled = true;
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
+  if (pendingCounterKindChoice) {
+    const ask = pendingCounterKindChoice;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    const holder = findPermanentInState(currentState, ask.picked[0])?.card;
+    title.textContent = `Remove which counter — ${ask.pending.cardName}`;
+    body.textContent = `${holder?.name || "That permanent"} holds more than one kind of counter. `
+      + "Choose the one removed to pay the cost.";
+    steps.innerHTML = `<div class="prompt-choice-row">${ask.kinds
+      .map((kind) => `<button type="button" class="prompt-choice-btn" data-counter-kind="${escapeHtml(kind)}">`
+        + `${escapeHtml(kind)} (${Number(holder?.counters?.[kind] || 0)})</button>`)
+      .join("")}</div>`;
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     customOkBtn.disabled = true;
@@ -14813,7 +15139,7 @@ function renderActivationPrompt() {
     return;
   }
 
-  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingCastDivision && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
+  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingCastDivision && !pendingManaColor && !pendingAbilityChoice && !pendingAbilityCostChoice && !pendingChannel) {
     // Who the game is actually waiting on: the seat that owes the open
     // decision (`prompt_owed_by`, read off the pending-choice queue), which is
     // not the priority holder — while it is owed nobody receives priority
@@ -15157,6 +15483,19 @@ function renderActivationPrompt() {
         }
       }
     }
+    // An activation whose charge moved off its printed cost (Auriok
+    // Steelshaper's {0} equip, `ability_prices`): the card in front of the
+    // player still reads "Equip {1}", so what this click will cost is said.
+    if (pendingCastTarget.castAction === "activate"
+        && abilityPriceNow(pendingCastTarget.card, pendingCastTarget.abilityIndex) !== null) {
+      const printed = getActivatedAbilityCost(pendingCastTarget.card, pendingCastTarget.abilityIndex);
+      steps.insertAdjacentHTML(
+        "beforeend",
+        `<div class="ability-price-note">Cost now: ${abilityCostShownHtml(
+          pendingCastTarget.card, printed, pendingCastTarget.abilityIndex,
+        )}</div>`,
+      );
+    }
     okBtn.disabled = true;
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
@@ -15300,6 +15639,30 @@ function renderActivationPrompt() {
     return;
   }
 
+  if (pendingAbilityCostChoice) {
+    const pending = pendingAbilityCostChoice;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose a cost — ${pending.cardName}`;
+    body.textContent = "This ability prints two costs. Pay either one, not both.";
+    const labels = abilityCostAlternativeLabels(pending.card, pending.abilityIndex, pending.prices);
+    const me = getCurrentPlayerState();
+    const line = abilityOptionAt(pending.card, pending.abilityIndex)?.line || "";
+    steps.innerHTML = [
+      line ? `<div>Ability: ${renderSymbolsInline(line)}</div>` : "",
+      `<div>Your mana pool: ${me ? currentManaHtml(me.mana_pool) : "none"}</div>`,
+      `<div class="prompt-choice-row">${labels
+        .map((label, index) => `<button type="button" class="prompt-choice-btn" data-ability-cost-alt="${index}">`
+          + `Pay ${renderSymbolsInline(label)}</button>`)
+        .join("")}</div>`,
+    ].join("");
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
+
   if (pendingAbilityChoice) {
     panel.classList.remove("hidden");
     okBtn.classList.add("hidden");
@@ -15347,7 +15710,11 @@ function renderActivationPrompt() {
               // (CR 601.2h, `activation.activation_cost_choice`).
               const shown = opt.orCost
                 ? `${renderSymbolsInline(opt.cost)} or ${renderSymbolsInline(opt.orCost)}`
-                : renderSymbolsInline(opt.cost);
+                : Array.isArray(opt.costAlternatives)
+                // The Shards' two printed costs, both on the button: the
+                // choice between them is asked once this ability is picked.
+                ? opt.costAlternatives.map((half) => renderSymbolsInline(half)).join(" or ")
+                : abilityCostShownHtml(choiceCard, opt.cost, opt.index);
               return `<button type="button" class="prompt-choice-btn" data-ability-choice="${opt.index}"${disabledAttrs}>` +
                 `${shown}: ${escapeHtml(opt.text)}</button>`;
             },
@@ -15802,6 +16169,34 @@ function getActivatedAbilityOptions(card) {
         costHalf = head.slice(0, head.length - 2).replace(/\s+$/, "");
       }
     }
+    // "{3}, {T} or {U}, {T}" (the five Mirrodin Shards): one ability and two
+    // printed costs, either paid and not both (the 2004-10-04 ruling; CR
+    // 602.2b through 601.2b). `engine/activation_costs._split_cost_alternatives`'
+    // reading, so the two readers agree: split on "or" only where every half
+    // prints the same non-mana costs ({T} each time) and mana this can price.
+    // `cost` is the first — what the parity guard compares and the auto-tap
+    // pays by default — and `costAlternatives` every half in printed order,
+    // whose position is the `alternative_cost_index` an activation announces.
+    // Any other "or" (a noun phrase's, a life payment's) is left whole.
+    let costAlternatives = null;
+    if (!orCost && /\sor\s/i.test(costHalf)) {
+      const halves = costHalf.split(/\s+or\s+/i).map((half) => half.trim());
+      const restOf = (half) => half
+        .replace(/\{([^{}]+)\}/g, (token, symbol) => (symbol.toUpperCase() === "T" ? token : ""))
+        .toLowerCase().split(",").map((part) => part.trim()).filter(Boolean).join(" ");
+      const priced = (half) => {
+        const symbols = (half.match(/\{([^{}]+)\}/g) || [])
+          .map((token) => token.slice(1, -1).trim().toUpperCase())
+          .filter((symbol) => symbol !== "T");
+        return symbols.length > 0
+          && symbols.every((symbol) => /^\d+$/.test(symbol) || /^[WUBRGC]$/.test(symbol));
+      };
+      const shared = restOf(halves[0]);
+      if (halves.length > 1 && halves.every((half) => restOf(half) === shared && priced(half))) {
+        costAlternatives = halves;
+        costHalf = halves[0];
+      }
+    }
     const m = [null, costHalf, effectHalf];
     // Modal activated ability (Pyramids: "{2}: Choose one —" + bullets):
     // one option per bullet, sharing the cost — matching the engine, which
@@ -15823,6 +16218,7 @@ function getActivatedAbilityOptions(card) {
     }
     options.push({
       index, cost: m[1].trim(), orCost, rateCost,
+      ...(costAlternatives ? { costAlternatives } : {}),
       text: m[2].trim(), line: line.trim(),
     });
     index += 1;
@@ -16067,6 +16463,62 @@ function resolveAbilityChoice(optionIndex) {
 // carried through the one place they all end up (`sendAction`).
 let pendingChosenAbilityWord = null;
 
+// "{3}, {T} or {U}, {T}" (the Mirrodin Shards): which printed cost the
+// activation pays (CR 602.2b through 601.2b — announced before the targets).
+// `pendingAbilityCostChoice` is the open question; `pendingAbilityCostAlternative`
+// the answer, `{permanentIndex, abilityIndex, index}`, carried by `sendAction`
+// onto the activate body for that permanent and ability as
+// `alternative_cost_index` — the field the cast path reads for CR 118.9a's
+// choice. Kept apart from `pendingActivationCost`, because that stash marks
+// *every* cost prompt answered and this answers only which mana is paid.
+let pendingAbilityCostChoice = null;
+let pendingAbilityCostAlternative = null;
+
+// The printed costs ability `abilityIndex` offers a choice between, as the
+// server lists them (`ability_cost_alternatives`, mana only, printed order),
+// or null for an ability that prints one cost.
+function abilityCostAlternativesOf(card, abilityIndex = null) {
+  const listed = Array.isArray(card?.ability_cost_alternatives) ? card.ability_cost_alternatives : null;
+  if (!listed) return null;
+  const prices = listed[Number.isInteger(abilityIndex) ? abilityIndex : 0];
+  return Array.isArray(prices) && prices.length > 1 ? prices : null;
+}
+
+function abilityCostAlternativeAnswered(permanentIndex, abilityIndex) {
+  const stash = pendingAbilityCostAlternative;
+  return !!stash && stash.permanentIndex === permanentIndex
+    && (Number.isInteger(stash.abilityIndex) ? stash.abilityIndex : null)
+      === (Number.isInteger(abilityIndex) ? abilityIndex : null);
+}
+
+// The option of `card`'s menu for ability `abilityIndex` (the synthetic
+// one-line card a menu pick makes holds that ability alone).
+function abilityOptionAt(card, abilityIndex) {
+  const options = getActivatedAbilityOptions(card);
+  if (options.length === 1) return options[0];
+  const wanted = Number.isInteger(abilityIndex) ? abilityIndex : 0;
+  return options.find((opt) => opt.index === wanted) || null;
+}
+
+// The words of each price on the choice's buttons: the card's own halves
+// ("{3}, {T}") where the client read as many as the server lists, else the
+// server's mana.
+function abilityCostAlternativeLabels(card, abilityIndex, prices) {
+  const halves = abilityOptionAt(card, abilityIndex)?.costAlternatives;
+  return Array.isArray(halves) && halves.length === prices.length ? halves : prices;
+}
+
+function chooseAbilityCostAlternative(index) {
+  const pending = pendingAbilityCostChoice;
+  if (!pending || !Number.isInteger(index) || index < 0 || index >= pending.prices.length) return;
+  pendingAbilityCostChoice = null;
+  pendingAbilityCostAlternative = {
+    permanentIndex: pending.permanentIndex, abilityIndex: pending.abilityIndex, index,
+  };
+  renderActivationPrompt();
+  startActivationPrompt(pending.card, pending.targetSeat, pending.permanentIndex);
+}
+
 function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -16129,6 +16581,28 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     }
   }
 
+  // "{3}, {T} or {U}, {T}": which printed cost is paid is announced first
+  // (CR 602.2b through 601.2b, before CR 601.2c's targets), so it is asked
+  // before anything else about the activation. A stash left by another
+  // activation is stale and goes — but not the one whose mana is being paid:
+  // the lands clicked to pay it come through here too.
+  if (
+    pendingAbilityCostAlternative && !abilityCostAlternativeAnswered(permanentIndex, abilityIndex)
+    && !(pendingActivation
+      && abilityCostAlternativeAnswered(pendingActivation.permanentIndex, pendingActivation.abilityIndex))
+  ) {
+    pendingAbilityCostAlternative = null;
+  }
+  {
+    const prices = abilityCostAlternativesOf(card, abilityIndex);
+    if (prices && !abilityCostAlternativeAnswered(permanentIndex, abilityIndex)) {
+      pendingAbilityCostChoice = { card, cardName, targetSeat, permanentIndex, abilityIndex, prices };
+      renderActivationPrompt();
+      updateActionHint(`Choose which cost ${cardName}'s ability is activated for.`);
+      return;
+    }
+  }
+
   // A picker with nothing in it, for an ability that owes no target (see
   // `abilityMayNameNothing`): asked here, ahead of every branch below that
   // would refuse the empty list. OK comes back through this function with the
@@ -16139,7 +16613,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       permanentIndex,
       targetSeat,
       abilityIndex,
-      activationCost: getActivatedAbilityCost(card, abilityIndex),
+      activationCost: chargedActivationCost(card, abilityIndex),
       manaRequirement: {},
       awaitingApproval: true,
       nothingToChoose: { card, text: nothingToChooseText(card, cardName) },
@@ -16618,7 +17092,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  const activationCost = getActivatedAbilityCost(card, abilityIndex);
+  const activationCost = chargedActivationCost(card, abilityIndex);
 
   // "{X}" activation costs (Illusionary Mask, Clockwork Beast) need an X chosen
   // before the ability is sent — without it the engine receives X = 0 and e.g.
@@ -17107,7 +17581,8 @@ function permanentCostVerbLabel(pending) {
     case "return": return "Return";
     case "untap": return "Untap";
     case "put_counter": return `Put a ${counter} counter on`;
-    case "remove_counter": return `Remove a ${counter} counter from`;
+    // "Remove a counter from" — of any kind (Power Conduit, `counter` "any").
+    case "remove_counter": return counter === "any" ? "Remove a counter from" : `Remove a ${counter} counter from`;
     // A card in hand paying a morph cost ("Morph—Discard a Zombie card",
     // Putrid Raptor), or exiled from it.
     case "discard": return "Discard";
@@ -17153,6 +17628,8 @@ function permanentCostStep(costSpec, alreadyChosen = []) {
   return {
     verb: permanentCostVerb(costSpec),
     counter: costSpec.counter || null,
+    // "a counter" of any kind (`any_counter_kind`, Power Conduit).
+    anyCounterKind: !!costSpec.any_counter_kind,
     noun: typeof subtype === "string"
       ? subtype.charAt(0).toUpperCase() + subtype.slice(1)
       : (costSpec.kind || "permanent"),
@@ -17194,10 +17671,11 @@ function openPermanentCostStep(card, cardName, run) {
     picked: [],
     activation: run.activation,
     // The rest of the chain, what earlier steps named, and an X one of them
-    // announced.
+    // announced — and a counter kind one of them chose.
     remaining: rest,
     chosen: run.chosen,
     xValue: run.xValue,
+    counterKind: run.counterKind || null,
   };
   renderActivationPrompt();
   const words = permanentCostVerbLabel(step).toLowerCase();
@@ -17298,11 +17776,45 @@ function togglePermanentCost(permanentId) {
   renderActivationPrompt();
 }
 
+// The kinds of counter on the permanent with id `permanentId`, as the board
+// payload names them (`counters`: "+1/+1", "charge", …, the spelling the
+// engine's `counter_kinds_on` reads back) — only those it holds.
+function counterKindsOnPermanentId(permanentId, state = currentState) {
+  const found = findPermanentInState(state, permanentId);
+  const counters = found?.card?.counters;
+  if (!counters || typeof counters !== "object") return [];
+  return Object.entries(counters)
+    // A mire counter is a flag (`mire_counter`), not a stored kind.
+    .filter(([kind, count]) => Number(count) > 0 && kind !== "mire")
+    .map(([kind]) => kind);
+}
+
+function chooseCounterKind(kind) {
+  const ask = pendingCounterKindChoice;
+  if (!ask || !ask.kinds.includes(kind)) return;
+  pendingCounterKindChoice = null;
+  pendingPermanentCost = { ...ask.pending, picked: ask.picked, counterKindChosen: kind };
+  confirmPermanentCost();
+}
+
 function confirmPermanentCost() {
   const pending = pendingPermanentCost;
   if (!pending) return;
   const picked = (pending.picked || []).slice();
   if (!pending.announcesX && !pending.anyNumber && picked.length !== pending.count) return;
+  // Power Conduit: the permanent is chosen; which of its counters comes off
+  // is asked when it holds more than one kind (one kind needs no choice — the
+  // engine takes it).
+  if (pending.anyCounterKind && !pending.counterKindChosen && picked.length === 1) {
+    const kinds = counterKindsOnPermanentId(picked[0]);
+    if (kinds.length >= 2) {
+      pendingCounterKindChoice = { pending, picked, kinds };
+      pendingPermanentCost = null;
+      renderActivationPrompt();
+      updateActionHint(`Choose which counter ${pending.cardName} removes to pay its cost.`);
+      return;
+    }
+  }
   pendingPermanentCost = null;
   renderActivationPrompt();
   if (pending.graveyardAbility) {
@@ -17382,6 +17894,14 @@ function confirmPermanentCost() {
     // an offer already taken.
     pendingCastCost = { ...(pendingCastCost || {}), cost_permanent_ids: picked };
     const castAction = pending.cast.castAction || "cast";
+    if (pending.cast.entwineRun) {
+      // An entwined cast's price is paid ("Sacrifice three lands"); now every
+      // mode's targets (CR 601.2c).
+      pendingModeCollection = pending.cast.entwineRun;
+      updateActionHint(`Entwining ${pending.cardName}: choose each mode's targets.`);
+      promptNextModeTarget();
+      return;
+    }
     if (pending.cast.thenTarget) {
       continueCastAfterCost(pending.card, castAction);
       return;
@@ -17400,14 +17920,16 @@ function confirmPermanentCost() {
   // "Sacrifice X lands": the number named is the X announced (CR 601.2b), so
   // the two cannot disagree — and an X the engine is never told is zero.
   const xValue = pending.announcesX ? picked.length : pending.xValue;
+  const counterKind = pending.counterKindChosen || pending.counterKind || null;
   if (Array.isArray(pending.remaining) && pending.remaining.length) {
     openPermanentCostStep(pending.card, pending.cardName, {
-      chain: pending.remaining, chosen, xValue, activation: pending.activation,
+      chain: pending.remaining, chosen, xValue, counterKind, activation: pending.activation,
     });
     return;
   }
   const fields = { cost_permanent_ids: chosen };
   if (Number.isInteger(xValue)) fields.x_value = xValue;
+  if (counterKind) fields.cost_counter_kind = counterKind;
   resumeActivationAfterCost(pending.card, pending.activation, fields);
 }
 
@@ -17641,8 +18163,96 @@ function startModalChoicePrompt(card, castAction = "cast") {
   // would be the substring match the compiler stopped making.
   const atLeast = card && card.modes_at_least === true;
   pendingModalChoice = { card, cardName, castAction, modes, atLeast, picked: [] };
+  // **Entwine** (CR 702.42a): "You may choose all modes of this spell instead
+  // of just the number specified. If you do, you pay an additional [cost]."
+  // Asked before any mode, because taking it *is* the choice of modes — the
+  // server puts the offer on the card's own "modal" spec for that reason
+  // (`target_spec.entwine` beside a `cost_offers` entry labelled "entwine").
+  // Only a real cast takes the announcement.
+  const entwine = castAction === "cast" ? castEntwineOffer(card) : null;
+  if (entwine) pendingModalChoice.entwine = { offer: entwine, declined: false };
   renderActivationPrompt();
   return true;
+}
+
+// The entwine offer on a modal card's spec, or null for a card printing none.
+function castEntwineOffer(card) {
+  const spec = targetSpecOf(card);
+  if (!spec?.entwine) return null;
+  return (Array.isArray(spec.cost_offers) ? spec.cost_offers : []).find(
+    (offer) => offer.label === "entwine" && offer.symbols === spec.entwine,
+  ) || null;
+}
+
+// Why the entwine offer cannot be taken right now, or "" when it can: the
+// price is not payable (`max_times` 0, the server's answer for the pool and
+// the board), or a mode has no legal target or is unsupported — CR 700.2a:
+// a mode that cannot be chosen cannot be chosen by entwining either.
+function entwineRefusal(choice) {
+  const offer = choice?.entwine?.offer;
+  if (!offer) return "no entwine offer";
+  if (Number(offer.max_times || 0) <= 0) return "you can't pay its entwine cost right now";
+  const blocked = (choice.modes || []).find(
+    (mode) => mode.supported === false || mode.announceable === false,
+  );
+  if (blocked) return `"${blocked.label}" has no legal target, so every mode can't be chosen`;
+  return "";
+}
+
+// The entwine price in words: its mana symbols, or the cost's own sentence
+// ("sacrifice three lands").
+function entwinePriceHtml(offer) {
+  return /\{/.test(offer?.symbols || "")
+    ? renderSymbolsInline(offer.symbols)
+    : escapeHtml(offer?.symbols || "");
+}
+
+// "Entwine": every mode is chosen and the price announced (CR 601.2b) — on
+// `pendingCastCost`, which every cast body merges — then a price paid with
+// permanents (Betrayal of Flesh's, Solar Tide's "Sacrifice N lands") asks
+// which, and each mode's targets are walked in printed order by the
+// choose-one-or-more collection (CR 601.2c), which sends one cast naming
+// them all.
+function takeEntwine() {
+  const choice = pendingModalChoice;
+  if (!choice?.entwine) return;
+  const refusal = entwineRefusal(choice);
+  if (refusal) {
+    updateActionHint(`${choice.cardName} can't be entwined: ${refusal}.`, true);
+    return;
+  }
+  const offer = choice.entwine.offer;
+  pendingModalChoice = null;
+  pendingCastModeIndex = null;
+  const taken = { ...((pendingCastCost || {}).optional_cost_payments || {}), [offer.symbols]: 1 };
+  pendingCastCost = { ...(pendingCastCost || {}), optional_cost_payments: taken };
+  const run = {
+    card: choice.card,
+    cardName: choice.cardName,
+    castAction: choice.castAction,
+    modes: choice.modes,
+    order: choice.modes.map((_mode, index) => index),
+    collected: [],
+    cursor: 0,
+    entwined: true,
+  };
+  const costSpec = targetSpecOf(choice.card)?.entwine_cost_spec;
+  if (costSpec && startCastPermanentSetCostPrompt(choice.card, choice.castAction, costSpec)) {
+    // The modes are walked once the permanents are chosen
+    // (`confirmPermanentCost`'s cast branch).
+    pendingPermanentCost.cast.entwineRun = run;
+    return;
+  }
+  pendingModeCollection = run;
+  renderActivationPrompt();
+  updateActionHint(`Entwining ${choice.cardName}: choose each mode's targets.`);
+  promptNextModeTarget();
+}
+
+function declineEntwine() {
+  if (!pendingModalChoice?.entwine) return;
+  pendingModalChoice.entwine.declined = true;
+  renderActivationPrompt();
 }
 
 // Confirm a multi-select mode prompt: begin walking the chosen modes through
@@ -17689,16 +18299,35 @@ function finishModeCollection() {
   const run = pendingModeCollection;
   if (!run) return;
   pendingModeCollection = null;
-  updateActionHint(`Casting ${run.cardName}...`);
-  sendAction({
+  updateActionHint(`${run.entwined ? "Casting entwined" : "Casting"} ${run.cardName}...`);
+  // What CR 601.2b announced (an entwine taken, the lands paying it, the zone)
+  // is written onto this body rather than left to `pendingCastCost`: the last
+  // mode's own prompt clears that stash once this send is under way, and an
+  // auto-tap retry resends this body after it has gone.
+  const actionBody = {
     seat,
     action: run.castAction || "cast",
     card_name: run.cardName,
     mode_choices: run.collected,
-  })
-    .then(() => updateActionHint(`Cast ${run.cardName}.`))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+    ...(pendingCastCost || {}),
+  };
+  if (pendingCastFromZone != null) actionBody.from_zone = pendingCastFromZone;
+  sendAction(actionBody)
+    .then(() => {
+      updateActionHint(`Cast ${run.cardName}${run.entwined ? ", entwined" : ""}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      // The pool cannot pay (an entwine is mana on top of the spell's): the
+      // auto-tap dialog, with every mode's targets kept for the retry.
+      if (isManaRefusal(e.message)) {
+        pendingAutoTap = { card: run.card, cardName: run.cardName, actionBody };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+      clearPendingHandCast();
+    });
 }
 
 // Apply the caster's mode pick: record the index, then continue into the normal
@@ -22621,7 +23250,7 @@ function libraryPileClicked(info) {
   beginZoneCast(card, "library", entry);
 }
 
-async function beginZoneCast(card, zone, entry = null, way = null, { madnessSlot = null } = {}) {
+async function beginZoneCast(card, zone, entry = null, way = null, { madnessSlot = null, copyCastSlot = null } = {}) {
   if (seat === null) return;
   if (pendingCastHandCard) {
     updateActionHint("Finish the current cast before starting another.", true);
@@ -22638,6 +23267,8 @@ async function beginZoneCast(card, zone, entry = null, way = null, { madnessSlot
   // The answer to a madness offer: every body this chain sends is turned into
   // `madness_cast_confirm` by `carryMadnessAnswer`.
   if (Number.isInteger(madnessSlot)) pendingMadnessCast = { slot: madnessSlot };
+  // …and the answer to a copy-cast offer, by `carryCopyCastAnswer`.
+  if (Number.isInteger(copyCastSlot)) pendingCopyCast = { slot: copyCastSlot };
   try {
     if (startFaceChoicePrompt(card)) return;  // CR 709.3, as in the hand cast
     if (cardIsModal(card) && startModalChoicePrompt(card)) return;
@@ -25759,6 +26390,100 @@ function playHandArrivalFlights(flights, state, viewerSeat) {
   });
 }
 
+// -- Controlling another player (CR 723, Mindslaver) -------------------------
+//
+// The server says who controls whom this turn (`player_controls`, controlled
+// seat -> controller seat), who will next (`player_controls_waiting`), and
+// the seat this viewer's decider acts as right now (`act_as`). A person
+// controlling another seat follows `act_as`: while the controlled seat owes a
+// decision, holds priority or is declaring, this browser looks and acts as
+// that seat (its hand is the one at the bottom, its prompts are the ones
+// shown), and goes back to its own seat for its own decisions (CR 723.8) and
+// when the turn is over. Every action sent as another seat carries
+// `controller_seat` (`sendAction`). A person another player controls is
+// asked nothing; this browser steps the AI that plays their turn and may
+// concede (CR 723.6), and sends nothing else.
+
+// What a person another player controls may still send: a concession, and
+// the AI step that plays their controlled turn.
+const CONTROLLED_SEAT_ACTIONS = new Set(["concede", "ai_step"]);
+
+// Whether the turn in progress is one this browser plays: its own seat's,
+// or the seat it controls this turn (CR 723) — which it plays while it acts
+// as either seat, so End Turn's auto-pass is not dropped when it answers its
+// own priority in the controlled turn (`followActingSeat`).
+function turnIsDrivenHere(state) {
+  if (!state || seat === null) return false;
+  if (state.current_turn === seat) return true;
+  return Number.isInteger(homeSeat)
+    && (state.player_controls || {})[String(state.current_turn)] === homeSeat;
+}
+
+// sendAction's CR 723 half: a person another player controls sends only what
+// `CONTROLLED_SEAT_ACTIONS` names; a person acting for the seat they control
+// signs the body with their own seat.
+function carryControllerSeat(actionBody) {
+  const controlledBy = controllerOfHomeSeat(currentState);
+  if (
+    Number.isInteger(controlledBy)
+    && !CONTROLLED_SEAT_ACTIONS.has(actionBody?.action)
+    && !String(actionBody?.action || "").startsWith("debug_")
+  ) {
+    const name = currentState?.players?.[controlledBy]?.name || "Another player";
+    throw new Error(`${name} controls your turn (Mindslaver) — you may only concede.`);
+  }
+  if (Number.isInteger(homeSeat) && Number.isInteger(actionBody?.seat) && actionBody.seat !== homeSeat) {
+    actionBody.controller_seat = homeSeat;
+  }
+}
+
+function controllerOfHomeSeat(state) {
+  if (!state || !Number.isInteger(homeSeat)) return null;
+  const controller = (state.player_controls || {})[String(homeSeat)];
+  return Number.isInteger(controller) && controller !== homeSeat ? controller : null;
+}
+
+// Switch `seat` to the seat this person acts as now; true when it changed
+// (the caller fetches the state again, as the new seat).
+function followActingSeat(state) {
+  if (!state || !Number.isInteger(homeSeat)) return false;
+  const actAs = Number.isInteger(state.act_as) && controllerOfHomeSeat(state) === null
+    ? state.act_as
+    : homeSeat;
+  if (actAs === seat) return false;
+  seat = actAs;
+  return true;
+}
+
+function renderPlayerControlBanner(state) {
+  const el = document.getElementById("playerControlBanner");
+  if (!el) return;
+  const players = state?.players || [];
+  const nameOf = (s) => players?.[s]?.name || `Seat ${s}`;
+  const controls = state?.player_controls || {};
+  const waiting = state?.player_controls_waiting || {};
+  let text = "";
+  const controller = controllerOfHomeSeat(state);
+  if (Number.isInteger(controller)) {
+    text = `${nameOf(controller)} controls your turn (Mindslaver): they make your decisions. You may only concede.`;
+  } else {
+    const mine = Object.entries(controls)
+      .filter(([, by]) => by === homeSeat)
+      .map(([controlled]) => Number(controlled));
+    if (mine.length) {
+      const actingAs = seat === homeSeat ? "yourself" : nameOf(seat);
+      text = `You control ${mine.map(nameOf).join(", ")} this turn (Mindslaver) — acting as ${actingAs}.`;
+    } else {
+      const next = Object.entries(waiting).map(
+        ([controlled, by]) => `${nameOf(by)} will control ${nameOf(Number(controlled))}'s next turn (Mindslaver).`,
+      );
+      text = next.join(" ");
+    }
+  }
+  el.textContent = text;
+  el.classList.toggle("hidden", !text);
+}
+
 // Whether *incoming* is older than the state on screen, so rendering it would
 // step the board back: a slow HTTP response arriving after a faster
 // SSE-prompted fetch has already shown something newer.
@@ -25788,6 +26513,14 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   // Discard stale responses (`stateIsStale`). skipStaleCheck is set where the
   // caller knows its state is the newest: its own undo or rematch response.
   if (!skipStaleCheck && stateIsStale(state, currentState)) return;
+  // CR 723 (Mindslaver): a person controlling another seat's turn acts and
+  // looks through the seat the server names; the state is fetched again
+  // as that seat before anything is drawn.
+  if (followActingSeat(state)) {
+    getState(true).catch(() => {});
+    return;
+  }
+  renderPlayerControlBanner(state);
   // The re-ask back-off (`retryAutoAdvanceAfterFlight`) counts unchanged renders.
   noteStateForRefetchBackoff(state);
   // Kicked from a still-open lobby: our seat is no longer joined (we lost the
@@ -25813,13 +26546,18 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     autoPassMode = null;
   }
 
-  if (autoPassTurnEndEnabled && autoPassMode === "self" && state.current_turn !== seat) {
+  if (
+    autoPassTurnEndEnabled && autoPassMode === "self"
+    && (!turnIsDrivenHere(state) || (
+      Number.isInteger(autoPassTurnNumber) && state.turn_number !== autoPassTurnNumber
+    ))
+  ) {
     autoPassTurnEndEnabled = false;
     autoPassTurnEndRequestedStateKey = "";
     autoPassMode = null;
   }
 
-  if (autoPassTurnEndEnabled && autoPassMode === "opponent" && state.current_turn === seat) {
+  if (autoPassTurnEndEnabled && autoPassMode === "opponent" && turnIsDrivenHere(state)) {
     autoPassTurnEndEnabled = false;
     autoPassTurnEndRequestedStateKey = "";
     autoPassMode = null;
@@ -27109,6 +27847,7 @@ async function createSession() {
   const data = await postJson("/api/sessions", req);
   sessionId = data.session_id;
   seat = data.seat;
+  homeSeat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
@@ -27160,6 +27899,7 @@ async function joinSession() {
     guest_colors: Number(q("joinColors")?.value) || 2,
   });
   seat = data.seat;
+  homeSeat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
@@ -27285,6 +28025,7 @@ async function rejoinSession(seatIndex) {
   stopJoinTargetPolling();
   sessionId = data.session_id;
   seat = data.seat;
+  homeSeat = data.seat;
   openStateSyncStream();
   setJoinUrls(data.join_url, data.lan_join_url, data.public_join_url);
   setVisible(true);
@@ -27979,8 +28720,90 @@ function carryCastZoneAndCost(body) {
   return body;
 }
 
+
+// "Choose one or more —" and an entwined cast (CR 700.2d, 702.42a): while a
+// collection is open, a cast body is not a cast — it is the target the
+// current mode's own prompt just produced. Captured onto the collection and
+// the next mode's prompt opened; true when the body was captured (and must
+// not be sent). Asked by `sendAction`, the one place every targeting prompt
+// ends up, the same reason the single mode index rides through it.
+function captureModeCollectionTarget(body) {
+  if (!pendingModeCollection || !_CAST_ACTIONS.has(body.action)) return false;
+  const run = pendingModeCollection;
+  const entry = { index: run.order[run.cursor] };
+  const mode = run.modes?.[entry.index];
+  if (Number.isInteger(body.target_seat)) entry.target_seat = body.target_seat;
+  if (Number.isInteger(body.permanent_index)) entry.permanent_index = body.permanent_index;
+  if (Number.isInteger(body.target_permanent_index)) entry.permanent_index = body.target_permanent_index;
+  // A mode naming **several** permanents (Blinding Beam's "Tap two target
+  // creatures", entwined): the several-target picker's ids, on the mode's
+  // `permanent_ids`. The wire reads a mode's slots on one board
+  // (`ModeChoice.permanent_ids`, a cross-board list is a 422), so a pick
+  // spread over two battlefields is refused here and the mode asked again.
+  if (Array.isArray(body.target_permanent_ids) && body.target_permanent_ids.length) {
+    const seats = body.target_permanent_ids.map((pid) => findPermanentInState(currentState, pid)?.seat);
+    if (seats.some((s) => !Number.isInteger(s)) || new Set(seats).size > 1) {
+      updateActionHint(
+        `${run.cardName}: "${mode?.label || "this mode"}" can only name permanents on one battlefield here — choose again.`,
+        true,
+      );
+      promptNextModeTarget();
+      return true;
+    }
+    entry.target_seat = seats[0];
+    entry.permanent_ids = body.target_permanent_ids.slice();
+    delete entry.permanent_index;
+  } else if (Array.isArray(body.target_permanent_indices) && body.target_permanent_indices.length === 1
+      && !Number.isInteger(entry.permanent_index)) {
+    entry.permanent_index = body.target_permanent_indices[0];
+  }
+  // Prefer the identity over the slot, for the reason every other target
+  // does: a permanent that leaves between the click and the cast must be a
+  // refusal, not whichever permanent slid into its place (CR 400.7). **Not
+  // for a graveyard mode** (Betrayal of Flesh's "Return target creature
+  // card from your graveyard"): its slot counts into a pile, and the id
+  // of the permanent in that numbered battlefield slot named something else.
+  const graveyardMode = mode?.target_kind === "graveyard_creature";
+  if (!graveyardMode && !entry.permanent_ids
+      && Number.isInteger(entry.target_seat) && Number.isInteger(entry.permanent_index)) {
+    const pid = permanentIdAt(entry.target_seat, entry.permanent_index);
+    if (Number.isInteger(pid)) entry.permanent_id = pid;
+  }
+  if (Number.isInteger(body.target_stack_index)) entry.target_stack_index = body.target_stack_index;
+  run.collected.push(entry);
+  run.cursor += 1;
+  promptNextModeTarget();
+  return true;
+}
+
+// Which printed cost the Shards' "{3}, {T} or {U}, {T}" activation announced
+// (`pendingAbilityCostAlternative`), onto the activate body for the permanent
+// and ability it was chosen for as `alternative_cost_index` — and onto the
+// caller's body, so an auto-tap retry announces the same cost. A land tapped
+// for mana in between is another activation and leaves it alone.
+function carryAbilityCostAlternative(body, actionBody) {
+  if (
+    body.action !== "activate" || body.alternative_cost_index != null
+    || !pendingAbilityCostAlternative
+    || !abilityCostAlternativeAnswered(
+      body.permanent_index, Number.isInteger(body.ability_index) ? body.ability_index : null,
+    )
+  ) return body;
+  body.alternative_cost_index = pendingAbilityCostAlternative.index;
+  if (actionBody && typeof actionBody === "object") {
+    actionBody.alternative_cost_index = pendingAbilityCostAlternative.index;
+  }
+  pendingAbilityCostAlternative = null;
+  return body;
+}
+
 async function sendAction(actionBody) {
   if (!sessionId) return;
+  // CR 723 (Mindslaver): refused here when another player controls this
+  // browser's seat, and signed with `controller_seat` when it acts for a
+  // seat it controls. Through `typeof`, because the tests that lift this
+  // function into bare node bring their own module state, not this.
+  if (typeof carryControllerSeat === "function") carryControllerSeat(actionBody);
   snapStateRefetchBackoff();
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
@@ -27997,6 +28820,8 @@ async function sendAction(actionBody) {
     actionBody.chosen_keyword = pendingChosenAbilityWord;
     pendingChosenAbilityWord = null;
   }
+  // …and which printed cost (the Shards' "{3}, {T} or {U}, {T}").
+  carryAbilityCostAlternative(body, actionBody);
   // And the cost the activation announced before its X and its targets were
   // asked (`pendingActivationCost`): carried onto the activate body for *that*
   // permanent and ability, whichever prompt built it. Written onto the
@@ -28019,25 +28844,7 @@ async function sendAction(actionBody) {
   // it and open the next mode's prompt instead of sending. Intercepted here
   // because this is the one place every targeting prompt ends up, the same
   // reason the single mode index rides through it.
-  if (pendingModeCollection && _CAST_ACTIONS.has(body.action)) {
-    const run = pendingModeCollection;
-    const entry = { index: run.order[run.cursor] };
-    if (Number.isInteger(body.target_seat)) entry.target_seat = body.target_seat;
-    if (Number.isInteger(body.permanent_index)) entry.permanent_index = body.permanent_index;
-    if (Number.isInteger(body.target_permanent_index)) entry.permanent_index = body.target_permanent_index;
-    // Prefer the identity over the slot, for the reason every other target
-    // does: a permanent that leaves between the click and the cast must be a
-    // refusal, not whichever permanent slid into its place (CR 400.7).
-    if (Number.isInteger(entry.target_seat) && Number.isInteger(entry.permanent_index)) {
-      const pid = permanentIdAt(entry.target_seat, entry.permanent_index);
-      if (Number.isInteger(pid)) entry.permanent_id = pid;
-    }
-    if (Number.isInteger(body.target_stack_index)) entry.target_stack_index = body.target_stack_index;
-    run.collected.push(entry);
-    run.cursor += 1;
-    promptNextModeTarget();
-    return;
-  }
+  if (captureModeCollectionTarget(body)) return;
   carryAnnouncedSeat(body, actionBody);
   carryCastZoneAndCost(body);
   // A cast that makes mana "in any combination of" (Burnt Offering) owes its
@@ -28052,6 +28859,7 @@ async function sendAction(actionBody) {
     actionBody.mana_combination = chosen;
   }
   carryMadnessAnswer(body);
+  carryCopyCastAnswer(body);
   // A paying action whose preview says the pool cannot pay it is not sent:
   // the refusal it would draw ("insufficient mana") is what every caller
   // opens the auto-tap dialog on, so it is raised here instead of fetched.
@@ -28123,6 +28931,18 @@ function carryMadnessAnswer(body) {
   return body;
 }
 
+// The same for a copy-cast offer (`pendingCopyCast`, CR 707.12): the cast the
+// ordinary chain built is the offer's answer, `copy_cast_confirm` with
+// `accept: true` and every announcement field on it. The server reads the
+// zone itself and waives the mana cost; there is no priority-window payment.
+function carryCopyCastAnswer(body) {
+  if (pendingCopyCast === null || body.action !== "cast") return body;
+  body.action = "copy_cast_confirm";
+  body.accept = true;
+  delete body.auto_tap;
+  return body;
+}
+
 q("homeHostBtn")?.addEventListener("click", () => {
   showMenuPage("host");
   syncGameTypeFields();
@@ -28155,7 +28975,9 @@ async function requestRematch() {
     btn.textContent = currentState?.mode === "human_vs_human" ? "Waiting for opponent…" : "Starting…";
   }
   try {
-    const payload = await postJson(`/api/sessions/${sessionId}/rematch`, { seat });
+    const payload = await postJson(`/api/sessions/${sessionId}/rematch`, {
+      seat: Number.isInteger(homeSeat) ? homeSeat : seat,
+    });
     renderState(payload, { skipStaleCheck: true });
   } catch (e) {
     if (btn) {
@@ -28173,6 +28995,7 @@ function restartLocalGame() {
   closeStateSyncStream();
   sessionId = null;
   seat = null;
+  homeSeat = null;
   currentState = null;
   previousLifeBySeat = {};
   return createSession().catch((e) => resetToSetup(e.message));
@@ -28447,6 +29270,9 @@ function cancelPendingPrompt() {
   // is not the next activation's: left set, the next Splicer skipped the word
   // prompt and announced the cancelled word.
   pendingChosenAbilityWord = null;
+  pendingAbilityCostChoice = null;
+  pendingAbilityCostAlternative = null;
+  pendingCounterKindChoice = null;
   const wasPickingAttackTarget = !!pendingAttackTarget;
   pendingAttackTarget = null;
   clearPendingHandCast();
@@ -28476,7 +29302,7 @@ q("promptAutoTapBtn")?.addEventListener("click", async () => {
   try {
     // A madness cast is paid by hand (applyMadnessPaymentPrompt): the button
     // resends the kept announcement instead of asking for a plan.
-    if (pendingAutoTap && pendingMadnessCast !== null) {
+    if (pendingAutoTap && (pendingMadnessCast !== null || pendingCopyCast !== null)) {
       await retryMadnessCast();
       return;
     }
@@ -28532,6 +29358,13 @@ q("promptSteps").addEventListener("click", (event) => {
   const modeChoice = target.dataset.modeChoice;
   if (modeChoice !== undefined && pendingModalChoice) {
     chooseModalMode(Number(modeChoice));
+    return;
+  }
+
+  const entwineAnswer = target.closest("[data-entwine]")?.dataset.entwine;
+  if (entwineAnswer && pendingModalChoice?.entwine) {
+    if (entwineAnswer === "take") takeEntwine();
+    else declineEntwine();
     return;
   }
 
@@ -28601,6 +29434,18 @@ q("promptSteps").addEventListener("click", (event) => {
   const abilityChoice = target.dataset.abilityChoice;
   if (abilityChoice !== undefined && pendingAbilityChoice) {
     resolveAbilityChoice(Number(abilityChoice));
+    return;
+  }
+
+  const counterKind = target.closest("[data-counter-kind]")?.dataset.counterKind;
+  if (counterKind !== undefined && pendingCounterKindChoice) {
+    chooseCounterKind(counterKind);
+    return;
+  }
+
+  const costAlternative = target.closest("[data-ability-cost-alt]")?.dataset.abilityCostAlt;
+  if (costAlternative !== undefined && pendingAbilityCostChoice) {
+    chooseAbilityCostAlternative(Number(costAlternative));
   }
 });
 
@@ -28626,6 +29471,7 @@ q("endTurnBtn").addEventListener("click", async () => {
     const isSelfTurn = !!currentState && seat !== null && currentState.current_turn === seat;
     autoPassTurnEndEnabled = true;
     autoPassMode = isSelfTurn ? "self" : "opponent";
+    autoPassTurnNumber = currentState?.turn_number ?? null;
     autoPassTurnEndRequestedStateKey = "";
     renderBoard(currentState);
     renderActivationPrompt();

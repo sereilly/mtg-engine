@@ -800,6 +800,15 @@ EXILED_BY_SEAT = "exiled_by_seat"
 #: removing it.
 MILLED_THIS_WAY = "milled_this_way"
 
+#: "Target opponent **guesses whether a card with that name is in your
+#: hand**. … If you do and your opponent guessed wrong, draw a card." (Liar's
+#: Pendulum.) The guess a seat made about a hidden hand, written by the guess
+#: prompt's answer as ``{"in_hand": <the guess>, "was_in_hand": <the
+#: truth>}`` — the truth taken as the guess is made, which is the moment the
+#: guess is about. Engine-private: the record sits on the resolution's
+#: scratchpad, and the prompt that wrote it showed the guesser only the name.
+NAMED_CARD_GUESS = "named_card_guess"
+
 TAPPED_THIS_WAY = "tapped_this_way"
 
 #: "Discard a card at random. **If you discard a creature card this way,**

@@ -184,6 +184,12 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     # half has no card in the pool and shows as untested, which is the
     # honest reading rather than a section trimmed to what passes.
     "724": "all",
+    # Controlling Another Player, joined with Mirrodin's Mindslaver
+    # (``engine/player_control.py``: ``Game.decider_of``). Every subrule:
+    # 723.2's limited-duration controls (Word of Command, Opposition Agent)
+    # and 723.5b/723.7's restrictions are not what Mindslaver does and show as
+    # untested, which is the honest reading.
+    "723": "all",
     # 8xx — Multiplayer rules the web app's free_for_all mode uses
     "800": "all",
     "802": "all",  # Attack Multiple Players Option

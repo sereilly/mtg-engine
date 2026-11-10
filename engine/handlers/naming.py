@@ -156,6 +156,46 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     return True, "pending_choose_card_name"
 
 
+@effect_handler("guess_named_card_in_hand")
+def guess_named_card_in_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target opponent **guesses whether a card with that name is in your
+    hand**." (Liar's Pendulum.)
+
+    Nothing happens here but the question, put to the **guesser** — the
+    targeted seat, not the ability's controller — about the controller's hand,
+    which that seat may not see (CR 400.2). The name is the record the naming
+    step in front of this one wrote; the answer and the truth it is measured
+    against are written back by the prompt's resolver
+    (``oracle_types.NAMED_CARD_GUESS``), where "if your opponent guessed
+    wrong" reads them.
+
+    The prompt suspends the resolution (CR 608.2, 117.3b): the offer to reveal
+    behind it is the controller's decision about a guess already made, and
+    asking it first would be asking before there was anything to decide.
+
+    A seat nobody asks guesses at random, from the RNG the engine seeds — the
+    hand is hidden from it, so any rule reading the hand would be the AI
+    cheating, and any fixed answer is one the controller can name around.
+    """
+    guesser = context.target
+    holder = context.caster
+    if guesser is None or guesser not in game.players or holder is None:
+        game.log.append(
+            f"{context.card.name if context.card is not None else 'The guess'}:"
+            " nobody to guess"
+        )
+        return True, "resolved"
+    named = str(context.results.get("chosen_card_name") or "").strip()
+    game.arm_pending_choice(
+        "guess_named_card", game.players.index(guesser),
+        card_name=context.card.name if context.card is not None else "",
+        named=named,
+        holder_seat=game.players.index(holder),
+        record=context.results,
+    )
+    return True, "pending_guess_named_card"
+
+
 @effect_handler("name_and_strip")
 def name_and_strip(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Necromentia: name a card, strip every copy from an opponent's three

@@ -43,6 +43,7 @@ from .ai_policy import (
 )
 from .ai_rehearsal import blocks_still_to_come
 from .ai_scratch_copy import mid_resolution
+from .ai_player_control import plays_for_another
 
 if TYPE_CHECKING:
     from .game import Game
@@ -168,6 +169,10 @@ def act_at_priority(
     proposes, and a table asks this dozens of times a turn. In the seat's own
     upkeep only the graveyard is weighed (see :func:`instant_speed_window`).
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, seat):
+        return None
     window = instant_speed_window(game, seat)
     if window is None or mid_resolution(game):
         return None

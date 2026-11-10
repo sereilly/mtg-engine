@@ -162,6 +162,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     "draw_then_discard_self": "activated_draw",
     "grant_banding_to_target": "activated_pump",
     "grant_extra_turn": "spell_pattern",
+    # Mindslaver (CR 723): a turn given to another decider, the extra
+    # turn's neighbour and its bucket.
+    "control_player_next_turn": "spell_pattern",
     "grant_prevention_shield": "activated_prevent",
     "grant_regeneration_to_enchanted_creature": "activated_regenerate",
     "grant_regeneration_to_self": "activated_regenerate",

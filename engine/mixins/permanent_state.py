@@ -54,7 +54,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              chooses_card_name_on_enter,
                              chooses_opponent_on_enter,
                              chooses_opponent_and_card_name_on_enter,
-                             copy_on_enter_type,
+                             COPY_DECLINED, copy_on_enter_type,
                              ENTERS_TAPPED, enters_with_counted_pt_counters,
                              enters_with_x_pt_counters,
                              enters_with_x_named_counters,
@@ -129,7 +129,7 @@ class PermanentStateMixin:
         exists. The prompt still carries the default (``default_*``), which is
         what a person's prompt answered by default writes
         (``_default_enter_choice``, ``_default_body_choice``)."""
-        return chooser not in self.interactive_seats
+        return not self.asks_a_person(chooser)
 
     def _perform_entry_state(
         self,
@@ -983,17 +983,12 @@ class PermanentStateMixin:
             if placement is None:
                 continue
             count, kind = placement
-            if kind == "+1/+1":
-                # Through the seam: entering with counters is a counter
-                # placement like any other, so a replacement that modifies it
-                # applies (CR 614.1c).
-                self.place_plus1_counters(permanent, count)
-            elif kind == "+1/+0":
-                permanent.power_bonus += count
-                permanent.metadata["plus_1_0_counters"] = count
-            else:
-                permanent.toughness_bonus += count
-                permanent.metadata["plus_0_1_counters"] = count
+            # Through the seam: entering with counters is a counter placement
+            # like any other, so a replacement that modifies it applies
+            # (CR 614.1c) — and every kind lands in the one store its readers
+            # ask (``pt.pt_counter_key``). The +1/+0 and +0/+1 arms used to be
+            # written out here, the second into a key nothing read.
+            self.place_pt_counters(permanent, kind, count)
 
         # "**If this creature was kicked, it enters with** two +1/+1 counters
         # on it **and with flying**." (Faerie Squadron.) The loop above under
@@ -1045,16 +1040,8 @@ class PermanentStateMixin:
                 counted_from = entry.get("counters_from")
                 if counted_from is not None:
                     count = max(0, int(permanent.metadata.get(counted_from, 0) or 0))
-                if count <= 0:
-                    pass
-                elif kind == "+1/+1":
-                    self.place_plus1_counters(permanent, count)
-                elif kind == "+1/+0":
-                    permanent.power_bonus += count
-                    permanent.metadata["plus_1_0_counters"] = count
-                else:
-                    permanent.toughness_bonus += count
-                    permanent.metadata["plus_0_1_counters"] = count
+                if count > 0:
+                    self.place_pt_counters(permanent, kind, count)
                 for keyword in entry["keywords"]:
                     grant_keyword(permanent, keyword)
                 for granted_line in entry["ability_lines"]:
@@ -1076,17 +1063,10 @@ class PermanentStateMixin:
             x_value = permanent.metadata.get("cast_x_value")
             if not isinstance(x_value, int) or x_value <= 0:
                 continue
-            if kind == "+1/+1":
-                # Through the seam: entering with counters is a counter
-                # placement like any other, so a Conclave Mentor raises it
-                # (CR 614.1c's replacement applies as the permanent enters).
-                self.place_plus1_counters(permanent, x_value)
-            elif kind == "+1/+0":
-                permanent.power_bonus += x_value
-                permanent.metadata["plus_1_0_counters"] = x_value
-            else:
-                permanent.toughness_bonus += x_value
-                permanent.metadata["plus_0_1_counters"] = x_value
+            # Through the seam: entering with counters is a counter placement
+            # like any other, so a Conclave Mentor raises it (CR 614.1c's
+            # replacement applies as the permanent enters).
+            self.place_pt_counters(permanent, kind, x_value)
 
         # "…enters with a <kind> counter on it **for each <noun phrase>**"
         # (Zombie Mob). The third place the number can come from, beside the
@@ -1120,17 +1100,10 @@ class PermanentStateMixin:
             ))
             if amount <= 0:
                 continue
-            if kind == "+1/+1":
-                # Through the seam, for the printed-count loop's reason: an
-                # entry counter is a counter placement and CR 614.1c lets a
-                # replacement modify it.
-                self.place_plus1_counters(permanent, amount)
-            elif kind == "+1/+0":
-                permanent.power_bonus += amount
-                permanent.metadata["plus_1_0_counters"] = amount
-            else:
-                permanent.toughness_bonus += amount
-                permanent.metadata["plus_0_1_counters"] = amount
+            # Through the seam, for the printed-count loop's reason: an entry
+            # counter is a counter placement and CR 614.1c lets a replacement
+            # modify it.
+            self.place_pt_counters(permanent, kind, amount)
 
         # The copy-as-enter choice (Clone, Copy Artifact) used to be made here,
         # *after* every other entry replacement above had read the printed
@@ -1182,7 +1155,19 @@ class PermanentStateMixin:
         # of the one reader the cast-time picker asks, so the picker and the
         # copy cannot disagree about which cards offer one or what they offer.
         copied = copy_on_enter_type(program.normalized_text or "")
+        declined = bool(permanent.metadata.pop(COPY_DECLINED, False))
         if copied is None:
+            return
+        if declined:
+            # "You can choose not to copy anything. In that case, Clone enters
+            # as a 0/0 Shapeshifter creature" (Clone, 2025-10-02); "Sculpting
+            # Steel stays on the battlefield as an artifact that doesn't do
+            # much of anything" (2007-07-15). The cast announced the decline
+            # (``enter_effects.COPY_DECLINED``), so there is no fallback.
+            permanent.metadata.pop("copy_target", None)
+            self.log.append(
+                f"{permanent.card.name} entered as itself, copying nothing"
+            )
             return
         # Honor the permanent the player chose when casting; fall back to the
         # first one of the type for AI/untargeted casts.

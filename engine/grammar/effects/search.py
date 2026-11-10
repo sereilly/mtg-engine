@@ -821,10 +821,16 @@ def _accept_counted_exile_search(
     # a later linked ability can read it, where Foresight's finds are exiled
     # and never mentioned again.
     #
-    # No "then shuffle" here, and that is the card rather than an omission —
-    # Mangara's Tome shuffles its library in the *next* printed sentence, which
-    # the ordinary shuffle production reads. Consuming a shuffle that is not
-    # there would take that sentence's words away from it.
+    # No "then shuffle" in this sentence: Mangara's Tome and Parallel Thoughts
+    # shuffle their library in the *next* printed sentence, "Then shuffle your
+    # library." That sentence is **this search's shuffle** (CR 701.24a), the
+    # one a search's "then shuffle" names, which the search prompt's answer
+    # performs — so the search is marked as having left it, and
+    # ``riders._parse_deferred_search_shuffle`` consumes the sentence rather
+    # than the ordinary shuffle production lowering it to a second
+    # ``shuffle_library``. Read that way the library was shuffled twice for
+    # one printed shuffle, harmless until Psychogenic Probe dealt 2 damage
+    # for each (W2G4's census: these two cards, nothing else in the pool).
     if stream.accept_phrase("in", "a", "face-down", "pile"):
         stream.accept_punct(",")
         stream.accept_word("and")
@@ -832,6 +838,9 @@ def _accept_counted_exile_search(
         return ast.SearchAndExile(
             filt, zones=zones, count=count,
             face_down_pile=True, shuffle_pile=shuffled,
+            shuffle_deferred=(
+                stream.at_punct(".") and _names_a_trailing_shuffle(stream)
+            ),
         )
     # "…exile them, **then create that many** 1/1 colorless Myr artifact
     # creature tokens. **Then shuffle.**" (Myr Incubator.) The search's shuffle
@@ -859,16 +868,30 @@ def _accept_counted_exile_search(
     return ast.SearchAndExile(filt, zones=zones, count=count)
 
 
+#: The sentence that states a search's shuffle on its own, in the two
+#: templates the pool prints it in: "Then shuffle." (Myr Incubator, Grim
+#: Reminder) and the older "Then shuffle your library." (Mangara's Tome,
+#: Parallel Thoughts). One library either way — the searcher's, which is the
+#: one the search looked through.
+TRAILING_SEARCH_SHUFFLES = (
+    ("then", "shuffle"),
+    ("then", "shuffle", "your", "library"),
+)
+
+
 def _names_a_trailing_shuffle(stream: TokenStream) -> bool:
-    """Whether the line ends with the bare sentence "Then shuffle." — a token
-    scan with the cursor unmoved, for ``_reveal_until.
-    names_the_revealed_cards_placed``' reason: the sentence that states this
-    search's shuffle is not the next clause but the one after the step that
-    reads the finds."""
+    """Whether the line ends with a sentence of
+    :data:`TRAILING_SEARCH_SHUFFLES` — a token scan with the cursor unmoved,
+    for ``_reveal_until.names_the_revealed_cards_placed``' reason: the
+    sentence that states this search's shuffle is not the next clause but the
+    one after the step that reads the finds."""
     words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
-    return words[-3:] == [".", "then", "shuffle"] or words[-4:] == [
-        ".", "then", "shuffle", ".",
-    ]
+    if words and words[-1] == ".":
+        words = words[:-1]
+    return any(
+        words[-(len(sentence) + 1):] == [".", *sentence]
+        for sentence in TRAILING_SEARCH_SHUFFLES
+    )
 
 
 def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:

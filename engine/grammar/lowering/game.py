@@ -59,6 +59,36 @@ def _lower_extra_turn(node: ast.ExtraTurn) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("grant_extra_turn", "", payload),)
 
 
+def _lower_control_player_next_turn(
+    node: ast.ControlPlayerNextTurn,
+) -> tuple[OracleInstruction, ...]:
+    """"You control target player during that player's next turn."
+    (Mindslaver, CR 723.)
+
+    ``control_player_next_turn`` records the control as pending for the seat
+    the payload's ``player`` pronoun names; the turn it applies to is decided
+    as turns begin (CR 723.1, 723.1b). The pronoun is kept as printed so the
+    picker is ``player_pronoun_spec``'s ("target opponent" would be narrowed
+    there). The controller is the effect's own (CR 109.5): any other subject
+    would hand the decisions to a seat no handler reads, so it refuses, as
+    does a controlled seat that is not a chosen target.
+    """
+    if node.controller.kind != "you":
+        raise LoweringError(
+            f"no handler for {node.controller.kind!r} controlling a player",
+            node=node,
+        )
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler for controlling {node.player.kind!r}", node=node
+        )
+    return (
+        OracleInstruction(
+            "control_player_next_turn", "", {"player": node.player.kind},
+        ),
+    )
+
+
 # Who a "loses the game" sentence names, and the handler that makes that player
 # lose. `player_loses_game` and `target_player_loses_game` are the *same*
 # function (engine/handlers/life_and_game.py registers both names) and it picks

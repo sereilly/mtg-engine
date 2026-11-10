@@ -13,6 +13,7 @@ from fastapi import HTTPException
 
 from engine.aura_attachment import attach_aura
 from engine.exiled_records import distinct_exile_object
+from engine.graveyard_order import keep_graveyards_apart
 from engine.face_down import face_down_card, hidden_card_of
 from engine.linked_exile import keep_face_down_after_departure
 from engine.models import Permanent
@@ -302,6 +303,15 @@ def _apply_raw_state(session: Session, raw: dict, viewer_seat: int | None = None
         player.exile = []
         player.ante = built["ante"]
         player.battlefield = built["battlefield"]
+
+    # Each graveyard is written whole from names, so two copies named are the
+    # catalog's one object at two positions — which no arrival can make
+    # (``Game.put_card_into_graveyard``, CR 400.7). Held apart here, every seat
+    # at once, so a pasted pile is one an arrival could have built. Not through
+    # the arrival itself: a paste is a state, and Forbidden Crypt or a "card put
+    # into a graveyard" watcher firing for it would be a game the paste did not
+    # describe.
+    keep_graveyards_apart(game.players)
 
     # Exile arrives through its one transition, once every seat's pile is empty:
     # a paste naming two copies of a card names two objects (no exile holds one

@@ -445,6 +445,27 @@ class ChooseCardName:
 
 
 @dataclass(frozen=True)
+class GuessNamedCardInHand:
+    """``Target opponent guesses whether a card with that name is in your
+    hand.`` (Liar's Pendulum.)
+
+    A **guess about a hidden zone**, made by one seat about another seat's
+    hand: yes or no, answered by ``guesser`` with nothing to go on but what it
+    may see (CR 400.2 hides the hand). Like :class:`ChooseCardName` in front
+    of it, the sentence produces a value and no effect of its own — the guess
+    and whether it was right — and a later sentence reads it back ("if your
+    opponent guessed wrong").
+
+    ``holder`` is whose hand the guess is about. "That name" is the name the
+    "choose a card name" step in front of this one recorded, so it is not a
+    field: the lowering refuses the sentence unless that producer is there.
+    """
+
+    guesser: PlayerRef
+    holder: PlayerRef
+
+
+@dataclass(frozen=True)
 class ChooseColor:
     """``Choose a color.`` (Chromatic Armor's activated ability.)
 
@@ -596,6 +617,21 @@ class ExtraTurn:
     player: PlayerRef
     # "Take two extra turns after this one." (Teferi, Master of Time.)
     count: int = 1
+
+
+@dataclass(frozen=True)
+class ControlPlayerNextTurn:
+    """``You control target player during that player's next turn.``
+    (Mindslaver, CR 723.)
+
+    *controller* is the sentence's subject — who makes the decisions — and
+    *player* is the seat controlled. Beside :class:`ExtraTurn` because it is
+    about a turn of the game, not about any object: CR 723.3 is explicit that
+    only control of the *player* changes, and every permanent stays under its
+    own controller.
+    """
+    controller: PlayerRef
+    player: PlayerRef
 
 
 @dataclass(frozen=True)

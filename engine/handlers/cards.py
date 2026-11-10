@@ -592,8 +592,12 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
         taken = victim.library[:max(0, int(amount))]
         del victim.library[:len(taken)]
         for card in taken:
-            game.put_card_into_graveyard(victim, card, from_zone="library")
-            put_there.append(card)
+            # The object the pile now holds (CR 400.7), which is what the
+            # record names — a new one when the pile already held this card's.
+            put_there.append(
+                game.put_card_into_graveyard(victim, card, from_zone="library")
+                or card
+            )
         game.log.append(f"{victim.name} milled {len(taken)} card(s)")
     return True, "resolved"
 
@@ -634,7 +638,7 @@ def mill_until_matching(game: Game, instruction: OracleInstruction, context: Ora
     milled = 0
     while milled < limit and victim.library:
         card = victim.library.pop(0)
-        game.put_card_into_graveyard(victim, card, from_zone="library")
+        card = game.put_card_into_graveyard(victim, card, from_zone="library") or card
         milled += 1
         if _card_matches_filter(card, stop_filter, game=game, owner=victim):
             matched.append(card)

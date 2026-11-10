@@ -407,9 +407,10 @@ def test_w2g4_exhaustion_holds_both_types_on_one_seat_only(set_pool):
     assert game.cast_from_hand(0, "Exhaustion", target_player_index=1).supported
     _g4e_resolve(game)
 
-    assert theirs.battlefield[0].metadata.get("skip_next_untap") == 1
-    assert theirs.battlefield[1].metadata.get("skip_next_untap") == 1
-    assert mine.battlefield[0].metadata.get("skip_next_untap") is None
+    # A lock on the target's step since MRD W2G4 (CR 611.2c; the card's
+    # 2009-10-01 ruling), so the caster's own step untaps the caster's board.
+    game.resolve_untap_step(0)
+    assert not mine.battlefield[0].tapped
 
     game.active_player_index = 1
     game.resolve_untap_step(1)

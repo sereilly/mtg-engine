@@ -114,6 +114,9 @@ def main() -> int:
     # the seats itself and walked past the queue.
     if report.extra_turns_taken:
         print(f"Extra turns taken: {report.extra_turns_taken}")
+    # CR 723: turns played under another seat's control (Mindslaver).
+    if report.controlled_turns:
+        print(f"Turns controlled by another player: {report.controlled_turns}")
 
     # CR 700.2: modal spells cast, and how many named a mode other than the
     # first. Until the policy had a mode to name, every one was the first

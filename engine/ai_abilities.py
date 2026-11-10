@@ -33,7 +33,11 @@ from .ai_target_sides import (
     host_effect_by_the_moment,
     host_effect_side,
     named_counter_marks_for_harm,
+    sweep_a_named_counter_spares,
+    sweeps_what_its_counter_shelters,
+    toll_effect_side,
     instruction_target_side,
+    untaps_its_target,
 )
 from .ai_slot_sides import ability_role_target_sides
 from .ai_valuation import (
@@ -53,6 +57,7 @@ from .activation_restrictions import activation_denial, global_activation_ban
 from .cost_modifiers import sacrifice_taxes
 from .game import Game
 from .models import Permanent
+from .named_counters import counters_on
 from .oracle import OracleInstruction, compile_card_oracle
 from .targeting import (
     derive_activation_spec,
@@ -65,6 +70,8 @@ from .cost_pickers import spec_is_a_cost
 from .ai_payment import (_plan_land_taps, plan_printed_activation_cost,
                          tap_planned_lands)
 from .ai_rehearsal import Rehearsal, deliberating, rehearse
+from .ai_standing import permanent_worth
+from .subject_filters import subject_matches
 from .ai_weighed_cast import _effect_steps
 from .ai_actions import ActivationAction, activation_announcement
 from .ai_text_changes import (WORTH_FLOOR, ability_text_change_mode,
@@ -81,6 +88,7 @@ from .ai_targets import (
     _aura_harms_its_host,
     _choose_damage_source,
 )
+from .ai_player_control import plays_for_another
 
 
 def _required_activation_target(
@@ -136,6 +144,10 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     an attacking Krosan Warchief a person had blocked was passed over (it is
     tapped) with {1}{G} open and died unregenerated (SCG Phase 5, smoke game 2).
     """
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, player_index):
+        return None
     player = game.players[player_index]
 
     best: ActivationAction | None = None
@@ -498,16 +510,24 @@ def _activation_candidate(
     # **An X that sizes only the effect is announced now** (ONS W2G5: Silklash
     # Spider was never activated), sized by rehearsal (`_sized_x_activation`).
     # Still declined: an X that sizes the target list (the spec's
-    # ``x_targets``, Candelabra, CR 601.2c) and one the card defines (Voodoo
-    # Doll — the engine computes it, and refuses where it cannot).
+    # ``x_targets``, Candelabra, CR 601.2c).
+    #
+    # **An X the card defines is priced as the engine charges it** (MRD W2G5):
+    # "{X}, {T}: Create a token that's a copy of the exiled card. X is the
+    # mana value of that card." (Soul Foundry; Voodoo Doll, Bargaining Table.)
+    # Nobody announces it, so there is nothing to size: the charge below
+    # (`Game.activation_mana_charge`, which reads `cost_x_definitions`) is the
+    # price, planned like a printed one, and the rehearsal judges the rest.
+    # Declined outright, a Soul Foundry that had taken its imprint made no
+    # token all game.
     from .cost_x_definitions import cost_x_is_defined
 
     x_symbols = (ability.source_line or "").lower().split(":", 1)[0].count("{x}")
-    if x_symbols and (
-        (spec or {}).get("x_targets")
-        or cost_x_is_defined(ability.source_line or "")
-    ):
+    if x_symbols and (spec or {}).get("x_targets"):
         return None
+    if x_symbols and cost_x_is_defined(ability.source_line or ""):
+        # The X the activator announces: none, here.
+        x_symbols = 0
     # An ability naming several targets of *different* kinds, chosen in
     # dependency order (CR 602.2b reaches CR 601.2c). Asked before the
     # single-target block below, which has no arm for it: the kind is
@@ -655,13 +675,33 @@ def _activation_candidate(
                 and target.tapped
                 and not (ability.cost.requires_tap and target is permanent)
             ]
-        if not perms:
-            return None
         def _power(t):
             perm = game.permanent_at(t["seat"], t["index"])
             return perm.effective_power if perm is not None else 0
 
-        chosen = max(perms, key=_power)
+        rank = _power
+        sheltered = sweep_a_named_counter_spares(permanent.effective_card, ability.instruction)
+        if sheltered is not None:
+            # "Put a fate counter on target permanent" beside the same card's
+            # "Destroy each nonland permanent without a fate counter on it"
+            # (Oblivion Stone): a shelter, so one of the seat's own that the
+            # sweep would take and that has none yet — never the source,
+            # which the sweep's cost sacrifices — the most valuable first. The
+            # strongest-power pick stacked three on one Grizzly Bears.
+            counter, swept = sheltered
+            perms = [
+                t for t in perms
+                if (perm := game.permanent_at(t["seat"], t["index"])) is not None
+                and perm is not permanent
+                and counters_on(perm, counter) == 0
+                and subject_matches(game, perm, swept, observer=player_index)
+            ]
+
+            def rank(t):
+                return permanent_worth(game.permanent_at(t["seat"], t["index"]), now=False)
+        if not perms:
+            return None
+        chosen = max(perms, key=rank)
         target = chosen["seat"]
         target_permanent_index = chosen["index"]
         # "{T}: Untap **two** target lands" (Argothian Elder), "Choose two
@@ -922,6 +962,21 @@ def _activation_candidate(
         worth = _land_ability_worth(game, player_index, candidate)
         if worth is None:
             return None
+        if sweeps_what_its_counter_shelters(permanent.effective_card, ability.instruction):
+            # **A sweep whose shelter the same card sells is scored by what
+            # its rehearsal measured** (MRD W2G5), never below the flat score.
+            # "{5}, {T}, Sacrifice this artifact: Destroy each nonland
+            # permanent without a fate counter on it" (Oblivion Stone) is the
+            # trade of a whole board, and at the flat 2.5 it tied the Stone's
+            # own "put a fate counter" beside it — which the chooser's strict
+            # comparison then kept, every turn, so the Stone never swept.
+            # Narrowed to the pair on purpose: every ability giving up its
+            # source scored this way outranked the flat abilities beside it
+            # (sim_fingerprint TOR: Narcissism's sacrifice beat its own
+            # madness discard and the seat lost the Narcissism it then needed).
+            from dataclasses import replace
+
+            return replace(candidate, score=max(candidate.score, worth))
         return candidate
     # **And every other ability** (kg4): proposed only where carried out on a
     # copy it moves something that lasts without leaving the seat worse off
@@ -961,15 +1016,12 @@ _OWN_REWRITE_KINDS = _OWN_TYPE_SET_KINDS | {
 #: The host steps that untap it: worth nothing on a host that is untapped.
 _HOST_UNTAP_KINDS = frozenset({"untap_enchanted_creature"})
 
-#: …and the targeted untaps, worth nothing on a target that is untapped.
-_TARGET_UNTAP_KINDS = frozenset({"untap_target_permanent", "untap_target_land"})
-
 
 def _untaps_only(instruction) -> bool:
-    """Whether every step of *instruction* untaps its target
-    (:data:`_TARGET_UNTAP_KINDS`)."""
-    steps = _effect_steps(instruction)
-    return bool(steps) and all(step.kind in _TARGET_UNTAP_KINDS for step in steps)
+    """Whether every step of *instruction* untaps its target — the reader a
+    trigger's target is aimed by too (``ai_target_sides.untaps_its_target``),
+    so an activation and a trigger printing the same untap read it alike."""
+    return untaps_its_target(instruction)
 
 
 def _host_refusal(game: Game, seat: int, permanent, instruction) -> bool:
@@ -1484,7 +1536,14 @@ def _activation_target_side(permanent: Permanent, instruction) -> str | None:
     # the target belongs on is what the card's *other* text does with it.
     if named_counter_marks_for_harm(permanent.effective_card, instruction):
         return "opponent"
-    return ability_target_side(instruction) or instruction_target_side(instruction)
+    # …and "Return target creature to its owner's hand unless its controller
+    # pays {1}" (Crystal Shard, Erratic Portal): the toll's unpaid branch names
+    # no target payload, so it is read last, by its own family
+    # (`ai_target_sides.toll_effect_side`).
+    return (
+        ability_target_side(instruction) or instruction_target_side(instruction)
+        or toll_effect_side(instruction)
+    )
 
 
 def _keyword_walk_order(game: Game, ability) -> list:

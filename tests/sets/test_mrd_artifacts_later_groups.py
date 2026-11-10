@@ -362,7 +362,7 @@ def test_w1g8_crystal_shard_bounces_unless_the_creatures_controller_pays(set_poo
 
 
 def test_w1g8_skeleton_shard_returns_only_an_artifact_creature_card(set_pool):
-    """"target **artifact creature** card": both types (CR 205.2a). Read as a
+    """"target **artifact creature** card": both types (CR 205.2b). Read as a
     union the picker offered a Grizzly Bears and a Sol Ring and the default
     returned the Bears."""
     mrd, lea = set_pool("MRD"), set_pool("LEA")
@@ -1884,3 +1884,300 @@ def test_w1g12_an_artifact_land_is_played_taps_and_is_an_artifact(set_pool, name
     assert not game.is_on_battlefield(theirs)
 
 # ==== end W1G12 ======================================================
+
+
+# ==== W2G2 ==========================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+
+import random as _w2g2_random
+
+from engine.game import Game as _W2G2Game
+from engine.models import Permanent as _W2G2Permanent
+from engine.models import PlayerState as _W2G2PlayerState
+from engine.oracle import compile_card_oracle as _w2g2_compile
+from engine.targeting import derive_activation_spec as _w2g2_activation_spec
+from engine.oracle_types import NAMED_CARD_GUESS as _W2G2_NAMED_CARD_GUESS
+
+from tests.helpers import resolve_stack as _w2g2_resolve_stack
+
+
+def _w2g2_pendulum_table(set_pool, *, hand=(), interactive=(0, 1)):
+    """Alice (seat 0) controls an untapped Liar's Pendulum; Bob is seat 1."""
+    lea, mrd = set_pool("LEA"), set_pool("MRD")
+    alice = _W2G2PlayerState(
+        name="Alice", hand=list(hand), library=[lea["Plains"]] * 6,
+    )
+    bob = _W2G2PlayerState(name="Bob", library=[lea["Island"]] * 6)
+    game = _W2G2Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    pendulum = _W2G2Permanent(card=mrd["Liar's Pendulum"])
+    game._put_permanent_onto_battlefield(0, pendulum, None)
+    pendulum.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return game, alice, bob, pendulum
+
+
+def _w2g2_swing(game, pendulum):
+    result = game.activate_permanent_ability(
+        0, "Liar's Pendulum", permanent_index=game.battlefield_index_of(pendulum),
+        ability_index=0, target_player_index=1,
+    )
+    assert result.supported, result.details
+    assert pendulum.tapped
+
+
+def _w2g2_owed(game):
+    return [(choice.kind, choice.player_index) for choice in game.pending_choices]
+
+
+def _w2g2_pendulum_by_hand(game, *, name, guess, reveal):
+    """Answer the three prompts as two people: Alice names, Bob guesses,
+    Alice says whether she reveals."""
+    assert _w2g2_owed(game) == [("choose_card_name", 0)]
+    assert game.confirm_choose_card_name(0, name)
+    assert _w2g2_owed(game) == [("guess_named_card", 1)]
+    assert game.confirm_guess_named_card(1, guess)
+    assert _w2g2_owed(game) == [("optional_pay", 0)]
+    assert game.confirm_optional_pay(0, accept=reveal)
+    _w2g2_resolve_stack(game)
+    assert not game.stack and not game.pending_choices
+
+
+def test_w2g2_liars_pendulum_compiles_whole_and_aims_at_an_opponent(set_pool):
+    program = _w2g2_compile(set_pool("MRD")["Liar's Pendulum"])
+    assert program.supported
+    (ability,) = program.activated_abilities
+    steps = [step.kind for step in ability.instruction.payload["steps"]]
+    assert steps == ["choose_card_name", "guess_named_card_in_hand", "may"]
+    # The picker offers what the line says: an opponent, chosen as the
+    # ability is activated (CR 602.2b).
+    assert _w2g2_activation_spec(ability) == {"kind": "player", "opponents_only": True}
+
+
+def test_w2g2_a_wrong_guess_and_a_reveal_draws_a_card(set_pool):
+    lea = set_pool("LEA")
+    game, alice, bob, pendulum = _w2g2_pendulum_table(set_pool, hand=[lea["Shivan Dragon"]])
+    _w2g2_swing(game, pendulum)
+    _w2g2_pendulum_by_hand(game, name="Shivan Dragon", guess=False, reveal=True)
+    assert [card.name for card in alice.hand] == ["Shivan Dragon", "Plains"]
+    assert any("Bob guesses that a card named Shivan Dragon is not in Alice's hand" in line
+               for line in game.log)
+    assert any("Alice reveals their hand" in line for line in game.log)
+
+
+def test_w2g2_a_right_guess_draws_nothing_even_revealed(set_pool):
+    lea = set_pool("LEA")
+    game, alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, hand=[lea["Shivan Dragon"]])
+    _w2g2_swing(game, pendulum)
+    _w2g2_pendulum_by_hand(game, name="Shivan Dragon", guess=True, reveal=True)
+    assert [card.name for card in alice.hand] == ["Shivan Dragon"]
+
+
+def test_w2g2_no_reveal_no_card_however_wrong_the_guess(set_pool):
+    """2004-12-01: "You can't draw a card if you don't reveal your hand.\""""
+    lea = set_pool("LEA")
+    game, alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, hand=[lea["Shivan Dragon"]])
+    _w2g2_swing(game, pendulum)
+    _w2g2_pendulum_by_hand(game, name="Grizzly Bears", guess=True, reveal=False)
+    assert [card.name for card in alice.hand] == ["Shivan Dragon"]
+    assert not any("reveals their hand" in line for line in game.log)
+
+
+def test_w2g2_a_name_held_nowhere_guessed_absent_is_right(set_pool):
+    lea = set_pool("LEA")
+    game, alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, hand=[lea["Shivan Dragon"]])
+    _w2g2_swing(game, pendulum)
+    _w2g2_pendulum_by_hand(game, name="Grizzly Bears", guess=False, reveal=True)
+    assert [card.name for card in alice.hand] == ["Shivan Dragon"]
+
+
+def test_w2g2_the_engine_played_controller_reveals_only_for_a_wrong_guess(set_pool):
+    """Alice is nobody's seat; Bob is a person. Alice names the card she
+    holds (her own hand is what the guess is about). Guessed right, she keeps
+    her hand hidden — revealing would buy nothing — and guessed wrong she
+    reveals and draws."""
+    lea = set_pool("LEA")
+    for guess, revealed in ((True, False), (False, True)):
+        game, alice, _bob, pendulum = _w2g2_pendulum_table(
+            set_pool, hand=[lea["Shivan Dragon"]], interactive=(1,),
+        )
+        _w2g2_swing(game, pendulum)
+        game.auto_resolve_pending_choices(only_player_index=0)
+        assert _w2g2_owed(game) == [("guess_named_card", 1)]
+        choice = game.pending_choices[0]
+        assert choice.data["named"] == "Shivan Dragon"
+        assert game.confirm_guess_named_card(1, guess)
+        _w2g2_resolve_stack(game)
+        game.auto_resolve_pending_choices(only_player_index=0)
+        _w2g2_resolve_stack(game)
+        shown = any("Alice reveals their hand" in line for line in game.log)
+        assert shown is revealed, (guess, game.log[-4:])
+        assert len(alice.hand) == (2 if revealed else 1)
+
+
+def test_w2g2_an_engine_played_guess_never_reads_the_hand(set_pool):
+    """The guesser's default is a coin from the seeded RNG: the same seed
+    gives the same guess whatever the hidden hand holds (CR 400.2) — and an
+    empty hand, whose size is public (CR 402.3), is deduced rather than
+    guessed."""
+    lea = set_pool("LEA")
+    game, _alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, interactive=(0,))
+    _w2g2_swing(game, pendulum)
+    assert game.confirm_choose_card_name(0, "Shivan Dragon")
+    game.auto_resolve_pending_choices()
+    assert any("Shivan Dragon is not in Alice's hand" in line for line in game.log)
+    guesses = []
+    for hand in ([lea["Shivan Dragon"]], [lea["Island"]], [lea["Island"], lea["Island"]]):
+        game, _alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, hand=hand, interactive=(0,))
+        _w2g2_swing(game, pendulum)
+        assert game.confirm_choose_card_name(0, "Shivan Dragon")
+        assert _w2g2_owed(game) == [("guess_named_card", 1)]
+        _w2g2_random.seed(20041201)
+        game.auto_resolve_pending_choices()
+        line = next(line for line in game.log if "guesses that" in line)
+        guesses.append(" is not in " not in line)
+    assert len(set(guesses)) == 1, guesses
+
+
+def test_w2g2_the_guess_prompt_shows_the_name_and_never_the_hand(set_pool):
+    """What the guesser's client is sent: the name and whose hand — the
+    hand itself is hidden from that seat, and so is whether the guess would
+    be right."""
+    from web.prompt_registry import PromptContext
+    from web.prompts import render_prompts
+
+    lea = set_pool("LEA")
+    game, _alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, hand=[lea["Shivan Dragon"]])
+    _w2g2_swing(game, pendulum)
+    assert game.confirm_choose_card_name(0, "Shivan Dragon")
+    shown = render_prompts(PromptContext(
+        game=game, viewer_seat=1, serialize_card=lambda card: {"name": card.name},
+        seat_type=lambda seat: "human",
+    ))["guess_named_card"]
+    assert shown == {
+        "player_seat": 1, "card_name": "Liar's Pendulum", "named": "Shivan Dragon",
+        "holder_seat": 0, "holder_name": "Alice",
+    }
+    # Alice's own view carries no guess prompt: it is Bob's to answer.
+    assert render_prompts(PromptContext(
+        game=game, viewer_seat=0, serialize_card=lambda card: {"name": card.name},
+        seat_type=lambda seat: "human",
+    ))["guess_named_card"] is None
+
+
+def test_w2g2_the_condition_reads_the_guess_record_not_the_hand_after(set_pool):
+    """The truth is taken as the guess is made: the record says what the
+    guess was about, whatever the hand holds later."""
+    lea = set_pool("LEA")
+    game, alice, _bob, pendulum = _w2g2_pendulum_table(set_pool, hand=[lea["Shivan Dragon"]])
+    _w2g2_swing(game, pendulum)
+    assert game.confirm_choose_card_name(0, "Shivan Dragon")
+    context = game.pending_choices[0].data["record"]
+    assert game.confirm_guess_named_card(1, True)
+    assert context[_W2G2_NAMED_CARD_GUESS] == {"in_hand": True, "was_in_hand": True}
+    assert game.confirm_optional_pay(0, accept=True)
+    _w2g2_resolve_stack(game)
+    assert len(alice.hand) == 1
+
+# ==== end W2G2 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+#
+# Mindslaver — "{4}, {T}, Sacrifice Mindslaver: You control target player
+# during that player's next turn." The CR 723 rules themselves are in
+# tests/rules/test_mrd_w2g1_controlling_a_player.py; these are the card.
+from engine import Game as _w2g1_Game, PlayerState as _w2g1_PlayerState
+from engine.models import Permanent as _w2g1_Permanent
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.targeting import derive_activation_spec as _w2g1_activation_spec
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_table(set_pool, *, their_hand=()):
+    lea = set_pool("LEA")
+    game = _w2g1_Game(players=[
+        _w2g1_PlayerState("P1", library=[lea["Forest"]] * 20),
+        _w2g1_PlayerState("P2", library=[lea["Forest"]] * 20, hand=list(their_hand)),
+    ])
+    game.active_player_index = 0
+    game.turn = 1
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    return game
+
+
+def _w2g1_put(game, seat, card):
+    permanent = _w2g1_Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def test_w2g1_mindslaver_picks_a_player_and_costs_four_tap_and_itself(set_pool):
+    slaver = set_pool("MRD")["Mindslaver"]
+    program = _w2g1_compile(slaver)
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    assert ability.cost.mana["generic"] == 4
+    assert ability.cost.requires_tap and ability.cost.sacrifice_self
+    assert _w2g1_activation_spec(ability)["kind"] == "player"
+
+
+def test_w2g1_mindslaver_paid_for_controls_the_opponents_next_turn(set_pool):
+    lea = set_pool("LEA")
+    game = _w2g1_table(set_pool, their_hand=[lea["Grizzly Bears"]])
+    game.enforce_mana_costs = True
+    _w2g1_put(game, 0, set_pool("MRD")["Mindslaver"])
+    for _ in range(4):
+        _w2g1_put(game, 0, lea["Forest"])
+    for land in [p for p in game.players[0].battlefield if p.card.name == "Forest"]:
+        assert game.tap_land_for_mana(0, "Forest", permanent_id=land.permanent_id)
+    assert game.players[0].mana_pool.get("G") == 4
+    result = game.activate_permanent_ability(0, "Mindslaver", target_player_index=1)
+    assert result.supported, result.details
+    _w2g1_resolve_stack(game)
+    assert "Mindslaver" in [card.name for card in game.players[0].graveyard]
+    assert "P1 will control P2 during P2's next turn" in game.log
+    assert game.decider_of(1) == 1    # not yet: P1's own turn goes on
+    game.start_next_turn()
+    _w2g1_resolve_stack(game)
+    assert (game.active_player_index, game.decider_of(1)) == (1, 0)
+    game.start_next_turn()
+    _w2g1_resolve_stack(game)
+    assert game.decider_of(1) == 1
+
+
+def test_w2g1_an_ai_controlling_the_opponent_casts_nothing_for_them(set_pool):
+    """The controlled seat's whole main phase as the simulator plays it: the
+    AI deciding for it plays no land, casts no creature and attacks with
+    nothing (``engine/ai_player_control.py``); uncontrolled, it would."""
+    from engine.ai_simulator import SimulationReport, _play_land_drops, _play_casts
+    from engine.ai_declarations import choose_attackers
+
+    lea = set_pool("LEA")
+    game = _w2g1_table(set_pool, their_hand=[lea["Forest"], lea["Grizzly Bears"]])
+    game.enforce_mana_costs = False
+    bears = _w2g1_put(game, 1, lea["Grizzly Bears"])
+    _w2g1_put(game, 0, set_pool("MRD")["Mindslaver"])
+    assert game.activate_permanent_ability(0, "Mindslaver", target_player_index=1).supported
+    _w2g1_resolve_stack(game)
+    game.start_next_turn()
+    _w2g1_resolve_stack(game)
+    report = SimulationReport(games_requested=1, games_completed=0, interaction_count=0)
+    _play_land_drops(game, 1, report, 1, 1)
+    _play_casts(game, 1, report, 1, 1)
+    assert report.lands_played == 0
+    assert [p.card.name for p in game.players[1].battlefield] == ["Grizzly Bears"]
+    assert choose_attackers(game, 1) == []
+    game.player_controls.clear()
+    _play_land_drops(game, 1, report, 1, 1)
+    assert report.lands_played >= 1
+    assert bears in list(game.controlled_by(1))
+
+# ==== end W2G1 ======================================================

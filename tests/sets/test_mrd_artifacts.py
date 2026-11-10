@@ -1790,3 +1790,184 @@ def test_w1g7_sculpting_steel_with_nothing_to_copy_is_itself(set_pool):
     assert steel.effective_card.name == "Sculpting Steel", "a creature is not an artifact"
 
 # ==== end W1G7 ======================================================
+
+
+# ==== W2G5 ==========================================================
+# W2G5's tests go between this line and the "end W2G5" line.
+#
+# The AI pile. Oblivion Stone: a fate counter is a shelter from the Stone's
+# own sweep (`ai_target_sides.sweep_a_named_counter_spares`), so it goes on
+# the seat's most valuable permanent the sweep would take that has none yet;
+# the sweep is scored by what its rehearsal measured. Crystal Shard: "Return
+# target creature to its owner's hand unless its controller pays {1}" is aimed
+# by the toll's unpaid branch (`ai_target_sides.toll_effect_side`).
+
+from engine import Game as _w2g5_Game
+from engine import PlayerState as _w2g5_PlayerState
+from engine.ai_abilities import choose_activation_action as _w2g5_choose_activation
+from engine.ai_actions import activation_announcement as _w2g5_activation_announcement
+from engine.ai_payment import tap_planned_lands as _w2g5_tap_planned_lands
+from engine.models import Permanent as _w2g5_Permanent
+from engine.named_counters import counters_on as _w2g5_counters_on
+from tests.helpers import _nosick as _w2g5_nosick
+from tests.helpers import resolve_stack as _w2g5_resolve_stack
+
+
+def _w2g5_table(set_pool, mine, theirs=()):
+    """Seat 0 (A) in its first main phase, mana enforced, all untapped."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    card = lambda name: mrd[name] if name in mrd else lea[name]  # noqa: E731
+    game = _w2g5_Game(players=[
+        _w2g5_PlayerState("A", library=[card("Island")] * 10),
+        _w2g5_PlayerState("B", library=[card("Island")] * 10),
+    ])
+    game.enforce_mana_costs = False
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w2g5_nosick(_w2g5_Permanent(card=card(name)))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            placed[seat].append(permanent)
+    game.start_turn(0)
+    game._settle()
+    game.enforce_mana_costs = True
+    return game, placed[0], placed[1]
+
+
+def _w2g5_activate_the_choice(game):
+    """What the main-phase chooser proposes, carried out; None if nothing."""
+    action = _w2g5_choose_activation(game, 0)
+    if action is None:
+        return None
+    _w2g5_tap_planned_lands(game, 0, action)
+    assert game.activate_permanent_ability(
+        0, action.permanent_name, **_w2g5_activation_announcement(action),
+    ).supported
+    _w2g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    return action
+
+
+def test_w2g5_oblivion_stone_shelters_its_best_permanent_then_sweeps(set_pool):
+    game, (stone, angel, *_lands), (bears, giant) = _w2g5_table(
+        set_pool, ["Oblivion Stone", "Serra Angel", *["Island"] * 10],
+        ["Grizzly Bears", "Hill Giant"],
+    )
+    # Swept now, the Angel would go with them: it is sheltered first.
+    first = _w2g5_activate_the_choice(game)
+    assert first is not None and first.ability_index is None
+    assert _w2g5_counters_on(angel, "fate") == 1
+    assert _w2g5_counters_on(stone, "fate") == 0
+    for permanent in game.all_permanents():
+        permanent.tapped = False
+    # Next time the sweep, not a second counter on the Angel.
+    second = _w2g5_activate_the_choice(game)
+    assert second is not None and second.ability_index == 1
+    assert not game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)
+    assert game.is_on_battlefield(angel) and _w2g5_counters_on(angel, "fate") == 0
+    assert not game.is_on_battlefield(stone)
+
+
+def test_w2g5_oblivion_stone_sweeps_a_board_worth_more_than_its_own(set_pool):
+    game, (_stone, bears, *_lands), theirs = _w2g5_table(
+        set_pool, ["Oblivion Stone", "Grizzly Bears", *["Island"] * 10],
+        ["Hill Giant", "Serra Angel", "Craw Wurm"],
+    )
+    action = _w2g5_activate_the_choice(game)
+    assert action is not None and action.ability_index == 1
+    assert not any(game.is_on_battlefield(permanent) for permanent in theirs)
+
+
+def test_w2g5_oblivion_stone_never_puts_a_fate_counter_on_a_land(set_pool):
+    game, (stone, *lands), _ = _w2g5_table(
+        set_pool, ["Oblivion Stone", *["Island"] * 10],
+    )
+    action = _w2g5_choose_activation(game, 0)
+    # Nothing of the seat's own the sweep would take, and nothing to sweep.
+    assert action is None
+    assert not any(_w2g5_counters_on(land, "fate") for land in lands)
+    assert _w2g5_counters_on(stone, "fate") == 0
+
+
+def test_w2g5_crystal_shard_leaves_its_own_creature_alone(set_pool):
+    game, (_shard, bears, *_lands), _ = _w2g5_table(
+        set_pool, ["Crystal Shard", "Grizzly Bears", "Island", "Island"],
+    )
+    assert _w2g5_choose_activation(game, 0) is None
+    assert game.is_on_battlefield(bears)
+
+
+def test_w2g5_crystal_shard_bounces_the_opponents_creature(set_pool):
+    game, (_shard, bears, *_lands), (giant,) = _w2g5_table(
+        set_pool, ["Crystal Shard", "Grizzly Bears", "Island", "Island"], ["Hill Giant"],
+    )
+    action = _w2g5_activate_the_choice(game)
+    assert action is not None and action.target_player_index == 1
+    assert not game.is_on_battlefield(giant)
+    assert [card.name for card in game.players[1].hand] == ["Hill Giant"]
+    assert game.is_on_battlefield(bears)
+
+# ==== end W2G5 ======================================================
+
+
+# ==== W2G4 ==========================================================
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import resolve_stack as _w2g4_resolve_stack
+
+
+def _w2g4_steel_table(set_pool):
+    """Sculpting Steel in seat 0's hand; an Ornithopter on each side and the
+    opponent's Serum Tank, so there is always something to copy."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w2g4_Game(players=[
+        _w2g4_PlayerState(name="P0", library=[lea["Island"]] * 5,
+                          hand=[mrd["Sculpting Steel"]]),
+        _w2g4_PlayerState(name="P1", library=[lea["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    for seat, card in ((0, mrd["Ornithopter"]), (1, mrd["Serum Tank"])):
+        game._put_permanent_onto_battlefield(seat, _w2g4_Permanent(card=card), None)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    _w2g4_resolve_stack(game)
+    return game
+
+
+def test_w2g4_sculpting_steel_declined_stays_an_artifact_doing_nothing(set_pool):
+    """The ruling (2007-07-15): "You can choose not to copy anything. In that
+    case, Sculpting Steel stays on the battlefield as an artifact that doesn't
+    do much of anything." Declined at cast, with two artifacts to copy, it is
+    itself: no Serum Tank's trigger counted its arrival as a copy would, and
+    the board's first artifact (the fallback a bare cast takes) was not
+    copied."""
+    game = _w2g4_steel_table(set_pool)
+    tank = next(p for p in game.all_permanents() if p.card.name == "Serum Tank")
+    before = tank.metadata.get("charge_counters") or 0
+
+    assert game.cast_from_hand(0, "Sculpting Steel", decline_copy=True).supported
+    _w2g4_resolve_stack(game)
+
+    steel = next(p for p in game.controlled_by(0) if p.card.name == "Sculpting Steel")
+    assert steel.effective_card.name == "Sculpting Steel", game.log
+    assert steel.has_type("artifact") and not steel.is_creature
+    assert not steel.metadata.get("charge_counters")
+    # The original Tank still saw an artifact enter — the Steel itself.
+    assert (tank.metadata.get("charge_counters") or 0) == before + 1
+    assert "Sculpting Steel entered as itself, copying nothing" in game.log
+
+
+def test_w2g4_sculpting_steel_naming_nothing_still_copies(set_pool):
+    """The default a seat nobody asks takes (and an AI cast that names no
+    model): it copies — the first artifact of the type, as before."""
+    game = _w2g4_steel_table(set_pool)
+
+    assert game.cast_from_hand(0, "Sculpting Steel").supported
+    _w2g4_resolve_stack(game)
+
+    steel = next(p for p in game.controlled_by(0) if p.card.name == "Sculpting Steel")
+    assert steel.effective_card.name != "Sculpting Steel", game.log
+
+# ==== end W2G4 ======================================================

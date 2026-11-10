@@ -94,6 +94,7 @@ from .lowering import (
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
     _fused_exile_event_subject_until_source_leaves,
+    _fused_event_object_exchange,
     _lower_become_color,
     _lower_cant_be,
     _lower_combat_restriction,
@@ -824,6 +825,14 @@ def lower_statement(
         fused = _fused_exile_event_subject_until_source_leaves(
             statement.steps, event
         )
+        if fused is not None:
+            return fused
+        # "…its controller chooses target permanent another player controls
+        # that shares a card type with it. Exchange control of those
+        # permanents." (Confusion in the Ranks.) Beside Portcullis for its
+        # reason: the pair is one announcement only under an event that froze
+        # the object and its controller (CR 603.10).
+        fused = _fused_event_object_exchange(statement.steps, event)
         if fused is not None:
             return fused
         # "Magma Burst deals 3 damage to any target. If this spell was kicked,

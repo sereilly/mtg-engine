@@ -659,8 +659,6 @@ def _blocked_and_aimed(text: str):
     """A creature printing *text* attacks, is blocked, and aims its ability at
     the blocker; the blocker is then taken out of combat in response. Returns
     the game, the blocker, the bystander beside it and the ability's kind."""
-    from engine.handlers.combat import _take_permanent_out_of_combat
-
     card = _mk_card(name="Relation Probe", type_line="Creature - Test", power=3, toughness=3, oracle_text=text)
     kind = compile_card_oracle(card).activated_abilities[0].instruction.kind
     source = _nosick(Permanent(card=card))
@@ -685,7 +683,7 @@ def _blocked_and_aimed(text: str):
         0, card.name, permanent_index=0, target_permanent_ids=[blocker.permanent_id],
     )
     assert queued.supported and queued.details == "queued", (text, queued)
-    _take_permanent_out_of_combat(game, blocker, frees_blocked_attackers=False)
+    game.remove_from_combat(blocker, frees_blocked_attackers=False)
     return game, blocker, bystander, kind
 
 

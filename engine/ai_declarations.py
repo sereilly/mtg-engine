@@ -38,6 +38,7 @@ from .ai_compelled_blocks import compelled_blocks, fight_outcome
 from .ai_standing import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
 from .combat_assignment import combat_damage_assigned_by
+from .ai_player_control import plays_for_another
 
 
 def legal_attackers(game: Game, attacking_player_index: int, against: int | None = None) -> list[int]:
@@ -192,6 +193,10 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     decides, for each legal attacker, whether to send it at that opponent —
     splitting one attack across multiple opponents is a documented stretch goal,
     not implemented here."""
+    # CR 723.5: a seat another player decides for plays nothing
+    # optional for itself (``ai_player_control``'s measured policy).
+    if plays_for_another(game, attacking_player_index):
+        return []
     player = game.players[attacking_player_index]
     opponent_index = choose_attack_target(game, attacking_player_index)
     opponent = game.players[opponent_index]

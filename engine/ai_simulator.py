@@ -146,6 +146,12 @@ class SimulationReport:
     #: the class, found by counting the queue at the end of four games with
     #: Time Walk pinned: five resolved, five still queued.
     extra_turns_taken: int = 0
+    #: Turns played under another seat's control (CR 723, Mindslaver): the
+    #: active seat's decisions made by its controller, whose AI plays nothing
+    #: optional for it (``ai_player_control``). Zero in every run whose pool
+    #: prints no such effect; a run pinning one that reads zero activated it
+    #: never, or its control never began.
+    controlled_turns: int = 0
     #: Modal spells cast ("Choose one —", CR 700.2), by the index of the mode
     #: each cast named. **Every key was 0 before the AI had a mode chooser**:
     #: the policy named no mode, the engine resolved the first bullet, and a
@@ -348,6 +354,11 @@ _SIMULATED_CHOICES = (
     # draw) waits for the type — so it belongs to the named pass, last, which
     # is where the catch-all answered it when nothing else was queued.
     "land_type_choice",
+    # "Target opponent guesses whether a card with that name is in your hand."
+    # (Liar's Pendulum.) Appended for the reason every entry above it is — the
+    # position cannot change an existing seed — and it suspends: the offer to
+    # reveal behind it reads the guess.
+    "guess_named_card",
 )
 
 
@@ -1239,6 +1250,7 @@ def run_ai_simulation(
             # than copied. See the notes below.
             active = game.start_next_turn()
             report.extra_turns_taken += bool(game.current_turn_is_extra)
+            report.controlled_turns += game.decider_of(active) != active
             active_player = game.players[active]
             opponent = game.players[1 - active]
 

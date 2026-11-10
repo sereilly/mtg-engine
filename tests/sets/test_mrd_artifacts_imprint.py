@@ -802,3 +802,140 @@ def test_w1g5_synod_sanctum_exiles_your_own_permanent_and_returns_the_pile(set_p
     assert [c.name for c in alice.graveyard] == ["Synod Sanctum"]
 
 # ==== end W1G5 ======================================================
+
+
+# ==== W2G5 ==========================================================
+# W2G5's tests go between this line and the "end W2G5" line.
+#
+# The AI pile: a seat nobody asks **takes** a hand imprint
+# (`ai_prompt_readers.offers_a_hand_imprint`, CR 607.2a) — the "make no
+# trades" default declined every one, and Chrome Mox tapped for nothing all
+# game — and then uses it: Isochron Scepter's copy is weighed one level down
+# inside the activation's rehearsal (`ai_policy.choose_copy_cast`), and Soul
+# Foundry's card-defined {X} is priced as the engine charges it
+# (`ai_abilities._activation_candidate`).
+
+from engine import Game as _w2g5_Game
+from engine import PlayerState as _w2g5_PlayerState
+from engine.ai_abilities import choose_activation_action as _w2g5_choose_activation
+from engine.ai_actions import activation_announcement as _w2g5_activation_announcement
+from engine.ai_payment import tap_planned_lands as _w2g5_tap_planned_lands
+from engine.ai_policy import choose_cast_action as _w2g5_choose_cast_action
+from engine.ai_prompt_readers import offers_a_hand_imprint as _w2g5_offers_a_hand_imprint
+from engine.models import Permanent as _w2g5_Permanent
+from engine.oracle import compile_card_oracle as _w2g5_compile
+from tests.helpers import _nosick as _w2g5_nosick
+from tests.helpers import resolve_stack as _w2g5_resolve_stack
+
+
+def _w2g5_card(set_pool, name):
+    mrd = set_pool("MRD")
+    return mrd[name] if name in mrd else set_pool("LEA")[name]
+
+
+def _w2g5_imprinted(set_pool, artifact, hand, lands=(), *, interactive=False):
+    """Seat 0 casts *artifact* (mana off) holding *hand*, the entry trigger
+    answered by the seat's own default; then mana on, everything able to act."""
+    card = lambda name: _w2g5_card(set_pool, name)  # noqa: E731
+    game = _w2g5_Game(players=[
+        _w2g5_PlayerState("A", hand=[card(artifact), *map(card, hand)],
+                          library=[card("Plains")] * 10),
+        _w2g5_PlayerState("B", library=[card("Island")] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0} if interactive else set()
+    for name in lands:
+        game._put_permanent_onto_battlefield(0, _w2g5_nosick(_w2g5_Permanent(card=card(name))), None)
+    game._put_permanent_onto_battlefield(
+        1, _w2g5_nosick(_w2g5_Permanent(card=card("Grizzly Bears"))), None,
+    )
+    game.start_turn(0)
+    game._settle()
+    assert game.cast_from_hand(0, artifact).supported
+    if not interactive:
+        _w2g5_resolve_stack(game)
+        game.auto_resolve_pending_choices()
+        for permanent in game.all_permanents():
+            _w2g5_nosick(permanent)
+        game.enforce_mana_costs = True
+    return game
+
+
+def _w2g5_activate(game):
+    action = _w2g5_choose_activation(game, 0)
+    assert action is not None
+    _w2g5_tap_planned_lands(game, 0, action)
+    assert game.activate_permanent_ability(
+        0, action.permanent_name, **_w2g5_activation_announcement(action),
+    ).supported
+    _w2g5_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    return action
+
+
+def test_w2g5_chrome_mox_imprints_the_cheapest_card_and_taps_for_its_colour(set_pool):
+    game = _w2g5_imprinted(set_pool, "Chrome Mox", ["Hill Giant", "Llanowar Elves", "Grizzly Bears"], ["Mountain"])
+    alice = game.players[0]
+    assert [card.name for card in alice.exile] == ["Llanowar Elves"]
+    assert "A exiled Llanowar Elves from their hand (Chrome Mox)" in game.log
+    # {1}{G} out of a Mountain and the Mox's green.
+    action = _w2g5_choose_cast_action(game, 0)
+    assert action is not None and action.card_name == "Grizzly Bears"
+    _w2g5_tap_planned_lands(game, 0, action)
+    assert game.cast_from_hand(0, "Grizzly Bears").supported
+    _w2g5_resolve_stack(game)
+    assert [p.card.name for p in game.controlled_by(0) if p.is_creature] == ["Grizzly Bears"]
+
+
+def test_w2g5_isochron_scepter_imprints_and_the_ai_casts_its_copy(set_pool):
+    game = _w2g5_imprinted(set_pool, "Isochron Scepter", ["Lightning Bolt", "Hill Giant"], ["Mountain"] * 2)
+    assert [card.name for card in game.players[0].exile] == ["Lightning Bolt"]
+    action = _w2g5_activate(game)
+    assert action.permanent_name == "Isochron Scepter"
+    assert "A cast a copy of Lightning Bolt without paying its mana cost (Isochron Scepter)" in game.log
+    assert not [p for p in game.controlled_by(1) if p.is_creature], "the copy killed the Bears"
+    assert [card.name for card in game.players[0].exile] == ["Lightning Bolt"], "the card stays imprinted"
+
+
+def test_w2g5_soul_foundry_imprints_and_the_ai_pays_its_defined_x(set_pool):
+    game = _w2g5_imprinted(set_pool, "Soul Foundry", ["Hill Giant", "Craw Wurm"], ["Mountain"] * 4)
+    assert [card.name for card in game.players[0].exile] == ["Hill Giant"]
+    action = _w2g5_activate(game)
+    assert action.permanent_name == "Soul Foundry"
+    assert "Soul Foundry created a token copy of Hill Giant" in game.log
+    # X is the Giant's mana value: all four Mountains paid it.
+    assert all(p.tapped for p in game.controlled_by(0) if p.card.name == "Mountain")
+
+
+def test_w2g5_an_interactive_seat_is_still_asked_about_the_imprint(set_pool):
+    game = _w2g5_imprinted(set_pool, "Chrome Mox", ["Llanowar Elves"], interactive=True)
+    # By hand: `resolve_stack` answers an interactive seat's prompt for it.
+    for _ in range(4):
+        if game.pending_choices or not game.stack:
+            break
+        game.resolve_top_of_stack()
+    assert [(choice.kind, choice.player_index) for choice in game.pending_choices] == [
+        ("optional_pay", 0)
+    ]
+    assert game.players[0].exile == []
+
+
+def test_w2g5_only_a_lone_hand_exile_linked_to_another_ability_is_an_imprint(set_pool):
+    mrd = set_pool("MRD")
+
+    def offer_of(card):
+        (trigger,) = _w2g5_compile(card).triggered_abilities
+        return trigger.instruction.payload["action"]
+
+    for name in ("Chrome Mox", "Isochron Scepter", "Soul Foundry"):
+        source = _w2g5_Permanent(card=mrd[name])
+        assert _w2g5_offers_a_hand_imprint(offer_of(mrd[name]), source), name
+    # The same exile with no linked ability behind it is a card given for
+    # nothing, and stays declined.
+    mox = mrd["Chrome Mox"]
+    assert not _w2g5_offers_a_hand_imprint(
+        offer_of(mox), _w2g5_Permanent(card=_w2g5_card(set_pool, "Grizzly Bears")),
+    )
+    assert not _w2g5_offers_a_hand_imprint(offer_of(mox), None)
+
+# ==== end W2G5 ======================================================

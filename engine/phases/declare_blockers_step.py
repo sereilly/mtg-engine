@@ -861,7 +861,7 @@ class DeclareBlockersStepMixin:
         declared pair, at the first member staying that its block was spread
         onto, and the spread is recomputed from that pair as it was from the
         first. Asked by every road an attacker leaves combat on: a removal
-        (``handlers/combat._take_permanent_out_of_combat``), leaving the
+        (``Game.remove_from_combat`` — an effect's, or a regeneration's), leaving the
         battlefield or changing controllers (``_renumber_combat_after_removal``)
         and no longer being a creature (``_prune_combat_state``).
         """

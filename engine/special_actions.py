@@ -159,6 +159,9 @@ def take_special_action(
         # here.
         game.take_card_from_hand(player, card)
         arrived = game.put_card_into_graveyard(player, card)
+        # The object the graveyard now holds, for the watchers below
+        # (CR 400.7, ``put_card_into_graveyard``).
+        card = arrived or card
         game.log.append(
             f"{player.name} discarded {card.name} (CR 116.2e special action)"
             if arrived

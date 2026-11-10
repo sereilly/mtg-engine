@@ -270,6 +270,7 @@ from .control_changes import (
     _lower_gain_control,
 )
 from .exchanges import (
+    _fused_event_object_exchange,
     _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
     _lower_exchange_chosen_sets,
@@ -428,6 +429,7 @@ from .game import (
     _lower_secretly_choose_numbers,
     _lower_ante,
     _lower_extra_turn,
+    _lower_control_player_next_turn,
     _lower_extra_phases,
     _lower_top_card_contest,
     _LOSE_GAME_KINDS,
@@ -606,6 +608,7 @@ __all__ = [
     "_lower_announced_choice",
     "_lower_choose_permanent",
     "_lower_choose_permanents",
+    "_fused_event_object_exchange",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",
     "_lower_exchange_chosen_sets",
@@ -783,6 +786,7 @@ __all__ = [
     "_lower_create_copy_token",
     "_lower_create_token",
     "_lower_extra_turn",
+    "_lower_control_player_next_turn",
     "_lower_extra_phases",
     "_LOSE_GAME_KINDS",
     "_lower_lose_game",

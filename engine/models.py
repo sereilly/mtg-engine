@@ -1342,10 +1342,13 @@ class PlayerState:
     # The **cards** behind that tally, for the sentence that names them rather
     # than counting them: "return to your hand all creature cards in your
     # graveyard **that were put there from the battlefield this turn**" (No Rest
-    # for the Wicked). A list and not a set, because two copies of a card in a
-    # deck are the same immutable ``CardDefinition`` — so "how many of this card
-    # arrived that way" is a count of entries, and the sweep may take exactly
-    # that many out of the pile.
+    # for the Wicked, Second Sunrise). The objects the pile held as they
+    # arrived: the graveyard's one arrival lands a copy colliding with an object
+    # some graveyard holds as a new one (CR 400.7), so an entry names one card,
+    # and an entry whose card has left a pile is retired at that object's next
+    # arrival (``graveyard_order.record_arrival_history``). A list and not a
+    # set, and read by count of entries, for a pile written directly, where one
+    # object can still sit at two positions.
     #
     # Its own record beside the tally rather than a replacement for it: the
     # tally counts a token (CR 111.7 puts it in the graveyard before the

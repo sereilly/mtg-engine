@@ -185,7 +185,7 @@ def return_one_exiled_card(game: Game, instruction: OracleInstruction, context: 
             if not legal:
                 context.results[RETURN_HOST_KEY] = None
                 return
-            if len(legal) > 1 and seat in game.interactive_seats:
+            if len(legal) > 1 and game.asks_a_person(seat):
                 game.arm_permanent_choice(
                     seat,
                     card_name=card_name,

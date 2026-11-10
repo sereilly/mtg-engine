@@ -895,6 +895,29 @@ def steal_blockers_of_source(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+def _announced_relation_refusal(game, targets: dict, context, anchor, chosen) -> str | None:
+    """Why *chosen* no longer answers the relations its announcement was
+    held to (``lowering.exchanges._fused_event_object_exchange``), or None.
+
+    The CR 608.2b re-check of what ``trigger_targets.
+    _trigger_candidates_by_relation`` offered: "another player controls"
+    against the seat that announced (the event object's controller, frozen
+    by the fire site), and "shares a card type with it" against *anchor*,
+    the event's object. A target whose controller has since become that seat,
+    or whose types no longer meet the anchor's, is illegal (Confusion in the
+    Ranks' 2004-12-01 ruling). None for a description carrying neither.
+    """
+    from .permanent_choices import shares_a_card_type
+
+    if targets.get("not_controlled_by") == "chooser":
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or game.controls(seat, chosen):
+            return "is controlled by the player who chose it"
+    if targets.get("shares_type_with_relative") and not shares_a_card_type(chosen, anchor):
+        return f"shares no card type with {anchor.card.name}"
+    return None
+
+
 @effect_handler("exchange_control_of_targets")
 def exchange_control_of_targets(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exchange control of target artifact, creature, or land you control and
@@ -941,6 +964,21 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
         chosen = [
             context.source_permanent, *resolve_target_slots(game, context, 1),
         ]
+    elif payload.get("first") == "event_subject":
+        # "…its controller chooses target permanent another player controls
+        # that shares a card type with it. Exchange control of those
+        # permanents." (Confusion in the Ranks.) Gilded Drake's one chosen
+        # slot with the other side the **firing event's object**, frozen by id
+        # at the fire site (CR 603.10) — gone by now, it names nothing, and
+        # the loop below reads that as no part of the exchange happening (the
+        # ruling, 2004-12-01: "only if they're both on the battlefield when the
+        # ability resolves").
+        frozen = (context.trigger_context or {}).get("event_subject_permanent_id")
+        slot_filters = [{}, dict(targets.get("filter") or {})]
+        chosen = [
+            game.permanent_by_id(frozen) if isinstance(frozen, int) else None,
+            *resolve_target_slots(game, context, 1),
+        ]
     else:
         slot_filters = list(targets.get("filters") or [targets.get("filter") or {}] * 2)
         chosen = resolve_target_slots(game, context, 2)
@@ -976,6 +1014,14 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
         game.log.append(f"{card.name}: the exchange could not be completed, so nothing happens")
         return True, "resolved"
     first, second = legal
+    refusal = _announced_relation_refusal(game, targets, context, first, second)
+    if refusal is not None:
+        # CR 608.2b: the one target is illegal now, so the ability does
+        # nothing at all — "the permanents have to share a permanent type
+        # both when the target is chosen and when the ability resolves"
+        # (Confusion in the Ranks, 2004-12-01).
+        game.log.append(f"{card.name}: {second.card.name} {refusal}, so nothing happens")
+        return True, "resolved"
 
     if payload.get("shares_a_type"):
         # "…that shares one of **those** types with it" — those types being the

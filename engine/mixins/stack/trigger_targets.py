@@ -713,7 +713,60 @@ class TriggerTargetsMixin:
             ability_source=item.source_permanent,
             triggered=True,
         )
+        candidates = self._trigger_candidates_by_relation(
+            item, spec, chooser_index, candidates
+        )
         return spec, chooser_index, candidates
+
+    def _trigger_candidates_by_relation(
+        self, item: StackItem, spec: dict, chooser_index: int, candidates: list,
+    ) -> list:
+        """*candidates* held to the two relations a chooser-announced target
+        prints, or *candidates* unchanged for a spec carrying neither.
+
+        "…its controller chooses target permanent **another player controls
+        that shares a card type with it**." (Confusion in the Ranks.) The
+        enumerator measures a printed controller from the ability's
+        controller, and "another player" here is measured from the *chooser*
+        — the entering object's controller, a different seat whenever an
+        opponent's permanent enters; "it" is the event's object, frozen by id
+        at the fire site (CR 603.10). Neither is a fact about one permanent,
+        so both are asked here, of the list the enumerator built, with the
+        readers ``choose_permanent``'s candidate rule asks them with. An
+        anchor that is gone names nothing, and an unknown relation offers
+        nothing rather than everything.
+        """
+        excluded = spec.get("not_controlled_by")
+        shares = spec.get("shares_type_with_relative")
+        if not excluded and not shares:
+            return candidates
+        from ...handlers.permanent_choices import shares_a_card_type
+
+        if excluded not in (None, "chooser"):
+            return []
+        anchor = None
+        if shares:
+            if spec.get("relative_to") != "event_subject":
+                return []
+            frozen = (item.trigger_context or {}).get("event_subject_permanent_id")
+            anchor = self.permanent_by_id(frozen) if isinstance(frozen, int) else None
+            if anchor is None or not self.is_on_battlefield(anchor):
+                return []
+        kept = []
+        for candidate in candidates:
+            if candidate.get("kind") != "permanent":
+                continue
+            permanent = self.permanent_at(candidate["seat"], candidate["index"])
+            if permanent is None:
+                continue
+            if excluded == "chooser" and self.controls(chooser_index, permanent):
+                continue
+            if anchor is not None and (
+                permanent is anchor or not shares_a_card_type(permanent, anchor)
+            ):
+                continue
+            kept.append(candidate)
+        return kept
 
     def _trigger_role_candidates(
         self, item: StackItem, spec: dict,

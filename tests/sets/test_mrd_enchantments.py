@@ -538,8 +538,9 @@ def test_w1g9_confusion_in_the_ranks_exchanges_the_entering_creature(set_pool):
 def test_w1g9_confusion_in_the_ranks_entering_permanents_controller_chooses(set_pool):
     """"**Its controller** chooses": when P1's Elves enter, the choice is
     P1's — an interactive P1 is asked, offered P0's creatures only (not the
-    enchantment, which shares no type with the Elves), and the trigger waits
-    on the stack until the answer."""
+    enchantment, which shares no type with the Elves). Asked as the ability
+    goes on the stack since MRD W2G4 (CR 603.3d: the printed "target" is an
+    announcement), so the answer is the stacked ability's target."""
     game = _w1g9_confusion_game(
         set_pool, mine=["Grizzly Bears", "Hill Giant"],
         hands=((), ["Llanowar Elves"]),
@@ -548,13 +549,13 @@ def test_w1g9_confusion_in_the_ranks_entering_permanents_controller_chooses(set_
     game.active_player_index = 1
     game.cast_from_hand(1, "Llanowar Elves")
     assert [(c.kind, c.player_index) for c in game.pending_choices] == [
-        ("permanent_choice", 1)
+        ("trigger_target", 1)
     ]
-    offered = game.live_permanent_choices(game.pending_choices[0])
-    assert sorted(p.card.name for p in offered) == ["Grizzly Bears", "Hill Giant"]
+    offered = game.pending_choices[0].data["targets"]
+    assert sorted(entry["name"] for entry in offered) == ["Grizzly Bears", "Hill Giant"]
     assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
     giant = _w1g9_named(game, "Hill Giant")
-    assert game.confirm_permanent_choice(1, giant.permanent_id) is True
+    assert game.confirm_trigger_target(1, permanent_id=giant.permanent_id) is True
     _w1g9_resolve_stack(game)
     game._settle()
     assert _w1g9_seats(game) == {
@@ -764,3 +765,395 @@ def test_w1g12_sphere_of_purity_ignores_a_spell_and_covers_only_you(set_pool):
     assert game.players[1].life == 19
 
 # ==== end W1G12 ======================================================
+
+
+# ==== W2G2 ==========================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+
+from engine.cast_permissions import playable_from_zones as _w2g2_playable
+from engine.game import Game as _W2G2Game
+from engine.linked_exile import face_down_exiled_cards as _w2g2_face_down
+from engine.models import Permanent as _W2G2Permanent
+from engine.models import PlayerState as _W2G2PlayerState
+from engine.oracle import compile_card_oracle as _w2g2_compile
+
+from tests.helpers import resolve_stack as _w2g2_resolve_stack
+
+
+def _w2g2_fate_table(set_pool, *, seats=2, libraries=None, fates=1, interactive=()):
+    """Alice (seat 0) controls *fates* Shared Fates. Bob's library is a
+    Plains over a Grizzly Bears over a Lightning Bolt unless told otherwise;
+    everybody else's is Islands."""
+    lea, mrd = set_pool("LEA"), set_pool("MRD")
+    default = {
+        1: [lea["Plains"], lea["Grizzly Bears"], lea["Lightning Bolt"]],
+    }
+    libraries = {**default, **(libraries or {})}
+    players = [
+        _W2G2PlayerState(
+            name=("Alice", "Bob", "Carol", "Dave")[seat],
+            library=list(libraries.get(seat, [lea["Island"]] * 4)),
+        )
+        for seat in range(seats)
+    ]
+    game = _W2G2Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    placed = []
+    for _ in range(fates):
+        fate = _W2G2Permanent(card=mrd["Shared Fate"])
+        game._put_permanent_onto_battlefield(0, fate, None)
+        placed.append(fate)
+    game._sync_control()
+    return game, players, placed
+
+
+def _w2g2_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w2g2_shared_fate_compiles_with_both_lines_carried_out(set_pool):
+    program = _w2g2_compile(set_pool("MRD")["Shared Fate"])
+    assert program.supported
+    assert sorted(i.value for i in program.instructions) == ["exiler_play", "replacements"]
+
+
+def test_w2g2_a_draw_exiles_an_opponents_top_card_face_down_instead(set_pool):
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool)
+    assert game._draw_with_replacements(alice, 1) == 0
+    assert alice.hand == [] and len(alice.library) == 4
+    assert _w2g2_names(bob.exile) == ["Plains"] and len(bob.library) == 2
+    # Face down to its owner, shown to the seat that exiled it (CR 406.3).
+    assert _w2g2_names(_w2g2_face_down(game, 1, 1)) == ["Plains"]
+    assert _w2g2_face_down(game, 1, 0) == []
+    # The log counts it and never names it: it is every seat's.
+    assert not any("Plains" in line for line in game.log)
+    assert any(
+        "Alice exiles the top card of Bob's library face down instead of drawing" in line
+        for line in game.log
+    )
+    # The enchantment is Alice's, and Bob's draws are replaced too: "a player".
+    game._draw_with_replacements(bob, 2)
+    assert bob.hand == [] and _w2g2_names(alice.exile) == ["Island", "Island"]
+    assert len(alice.library) == 2
+
+
+def test_w2g2_the_exiler_plays_lands_and_casts_spells_from_among_them(set_pool):
+    game, (alice, bob), (fate,) = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 2)
+    assert _w2g2_names(bob.exile) == ["Plains", "Grizzly Bears"]
+    offered = _w2g2_playable(game, 0)
+    assert [(e["zone"], e["name"], e["owner_seat"], e["source"]) for e in offered] == [
+        ("exile", "Plains", 1, "Shared Fate"), ("exile", "Grizzly Bears", 1, "Shared Fate"),
+    ]
+    # Not their owner's: Bob exiled neither (2004-12-01 — the cards are
+    # Alice's to play).
+    assert _w2g2_playable(game, 1) == []
+    played = game.cast_from_hand(0, "Plains", from_zone="exile")
+    assert played.supported, played.details
+    cast = game.cast_from_hand(0, "Grizzly Bears", from_zone="exile")
+    assert cast.supported, cast.details
+    _w2g2_resolve_stack(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Grizzly Bears", "Plains", "Shared Fate",
+    ]
+    assert bob.exile == [] and _w2g2_playable(game, 0) == []
+    # The record keeps nothing about a card that left exile (CR 400.7).
+    assert not fate.metadata.get("linked_exile")
+
+
+def test_w2g2_an_empty_opponent_library_is_nothing_exiled_and_no_loss(set_pool):
+    """2004-12-01: "Replacing your draws isn't optional. You can't draw cards
+    from your own library, even if all your opponents' libraries are empty." """
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool, libraries={1: []})
+    game._draw_with_replacements(alice, 1)
+    game.check_state_based_actions()
+    assert not alice.lost and not bob.lost
+    assert alice.hand == [] and len(alice.library) == 4
+    assert any("Bob's library is empty" in line for line in game.log)
+
+
+def test_w2g2_the_draw_step_draw_is_replaced_too(set_pool):
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 1, turn_based=True)
+    assert alice.hand == [] and _w2g2_names(bob.exile) == ["Plains"]
+
+
+def test_w2g2_when_shared_fate_leaves_its_cards_stay_face_down_and_closed(set_pool):
+    """2008-08-01: "Each Shared Fate tracks only the cards it exiled. If the
+    Shared Fate which was responsible for a card being exiled leaves the
+    battlefield, putting another Shared Fate onto the battlefield will not
+    allow you to play that card again." """
+    mrd = set_pool("MRD")
+    game, (alice, bob), (fate,) = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 1)
+    game.sacrifice_permanent(fate)
+    # Face down to everyone now — its exiler included (the look was the
+    # enchantment's) — and nobody's to play.
+    assert _w2g2_names(_w2g2_face_down(game, 1, 0)) == ["Plains"]
+    assert _w2g2_names(_w2g2_face_down(game, 1, 1)) == ["Plains"]
+    assert _w2g2_playable(game, 0) == []
+    # Draws are draws again.
+    game._draw_with_replacements(alice, 1)
+    assert _w2g2_names(alice.hand) == ["Island"]
+    second = _W2G2Permanent(card=mrd["Shared Fate"])
+    game._put_permanent_onto_battlefield(0, second, None)
+    assert _w2g2_playable(game, 0) == []
+    assert _w2g2_names(_w2g2_face_down(game, 1, 0)) == ["Plains"]
+
+
+def test_w2g2_three_players_the_drawer_picks_whose_library(set_pool):
+    lea = set_pool("LEA")
+    game, (alice, bob, carol), _ = _w2g2_fate_table(
+        set_pool, seats=3, libraries={2: [lea["Mountain"]] * 3}, interactive=(0,),
+    )
+    game._draw_with_replacements(alice, 1)
+    (offer,) = game.pending_replacement_choices
+    assert offer.kind == "opponent_library_draw" and offer.options == ("Bob", "Carol")
+    assert game.resolve_replacement_choice(0, 1, kind="opponent_library_draw")
+    assert _w2g2_names(carol.exile) == ["Mountain"] and bob.exile == []
+    assert [e["name"] for e in _w2g2_playable(game, 0)] == ["Mountain"]
+    # A seat nobody asks takes the smallest library still holding a card —
+    # Carol's two against Bob's three — and an empty one never.
+    game.interactive_seats = set()
+    game._draw_with_replacements(alice, 1)
+    assert _w2g2_names(carol.exile) == ["Mountain", "Mountain"]
+    carol.library.clear()
+    game._draw_with_replacements(alice, 1)
+    assert _w2g2_names(bob.exile) == ["Plains"]
+
+
+def test_w2g2_two_shared_fates_the_drawer_chooses_which_replaces(set_pool):
+    """2004-12-01: "If more than one Shared Fate is on the battlefield, you
+    choose which one replaces each card draw, but you can replace a draw only
+    once." (CR 616.1e.)"""
+    game, (alice, bob), (first, second) = _w2g2_fate_table(
+        set_pool, fates=2, interactive=(0,),
+    )
+    game._draw_with_replacements(alice, 1)
+    (order,) = [c for c in game.pending_choices if c.kind == "effect_order"]
+    assert len(order.data["options"]) == 2
+    assert game.resolve_pending_choice("effect_order", 0, option_index=1)
+    # One card exiled — the draw is replaced once — linked to one of them.
+    assert _w2g2_names(bob.exile) == ["Plains"]
+    linked = [f for f in (first, second) if f.metadata.get("linked_exile")]
+    assert len(linked) == 1 and len(linked[0].metadata["linked_exile"]) == 1
+
+
+def test_w2g2_the_wire_shows_the_card_to_its_exiler_alone(set_pool):
+    from web.serialization import exile_hidden_flags
+
+    game, (alice, bob), _ = _w2g2_fate_table(set_pool)
+    game._draw_with_replacements(alice, 1)
+    assert exile_hidden_flags(game, bob, 0, 1) == [False]
+    assert exile_hidden_flags(game, bob, 1, 1) == [True]
+    assert exile_hidden_flags(game, bob, None, 1) == [True]
+
+# ==== end W2G2 ======================================================
+
+
+# ==== W2G3 ==========================================================
+# W2G3's tests go between this line and the "end W2G3" line.
+from engine import Game as _w2g3_Game, PlayerState as _w2g3_PlayerState
+from engine.equipment import equipped_creature as _w2g3_equipped_creature
+from engine.models import Permanent as _w2g3_Permanent
+from tests.helpers import _nosick as _w2g3_nosick, resolve_stack as _w2g3_resolve
+
+
+def _w2g3_marching_bonesplitter(set_pool):
+    """March of the Machines on the battlefield, so Bonesplitter is a 1/1
+    artifact creature; Grizzly Bears beside it. Seat 0's precombat main."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    game = _w2g3_Game(players=[
+        _w2g3_PlayerState(name=f"P{seat}", library=[lea["Island"]] * 10)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    for _ in range(6):
+        if game.current_turn_phase == "precombat_main":
+            break
+        game._close_current_priority_step()
+    board = {}
+    for name, card in (
+        ("bears", lea["Grizzly Bears"]),
+        ("splitter", mrd["Bonesplitter"]),
+        ("march", mrd["March of the Machines"]),
+    ):
+        board[name] = _w2g3_nosick(_w2g3_Permanent(card=card))
+        game._put_permanent_onto_battlefield(0, board[name], None)
+    game._settle()
+    assert board["splitter"].is_creature
+    return game, board
+
+
+def test_w2g3_a_creature_equipment_can_activate_equip_and_it_does_nothing(set_pool):
+    """March of the Machines, 2004-12-01: "If an Equipment becomes a creature,
+    it can no longer equip a creature. … You can activate the Equipment's
+    equip ability, but it won't do anything." The activation was refused with
+    "no valid target" — the picker asked CR 301.5c's resolution question of
+    the target. Now the ability goes on the stack aimed at a creature its
+    controller controls, resolves, and the Equipment does not move."""
+    game, board = _w2g3_marching_bonesplitter(set_pool)
+    bears, splitter = board["bears"], board["splitter"]
+
+    queued = game.queue_permanent_ability(
+        0, "Bonesplitter", permanent_index=1,
+        target_permanent_ids=[bears.permanent_id],
+    )
+    assert queued.supported and queued.details == "queued", queued
+    _w2g3_resolve(game)
+
+    assert _w2g3_equipped_creature(splitter) is None
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    assert (
+        "Bonesplitter doesn't move: Bonesplitter is a creature and can't "
+        "equip (CR 301.5c)"
+    ) in game.log
+
+
+def test_w2g3_the_equip_picker_still_refuses_a_creature_it_may_not_target(set_pool):
+    """What the picker gave up is only the Equipment-side refusal. A creature
+    that is no legal target stays refused: an opponent's creature (the printed
+    "you control") is not offered while March animates the Equipment."""
+    game, board = _w2g3_marching_bonesplitter(set_pool)
+    theirs = _w2g3_nosick(_w2g3_Permanent(card=set_pool("LEA")["Grizzly Bears"]))
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    game._settle()
+
+    refused = game.queue_permanent_ability(
+        0, "Bonesplitter", permanent_index=1,
+        target_permanent_ids=[theirs.permanent_id],
+    )
+    assert not refused.supported, refused
+    assert not game.stack
+
+
+# ==== end W2G3 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# Confusion in the Ranks announces its target (CR 603.3d with the seat the
+# card names): "its controller chooses target permanent another player
+# controls that shares a card type with it" is chosen by the entering object's
+# controller as the ability goes on the stack, out of exactly the permanents
+# the two relations admit, and re-checked as it resolves (CR 608.2b; the
+# ruling, 2004-12-01: "The permanents have to share a permanent type both when
+# the target is chosen and when the ability resolves").
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.control import change_control as _w2g4_change_control
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import resolve_stack as _w2g4_resolve_stack
+
+
+def _w2g4_confusion(set_pool, boards, hand, *, seats=2, interactive=()):
+    """Confusion in the Ranks on seat 0's battlefield; *boards* maps a seat to
+    the LEA permanents on it; *hand* is ``(seat, name)``, the LEA creature that
+    seat holds and is active to cast."""
+    mrd, lea = set_pool("MRD"), set_pool("LEA")
+    players = []
+    for seat in range(seats):
+        battlefield = [_w2g4_Permanent(card=lea[n]) for n in boards.get(seat, ())]
+        if seat == 0:
+            battlefield.insert(0, _w2g4_Permanent(card=mrd["Confusion in the Ranks"]))
+        players.append(_w2g4_PlayerState(
+            name=f"P{seat}", battlefield=battlefield,
+            hand=[lea[hand[1]]] if hand[0] == seat else [],
+            library=[lea["Island"]] * 5,
+        ))
+    game = _w2g4_Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = hand[0]
+    game._sync_control()
+    return game
+
+
+def _w2g4_named(game, name):
+    return next(p for p in game.all_permanents() if p.card.name == name)
+
+
+def test_w2g4_confusion_names_its_target_on_the_stack(set_pool):
+    """The target is the stacked ability's before anything resolves — a seat
+    nobody asks names the one creature another player controls."""
+    from engine.stack_targets import chosen_targets
+
+    game = _w2g4_confusion(
+        set_pool, {1: ["Hill Giant", "Sol Ring"]}, (0, "Grizzly Bears"),
+    )
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    # Resolve the Bears alone: the trigger goes on the stack above nothing.
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
+    giant = _w2g4_named(game, "Hill Giant")
+    assert [t.permanent_id for t in chosen_targets(game, game.stack[-1])] == [
+        giant.permanent_id
+    ], game.log
+
+
+def test_w2g4_confusion_target_taken_by_the_chooser_in_response_is_illegal(set_pool):
+    """CR 608.2b: the announced Hill Giant comes under the chooser's control
+    before the ability resolves, so it is no longer a permanent "another
+    player controls" — the one target is illegal and nothing is exchanged."""
+    game = _w2g4_confusion(
+        set_pool, {1: ["Hill Giant"]}, (0, "Grizzly Bears"),
+    )
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Confusion in the Ranks"]
+    giant = _w2g4_named(game, "Hill Giant")
+    _w2g4_change_control(giant, 0, source="response")
+    game._sync_control()
+
+    _w2g4_resolve_stack(game)
+    bears = _w2g4_named(game, "Grizzly Bears")
+    assert game.controller_index_of(bears) == 0
+    assert game.controller_index_of(giant) == 0
+    assert any("is controlled by the player who chose it" in line for line in game.log), game.log
+
+
+def test_w2g4_confusion_another_player_is_measured_from_the_chooser(set_pool):
+    """Three seats: P1's Elves enter, so P1 announces, offered P0's and P2's
+    creatures and never its own Bears — "another player" against the chooser,
+    not against the ability's controller (P0)."""
+    game = _w2g4_confusion(
+        set_pool,
+        {0: ["Hill Giant"], 1: ["Grizzly Bears"], 2: ["Craw Wurm", "Sol Ring"]},
+        (1, "Llanowar Elves"), seats=3, interactive={1},
+    )
+    assert game.queue_from_hand(1, "Llanowar Elves").supported
+    game.resolve_top_of_stack()
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("trigger_target", 1)
+    ]
+    offered = sorted(e["name"] for e in game.pending_choices[0].data["targets"])
+    assert offered == ["Craw Wurm", "Hill Giant"]
+    wurm = _w2g4_named(game, "Craw Wurm")
+    assert game.confirm_trigger_target(1, permanent_id=wurm.permanent_id) is True
+    _w2g4_resolve_stack(game)
+    elves = _w2g4_named(game, "Llanowar Elves")
+    assert game.controller_index_of(elves) == 2
+    assert game.controller_index_of(wurm) == 1
+
+
+def test_w2g4_confusion_refuses_an_answer_the_relations_exclude(set_pool):
+    """The answer is held to the offer: the chooser's own creature and a
+    permanent sharing no type with the Elves are refused."""
+    game = _w2g4_confusion(
+        set_pool, {0: ["Hill Giant", "Sol Ring"], 1: ["Grizzly Bears"]},
+        (1, "Llanowar Elves"), interactive={1},
+    )
+    assert game.queue_from_hand(1, "Llanowar Elves").supported
+    game.resolve_top_of_stack()
+    own = _w2g4_named(game, "Grizzly Bears")
+    ring = _w2g4_named(game, "Sol Ring")
+    assert game.confirm_trigger_target(1, permanent_id=own.permanent_id) is False
+    assert game.confirm_trigger_target(1, permanent_id=ring.permanent_id) is False
+    assert [c.kind for c in game.pending_choices] == ["trigger_target"]
+
+# ==== end W2G4 ======================================================

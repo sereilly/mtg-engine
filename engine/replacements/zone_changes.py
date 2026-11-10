@@ -345,12 +345,12 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
         # from applying again). Through the discard's own destination, so the
         # re-ask is the same process — asked of an interactive seat when two
         # still apply — and not a list of the ones somebody remembered here.
-        before = len(player.graveyard)
-        game.discarded_card_destination(
+        # By arrival, not by membership: the destination answers with the
+        # object the graveyard now holds, which is a new one when the pile
+        # already held this card's (CR 400.7, ``put_card_into_graveyard``).
+        if game.discarded_card_destination(
             player, card, choice.data.get("cause_seat"), leng_declined=True,
-        )
-        # By arrival, not by membership: every copy of a card is one object.
-        if len(player.graveyard) > before and player.graveyard[-1] is card:
+        ):
             game.log.append(f"{player.name} put discarded {card.name} into their graveyard")
     return 0
 
