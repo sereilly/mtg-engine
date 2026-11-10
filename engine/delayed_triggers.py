@@ -999,65 +999,76 @@ DELAYED_MARK_PERMANENT_IDS = "delayed_mark_permanent_ids"
 def delayed_mark_events(game: "Game", firings) -> list[dict]:
     """The ``_enqueue_triggered_ability`` kwargs for *firings* — ``(permanent,
     mark, rider)`` triples, *rider* the payload that mark's action needs (its
-    condition, who sacrifices) — one delayed triggered ability per creating
-    effect.
+    condition, its action) — one delayed triggered ability per creation.
+
+    **One per creation**, because a mark is a kind of delayed ability and a
+    permanent can be named by several (``destruction_events.
+    DELAYED_CREATIONS_SUFFIX``): Dragon Whelp activated five times has two
+    sacrifices waiting (its ruling, 2022-09-09), and two Thicket Basilisks
+    blocking one creature destroy it twice at end of combat.
 
     "Destroy **each of those creatures** that didn't attack this turn"
-    (Maddening Imp) is one ability over a set, so the marks one effect made
-    together (``DELAYED_TOGETHER_SUFFIX``) are one stack object acting on all
-    of them at once, as the sweep did. Every other mark is one permanent's,
-    and one object: two Krovikan Elementalist activations are two abilities.
+    (Maddening Imp) is one ability over a set, so the creations one effect made
+    together (``CREATION_TOGETHER``) are one stack object acting on all of them
+    at once, as the sweep did. Grouped by everything the object carries — the
+    mark, its controller, its source, its rider and its set — and a group holds
+    as many objects as its most-marked member has creations in it: two Maddening
+    Imp activations over one set are two objects over the set, and a group of
+    one permanent is one object per creation.
 
-    The controller is the seat the mark recorded (CR 603.7d–e); a mark with
+    The controller is the seat the creation recorded (CR 603.7d–e); one with
     none (written by a test, or by nothing resolving) is its permanent's
     controller's. Each mark is spent as it is announced: a delayed ability
     with no stated duration triggers once (CR 603.7b).
     """
-    from .destruction_events import (DELAYED_CAUSE_SUFFIX,
-                                     DELAYED_SACRIFICER_SUFFIX,
-                                     DELAYED_SOURCE_SUFFIX,
-                                     DELAYED_TOGETHER_SUFFIX)
+    from .destruction_events import (CREATION_SACRIFICER, CREATION_SEAT,
+                                     CREATION_SOURCE, CREATION_TOGETHER,
+                                     delayed_mark_creations,
+                                     spend_delayed_mark)
     from .oracle_types import OracleInstruction
 
     groups: dict[tuple, dict] = {}
     for permanent, mark, rider in firings:
-        metadata = permanent.metadata
-        seat = metadata.get(mark + DELAYED_CAUSE_SUFFIX)
-        if not isinstance(seat, int) or isinstance(seat, bool):
-            seat = game.controller_index_of(permanent)
-        if seat is None:
-            continue
-        source = metadata.get(mark + DELAYED_SOURCE_SUFFIX) or permanent.card
-        rider = dict(rider)
-        if metadata.get(mark + DELAYED_SACRIFICER_SUFFIX):
-            rider["sacrificed_by"] = metadata[mark + DELAYED_SACRIFICER_SUFFIX]
-        together = metadata.get(mark + DELAYED_TOGETHER_SUFFIX) or (
-            permanent.permanent_id,
-        )
-        for key in (mark, mark + DELAYED_CAUSE_SUFFIX, mark + DELAYED_SOURCE_SUFFIX,
-                    mark + DELAYED_SACRIFICER_SUFFIX, mark + DELAYED_TOGETHER_SUFFIX):
-            metadata.pop(key, None)
-        key = (mark, seat, id(source), tuple(sorted(rider.items())), tuple(together))
-        group = groups.setdefault(key, {
-            "seat": seat, "source": source, "mark": mark, "rider": rider, "ids": [],
-        })
-        group["ids"].append(permanent.permanent_id)
+        creations = delayed_mark_creations(permanent, mark)
+        spend_delayed_mark(permanent, mark)
+        for creation in creations:
+            seat = creation[CREATION_SEAT]
+            if not isinstance(seat, int) or isinstance(seat, bool):
+                seat = game.controller_index_of(permanent)
+            if seat is None:
+                continue
+            source = creation[CREATION_SOURCE] or permanent.card
+            payload = dict(rider)
+            if creation[CREATION_SACRIFICER]:
+                payload["sacrificed_by"] = creation[CREATION_SACRIFICER]
+            together = creation[CREATION_TOGETHER] or (permanent.permanent_id,)
+            key = (mark, seat, id(source), tuple(sorted(payload.items())), tuple(together))
+            group = groups.setdefault(key, {
+                "seat": seat, "source": source, "mark": mark, "rider": payload,
+                "counts": {},
+            })
+            counts = group["counts"]
+            counts[permanent.permanent_id] = counts.get(permanent.permanent_id, 0) + 1
     events = []
     for group in groups.values():
         source = group["source"]
-        entry = DelayedTrigger(
-            controller_index=group["seat"],
-            event="",
-            instruction=OracleInstruction(
-                CARRY_OUT_DELAYED_MARK, "", {"mark": group["mark"], **group["rider"]},
-            ),
-            source_name=source.name,
-            card=source,
-            ability_text=delayed_ability_text(getattr(source, "oracle_text", "")),
-        )
-        events.append(entry.trigger_event(
-            trigger_context={DELAYED_MARK_PERMANENT_IDS: tuple(group["ids"])},
-        ))
+        counts = group["counts"]
+        for round_ in range(max(counts.values())):
+            entry = DelayedTrigger(
+                controller_index=group["seat"],
+                event="",
+                instruction=OracleInstruction(
+                    CARRY_OUT_DELAYED_MARK, "", {"mark": group["mark"], **group["rider"]},
+                ),
+                source_name=source.name,
+                card=source,
+                ability_text=delayed_ability_text(getattr(source, "oracle_text", "")),
+            )
+            events.append(entry.trigger_event(
+                trigger_context={DELAYED_MARK_PERMANENT_IDS: tuple(
+                    pid for pid, count in counts.items() if count > round_
+                )},
+            ))
     return events
 
 

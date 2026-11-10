@@ -86,37 +86,50 @@ if TYPE_CHECKING:
 #: The trigger-condition kind, as ``engine/trigger_conditions.py``'s table spells it.
 PERMANENT_DESTROYED = "permanent_destroyed"
 
-#: What is appended to a delayed destruction's mark to name the key its cause
-#: is recorded under — ``destroy_at_end_of_combat`` beside
-#: ``destroy_at_end_of_combat_cause_seat``. The seat CR 603.7d–e give the
-#: delayed ability. One key per mark rather than one for the permanent, because
-#: a creature can carry two marks set by two players' effects (a Berserk and a
-#: Basilisk's block), and the step that destroys it asks about the one firing.
-DELAYED_CAUSE_SUFFIX = "_cause_seat"
+#: What is appended to a delayed mark to name the key its **creations** are
+#: recorded under — ``destroy_at_end_of_combat`` beside
+#: ``destroy_at_end_of_combat_creations``: one entry for each delayed triggered
+#: ability (CR 603.7) waiting under the mark, in the order they were created.
+#:
+#: A list rather than one record, because a mark is a *kind* of delayed ability
+#: and a permanent can be named by several of them. "Any subsequent activations
+#: will also cause its delayed triggered ability to trigger. That means if you
+#: activate Dragon Whelp's ability five times, for example, two different
+#: delayed triggered abilities will trigger at the beginning of the next end
+#: step" (Dragon Whelp's ruling, 2022-09-09) — and two Thicket Basilisks
+#: blocking one creature are two destructions at end of combat, so one
+#: regeneration shield answers only the first. The mark was a flag with one
+#: cause beside it, so the second creation overwrote the first and the step
+#: announced one ability.
+#:
+#: Each entry is a dict of four fields:
+#:
+#: * :data:`CREATION_SEAT` — the seat CR 603.7d–e give the delayed ability
+#:   (None when nothing was resolving to ask);
+#: * :data:`CREATION_SOURCE` — the card whose spell or ability created it, CR
+#:   603.7d–e's *source*: the step announces it under that card's name
+#:   ("Cockatrice: destroy that creature at end of combat"), and by then
+#:   nothing is resolving to ask;
+#: * :data:`CREATION_SACRIFICER` — "**Sacrifice** it at the beginning of the
+#:   next end step" (Krovikan Elementalist) against "**Its controller**
+#:   sacrifices it …" (Celestial Sword). The first is the delayed ability's
+#:   controller doing it, and CR 701.21a: "A player can't sacrifice … a
+#:   permanent they don't control" — so a creature that changed hands before
+#:   the step stays. The second is whoever controls it then. ``"you"`` for the
+#:   first and None for the second, the spelling ``sacrifice_bound_permanent``'s
+#:   ``sacrificed_by`` payload already uses;
+#: * :data:`CREATION_TOGETHER` — "At the beginning of the next end step,
+#:   destroy **each of those creatures** that didn't attack this turn"
+#:   (Maddening Imp) is **one** delayed ability over a set, where two Krovikan
+#:   Elementalist activations are two. The set one effect marked, by id,
+#:   recorded on each member (None for a mark made alone), so the step
+#:   announces one stack object for it.
+DELAYED_CREATIONS_SUFFIX = "_creations"
 
-#: …and the card whose spell or ability created the delayed ability — CR
-#: 603.7d–e's *source* — recorded beside the seat, because the step that
-#: announces the mark as a delayed triggered ability puts it on the stack under
-#: that card's name ("Cockatrice: destroy that creature at end of combat"), and
-#: by then nothing is resolving to ask.
-DELAYED_SOURCE_SUFFIX = "_source_card"
-
-#: "**Sacrifice** it at the beginning of the next end step" (Krovikan
-#: Elementalist) against "**Its controller** sacrifices it …" (Celestial
-#: Sword). The first is the delayed ability's controller doing it, and CR
-#: 701.21a: "A player can't sacrifice … a permanent they don't control" — so a
-#: creature that changed hands before the step stays. The second is whoever
-#: controls it then. Recorded beside the mark as ``"you"`` for the first and
-#: left absent for the second, the spelling ``sacrifice_bound_permanent``'s
-#: ``sacrificed_by`` payload already uses.
-DELAYED_SACRIFICER_SUFFIX = "_sacrificed_by"
-
-#: "At the beginning of the next end step, destroy **each of those creatures**
-#: that didn't attack this turn" (Maddening Imp) is **one** delayed ability
-#: over a set, where two Krovikan Elementalist activations are two. The set one
-#: effect marked, by id, recorded on each member (absent for a mark made alone),
-#: so the step announces one stack object for it.
-DELAYED_TOGETHER_SUFFIX = "_marked_with"
+CREATION_SEAT = "seat"
+CREATION_SOURCE = "source"
+CREATION_SACRIFICER = "sacrificed_by"
+CREATION_TOGETHER = "together"
 
 
 class _Cause:
@@ -176,54 +189,84 @@ def cause_seat(game: "Game", cause=RESOLVING) -> int | None:
 
 def mark_delayed_destruction(
     game: "Game", permanent: "Permanent", mark: str, value=True,
-    *, sacrificed_by: str | None = None, together=None,
+    *, sacrificed_by: str | None = None, together=None, cause=RESOLVING,
 ) -> None:
-    """Set *permanent*'s delayed-action *mark*, and record who set it.
+    """Create one delayed ability under *permanent*'s *mark*, recording who
+    created it and from what.
 
     **The one writer of those marks** ("destroy_at_end_of_combat" and its
-    siblings, the end step's sacrifice and return included), so that a mark
-    cannot exist without its cause: the handler calls this while the spell or
-    ability creating the delayed ability is still resolving — CR 603.7d–e make
-    its controller the delayed ability's, and its source the delayed
-    ability's — and by the step that announces the mark nothing is resolving
-    at all. A mark written directly would be controlled by nobody, or by
-    whoever set the previous one; ``tests/regressions/test_ody_w2g4_destroy_seam.py``
-    fails a second writer.
+    siblings, the end step's sacrifice and return included, and the cleanup
+    step's sacrifice of a Mirage flash Aura), so that a mark cannot exist
+    without its cause: the handler calls this while the spell or ability
+    creating the delayed ability is still resolving — CR 603.7d–e make its
+    controller the delayed ability's, and its source the delayed ability's —
+    and by the step that announces the mark nothing is resolving at all. A
+    mark written directly would be controlled by nobody, or by whoever set the
+    previous one; ``tests/regressions/test_ody_w2g4_destroy_seam.py`` fails a
+    second writer.
+
+    **Each call is one more delayed ability** (:data:`DELAYED_CREATIONS_SUFFIX`):
+    a second call adds a second creation rather than replacing the first, and
+    the step announces one stack object for each. A mark that is not set (one
+    its step already spent, or one the cleanup step swept with its turn) starts
+    a fresh list, so a creation can never ride on a stale one.
 
     *value* is what the mark holds where it is more than a flag (the
     seat-turn stamp of "…at the beginning of **that turn's** end step").
     *sacrificed_by* is ``"you"`` for a sacrifice the delayed ability's
-    controller makes (:data:`DELAYED_SACRIFICER_SUFFIX`); *together* the
-    permanents one effect marked as a set (:data:`DELAYED_TOGETHER_SUFFIX`).
+    controller makes (:data:`CREATION_SACRIFICER`); *together* the
+    permanents one effect marked as a set (:data:`CREATION_TOGETHER`).
+
+    *cause* is the seat that controls the delayed ability, for the one writer
+    with nothing resolving in ``Game.resolving_seats`` to ask: a permanent
+    spell becoming a permanent runs no instruction. Mirage's flash Auras —
+    "If you cast it any time a sorcery couldn't have been cast, the controller
+    of the permanent it becomes sacrifices it at the beginning of the next
+    cleanup step" — are CR 603.7g's case: a static ability that let a player
+    take an action created the delayed ability, so its controller is the
+    caster and its source the card (``Game._resolve_card`` passes both).
     """
+    key = mark + DELAYED_CREATIONS_SUFFIX
+    creations = list(permanent.metadata.get(key) or ()) if permanent.metadata.get(mark) else []
     permanent.metadata[mark] = value
-    seat = cause_seat(game)
-    if seat is None:
-        permanent.metadata.pop(mark + DELAYED_CAUSE_SUFFIX, None)
-    else:
-        permanent.metadata[mark + DELAYED_CAUSE_SUFFIX] = seat
     resolving = getattr(game, "resolving_items", None)
-    source = resolving[-1].card if resolving else None
-    if source is None:
-        permanent.metadata.pop(mark + DELAYED_SOURCE_SUFFIX, None)
-    else:
-        permanent.metadata[mark + DELAYED_SOURCE_SUFFIX] = source
-    if sacrificed_by is None:
-        permanent.metadata.pop(mark + DELAYED_SACRIFICER_SUFFIX, None)
-    else:
-        permanent.metadata[mark + DELAYED_SACRIFICER_SUFFIX] = sacrificed_by
     members = tuple(together or ())
-    if len(members) > 1:
-        permanent.metadata[mark + DELAYED_TOGETHER_SUFFIX] = members
-    else:
-        permanent.metadata.pop(mark + DELAYED_TOGETHER_SUFFIX, None)
+    creations.append({
+        CREATION_SEAT: cause_seat(game, cause),
+        CREATION_SOURCE: resolving[-1].card if resolving else None,
+        CREATION_SACRIFICER: sacrificed_by,
+        CREATION_TOGETHER: members if len(members) > 1 else None,
+    })
+    permanent.metadata[key] = creations
+
+
+def delayed_mark_creations(permanent: "Permanent", mark: str) -> list[dict]:
+    """Every delayed ability waiting under *permanent*'s *mark*, oldest first
+    — one entry, with every field None, for a mark set without its writer
+    (a test, or a record older than the creations list)."""
+    if not permanent.metadata.get(mark):
+        return []
+    creations = permanent.metadata.get(mark + DELAYED_CREATIONS_SUFFIX)
+    if not creations:
+        return [{CREATION_SEAT: None, CREATION_SOURCE: None,
+                 CREATION_SACRIFICER: None, CREATION_TOGETHER: None}]
+    return [dict(creation) for creation in creations]
+
+
+def spend_delayed_mark(permanent: "Permanent", mark: str) -> None:
+    """Take *mark* and its creations off *permanent*: every delayed ability
+    under it has triggered (CR 603.7b — one with no stated duration triggers
+    once)."""
+    permanent.metadata.pop(mark, None)
+    permanent.metadata.pop(mark + DELAYED_CREATIONS_SUFFIX, None)
 
 
 def delayed_destruction_cause(permanent: "Permanent", mark: str):
-    """What the step destroying *permanent* under *mark* passes as its cause:
-    the seat :func:`mark_delayed_destruction` recorded, and "no spell or
-    ability" for a mark nothing recorded one for."""
-    seat = permanent.metadata.get(mark + DELAYED_CAUSE_SUFFIX)
+    """The cause the newest delayed ability under *mark* names: the seat
+    :func:`mark_delayed_destruction` recorded, and "no spell or ability" for
+    one nothing recorded a seat for."""
+    creations = delayed_mark_creations(permanent, mark)
+    seat = creations[-1][CREATION_SEAT] if creations else None
     if isinstance(seat, int) and not isinstance(seat, bool):
         return seat
     return NO_SPELL_OR_ABILITY
@@ -367,10 +410,11 @@ def instruction_finished(game: "Game") -> None:
 
 
 __all__ = [
-    "DELAYED_CAUSE_SUFFIX",
-    "DELAYED_SACRIFICER_SUFFIX",
-    "DELAYED_SOURCE_SUFFIX",
-    "DELAYED_TOGETHER_SUFFIX",
+    "CREATION_SACRIFICER",
+    "CREATION_SEAT",
+    "CREATION_SOURCE",
+    "CREATION_TOGETHER",
+    "DELAYED_CREATIONS_SUFFIX",
     "DestructionLedger",
     "NOT_A_DESTRUCTION",
     "NO_SPELL_OR_ABILITY",
@@ -380,9 +424,11 @@ __all__ = [
     "begin_destruction_hold",
     "cause_seat",
     "delayed_destruction_cause",
+    "delayed_mark_creations",
     "destruction_finished",
     "end_destruction_hold",
     "holding_destruction_triggers",
     "instruction_finished",
     "mark_delayed_destruction",
+    "spend_delayed_mark",
 ]

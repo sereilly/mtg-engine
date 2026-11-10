@@ -36,7 +36,8 @@ from ...cast_costs import (additional_costs, buyback_cost, cast_announces_x,
                            kicked, optional_x_offers)
 from ...cast_prohibitions import cast_prohibition
 from ...cast_restrictions import check_cast_timing
-from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
+from ...cast_timing import (CAST_AT_INSTANT_SPEED,
+                            cast_by_its_own_flash_permission,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
 from ...damage_ledger import record_cast
 from ...counter_conditions import spend_next_spell_promises
@@ -1572,12 +1573,18 @@ class SpellCastingMixin:
                         # announced, and by resolution the stack has emptied
                         # down to this spell and the step may have moved on.
                         # Stamped only for a card whose text asks — see
-                        # `cast_permissions`, whose whole rider this feeds.
+                        # `cast_permissions`, whose whole rider this feeds —
+                        # and only when its **own** permission is what lets
+                        # it be cast now: cast under Vernal Equinox's or a
+                        # Rootwater Shaman's, it is not sacrificed (the
+                        # cycle's rulings, 2022-12-08).
                         CAST_AT_INSTANT_SPEED: (
                             sacrifices_at_cleanup_if_cast_at_instant_speed(
                                 card.oracle_text or ""
                             )
-                            and not a_sorcery_could_be_cast(self, caster_index)
+                            and cast_by_its_own_flash_permission(
+                                self, caster_index, card
+                            )
                         ),
                     },
             )

@@ -68,11 +68,6 @@ _NOT_DEPARTURES = {
 
 #: ``(module, function, called) -> why that loop is not one departure event``.
 _REVIEWED = {
-    ("phases/cleanup_step.py", "_sacrifice_permanents_cast_at_instant_speed",
-     "sacrifice_permanent"): (
-        "each \"sacrifice it at the beginning of the next cleanup step\" mark is "
-        "its own delayed triggered ability (CR 603.7)."
-    ),
     ("mixins/stack/cast_additional_costs.py", "_pay_sacrifice_tax",
      "sacrifice_permanent"): (
         "Drought's tax is one additional \"Sacrifice a Swamp\" per black mana "

@@ -35,11 +35,12 @@ been the second copy this codebase keeps finding on the wrong side of.
 The rider is enforced across three places, none of which knows the sentence:
 the cast path records whether a sorcery could have been cast
 (:data:`CAST_AT_INSTANT_SPEED`, a ``StackItem.choices`` key), the permanent
-spell's resolution copies that answer onto the permanent, and the cleanup step
-sacrifices what is marked. CR 514.1's cleanup step is where the rule puts it,
-and a sweep there rather than a delayed trigger for the reason every other
-sweep in this engine exists: there is no single fire site, and a permanent can
-reach the battlefield marked by more than one route.
+spell's resolution writes that answer onto the permanent through the one writer
+of a delayed mark (``destruction_events.mark_delayed_destruction``: CR 603.7g's
+delayed triggered ability, controlled by the caster, its source the card), and
+the cleanup step announces what is marked as that ability — it triggers as the
+step begins and goes on the stack at CR 514.3a's moment, where it can be
+answered (``phases/cleanup_step._cleanup_mark_firings``).
 """
 
 from __future__ import annotations
@@ -143,19 +144,48 @@ def flash_surcharge_owed(game: "Game", seat: int, card) -> int:
     surcharge = flash_surcharge(getattr(card, "oracle_text", "") or "")
     if not surcharge:
         return 0
-    if a_sorcery_could_be_cast(game, seat):
+    if not cast_by_its_own_flash_permission(game, seat, card):
         return 0
+    return surcharge
+
+
+def another_source_gives_instant_timing(game: "Game", seat: int, card) -> bool:
+    """Whether something other than *card*'s own "you may cast this spell as
+    though it had flash" lets *seat* cast it whenever an instant could be:
+    its type or printed flash, Aluren's free cast, a resolved grant (Winding
+    Canyons) or a permanent's static permission (Rootwater Shaman, Vernal
+    Equinox) — :func:`casts_at_instant_speed`'s sources less the card's own
+    sentence."""
     if card.primary_type == "instant" or card.has_flash:
-        return 0
+        return True
     from .cast_permissions import board_free_cast
 
-    if (
+    return (
         board_free_cast(game, card) is not None
         or granted_flash_timing(game, seat, card)
         or board_flash_timing(game, seat, card)
-    ):
-        return 0
-    return surcharge
+    )
+
+
+def cast_by_its_own_flash_permission(game: "Game", seat: int, card) -> bool:
+    """Whether *seat* casting *card* now is casting it **by its own** "as
+    though it had flash" sentence: a sorcery could not be cast now (CR 307.1's
+    timing, :func:`a_sorcery_could_be_cast`) and nothing else lets the card be
+    cast at instant speed (:func:`another_source_gives_instant_timing`).
+
+    The question both of that sentence's riders ask, because each is the
+    price of using it. Invasion's surcharge is owed only then
+    (:func:`flash_surcharge_owed`), and Mirage's cleanup sacrifice happens only
+    then: "The sacrifice occurs only if you cast it using its own ability. If
+    you cast it using some other effect (for example, if another effect
+    allowed you to cast it as though it had flash), then it won't be
+    sacrificed" (the cycle's rulings, 2022-12-08). With both permissions
+    open the player casts by whichever they choose, and the one with no
+    price is the answer — derived rather than asked, as the surcharge is.
+    """
+    return not a_sorcery_could_be_cast(game, seat) and not another_source_gives_instant_timing(
+        game, seat, card
+    )
 
 
 @dataclass
@@ -524,6 +554,8 @@ __all__ = [
     "CAST_AT_INSTANT_SPEED",
     "FlashGrant",
     "a_sorcery_could_be_cast",
+    "another_source_gives_instant_timing",
+    "cast_by_its_own_flash_permission",
     "expire_end_of_turn",
     "grant_flash_timing",
     "granted_flash_timing",

@@ -7,10 +7,14 @@ from ..game_over_guard import goes_no_further
 The active player discards down to maximum hand size, then all damage is removed
 and "until end of turn" effects end (CR 514.2): regeneration shields, temporary
 P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
-"until end of turn" return here (CR 610.3). No player normally receives priority.
+"until end of turn" return here (CR 610.3). No player normally receives priority
+— unless the step performed a state-based action or put a triggered ability on
+the stack, when the active player gets priority and, once everyone has passed
+with the stack empty, another cleanup step begins (CR 514.3a).
 """
 
-from ..delayed_triggers import expire_delayed_triggers, fire_delayed_triggers
+from ..delayed_triggers import (delayed_mark_events, expire_delayed_triggers,
+                                fire_delayed_triggers)
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
 from ..cast_timing import expire_end_of_turn as expire_end_of_turn_flash
 from ..cast_timing import CAST_AT_INSTANT_SPEED
@@ -44,6 +48,18 @@ from ..pt import remove_temporary_pt
 from ..turn_state import stamped_turn_has_passed
 
 
+#: How many cleanup steps one turn's cleanup may run (CR 514.3a begins
+#: another after each in which a player got priority), and how many times one
+#: step gives priority round with the stack empty. A bound on a loop, never a
+#: rule: a step that keeps setting something off would otherwise never end.
+_MAX_CLEANUP_ROUNDS = 8
+
+#: The key a countdown entry (and a phase-in block) carries once a cleanup step
+#: has counted the turn against it: the ``Game.turn`` it was counted on. See
+#: :func:`_turn_expired`.
+COUNTED_ON_TURN = "counted_on_turn"
+
+
 def _turn_expired(entries: list, game=None) -> list:
     """*entries* with this cleanup counted against each one's window.
 
@@ -61,6 +77,17 @@ def _turn_expired(entries: list, game=None) -> list:
     (``turn_state.stamped_turn_has_passed``). Which is also why *game* is
     optional: the countdown half needs nothing but the entry, and callers
     sweeping a list that has never carried a stamp are unchanged.
+
+    **One count per turn, however many cleanup steps it has.** CR 514.3a
+    begins another cleanup step after one in which a player got priority, and
+    a countdown is a count of *turns*: Peace Talks' "this turn and next turn"
+    counted twice in one turn would end a turn early. So an entry kept is
+    stamped with the turn it was counted on (:data:`COUNTED_ON_TURN`), and a
+    stamped entry is not counted again on that turn — while one made since (a
+    "this turn" restriction cast while a player had priority in cleanup) is
+    counted, and ends. The web's cleanup with a person's discard runs the step
+    twice too (once to find the discard owed, once with it chosen), and it
+    counted Peace Talks twice there whatever CR 514.3a did.
     """
     kept = []
     for entry in entries:
@@ -69,9 +96,13 @@ def _turn_expired(entries: list, game=None) -> list:
             if game is None or not stamped_turn_has_passed(game, window):
                 kept.append(entry)
             continue
+        if game is not None and entry.get(COUNTED_ON_TURN) == game.turn:
+            kept.append(entry)
+            continue
         remaining = int(entry.get("remaining_turns", 1)) - 1
         if remaining > 0:
-            kept.append({**entry, "remaining_turns": remaining})
+            stamp = {} if game is None else {COUNTED_ON_TURN: game.turn}
+            kept.append({**entry, "remaining_turns": remaining, **stamp})
     return kept
 
 
@@ -83,7 +114,17 @@ class CleanupStepMixin:
         player_index: int,
         discard_hand_indices: list[int] | None = None,
         defer_discard_selection: bool = False,
+        *,
+        _passes: int = 0,
     ) -> bool:
+        """The cleanup step (CR 514); True when it ended.
+
+        False while a decision is owed: the hand-size discard a person makes
+        (*defer_discard_selection*), or an answer a resolution in the step
+        stopped for. *_passes* is this method's own: how many cleanup steps
+        this turn's cleanup has run, for the one CR 514.3a begins after a step
+        in which a player got priority.
+        """
         phase = "ending"
         step = "cleanup"
         self._set_phase_and_step(phase, step)
@@ -98,15 +139,19 @@ class CleanupStepMixin:
             self._refresh_dynamic_creatures()
 
         # "…the controller of the permanent it becomes sacrifices it at the
-        # beginning of the next cleanup step" (Mirage's five flash Auras).
-        # CR 514.1's moment, and the *first* thing this step does, because the
-        # sentence says "at the beginning of". A sweep over the mark rather than
-        # a delayed trigger armed at the cast, for the reason every other sweep
-        # in this engine exists: the mark can arrive by more than one route (an
-        # Aura that becomes a permanent, and any later card that copies the
-        # sentence), and a rule with several fire sites is a rule that gets
-        # forgotten at one of them.
-        self._sacrifice_permanents_cast_at_instant_speed()
+        # beginning of the next cleanup step" (Mirage's flash Auras and
+        # Visions'). A delayed triggered ability — CR 603.7g: the static
+        # ability that let the spell be cast as though it had flash created it
+        # as the spell was cast — recorded as a mark on the permanent the
+        # spell became (``destruction_events.mark_delayed_destruction``, at
+        # ``Game._resolve_card``) and announced as a stack object
+        # (``delayed_triggers.delayed_mark_events``). It triggers **now**, as
+        # the step begins ("at the beginning of"), so what it names is read
+        # off the board before the discard and the sweeps below; it goes on
+        # the stack with everything else that triggered once those are done
+        # (CR 514.3a). It was a sweep here, sacrificing before anything else
+        # in the step and before anybody could answer it.
+        cleanup_marks = delayed_mark_events(self, self._cleanup_mark_firings())
 
         active_player = self.players[player_index]
         cleanup_completed = True
@@ -172,7 +217,7 @@ class CleanupStepMixin:
         expire_end_of_turn_flash(self)
         # "…can't block this turn" blanket restrictions end with the turn too.
         self.blocking_restrictions_until_eot = _turn_expired(
-            self.blocking_restrictions_until_eot
+            self.blocking_restrictions_until_eot, self
         )
         # "Creatures can't attack this turn." (Festival.) CR 514.2 ends it with
         # the same cleanup, beside its blocking twin rather than anywhere else,
@@ -189,19 +234,22 @@ class CleanupStepMixin:
         )
         # The same countdown for the targeting ban Peace Talks' other clause
         # arms, read by `legality_enumeration._enumerate_targets`.
-        self.targeting_bans = _turn_expired(self.targeting_bans)
+        self.targeting_bans = _turn_expired(self.targeting_bans, self)
         # "Until the end of your next turn, they can't phase in." (Teferi,
         # Timeless Voyager.) The block counts the *caster's* turn ends; this
-        # cleanup ends the active player's turn, so their countdowns tick.
+        # cleanup ends the active player's turn, so their countdowns tick —
+        # once per turn, stamped as the lists above are (``COUNTED_ON_TURN``).
         for player in self.players:
             for perm in player.phased_out:
                 block = perm.metadata.get("phase_in_blocked")
                 if (
                     isinstance(block, dict)
+                    and block.get(COUNTED_ON_TURN) != self.turn
                     and block.get("seat") == self.active_player_index
                     and int(block.get("turn_ends_remaining", 0)) > 0
                 ):
                     block["turn_ends_remaining"] = int(block["turn_ends_remaining"]) - 1
+                    block[COUNTED_ON_TURN] = self.turn
         for player in self.players:
             # CR 615.3: every prevention shield lasts until it is used up or its
             # duration expires, and "until end of turn" expires here. One sweep
@@ -417,7 +465,12 @@ class CleanupStepMixin:
         # This step checked only when something had triggered, so those waited
         # for the next turn's untap step — and died on the wrong turn, after
         # `begin_turn_bookkeeping` had already reset this one's death counts.
-        self._check_after_turn_based_actions()
+        #
+        # And a check that performed anything is half of the exception: "If
+        # so, those state-based actions are performed, then those triggered
+        # abilities are put on the stack, **then the active player gets
+        # priority**" — with or without a trigger.
+        performed = self._check_after_turn_based_actions()
         # CR 514.3a: "…the game checks to see if … any triggered abilities are
         # waiting to be put onto the stack (**including those that trigger 'at
         # the beginning of the next cleanup step'**). If so, … those triggered
@@ -431,19 +484,17 @@ class CleanupStepMixin:
         # step — while a `next_cleanup_step` entry carries
         # ``until_it_triggers`` and survives to be announced.
         #
-        # The stack is then drained where it stands. No priority window opens
-        # in this engine's cleanup, so an ability merely enqueued would sit
+        # Then the active player gets priority, and the step's window is run
+        # where it stands (``_settle``): a table whose seats a driver plays
+        # (the simulator's ``priority_driver``) gives each seat priority
+        # before each object resolves and once more with the stack empty, so
+        # the sacrifice of a flashed-in Aura can be answered; a table with an
+        # interactive seat still has the window collapsed to its outcome here
+        # — the web layer holds no cleanup window (``web/game_flow.
+        # _advance_phase``'s ``step == "end"`` branch) — and so does a bare
+        # headless one. An ability merely enqueued would otherwise sit
         # unresolved until the *next* turn's first window: Thawing Glaciers
-        # would come back to hand a turn late, on an opponent's upkeep. That is
-        # the CR 514.3a window collapsed to its outcome — nobody in this engine
-        # holds priority during cleanup to respond in it — and it runs only
-        # when something actually fired, so every other turn's cleanup is
-        # untouched.
-        #
-        # CR 514.3a's "another cleanup step begins" is deliberately not
-        # modelled: the second pass exists to re-check hand size and
-        # state-based actions after the triggers resolved, and no card in the
-        # pool can raise a hand over its maximum from a cleanup trigger.
+        # would come back to hand a turn late, on an opponent's upkeep.
         #
         # **And whatever else triggered during the step.** The hand-size
         # discard above is the other way something reaches the stack here: a
@@ -453,60 +504,79 @@ class CleanupStepMixin:
         # your cleanup step"), and "whenever an opponent discards a card"
         # (Megrim) fires off the same discard. Both waited on the stack into
         # the next turn while only the delayed triggers were settled here.
+        #
+        # The marks that triggered as the step began (above) go on the stack
+        # here with them, in the same batch order the end step uses: the
+        # marks first.
+        if cleanup_marks:
+            self._enqueue_triggered_batch(cleanup_marks)
         fired = fire_delayed_triggers(self, "next_cleanup_step")
-        if fired or self.stack:
+        if performed or fired or self.stack:
             self._settle()
-            if self.stack or self.waiting_prompt() is not None:
-                # A person owes the answer (the madness offer, held on the
-                # stack for them): the step is not over, and the caller must
-                # not begin the next turn around it.
-                self._on_step_or_phase_end(phase, step)
-                return False
-            # CR 514.3a: "Once those spells and abilities finish resolving,
-            # another cleanup step begins." The comment above called that
-            # second pass unreachable because no card could raise a hand over
-            # its maximum from a cleanup trigger — madness can: an Obsessive
-            # Search discarded to hand size is cast and draws a card. Taken
-            # only for the hand, which is the one thing the second pass here
-            # would change (every sweep above has already run and is
-            # idempotent); bounded by the library, as the game itself is.
-            limit = maximum_hand_size(self, player_index)
-            if limit is not None and len(active_player.hand) > limit:
-                self._on_step_or_phase_end(phase, step)
-                return self.resolve_cleanup_step(
-                    player_index, defer_discard_selection=defer_discard_selection,
+            for _ in range(_MAX_CLEANUP_ROUNDS):
+                if self.stack or self.waiting_prompt() is not None:
+                    # A person owes the answer (the madness offer, held on the
+                    # stack for them): the step is not over, and the caller
+                    # must not begin the next turn around it.
+                    self._on_step_or_phase_end(phase, step)
+                    return False
+                # CR 514.3a / 117.4: "Once the stack is empty and all players
+                # pass in succession" — each player has priority once more
+                # with nothing on the stack, and what one casts there resolves
+                # in this step before it ends (``offer_priority``; inert but
+                # at a driver's table).
+                if self.is_game_over() or not self.offer_priority():
+                    break
+                self._settle()
+            # "…another cleanup step begins": 514.1's discard and 514.2's
+            # sweeps again, for whatever the window changed — a hand a
+            # madness card drew into (an Obsessive Search discarded to hand
+            # size is cast and draws a card), damage dealt and "until end of
+            # turn" effects created in the window, a flash Aura cast there
+            # (its "next cleanup step" is that one). The countdowns this step
+            # counted are not counted again (``COUNTED_ON_TURN``). Bounded, as
+            # a step that keeps setting something off would otherwise never
+            # end.
+            self._on_step_or_phase_end(phase, step)
+            if self.is_game_over():
+                return cleanup_completed
+            if _passes + 1 >= _MAX_CLEANUP_ROUNDS:
+                self.log.append(
+                    f"cleanup stopped after {_passes + 1} cleanup steps (possible loop)"
                 )
+                return cleanup_completed
+            return self.resolve_cleanup_step(
+                player_index, defer_discard_selection=defer_discard_selection,
+                _passes=_passes + 1,
+            )
         self._on_step_or_phase_end(phase, step)
         return cleanup_completed
 
-    def _sacrifice_permanents_cast_at_instant_speed(self) -> None:
-        """CR 514.1's half of Mirage's flash-Aura rider.
+    def _cleanup_mark_firings(self) -> list:
+        """Every delayed ability recorded as a mark that triggers as this
+        cleanup step begins, as ``(permanent, mark, rider)`` for
+        ``delayed_triggers.delayed_mark_events``: Mirage's flash-Aura rider
+        (:data:`~engine.cast_timing.CAST_AT_INSTANT_SPEED`).
 
-        "If you cast it any time a sorcery couldn't have been cast, the
-        controller of the permanent it becomes sacrifices it at the beginning of
-        the next cleanup step." The mark was frozen as the spell was announced
-        (`engine/cast_timing.py`) and copied onto the permanent as the spell
-        resolved, so nothing here has to reconstruct a timing question the board
-        can no longer answer.
+        A sacrifice with **no** sacrificer recorded: "**the controller of the
+        permanent it becomes** sacrifices it" is whoever controls the Aura as
+        the ability resolves, where "sacrifice it" would be the ability's own
+        controller (CR 701.21a; ``handlers/delayed.carry_out_delayed_mark``).
+        Sacrificed rather than destroyed: a regeneration shield does not save
+        it.
 
         **The next cleanup step, not this permanent's controller's.** CR 514.1
-        gives every turn one, and the sentence names the next one there is — so
-        an Aura flashed in on an opponent's turn dies at the end of that turn
-        rather than surviving to the caster's own.
+        gives every turn one, and the sentence names the next one there is —
+        so an Aura flashed in on an opponent's turn dies at the end of that
+        turn rather than surviving to the caster's own.
 
-        Sacrificed rather than destroyed: a regeneration shield does not save it
-        and it is its controller's own action (CR 701.21a).
+        Over each seat's permanents through the control seam, as the end
+        step's marks are (``_end_step_mark_firings``), so a phased-out
+        permanent's mark waits, as the sweep this replaces did.
         """
-        marked = [
-            perm for perm in self.all_permanents()
-            if perm.metadata.get(CAST_AT_INSTANT_SPEED)
+        return [
+            (permanent, CAST_AT_INSTANT_SPEED, {"action": "sacrifice"})
+            for controller in self.players
+            for permanent in self.controlled_by(controller)
+            if permanent.metadata.get(CAST_AT_INSTANT_SPEED)
         ]
-        for perm in marked:
-            seat = self.controller_index_of(perm)
-            if seat is None:
-                continue
-            self.log.append(
-                f"{self.players[seat].name} sacrifices {perm.card.name} "
-                "(cast when a sorcery couldn't have been)"
-            )
-            self.sacrifice_permanent(perm)

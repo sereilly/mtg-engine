@@ -52,7 +52,8 @@ from engine import events as events_module
 from engine import faces
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.destruction_events import (DELAYED_CAUSE_SUFFIX,
+from engine.destruction_events import (CREATION_SEAT,
+                                       DELAYED_CREATIONS_SUFFIX,
                                        NO_SPELL_OR_ABILITY,
                                        PERMANENT_DESTROYED)
 from engine.models import CardDefinition, Permanent
@@ -1398,8 +1399,14 @@ _DELAYED_MARKS = frozenset({
     # kg5: the mark records the seat and the card its delayed ability is
     # announced under (CR 603.7d-e).
     "sacrifice_at_next_end_step", "bounce_at_next_end_step",
+    # The cleanup step's sacrifice of a Mirage flash Aura (kg5/cleanup): a
+    # delayed ability since it stopped being a sweep, controlled by the caster
+    # (CR 603.7g). On e245e624c `Game._resolve_card` wrote it directly.
+    "cast_at_instant_speed",
 })
-_DELAYED_MARK_NAMES = frozenset({"DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY"})
+_DELAYED_MARK_NAMES = frozenset({
+    "DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY", "CAST_AT_INSTANT_SPEED",
+})
 
 
 def test_a_delayed_destruction_mark_is_written_only_with_its_cause():
@@ -1432,7 +1439,10 @@ def test_a_delayed_mark_records_the_seat_that_set_it(by_name):
     finally:
         game.resolving_seats.pop()
     assert bears.metadata["destroy_at_next_end_step"] is True
-    assert bears.metadata["destroy_at_next_end_step" + DELAYED_CAUSE_SUFFIX] == 1
+    assert [
+        creation[CREATION_SEAT]
+        for creation in bears.metadata["destroy_at_next_end_step" + DELAYED_CREATIONS_SUFFIX]
+    ] == [1]
     assert destruction_events.delayed_destruction_cause(bears, "destroy_at_next_end_step") == 1
     # …and one nothing was resolving for is nobody's, not a stale seat.
     destruction_events.mark_delayed_destruction(game, bears, "destroy_at_next_end_step")
