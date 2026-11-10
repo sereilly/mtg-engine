@@ -108,8 +108,9 @@ def test_every_spell_names_the_cards_its_discard_is_paid_with():
             land_tap_indices=(), score=0.0, hand_index=0,
             optional_cost_payments=offers,
         )
-        named = _cast_naming_its_discards(game, 0, unit, action, offers).cost_hand_indices
-        assert named, unit.name
+        announced = _cast_naming_its_discards(game, 0, unit, action, offers)
+        assert announced.cost_hand_index is not None, unit.name
+        named = [announced.cost_hand_index, *(announced.cost_other_hand_indices or ())]
         hand = game.players[0].hand
         assert 0 not in named, unit.name
         assert len(named) == cost.discarded_count(x_value), (unit.name, named)

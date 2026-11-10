@@ -962,7 +962,9 @@ def _cast_naming_its_discards(
     if owed <= 0 or len(slots) < owed:
         return action
     chosen = discard_order(game, player_index, slots, None)[:owed]
-    return replace(action, cost_hand_indices=tuple(chosen))
+    return replace(
+        action, cost_hand_index=chosen[0], cost_other_hand_indices=chosen[1:] or None,
+    )
 
 
 def _cast_naming_its_sacrifice(
