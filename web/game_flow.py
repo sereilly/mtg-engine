@@ -284,6 +284,19 @@ def _ai_step(session: Session) -> bool:
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
+                # **A land played puts nothing on the stack** (CR 305.1,
+                # 116.2a: a special action), and the seat receives priority
+                # again (CR 116.3) to go on with its main phase: the next
+                # `ai_step` asks the cast door again. The exchange below
+                # passed that priority on over an empty stack, so the
+                # person's pass — the client's default on an opponent's main
+                # phase — ended the phase (CR 117.4) before the AI cast
+                # anything after its land, and every web AI cast its spells
+                # in its second main phase. A land whose entering set a
+                # trigger off goes round like any other object.
+                if not game.stack:
+                    _auto_resolve_ai_pending(session)
+                    return False
                 # NOTE (frontend FFA pass): route through the priority-exchange
                 # cascade rather than a bare engine pass. In a 3+ player (FFA)
                 # game, the seat right after `seat` in turn order may be a
