@@ -194,7 +194,14 @@ class Rehearsal:
         blocker). Where they are the same, what the cast does to the fight is
         what it does to a combat whose declarations it did not touch, and an
         ability can wait for the blocks to be known
-        (``ai_abilities._read_through_the_fight``).
+        (``ai_abilities._read_through_the_fight``);
+    ``reordered_only``
+        everything it changed is **the order of a library**: a shuffle (CR
+        701.24a, "so that no player knows their order") of the same cards —
+        Feldon's Cane over an empty graveyard, which CR 701.24c shuffles all
+        the same. Read only for an action with no spell's trip to take out
+        (an activation); a digest compares libraries in order, so this is
+        otherwise a lasting change no seat can count on.
     """
 
     accepted: bool
@@ -210,6 +217,7 @@ class Rehearsal:
     creature_ahead: bool = False
     blocks_added: bool = False
     declarations_changed: bool = False
+    reordered_only: bool = False
 
     @property
     def swing(self) -> float:
@@ -601,6 +609,18 @@ def same_position(
         ):
             return False
     return True
+
+
+def _libraries_unordered(digest: dict) -> dict:
+    """*digest* (:func:`position_digest`) with each seat's library read as the
+    cards it holds, in no order (``Rehearsal.reordered_only``)."""
+    return {
+        **digest,
+        "seats": [
+            {**seat, "library": sorted(seat.get("library", ()))}
+            for seat in digest["seats"]
+        ],
+    }
 
 
 def _spend_one_use(entries: list, name: str) -> list:
@@ -1069,6 +1089,17 @@ def _rehearse(
             untouched["digest"], reading["digest"], spell_name=returned, caster=seat,
             spell_zone=zone or "hand", spell_seat=spell_seat,
         )
+        # Whether the libraries' order is all of it (``Rehearsal.
+        # reordered_only``): the same digests with every library read as the
+        # cards it holds. Only where no spell made a trip, whose undoing reads
+        # a library's top.
+        reordered_only = (
+            changed and not made_mana and returned is None
+            and same_position(
+                _libraries_unordered(untouched["digest"]),
+                _libraries_unordered(reading["digest"]), caster=seat,
+            )
+        )
         # Whether any of it is still there once the turn is over. Asked of
         # the table only where the standings leave it open — a lasting swing
         # is a lasting change — because the answer costs a digest of each
@@ -1136,6 +1167,7 @@ def _rehearse(
                 reading["attacks"] != untouched["attacks"]
                 or reading["blocks"] != untouched["blocks"]
             ),
+            reordered_only=reordered_only,
         )
     except Exception as raised:
         _note_raised(label or spell_name, raised)

@@ -29,6 +29,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 
 from .ai_activation_rehearsal import (
+    _gives_up_its_source,
     _land_ability_worth,
     _moves_something,
     _queue_activation,
@@ -982,13 +983,19 @@ def _activation_candidate(
     # **And every other ability** (kg4): proposed only where carried out on a
     # copy it moves something that lasts without leaving the seat worse off
     # (`_moves_something`) — in the main phase; at instant speed every
-    # proposal is rehearsed by its caller, and held to more. Not a one-shot
-    # given up (`_exists_to_be_given_up`: the Mossfire Egg), whose flat score
-    # is kept for the reason that function gives — the standing prices the
-    # permanent at least a card, so a rehearsal would never crack it.
-    if _gives_up_its_source(ability.cost) and _exists_to_be_given_up(permanent):
-        return candidate
-    if not _AT_INSTANT_SPEED.get() and not _moves_something(game, player_index, candidate):
+    # proposal is rehearsed by its caller, and held to more.
+    #
+    # **A one-shot given up** (`_exists_to_be_given_up`: Feldon's Cane,
+    # Tormod's Crypt) keeps its flat score — the standing prices the
+    # permanent at least a card, so a rehearsal of the whole cost would never
+    # crack it — but is asked the same question **with the source given up on
+    # both copies** (kg5): what is weighed is what the effect does now. Kept
+    # flat, a Cane was cracked over an empty graveyard and a Crypt aimed at
+    # one, each the seat's activation of the turn.
+    one_shot = _gives_up_its_source(ability.cost) and _exists_to_be_given_up(permanent)
+    if not _AT_INSTANT_SPEED.get() and not _moves_something(
+        game, player_index, candidate, one_shot=one_shot,
+    ):
         return None
     return candidate
 
@@ -1050,18 +1057,6 @@ def _host_refusal(game: Game, seat: int, permanent, instruction) -> bool:
     )
 
 
-def _gives_up_its_source(cost) -> bool:
-    """Whether an activation's cost takes the permanent it is printed on off
-    the battlefield — sacrificed, exiled or returned to its owner's hand
-    (CR 602.1's cost, paid in full as it is activated). The source is the one
-    thing such an ability spends that its flat score never reads."""
-    return bool(
-        getattr(cost, "sacrifice_self", False)
-        or getattr(cost, "exile_self", False)
-        or getattr(cost, "return_self_to_hand", False)
-    )
-
-
 def _sacrifice_is_weighed(cost) -> bool:
     """Whether *cost* sacrifices a printed number of permanents chosen as it
     is paid ("Sacrifice a Goblin", "Sacrifice two lands", "…another Orc or
@@ -1082,7 +1077,9 @@ def _exists_to_be_given_up(permanent) -> bool:
     It is worth nothing but the ability, and the standing prices every
     permanent at least a card (``ai_standing.permanent_worth``): rehearsed,
     the Egg's {R}{G} and card were worth less than the Egg, and it was never
-    cracked (sim_fingerprint ODY, ICE). Its ability keeps its flat score."""
+    cracked (sim_fingerprint ODY, ICE). Its ability keeps its flat score, and
+    is rehearsed with the source given up on both copies
+    (``ai_activation_rehearsal._moves_something(one_shot=True)``)."""
     if permanent.is_creature or not permanent.has_type("artifact"):
         return False
     program = compile_card_oracle(permanent.effective_card)

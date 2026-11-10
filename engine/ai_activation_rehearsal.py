@@ -43,12 +43,17 @@ def _rehearse_activation(
     did, the question :func:`_moves_something` asks — a "{T}: … until end of
     turn" whose source stays tapped is otherwise a change that lasts, and a
     creature tapped is a body missing *now*, neither of which the effect
-    did."""
+    did. And it **gives the source up** there when the cost does
+    (:func:`_gives_up_its_source`: sacrificed, exiled, returned to a hand) —
+    the one-shot's case (kg5: ``ai_abilities._exists_to_be_given_up``),
+    whose standing would otherwise read the artifact's own card as the
+    price of everything it does."""
 
     def perform(table):
         return _queue_activation(table, seat, action)
 
-    source_taps = cost_neutral and _taps_its_source(game, seat, action)
+    given_up = cost_neutral and _gives_up_its_source(_ability_named(game, seat, action))
+    source_taps = cost_neutral and not given_up and _taps_its_source(game, seat, action)
 
     def paid_for(table, _carried) -> None:
         pool = table.players[seat].mana_pool
@@ -60,8 +65,10 @@ def _rehearse_activation(
             source = table.permanent_at(seat, action.permanent_index)
             if source is not None:
                 source.tapped = True
+        if given_up:
+            _give_up_the_source(table, seat, action)
 
-    taps = bool(action.land_tap_indices) or source_taps
+    taps = bool(action.land_tap_indices) or source_taps or given_up
     rehearsal = rehearse(
         game, seat, perform, spell_name=None, leaves_hand=False,
         label=f"{action.permanent_name}'s ability",
@@ -82,16 +89,64 @@ def _rehearse_activation(
         ) + (
             ("victims", tuple(action.cost_permanent_ids))
             if action.cost_permanent_ids else ()
-        ),
+        ) + (("source_given_up",) if given_up else ()),
         without=paid_for if taps else None,
         without_key=(
             ("paid", action.land_tap_indices, action.land_tap_colors)
             + ((("source_tapped", seat, action.permanent_index),) if source_taps else ())
+            + ((("source_given_up", seat, action.permanent_index),) if given_up else ())
             if taps else None
         ),
         through_combat=through_combat,
     )
     return _with_the_words_aimed(game, seat, action, rehearsal)
+
+
+def _gives_up_its_source(cost) -> bool:
+    """Whether an activation's cost takes the permanent it is printed on off
+    the battlefield — sacrificed, exiled or returned to its owner's hand
+    (CR 602.1's cost, paid in full as it is activated). The source is the one
+    thing such an ability spends that its flat score never reads."""
+    return bool(
+        getattr(cost, "sacrifice_self", False)
+        or getattr(cost, "exile_self", False)
+        or getattr(cost, "return_self_to_hand", False)
+    )
+
+
+def _ability_named(game: Game, seat: int, action: ActivationAction):
+    """The cost of the ability *action* names on the seat's own permanent, or
+    None (another seat's permanent, or one no longer there)."""
+    if action.source_controller_index is not None:
+        return None
+    source = game.permanent_at(seat, action.permanent_index)
+    usable = game.usable_abilities_of(source) if source is not None else []
+    index = action.ability_index or 0
+    return usable[index].cost if 0 <= index < len(usable) else None
+
+
+def _give_up_the_source(table: Game, seat: int, action: ActivationAction) -> None:
+    """Pay *action*'s "Sacrifice / Exile / Return this permanent" on *table*
+    — the copy with nothing activated — through the seams the activation
+    path pays it through (``Game.sacrifice_permanent``, ``put_card_into_
+    exile``, ``put_card_into_hand``), so the two copies differ by the effect
+    alone."""
+    source = table.permanent_at(seat, action.permanent_index)
+    cost = _ability_named(table, seat, action)
+    if source is None or cost is None:
+        return
+    if cost.sacrifice_self:
+        table.sacrifice_permanent(source)
+    elif cost.exile_self:
+        table.remove_from_battlefield(source)
+        table.put_card_into_exile(table.players[seat], source.card)
+    elif cost.return_self_to_hand:
+        owner = table.owner_index_of(source)
+        table.remove_from_battlefield(source)
+        table.put_card_into_hand(
+            table.players[owner if owner is not None else seat], source.card,
+            from_battlefield=source,
+        )
 
 
 def _taps_its_source(game: Game, seat: int, action: ActivationAction) -> bool:
@@ -199,7 +254,9 @@ def _land_ability_worth(
     return rehearsal.lasting
 
 
-def _moves_something(game: Game, seat: int, action: ActivationAction) -> bool:
+def _moves_something(
+    game: Game, seat: int, action: ActivationAction, *, one_shot: bool = False,
+) -> bool:
     """Whether *action* — an ability the main-phase chooser would propose by
     its flat score alone — is one to propose: the cast rule (CLAUDE.md, "a
     cast that moves nothing, or leaves its caster worse off, is not
@@ -224,7 +281,16 @@ def _moves_something(game: Game, seat: int, action: ActivationAction) -> bool:
     that turns its own source into an Aura (the Licids) is asked only whether
     it moves something that lasts: what such an Aura is worth is the
     restriction it puts on its host ("can't attack"), which no standing
-    reads, against the creature its source stops being, which one does."""
+    reads, against the creature its source stops being, which one does.
+
+    *one_shot* (kg5): the ability gives up a permanent that exists to be given
+    up (``ai_abilities._exists_to_be_given_up``: Feldon's Cane, Tormod's
+    Crypt), read with the source given up on both copies — and a rehearsal
+    whose only change is a library's order (``Rehearsal.reordered_only``) moves
+    nothing: a Cane cracked over an empty graveyard shuffles a library nobody
+    knows the order of (CR 701.24a). Only for a one-shot: an ability that can
+    be activated again (Soothsaying's "put them back in any order") arranges
+    what its controller has seen, which a copy cannot."""
     rehearsal = _rehearse_activation(game, seat, action, cost_neutral=True)
     if rehearsal is None:
         return True
@@ -236,6 +302,8 @@ def _moves_something(game: Game, seat: int, action: ActivationAction) -> bool:
             return False
     if rehearsal.accepted and rehearsal.changed and _becomes_an_aura(game, seat, action):
         return not _leaves_nothing(rehearsal)
+    if one_shot and rehearsal.accepted and rehearsal.reordered_only:
+        return False
     return _worth_proposing(rehearsal)
 
 
