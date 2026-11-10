@@ -130,6 +130,11 @@
       "hooked_cards_pct_of_supported": 0.0,
       "hooked_lines_pct_of_supported": 0.0
     },
+    "MRD": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
+    },
     "NEM": {
       "entries_per_100_supported_cards": 0.0,
       "hooked_cards_pct_of_supported": 0.0,

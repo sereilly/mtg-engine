@@ -43,6 +43,7 @@
     "Kobolds of Kher Keep",
     "Lady Orca",
     "Lowland Giant",
+    "Lumengrid Warden",
     "Merfolk of the Pearl Trident",
     "Mons's Goblin Raiders",
     "Moss Monster",
@@ -91,6 +92,7 @@
     "Fighting Drake",
     "Flying Men",
     "Gaea's Skyfolk",
+    "Leonin Skyhunter",
     "Misshapen Fiend",
     "Phantom Monster",
     "Roc of Kher Ridges",
@@ -137,6 +139,20 @@
     "Warthog"
   ],
   [
+    "Argothian Swine",
+    "Crash of Rhinos",
+    "Defiant Elf",
+    "Fangren Hunter",
+    "Giant Warthog",
+    "Goliath Beetle",
+    "Iron Tusk Elephant",
+    "Jhovall Rider",
+    "Moorish Cavalry",
+    "Pygmy Razorback",
+    "War Mammoth",
+    "Wild Elephant"
+  ],
+  [
     "Death Speakers",
     "Galina's Knight",
     "Guma",
@@ -149,19 +165,6 @@
     "Shivan Zombie",
     "Vodalian Zombie",
     "Yavimaya Barbarian"
-  ],
-  [
-    "Argothian Swine",
-    "Crash of Rhinos",
-    "Defiant Elf",
-    "Giant Warthog",
-    "Goliath Beetle",
-    "Iron Tusk Elephant",
-    "Jhovall Rider",
-    "Moorish Cavalry",
-    "Pygmy Razorback",
-    "War Mammoth",
-    "Wild Elephant"
   ],
   [
     "Elvish Archers",
@@ -192,6 +195,14 @@
     "Wall of Ice",
     "Wall of Stone",
     "Wall of Wood"
+  ],
+  [
+    "Alpha Myr",
+    "Metallic Sliver",
+    "Obsianus Golem",
+    "Omega Myr",
+    "Phyrexian Hulk",
+    "Phyrexian Walker"
   ],
   [
     "Archangel",
@@ -331,6 +342,13 @@
     "Disciple of Malice"
   ],
   [
+    "Bonesplitter",
+    "Leonin Scimitar",
+    "Short Sword",
+    "Slagwurm Armor",
+    "Vulshok Battlegear"
+  ],
+  [
     "Canyon Wildcat",
     "Dwarven Grunt",
     "Goblin Spelunkers",
@@ -352,6 +370,13 @@
     "Wooden Sphere"
   ],
   [
+    "Dross Prowler",
+    "Gluttonous Zombie",
+    "Razortooth Rats",
+    "Severed Legion",
+    "Squirming Mass"
+  ],
+  [
     "Dwarven Song",
     "Heaven's Gate",
     "Sea Kings' Blessing",
@@ -364,6 +389,13 @@
     "Pearl Medallion",
     "Ruby Medallion",
     "Sapphire Medallion"
+  ],
+  [
+    "Goblin Chariot",
+    "Lightning Elemental",
+    "Raging Goblin",
+    "Thundering Giant",
+    "Vulshok Berserker"
   ],
   [
     "Hematite Talisman",
@@ -460,34 +492,22 @@
     "Shivan Dragon"
   ],
   [
+    "Fists of the Anvil",
+    "Giant Growth",
+    "Might of Oaks",
+    "Titanic Growth"
+  ],
+  [
     "Fyndhorn Elves",
     "Llanowar Elves",
     "Skyshroud Troopers",
     "Wirewood Elf"
   ],
   [
-    "Gluttonous Zombie",
-    "Razortooth Rats",
-    "Severed Legion",
-    "Squirming Mass"
-  ],
-  [
-    "Goblin Chariot",
-    "Lightning Elemental",
-    "Raging Goblin",
-    "Thundering Giant"
-  ],
-  [
     "Laccolith Grunt",
     "Laccolith Titan",
     "Laccolith Warrior",
     "Laccolith Whelp"
-  ],
-  [
-    "Metallic Sliver",
-    "Obsianus Golem",
-    "Phyrexian Hulk",
-    "Phyrexian Walker"
   ],
   [
     "Prodigal Sorcerer",
@@ -499,6 +519,11 @@
     "Aggressive Urge",
     "Defiant Strike",
     "Sudden Strength"
+  ],
+  [
+    "Ambush Party",
+    "Goblin Berserker",
+    "Goblin Striker"
   ],
   [
     "Armor Sliver",
@@ -576,9 +601,14 @@
     "Flowstone Shambler"
   ],
   [
-    "Giant Growth",
-    "Might of Oaks",
-    "Titanic Growth"
+    "Fountain of Youth",
+    "Tanglebloom",
+    "Tower of Eons"
+  ],
+  [
+    "Gorilla Chieftain",
+    "Skyshroud Troll",
+    "Tel-Jilad Exile"
   ],
   [
     "Kavu Climber",
@@ -639,10 +669,6 @@
     "Steadfast Guard"
   ],
   [
-    "Ambush Party",
-    "Goblin Berserker"
-  ],
-  [
     "Amugaba",
     "Balshan Griffin"
   ],
@@ -665,6 +691,10 @@
   [
     "Angelic Wall",
     "Wall of Swords"
+  ],
+  [
+    "Arcane Laboratory",
+    "Rule of Law"
   ],
   [
     "Arenson's Aura",
@@ -735,8 +765,20 @@
     "Rampart Crawler"
   ],
   [
+    "Boomerang",
+    "Regress"
+  ],
+  [
+    "Bouncing Beebles",
+    "Neurok Spy"
+  ],
+  [
     "Branded Brawlers",
     "Veteran Brawlers"
+  ],
+  [
+    "Brass Man",
+    "Goblin War Wagon"
   ],
   [
     "Brassclaw Orcs",
@@ -785,6 +827,10 @@
   [
     "Coalition Honor Guard",
     "Standard Bearer"
+  ],
+  [
+    "Concordant Crossroads",
+    "Mass Hysteria"
   ],
   [
     "Consume Strength",
@@ -947,6 +993,10 @@
     "Pardic Swordsmith"
   ],
   [
+    "Frogmite",
+    "Myr Enforcer"
+  ],
+  [
     "Fylamarid",
     "Metathran Transport"
   ],
@@ -987,12 +1037,12 @@
     "Mogg Raider"
   ],
   [
-    "Gorilla Chieftain",
-    "Skyshroud Troll"
-  ],
-  [
     "Grasp of Darkness",
     "Shrink"
+  ],
+  [
+    "Grid Monitor",
+    "Steel Golem"
   ],
   [
     "Gustcloak Harrier",
@@ -1247,6 +1297,10 @@
     "Spire Owl"
   ],
   [
+    "Scale of Chiss-Goria",
+    "Tooth of Chiss-Goria"
+  ],
+  [
     "Scoria Cat",
     "Spur Grappler"
   ],
@@ -1283,6 +1337,14 @@
     "Wild Colos"
   ],
   [
+    "Tel-Jilad Chosen",
+    "Yavimaya Scion"
+  ],
+  [
+    "Telepathic Spies",
+    "Wanderguard Sentry"
+  ],
+  [
     "Torment",
     "Weakness"
   ],
@@ -1293,6 +1355,10 @@
   [
     "Treetop Rangers",
     "Treetop Scout"
+  ],
+  [
+    "Uktabi Orangutan",
+    "Viridian Shaman"
   ],
   [
     "Viashino Sandscout",

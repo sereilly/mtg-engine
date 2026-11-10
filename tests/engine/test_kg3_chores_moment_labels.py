@@ -58,7 +58,7 @@ SHARED_MOMENT_WORDS: dict[str, frozenset[str]] = {
     "triggered_combat": frozenset({
         "attackers_declared", "attacks_unblocked", "combat",
         "combat_opponent_turn", "combat_your_turn", "creature_attacks",
-        "creature_attacks_or_blocks", "creature_becomes_blocked",
+        "creature_attacks_or_blocks", "creature_becomes_blocked", "creature_blocks",
         "creature_blocks_or_blocked_by", "creature_dealt_damage",
         "damage_dealt", "matching_creature_becomes_blocked",
     }),

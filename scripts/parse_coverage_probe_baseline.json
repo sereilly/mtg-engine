@@ -340,6 +340,13 @@
   ]
  },
  {
+  "card": "Blinkmoth Urn",
+  "clause": "if this artifact is untapped, that player adds {c} for each artifact they control",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
   "card": "Blood of the Martyr",
   "clause": "until end of turn, if damage would be dealt to any creature, you may have that damage dealt to you instead",
   "ignored": [
@@ -372,6 +379,13 @@
   "clause": "choose a creature type. reveal the top card of your library. if that card is a creature card of the chosen type, put it into your hand. otherwise, put it into your graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Bloodscent",
+  "clause": "all creatures able to block target creature this turn do so",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -917,6 +931,20 @@
   ]
  },
  {
+  "card": "Disarm",
+  "clause": "unattach all equipment from target creature",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Disciple of the Vault",
+  "clause": "you may have target opponent lose 1 life",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
   "card": "Dismantling Blow",
   "clause": "destroy target artifact or enchantment. if this spell was kicked, draw two cards",
   "ignored": [
@@ -1249,6 +1277,20 @@
   ]
  },
  {
+  "card": "Farsight Mask",
+  "clause": "if this artifact is untapped, you may draw a card",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
+  "card": "Fatespinner",
+  "clause": "that player chooses draw step, main phase, or combat phase. the player skips each instance of the chosen step or phase this turn",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Feint",
   "clause": "tap all creatures blocking target attacking creature. prevent all combat damage that would be dealt this turn by that creature and each creature blocking it",
   "ignored": [
@@ -1261,6 +1303,13 @@
   "clause": "this aura deals x damage to that player, where x is the number of infection counters on this aura",
   "ignored": [
    "aura"
+  ]
+ },
+ {
+  "card": "Fiery Gambit",
+  "clause": "flip a coin until you lose a flip or choose to stop flipping. if you lose a flip, fiery gambit has no effect. if you win one or more flips, fiery gambit deals 3 damage to target creature. if you win two or more flips, fiery gambit deals 6 damage to each opponent. if you win three or more flips, draw nine cards and untap all lands you control",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1371,6 +1420,14 @@
   ]
  },
  {
+  "card": "Gate to the Aether",
+  "clause": "that player reveals the top card of their library. if it's an artifact, creature, enchantment, or land card, the player may put it onto the battlefield",
+  "ignored": [
+   "or",
+   "card,"
+  ]
+ },
+ {
   "card": "Gauntlets of Chaos",
   "clause": "exchange control of target artifact, creature, or land you control and target permanent an opponent controls that shares one of those types with it. if those permanents are exchanged this way, destroy all auras attached to them",
   "ignored": [
@@ -1431,6 +1488,13 @@
   "clause": "destroy all creatures that were blocked by target wall this turn. they can't be regenerated. for each creature that died this way, put a creature card from the graveyard of the player who controlled that creature the last time it became blocked by that wall onto the battlefield under its owner's control",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Goblin Charbelcher",
+  "clause": "reveal cards from the top of your library until you reveal a land card. this artifact deals damage equal to the number of nonland cards revealed this way to any target. if the revealed land card was a mountain, this artifact deals double that damage instead. put the revealed cards on the bottom of your library in any order",
+  "ignored": [
+   "artifact"
   ]
  },
  {
@@ -2085,6 +2149,13 @@
   ]
  },
  {
+  "card": "Krark-Clan Shaman",
+  "clause": "this creature deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Krosan Reclamation",
   "clause": "target player shuffles up to two target cards from their graveyard into their library",
   "ignored": [
@@ -2141,6 +2212,13 @@
   ]
  },
  {
+  "card": "Leonin Bladetrap",
+  "clause": "it deals 2 damage to each attacking creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Lesser Werewolf",
   "clause": "if this creature's power is 1 or more, it gets -1/-0 until end of turn and put a -0/-1 counter on target creature blocking or blocked by this creature",
   "ignored": [
@@ -2152,6 +2230,13 @@
   "clause": "all lands you control become 1/1 creatures until end of turn. they're still lands",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Lightning Coils",
+  "clause": "if this artifact has five or more charge counters on it, remove all of them from it and create that many 3/1 red elemental creature tokens with haste. exile them at the beginning of the next end step",
+  "ignored": [
+   "artifact"
   ]
  },
  {
@@ -2660,6 +2745,14 @@
   ]
  },
  {
+  "card": "Oblivion Stone",
+  "clause": "destroy each nonland permanent without a fate counter on it, then remove all fate counters from all permanents",
+  "ignored": [
+   "each",
+   "all"
+  ]
+ },
+ {
   "card": "Omen of Fire",
   "clause": "return all islands to their owners' hands. each player sacrifices a plains or a white permanent of their choice for each white permanent they control",
   "ignored": [
@@ -3105,6 +3198,13 @@
   ]
  },
  {
+  "card": "Reiver Demon",
+  "clause": "if you cast it from your hand, destroy all nonartifact, nonblack creatures. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Relentless Assault",
   "clause": "untap all creatures that attacked this turn. after this main phase, there is an additional combat phase followed by an additional main phase",
   "ignored": [
@@ -3234,6 +3334,13 @@
   "clause": "create an x/x creature token of the chosen color and type, where x is the number of charge counters on this artifact",
   "ignored": [
    "artifact"
+  ]
+ },
+ {
+  "card": "Roar of the Kha",
+  "clause": "untap all creatures you control",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -3414,6 +3521,13 @@
  {
   "card": "Season of the Witch",
   "clause": "destroy all untapped creatures that didn't attack this turn, except for creatures that couldn't attack",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Second Sunrise",
+  "clause": "each player returns to the battlefield all artifact, creature, enchantment, and land cards in their graveyard that were put there from the battlefield this turn",
   "ignored": [
    "all"
   ]
@@ -3681,6 +3795,20 @@
   ]
  },
  {
+  "card": "Solar Tide",
+  "clause": "destroy all creatures with power 2 or less",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Solar Tide",
+  "clause": "destroy all creatures with power 3 or greater",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Songs of the Damned",
   "clause": "add {b} for each creature card in your graveyard",
   "ignored": [
@@ -3720,6 +3848,13 @@
   "clause": "return a red or green creature you control to its owner's hand",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Spellweaver Helix",
+  "clause": "you may exile two target sorcery cards from a single graveyard",
+  "ignored": [
+   "cards"
   ]
  },
  {
@@ -3979,6 +4114,13 @@
   "clause": "prevent the next x damage that would be dealt to target creature this turn. for each 1 damage prevented this way, put a +1/+1 counter on that creature",
   "ignored": [
    "1"
+  ]
+ },
+ {
+  "card": "Tempest of Light",
+  "clause": "destroy all enchantments",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -4441,6 +4583,20 @@
   ]
  },
  {
+  "card": "Vulshok Battlemaster",
+  "clause": "attach all equipment on the battlefield to it",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Wail of the Nim",
+  "clause": "regenerate each creature you control",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Wake of Destruction",
   "clause": "destroy target land and all other lands with the same name as that land",
   "ignored": [
@@ -4600,6 +4756,13 @@
   ]
  },
  {
+  "card": "Worldslayer",
+  "clause": "destroy all permanents other than this equipment",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Wormfang Behemoth",
   "clause": "exile all cards from your hand",
   "ignored": [
@@ -4625,6 +4788,14 @@
   "clause": "tap all red creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Wurmskin Forger",
+  "clause": "distribute three +1/+1 counters among one, two, or three target creatures",
+  "ignored": [
+   "or",
+   "target"
   ]
  },
  {
