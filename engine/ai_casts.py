@@ -60,6 +60,7 @@ from .ai_valuation import (
     entry_may_remove_itself,
     entry_triggers_bought,
 )
+from .ai_graveyard_returns import cast_graveyard_return
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_restrictions import check_cast_timing
 from .face_down import cast_announces_morph
@@ -1327,6 +1328,12 @@ def _announced_candidate(
         buried = _cast_graveyard_denial(game, player_index, card)
         if buried is not None:
             target, target_permanent_index = buried
+        # …and a card it returns ("Return target creature card from your
+        # graveyard to the battlefield"): the one worth most back that can
+        # arrive there (`ai_graveyard_returns.cast_graveyard_return`). Named
+        # nothing, the handler took the first card in the pile.
+        elif (returned := cast_graveyard_return(game, player_index, card)) is not None:
+            target, target_permanent_index = returned
     # The spell a cast whose target **is** a spell names: a role's or a
     # "spell or permanent"'s choice above, the guard's, or — with no guard to
     # choose by — the one whose answer its rehearsal measures most

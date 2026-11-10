@@ -860,7 +860,22 @@ class TriggerChoicesMixin:
                     choice, pile, slots[:ceiling]
                 )
             if cards:
-                pick = next(
+                # …unless the card is **returned** ("…return target creature
+                # card from your graveyard to the battlefield", Karmic Guide;
+                # "…to your hand", Gravedigger): then the card worth most back
+                # that can arrive there (``ai_graveyard_returns``), in any pile
+                # on offer — the first in the pile was whichever died first,
+                # and could be a card the battlefield cannot take (CR 400.4a).
+                from ....ai_graveyard_returns import (best_graveyard_return,
+                                                      graveyard_return_destination)
+
+                returned_to = graveyard_return_destination(
+                    (getattr(item, "ability_instruction", None),)
+                )
+                pick = (
+                    best_graveyard_return(self, choice.player_index, cards, returned_to)
+                    if returned_to else None
+                ) or next(
                     (target for target in cards if target.get("seat") == standing),
                     cards[0],
                 )

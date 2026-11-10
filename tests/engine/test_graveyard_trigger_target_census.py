@@ -522,7 +522,15 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _t
     seat's pile where the phrase reaches any graveyard, in the only pile on
     offer otherwise — so choosing here changes what a *player* is asked and
     nothing a seat nobody asks does. The choice is now made, stamped and
-    logged as the ability goes on the stack."""
+    logged as the ability goes on the stack.
+
+    **Except a card the trigger returns** (kg5): "…put target creature card
+    from a graveyard onto the battlefield under your control" (Necromancy)
+    takes the card worth most back that can arrive, in any pile on offer
+    (``ai_graveyard_returns.best_graveyard_return``, over the list the same
+    trigger offers a seat that is asked) — the first in the pile was
+    whichever died first."""
+    from engine.ai_graveyard_returns import best_graveyard_return, graveyard_return_destination
     examined = 0
     findings: list[str] = []
     for card, trigger, spec, targeted in _rows(_pool):
@@ -544,6 +552,22 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _t
         own_only = bool(spec.get("own_graveyard_only"))
         expected = 0 if own_only else 1
         count = _count_owed(spec)
+        returned_to = graveyard_return_destination((trigger.instruction,))
+        best = None
+        if returned_to is not None and count <= 1:
+            asked = _table(_pool, _tribes, interactive=(0,))
+            _fire(asked, card, trigger)
+            prompt = _prompt(asked, trigger)
+            offered = [
+                target for target in ((prompt.data.get("targets") or ()) if prompt else ())
+                if target.get("kind") == "graveyard"
+            ]
+            best = best_graveyard_return(asked, 0, offered, returned_to)
+        if best is not None:
+            picked = [(stamp.seat, stamp.card.name) for stamp in stamps]
+            if picked != [(best["seat"], best["name"])]:
+                findings.append(f"{label}: chose {picked}, not {best['name']} from pile {best['seat']}")
+            expected = best["seat"]
         if count > 1 and not own_only and sum(
             graveyard_card_matches(spec, card, game=game, owner=1)
             for card in game.players[1].graveyard

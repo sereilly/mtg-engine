@@ -95,6 +95,7 @@ from .ai_targets import (
     _one_graveyard_card_is_denied,
     _choose_damage_source,
 )
+from .ai_graveyard_returns import best_graveyard_return, graveyard_return_destination
 from .ai_player_control import plays_for_another
 
 
@@ -756,7 +757,15 @@ def _activation_candidate(
 
         if side is None and any(t["seat"] != player_index for t in cards):
             cards = [t for t in cards if t["seat"] != player_index]
-        chosen = max(cards, key=_mana_value)
+        # A return's card: the one worth most back that can arrive
+        # (`ai_graveyard_returns`); any other effect's, the greatest value.
+        returned_to = graveyard_return_destination((ability.instruction,))
+        chosen = (
+            best_graveyard_return(game, player_index, cards, returned_to)
+            if returned_to else max(cards, key=_mana_value)
+        )
+        if chosen is None:
+            return None
         target = chosen["seat"]
         target_permanent_index = chosen["index"]
 

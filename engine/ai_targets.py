@@ -46,6 +46,7 @@ from .ai_slot_sides import (
     several_target_slot_sides,
 )
 from .ai_standing import permanent_worth
+from .ai_graveyard_returns import ranked_graveyard_slots
 from .ai_prompt_readers import (
     exiles_a_graveyard_target,
     graveyard_denial_order,
@@ -1036,6 +1037,9 @@ def _choose_several_targets(
         # one or more (`()`), where every other shape hands on to the
         # one-target chooser as it always has.
         return () if sized_by_x else None
+    if wanted_kind == "graveyard":
+        # The cards worth most back first, not the pile's order (kg5).
+        by_seat = ranked_graveyard_slots(game, caster_index, by_seat, _announced_steps(card, program))
 
     if sized_by_x or announced is not None:
         # **…and "up to X target creatures, where X is one plus the number of
