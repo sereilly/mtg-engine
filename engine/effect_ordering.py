@@ -341,6 +341,7 @@ def apply_in_order(
     chooser_index: int | None = None,
     stop: Callable[[Any, dict], bool] | None = None,
     ask: Callable[[Any, int | None, list[Candidate], dict], Any] | None = None,
+    default: Callable[[Any, int | None, list[Candidate], dict], Candidate] | None = None,
 ) -> OrderingTrace:
     """Apply *candidates* to *event* following CR 616.1.
 
@@ -368,6 +369,13 @@ def apply_in_order(
     that contends takes the default and is recorded in ``trace.unasked``. In
     this pool that cannot happen: applying an effect only ever makes predicates
     go true→false, so if any round contends the first one did.
+
+    ``default`` is the first round's choice for a seat nobody asks, in place
+    of :func:`choose_effect`'s stated order — ``default(game, chooser_index,
+    applicable, event)``, the same arguments ``ask`` takes. A damage event
+    passes a measured one (``engine/measured_effect_order.py``); a later round
+    takes the stated order whatever is passed, since by then the process is
+    no longer pure.
     """
     trace = OrderingTrace()
     remaining = list(candidates)
@@ -383,7 +391,11 @@ def apply_in_order(
         elif ask is None or trace.applied:
             if ask is not None:
                 trace.unasked.append(tuple(c.key for c in applicable))
-            chosen = choose_effect(game, chooser_index, applicable)
+            chosen = (
+                default(game, chooser_index, applicable, event)
+                if default is not None and not trace.applied
+                else choose_effect(game, chooser_index, applicable)
+            )
         else:
             answer = ask(game, chooser_index, applicable, event)
             if answer is SUSPENDED:

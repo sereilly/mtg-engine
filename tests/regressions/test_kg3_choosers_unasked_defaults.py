@@ -73,7 +73,7 @@ _DEFAULTS: dict[str, str] = {
     "discard_unless_pay_life": "stated",  # pay while it is not the whole life
     "draw_becomes_counter": "stated",
     "draw_up_to": "stated",               # the whole offer
-    "effect_order": "stated",             # CR 616.1e: ``choose_effect``, stamped at arm
+    "effect_order": "worth",              # CR 616.1e: damage measured on scratch copies (``measured_effect_order``), stamped at arm; other kinds stated
     "enter_choice": "stated",             # stamped at arm
     "entry_discard_toll": "stated",
     "entry_exile": "worth",               # least mana value
