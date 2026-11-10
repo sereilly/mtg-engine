@@ -107,49 +107,50 @@ def refusals_report(cards) -> list[tuple[str, str, str, list[tuple[str, str, str
     """``(card, primary type, headline reason, line findings)`` for every
     unsupported card, where each line finding is ``(status, line, detail)``.
 
-    ``status`` is ``"refused"`` (the grammar could not read the line, detail is
-    the parse error), ``"unlowered"`` (parsed but no instructions, detail is
-    the lowering error), or ``"clean"`` (the grammar reads it; the refusal that
-    costs the card its support is in the compiler front end — the headline
-    reason names it). Lines come from ``expand_ability_lines`` because that is
-    the text the compiler classifies; reading ``oracle_text`` raw would census
-    a different card (an equip line, most visibly).
+    The status and the site come from ``scripts/probe_line.py``, which reads
+    each line through every layer the compiler consults and names the one that
+    refused it (``probe_line.census_site``):
+
+    * ``"refused"`` — refused at some layer. For the grammar the detail is the
+      parse error verbatim, the key this rollup has always grouped by; for any
+      other layer — a trigger-condition table, a card gate, the Aura gate, a
+      line reader that does not take what the grammar lowered — it is
+      ``"<layer>: <reason>"``, so a table-keyed refusal no longer passes for a
+      production.
+    * ``"unlowered"`` — the grammar parsed it and its lowering refused; the
+      detail is the lowering error.
+    * ``"clean"`` — some reader claims the line (a text-keyed table claiming a
+      line the grammar cannot parse is clean, not refused); the refusal that
+      costs the card its support is elsewhere — the headline reason names it.
+
+    Lines come from ``expand_ability_lines`` because that is the text the
+    compiler classifies; reading ``oracle_text`` raw would census a different
+    card (an equip line, most visibly).
     """
-    from engine.grammar import compile_line
-    from engine.oracle import (compile_card_oracle, compiled_faces,
-                               expand_ability_lines)
+    from engine.oracle import compile_card_oracle, compiled_faces
+    from probe_line import census_site, observing, origin_label, probe_unit
 
     findings: list[tuple[str, str, str, list[tuple[str, str, str]]]] = []
-    for card in cards:
-        program = compile_card_oracle(card)
-        if program.supported:
-            continue
-        lines: list[tuple[str, str, str]] = []
-        # The lines of every face that failed (``compiled_faces``): a split
-        # card's text is on its halves, each read under its own name — the
-        # half's name is its self-reference — and a half that compiles is not
-        # part of why the card is refused. A single-face card is its own
-        # one-entry list, so this is the loop it always was.
-        for face, face_program in compiled_faces(card):
-            if face_program.supported:
+    with observing():
+        for card in cards:
+            program = compile_card_oracle(card)
+            if program.supported:
                 continue
-            expanded = expand_ability_lines(
-                face.oracle_text or "", card_name=face.name, legendary=face.is_legendary
-            )
-            for raw in expanded.splitlines():
-                line = raw.strip()
-                if not line:
+            lines: list[tuple[str, str, str]] = []
+            # The lines of every face that failed (``compiled_faces``): a split
+            # card's text is on its halves, each read under its own name — the
+            # half's name is its self-reference — and a half that compiles is
+            # not part of why the card is refused. A single-face card is its
+            # own one-entry list, so this is the loop it always was.
+            for face, face_program in compiled_faces(card):
+                if face_program.supported:
                     continue
-                result = compile_line(line, card_name=face.name)
-                if result.blank:
-                    continue
-                if result.parse_error:
-                    lines.append(("refused", line, result.parse_error))
-                elif result.lowering_error:
-                    lines.append(("unlowered", line, result.lowering_error))
-                else:
-                    lines.append(("clean", line, ""))
-        findings.append((card.name, card.primary_type, program.reason, lines))
+                for line in probe_unit(face, origin_label(card)).lines:
+                    if line.blank:
+                        continue
+                    status, detail = census_site(line)
+                    lines.append((status, line.text, detail))
+            findings.append((card.name, card.primary_type, program.reason, lines))
     return findings
 
 
@@ -159,7 +160,7 @@ def refusal_rollup(findings):
     Returns ``(sites, front_end_only)``: ``sites`` maps each refusal site to
     ``{"lines": int, "texts": set[str], "cards": set[str]}``, and
     ``front_end_only`` lists ``(card, headline)`` for cards whose every line is
-    grammar-clean — the refusal is a front-end classification.
+    read by some reader — the refusal is about the card.
 
     The card set is the column this rollup went four sets without: the
     lines-per-distinct-sentence ratio read 1.00 for 5ED, FEM, 6ED and HML
@@ -194,10 +195,10 @@ def print_refusals(findings) -> None:
     )
     print(f"Unsupported cards: {len(findings)}; refused lines: {refused_total}")
     print("(the plain census quotes only the first refused line per card)")
-    print("(a 'refused' line can still be claimed by a text-keyed rule table —")
-    print(" the grammar is the only probe here, and the tables read raw text;")
-    print(" LEG round 12 hit this on Evil Eye's round-7 whitelist line, so")
-    print(" check the headline reason before scheduling a 'refused' line)")
+    print("(each site is the layer that refused the line, read by")
+    print(" scripts/probe_line.py: a bare message is the grammar's parse error,")
+    print(" anything else names its layer first; a line some text-keyed table")
+    print(" claims is not listed. probe_line.py --card NAME shows every layer)")
     print()
 
     for name, primary_type, headline, lines in findings:
@@ -212,11 +213,11 @@ def print_refusals(findings) -> None:
         if clean and len(lines) > clean:
             print(f"  ({clean} other line(s) read fine)")
         if clean == len(lines):
-            # Every line is grammar-clean and the card is still unsupported:
-            # the refusal is a front-end classification (a trigger condition
-            # not in the pattern table, a blocklisted keyword, an activation
-            # restriction nothing enforces). The headline reason is the site.
-            print("  (every line grammar-clean — the refusal is the headline reason)")
+            # Every line is claimed by some reader and the card is still
+            # unsupported: the refusal is about the card (a blocklisted keyword,
+            # a layout, a spell whose effect no handler runs). The headline
+            # reason is the site.
+            print("  (every line is read — the refusal is the headline reason)")
 
     sites, front_end_only = refusal_rollup(findings)
     print()
@@ -233,7 +234,7 @@ def print_refusals(findings) -> None:
         )
     if front_end_only:
         print()
-        print(f"Front-end refusals ({len(front_end_only)} card(s), no grammar-refused line):")
+        print(f"Front-end refusals ({len(front_end_only)} card(s), no refused line):")
         for name, headline in front_end_only:
             print(f"  {name}: {headline}")
 
