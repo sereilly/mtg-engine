@@ -47,7 +47,11 @@ def _mode_announcements(
         return [
             (
                 mode.index, mode.target_player_index,
-                _announced_arity(mode.target_permanent_index), None,
+                _announced_arity(mode.target_permanent_index),
+                # …and its identities where the caller sent them (a mode's
+                # several targets across two boards), read by the gate as the
+                # cast's own ``target_permanent_ids`` are.
+                mode.target_permanent_id,
                 mode.target_stack_item,
             )
             for mode in chosen_modes
@@ -243,7 +247,7 @@ class CastAnnouncementMixin:
         before this ran (``entwine.entwined_mode_choices``).
         """
         from ...entwine import entwine_cost, entwine_mode_refusal, entwined
-        from ...game_types import ChosenMode, as_target_slots
+        from ...game_types import ChosenMode, as_target_ids, as_target_slots
 
         program = compile_card_oracle(card)
         entwine_paid = entwined(card, {"additional_costs_paid": optional_paid or {}})
@@ -294,6 +298,13 @@ class CastAnnouncementMixin:
                 target_permanent_index=as_target_slots(
                     entry.get("target_permanent_index")
                 ),
+                # A mode's targets by identity, where the caller resolved
+                # them: "Tap two target creatures" (Blinding Beam, entwined)
+                # may name creatures on two battlefields, which slots beside
+                # one ``target_player_index`` cannot say — the spell's own
+                # ``target_permanent_ids`` channel, per mode.
+                # ``_stamp_stack_targets`` keeps a mode that arrives stamped.
+                target_permanent_id=as_target_ids(entry.get("target_permanent_ids")),
                 target_stack_item=stack_item,
             ))
         chosen.sort(key=lambda mode: mode.index)

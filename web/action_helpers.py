@@ -56,6 +56,14 @@ def _default_target(game, caster_index: int, card_name: str, req) -> int:
         return caster_index
     return game._spell_default_seat(caster_index)
 
+def _mode_target_ids(mode) -> "list[int] | None":
+    """A mode's several targets by identity (``ModeChoice.permanent_ids``),
+    or None. The slots :func:`_mode_target_index` resolves are positions on
+    each permanent's own battlefield; these are what say which battlefield."""
+    several = getattr(mode, "permanent_ids", None)
+    return list(several) if several else None
+
+
 def _mode_target_index(game, mode):
     """The battlefield slot one chosen mode named, preferring its stable id.
 
@@ -85,12 +93,12 @@ def _mode_target_index(game, mode):
                     status_code=404,
                     detail="that permanent is no longer on the battlefield",
                 )
-            seat_found, permanent = found
-            if mode.target_seat is not None and seat_found != mode.target_seat:
-                raise HTTPException(
-                    status_code=422,
-                    detail="a mode's permanents are on one battlefield, its target_seat's",
-                )
+            _seat_found, permanent = found
+            # Each id's own slot on its own board: a mode's several targets
+            # may sit on two battlefields ("Tap two target creatures"), and
+            # the identities ride beside them (``target_permanent_ids`` on the
+            # mode, :func:`_mode_target_ids`), which is what the engine reads
+            # a cross-board announcement by — as the cast's own ids are.
             slots.append(game.battlefield_index_of(permanent))
         return slots
     if mode.permanent_id is not None:
@@ -140,6 +148,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
                 # the spell's own target is: a stale id is a refusal further in,
                 # never a fall back to whatever now sits at the index.
                 "target_permanent_index": _mode_target_index(game, mode),
+                "target_permanent_ids": _mode_target_ids(mode),
                 "target_stack_index": _engine_stack_index(mode.target_stack_index),
             }
             for mode in req.mode_choices
