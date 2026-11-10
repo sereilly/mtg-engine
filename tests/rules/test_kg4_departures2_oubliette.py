@@ -36,7 +36,7 @@ from engine.aura_attachment import attach_aura
 from engine.card_loader import load_catalog
 from engine.control import change_control
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -59,18 +59,6 @@ def _set_down(game: Game, seat: int, name: str) -> Permanent:
     return permanent
 
 
-def _settle(game: Game) -> None:
-    for _ in range(100):
-        if game.stack:
-            resolve_stack(game)
-            continue
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            continue
-        return
-    raise AssertionError(game.log[-8:])
-
-
 def _cast(game: Game, seat: int, name: str, target: Permanent) -> None:
     game.players[seat].hand.append(_CARDS[name])
     result = game.cast_from_hand(
@@ -78,7 +66,7 @@ def _cast(game: Game, seat: int, name: str, target: Permanent) -> None:
         target_permanent_ids=[target.permanent_id],
     )
     assert result.supported, result
-    _settle(game)
+    settle(game)
 
 
 def _oubliette(game: Game) -> Permanent:

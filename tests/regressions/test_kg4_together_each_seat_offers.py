@@ -40,7 +40,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compiled_units
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, settle
 
 _CATALOG = load_catalog()
 _CARDS = {card.name: card for card in _CATALOG}
@@ -80,24 +80,6 @@ def _place(game: Game, seat: int, name: str) -> Permanent:
     return permanent
 
 
-def _settle(game: Game) -> None:
-    """Resolve and answer everything, each prompt by its seat's default."""
-    for _ in range(300):
-        owed = game.waiting_prompt()
-        if owed is not None:
-            game.take_choice_default(owed)
-            continue
-        if game.stack:
-            game.resolve_top_of_stack(pause_for_choices=game.holds_for_answers())
-            continue
-        if game.pending_choices or game.pending_replacement_choices:
-            game.auto_resolve_pending_choices()
-            game.auto_resolve_pending_replacement_choices()
-            continue
-        return
-    raise AssertionError(f"the table did not settle: {game.log[-8:]}")
-
-
 def _life(game: Game) -> list[int]:
     return [player.life for player in game.players]
 
@@ -127,7 +109,7 @@ def _show_and_tell(game: Game, observer_later: bool):
     seat = next(s for s, name in puts.items() if name == WARDEN)
     before = _life(game)
     assert game.cast_from_hand(0, "Show and Tell").supported
-    _settle(game)
+    settle(game)
     return seat, _life(game)[seat] - before[seat], 1
 
 
@@ -139,7 +121,7 @@ def _from_hand_to_each_opponent(source: str, observer: str, other: str):
         seat = next(s for s, name in puts.items() if name == observer)
         before = _life(game)
         _place(game, 0, source)
-        _settle(game)
+        settle(game)
         return seat, _life(game)[seat] - before[seat], -1 if observer == "Carnival of Souls" else 1
     return row
 
@@ -153,7 +135,7 @@ def _enslaved_horror(game: Game, observer_later: bool):
     seat = next(s for s, name in puts.items() if name == WARDEN)
     before = _life(game)
     _place(game, 0, "Enslaved Horror")
-    _settle(game)
+    settle(game)
     return seat, _life(game)[seat] - before[seat], 1
 
 
@@ -172,7 +154,7 @@ def _veteran_explorer(game: Game, observer_later: bool):
     explorer = _place(game, 0, "Veteran Explorer")
     before = _life(game)
     game.sacrifice_permanent(explorer)
-    _settle(game)
+    settle(game)
     return seat, _life(game)[seat] - before[seat], 1
 
 
@@ -183,7 +165,7 @@ def _new_frontiers(game: Game, observer_later: bool):
     game.players[0].hand = [_CARDS["New Frontiers"]]
     before = _life(game)
     assert game.cast_from_hand(0, "New Frontiers", x_value=1).supported
-    _settle(game)
+    settle(game)
     return seat, _life(game)[seat] - before[seat], 1
 
 
@@ -193,7 +175,7 @@ def _hired_giant(game: Game, observer_later: bool):
     seat = _land_libraries(game, [1, 2], observer_later)
     before = _life(game)
     _place(game, 0, "Hired Giant")
-    _settle(game)
+    settle(game)
     return seat, _life(game)[seat] - before[seat], 1
 
 

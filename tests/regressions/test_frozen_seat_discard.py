@@ -31,7 +31,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from engine.oracle import compiled_units
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 
 @pytest.fixture(scope="module")
@@ -59,15 +59,6 @@ def _table(pool, mine=(), theirs=(), *, hands=((), ())):
     return game
 
 
-def _settle(game) -> None:
-    for _ in range(8):
-        resolve_stack(game)
-        if not game.pending_choices:
-            return
-        game.auto_resolve_pending_choices()
-    raise AssertionError("the table did not settle")
-
-
 def _zone(cards) -> list[str]:
     return sorted(card.name for card in cards)
 
@@ -81,7 +72,7 @@ def test_oppression_takes_the_card_from_whoever_cast_the_spell(pool):
     )
 
     assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
-    _settle(game)
+    settle(game)
 
     assert _zone(game.players[0].graveyard) == ["Forest", "Lightning Bolt"]
     assert _zone(game.players[1].hand) == ["Swamp"]
@@ -96,7 +87,7 @@ def test_oppression_still_takes_it_from_an_opponent_who_casts(pool):
     )
 
     assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
-    _settle(game)
+    settle(game)
 
     assert _zone(game.players[1].graveyard) == ["Lightning Bolt", "Swamp"]
     assert _zone(game.players[0].hand) == ["Forest"]
@@ -112,7 +103,7 @@ def test_putrefaction_takes_the_card_from_its_own_controller_too(pool):
     assert game.cast_from_hand(
         0, "Giant Growth", target_permanent_ids=[bears.permanent_id]
     ).supported
-    _settle(game)
+    settle(game)
 
     assert _zone(game.players[0].graveyard) == ["Forest", "Giant Growth"]
     assert _zone(game.players[1].hand) == ["Swamp"]
@@ -132,7 +123,7 @@ def test_anvil_of_bogardan_discards_from_the_player_whose_draw_step_it_is(pool, 
     game.resolve_untap_step(active)
     game.resolve_upkeep(active)
     game.resolve_draw_step(active)
-    _settle(game)
+    settle(game)
 
     drawer, other = game.players[active], game.players[1 - active]
     # One card for the turn, one for the Anvil, one discarded: net +1.

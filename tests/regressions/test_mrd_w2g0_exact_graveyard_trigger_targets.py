@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 
 def _table(set_pool, mine, theirs, *, interactive=()):
@@ -39,12 +39,6 @@ def _table(set_pool, mine, theirs, *, interactive=()):
     return game
 
 
-def _settle(game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-
-
 def _exiled(game) -> list[list[str]]:
     return [[card.name for card in player.exile] for player in game.players]
 
@@ -56,7 +50,7 @@ def test_a_seat_nobody_asks_imprints_two_of_its_own_beside_an_opponents_one(set_
     game = _table(set_pool, ["Wrath of God", "Fireball"], ["Mind Twist"])
 
     assert game.cast_from_hand(0, "Spellweaver Helix").supported
-    _settle(game)
+    settle(game)
 
     assert _exiled(game) == [["Wrath of God", "Fireball"], []]
     assert [card.name for card in game.players[1].graveyard] == ["Mind Twist"]
@@ -69,7 +63,7 @@ def test_an_unasked_seat_still_takes_the_opponents_pile_where_it_holds_two(set_p
     game = _table(set_pool, ["Wrath of God", "Fireball"], ["Mind Twist", "Stone Rain"])
 
     assert game.cast_from_hand(0, "Spellweaver Helix").supported
-    _settle(game)
+    settle(game)
 
     assert _exiled(game) == [[], ["Mind Twist", "Stone Rain"]]
 
@@ -90,7 +84,7 @@ def test_a_cast_naming_one_card_is_asked_again_for_two(set_pool):
     assert prompt.data.get("exact_targets") and prompt.data["max_targets"] == 2
     assert not game.confirm_trigger_target(0, seat=0, graveyard_index=1), "one is short"
     assert game.confirm_trigger_target(0, seat=0, graveyard_indices=[1, 2])
-    _settle(game)
+    settle(game)
     assert _exiled(game) == [["Fireball", "Stone Rain"], []]
     assert [card.name for card in game.players[0].graveyard] == ["Wrath of God"]
 
@@ -102,7 +96,7 @@ def test_a_cast_naming_one_card_at_an_unasked_seat_takes_two(set_pool):
     assert game.queue_from_hand(
         0, "Spellweaver Helix", target_player_index=0, target_permanent_index=0,
     ).supported
-    _settle(game)
+    settle(game)
 
     assert _exiled(game) == [["Wrath of God", "Fireball"], []]
 
@@ -116,6 +110,6 @@ def test_a_cast_naming_two_cards_stands(set_pool):
     ).supported
     game.resolve_top_of_stack()
     assert not game.pending_choices_of("trigger_target")
-    _settle(game)
+    settle(game)
 
     assert _exiled(game) == [["Wrath of God", "Stone Rain"], []]

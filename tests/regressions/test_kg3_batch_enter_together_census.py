@@ -30,7 +30,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -59,24 +59,6 @@ def _place(game: Game, seat: int, name: str) -> Permanent:
     return permanent
 
 
-def _settle(game: Game) -> None:
-    """Resolve and answer everything, each prompt by its seat's default."""
-    for _ in range(200):
-        owed = game.waiting_prompt()
-        if owed is not None:
-            game.take_choice_default(owed)
-            continue
-        if game.stack:
-            game.resolve_top_of_stack(pause_for_choices=game.holds_for_answers())
-            continue
-        if game.pending_choices or game.pending_replacement_choices:
-            game.auto_resolve_pending_choices()
-            game.auto_resolve_pending_replacement_choices()
-            continue
-        return
-    raise AssertionError(f"the table did not settle: {game.log[-5:]}")
-
-
 def _ordered(first: bool, *others: str) -> list[str]:
     return [WARDEN, *others] if first else [*others, WARDEN]
 
@@ -103,7 +85,7 @@ def _living_death(game: Game, first: bool):
     game.players[0].hand = [_CARDS["Living Death"]]
     before = _life(game)
     assert game.cast_from_hand(0, "Living Death").supported
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 2, None, None
 
@@ -117,9 +99,9 @@ def _planar_guide(game: Game, first: bool):
     _place(game, 0, "Planar Guide")
     before = _life(game)
     assert game.activate_permanent_ability(0, "Planar Guide")
-    _settle(game)
+    settle(game)
     game.resolve_end_step(0)
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 2, None, None
 
@@ -132,7 +114,7 @@ def _victimize(game: Game, first: bool):
     game.players[0].hand = [_CARDS["Victimize"]]
     before = _life(game)
     assert game.cast_from_hand(0, "Victimize", target_permanent_index=[0, 1]).supported
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 1, gained[1], 2
 
@@ -146,7 +128,7 @@ def _twilights_call(game: Game, first: bool):
     game.players[0].hand = [_CARDS["Twilight's Call"]]
     before = _life(game)
     assert game.cast_from_hand(0, "Twilight's Call").supported
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 2, gained[1], 3
 
@@ -159,7 +141,7 @@ def _tempting_wurm(game: Game, first: bool):
     game.players[0].hand = [_CARDS["Tempting Wurm"]]
     before = _life(game)
     assert game.cast_from_hand(0, "Tempting Wurm").supported
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     # The Warden already there sees the Wurm too.
     return gained[1], 1, gained[0], 3
@@ -180,7 +162,7 @@ def _death_or_glory(game: Game, first: bool):
     assert game.cast_from_hand(0, "Death or Glory").supported
     game.resolve_top_of_stack(pause_for_choices=True)
     assert game.resolve_pending_choice("pile_split", 0, first_pile=[0, 1])
-    _settle(game)
+    settle(game)
     assert sorted(p.card.name for p in game.controlled_by(0)) == sorted(
         [WARDEN, "Grizzly Bears"]
     ), game.log[-8:]
@@ -201,7 +183,7 @@ def _coffins_exiling(game: Game, first: bool) -> list:
             0, "Tawnos's Coffin", permanent_index=slot,
             target_permanent_ids=[victim.permanent_id],
         ).supported
-        _settle(game)
+        settle(game)
         assert not game.is_on_battlefield(victim)
     return coffins
 
@@ -217,7 +199,7 @@ def _coffins_swept(game: Game, first: bool):
     game.players[1].hand = [_CARDS["Shatterstorm"]]
     game.active_player_index = 1
     assert game.cast_from_hand(1, "Shatterstorm").supported
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 1, gained[1], 2
 
@@ -229,7 +211,7 @@ def _coffins_untapped(game: Game, first: bool):
     _coffins_exiling(game, first)
     before = _life(game)
     game.start_turn(0)
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 1, gained[1], 2
 
@@ -254,7 +236,7 @@ def _twin_tokens(game: Game, first: bool):
     game.players[0].hand = [maker]
     before = _life(game)
     assert game.cast_from_hand(0, "Twin Wardens").supported
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 2, gained[1], 2
 
@@ -274,7 +256,7 @@ def _parallel_evolution(game: Game, first: bool):
     game.players[0].hand = [_CARDS["Parallel Evolution"]]
     before = _life(game)
     assert game.cast_from_hand(0, "Parallel Evolution").supported
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     # The Warden token already there sees both copies; the new one sees one.
     return gained[0] - 2, 1, gained[1], 2
@@ -292,7 +274,7 @@ def _game_preserve(game: Game, first: bool):
     warden_seat = 0 if first else 1
     before = _life(game)
     game.start_turn(0)
-    _settle(game)
+    settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[warden_seat], 1, None, None
 
@@ -344,7 +326,7 @@ def test_two_dodecapods_one_discard_puts_onto_the_battlefield(interactive):
     game.players[0].hand = [_CARDS["Mind Rot"]]
     before = _life(game)
     assert game.cast_from_hand(0, "Mind Rot", target_player_index=1).supported
-    _settle(game)
+    settle(game)
     golems = [p for p in game.controlled_by(1) if p.card.name == "Dodecapod"]
     assert len(golems) == 2, game.log[-10:]
     assert all(p.effective_power == 5 for p in golems), [p.effective_power for p in golems]

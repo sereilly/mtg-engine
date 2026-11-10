@@ -27,7 +27,7 @@ from engine.combat_permissions import MUST_BLOCK_ATTACKERS_THIS_COMBAT
 from engine.game import Game
 from engine.models import CardDefinition, Permanent
 
-from tests.helpers import _mk_creature_card, _nosick, resolve_stack
+from tests.helpers import _mk_creature_card, _nosick, resolve_stack, settle
 
 
 def _sliver(name: str = "Test Sliver", power: int = 2, toughness: int = 2) -> CardDefinition:
@@ -66,15 +66,6 @@ def _table(attackers, defenders, *, seats=2, interactive=(), tapped=(), defender
     game.advance_combat_phase()
     game.advance_combat_phase()
     return game, mine, theirs
-
-
-def _settle(game) -> None:
-    """Resolve the stack and answer what a seat nobody asks would answer."""
-    for _ in range(10):
-        resolve_stack(game)
-        if not game.pending_choices:
-            return
-        game.auto_resolve_pending_choices()
 
 
 @pytest.mark.cr("702.39a", "603.3d", "509.1c")
@@ -162,7 +153,7 @@ def test_a_provoked_creature_that_cannot_block_this_creature_is_not_compelled(se
     resolve_stack(game)
     offer = next(c for c in game.pending_choices if c.kind == "optional_pay")
     assert game.resolve_pending_choice("optional_pay", offer.player_index, accept=True)
-    _settle(game)
+    settle(game)
 
     assert not bear.tapped
     assert bear.metadata[MUST_BLOCK_ATTACKERS_THIS_COMBAT] == [attacker.permanent_id]

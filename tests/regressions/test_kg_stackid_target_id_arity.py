@@ -44,7 +44,7 @@ from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, usable_activated_abilities
 
-from tests.helpers import stable_sample
+from tests.helpers import stable_sample, settle
 
 #: One announcement in every STRIDE, by a digest of the card's name.
 STRIDE = 4
@@ -137,19 +137,6 @@ def _fingerprint(game) -> dict:
     }
 
 
-def _settle(game) -> None:
-    for _ in range(80):
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            game.auto_resolve_pending_replacement_choices()
-            continue
-        if not game.stack:
-            return
-        if not game.resolve_top_of_stack():
-            game.auto_resolve_pending_choices()
-            game.auto_resolve_pending_replacement_choices()
-
-
 def _pick(game, entries, source=None):
     rows = []
     for entry in entries:
@@ -186,7 +173,7 @@ def _spell(card, how):
     result = game.queue_from_hand(0, card.name, **keywords)
     if not result.supported:
         return {"refused": result.details}
-    _settle(game)
+    settle(game)
     return _fingerprint(game)
 
 
@@ -206,7 +193,7 @@ def _ability(card, index, how):
     result = game.queue_permanent_ability(0, card.name, ability_index=index, **keywords)
     if not result.supported:
         return {"refused": result.details}
-    _settle(game)
+    settle(game)
     return _fingerprint(game)
 
 
@@ -266,7 +253,7 @@ def test_turn_to_slag_named_by_id_destroys_the_equipment():
     game = _board(hand=[_POOL["Turn to Slag"]])
     victim = next(p for p in game.controlled_by(1) if p.card.name == "Bait Creature")
     assert game.queue_from_hand(0, "Turn to Slag", target_permanent_ids=[victim.permanent_id]).supported
-    _settle(game)
+    settle(game)
     assert "Turn to Slag destroyed Bait Equipment" in game.log, game.log
     assert "Bait Equipment" in [card.name for card in game.players[1].graveyard]
 

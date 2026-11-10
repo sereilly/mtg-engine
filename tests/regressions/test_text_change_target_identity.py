@@ -32,7 +32,7 @@ from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.oracle_types import OracleInstruction
-from tests.helpers import _mk_card
+from tests.helpers import _mk_card, settle
 
 KIND = "mark_text_modified"
 
@@ -87,17 +87,6 @@ TEXT_CHANGERS = (
 def test_the_text_changers_are_the_ones_driven_here(pool):
     assert tuple(_text_changers(pool)) == TEXT_CHANGERS
     assert len(pool) >= 4700
-
-
-def _settle(game):
-    for _ in range(40):
-        if game.stack:
-            game.resolve_top_of_stack()
-        for choice in list(game.pending_choices):
-            game.auto_resolve_pending_choices(choice.player_index, kinds=[choice.kind])
-        if not game.stack and not game.pending_choices:
-            return
-    raise AssertionError([choice.kind for choice in game.pending_choices])
 
 
 @pytest.mark.parametrize("name", TEXT_CHANGERS)
@@ -158,7 +147,7 @@ def test_a_text_change_announced_by_id_rewrites_the_permanent_it_named(pool, nam
             old_color="W", mana_color="B",
         )
     assert done.supported, done.details
-    _settle(game)
+    settle(game)
 
     assert named.metadata.get("text_modified") is True, game.log[-4:]
     assert not first.metadata.get("text_modified"), (

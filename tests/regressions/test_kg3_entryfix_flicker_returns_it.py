@@ -33,7 +33,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.control import change_control
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import resolve_stack, settle
 
 _C = {card.name: card for card in load_catalog()}
 
@@ -54,29 +54,15 @@ def _table(person: bool) -> Game:
 def _place(game: Game, seat: int, name: str) -> Permanent:
     permanent = Permanent(card=_C[name])
     game._put_permanent_onto_battlefield(seat, permanent, None)
-    _settle(game)
+    settle(game)
     return permanent
-
-
-def _settle(game: Game) -> None:
-    for _ in range(100):
-        owed = game.waiting_prompt()
-        if owed is not None:
-            game.take_choice_default(owed)
-        elif game.stack:
-            game.resolve_top_of_stack(pause_for_choices=game.holds_for_answers())
-        elif game.pending_choices:
-            game.auto_resolve_pending_choices()
-        else:
-            game.check_state_based_actions()
-            return
 
 
 def _flicker(game: Game, permanent: Permanent) -> None:
     game.players[0].hand = [_C["Flicker"]]
     result = game.queue_from_hand(0, "Flicker", target_permanent_ids=[permanent.permanent_id])
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
 
 
 def _named(game: Game, seat: int, name: str) -> list[Permanent]:
@@ -130,7 +116,7 @@ def test_flicker_returns_an_aura_to_a_host_its_owner_chooses(person):
     bears = _place(game, 0, "Grizzly Bears")
     game.players[0].hand = [_C["Holy Strength"]]
     assert game.queue_from_hand(0, "Holy Strength", target_permanent_ids=[bears.permanent_id]).supported
-    _settle(game)
+    settle(game)
     aura = _named(game, 0, "Holy Strength")[0]
     assert aura.metadata.get("attached_to") is bears
 

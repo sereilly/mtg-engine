@@ -36,7 +36,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.game_types import StackItem
 from engine.models import Permanent
-from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import _mk_card, settle
 
 
 def _lookup(set_pool, name):
@@ -75,12 +75,6 @@ def _spell_on_stack(game, set_pool, name, controller, owner=None):
     return item
 
 
-def _settle(game):
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-
-
 def _lives(game):
     return [player.life for player in game.players]
 
@@ -93,7 +87,7 @@ def test_undermine_drains_the_opponent_whose_spell_it_counters(set_pool):
     _spell_on_stack(game, set_pool, "Grizzly Bears", controller=1)
 
     assert game.queue_from_hand(0, "Undermine", target_stack_index=0).supported
-    _settle(game)
+    settle(game)
 
     assert _lives(game) == [20, 17]
     assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
@@ -107,7 +101,7 @@ def test_undermine_at_your_own_spell_drains_you(set_pool):
     _spell_on_stack(game, set_pool, "Grizzly Bears", controller=0)
 
     assert game.queue_from_hand(0, "Undermine", target_stack_index=0).supported
-    _settle(game)
+    settle(game)
 
     assert _lives(game) == [17, 20]
 
@@ -123,7 +117,7 @@ def test_undermine_follows_the_spell_past_the_seat_the_wire_sends(set_pool):
     assert game.queue_from_hand(
         0, "Undermine", target_stack_index=0, target_player_index=1,
     ).supported
-    _settle(game)
+    settle(game)
 
     assert _lives(game) == [17, 20]
 
@@ -137,7 +131,7 @@ def test_undermine_charges_the_controller_of_a_spell_somebody_else_owns(set_pool
     _spell_on_stack(game, set_pool, "Grizzly Bears", controller=1, owner=0)
 
     assert game.queue_from_hand(0, "Undermine", target_stack_index=0).supported
-    _settle(game)
+    settle(game)
 
     assert _lives(game) == [20, 17]
     assert "Grizzly Bears" in [card.name for card in game.players[0].graveyard]
@@ -151,7 +145,7 @@ def test_undermine_names_the_right_player_at_three_seats(set_pool):
     _spell_on_stack(game, set_pool, "Grizzly Bears", controller=2)
 
     assert game.queue_from_hand(0, "Undermine", target_stack_index=0).supported
-    _settle(game)
+    settle(game)
 
     assert _lives(game) == [20, 20, 17]
 
@@ -180,7 +174,7 @@ def test_undermine_does_nothing_once_its_spell_has_left(set_pool):
 
     assert game.queue_from_hand(0, "Undermine", target_stack_index=0).supported
     game.stack = [item for item in game.stack if item is not bears]
-    _settle(game)
+    settle(game)
 
     assert _lives(game) == [20, 20]
 
@@ -230,7 +224,7 @@ def test_a_damage_rider_reaches_the_countered_spells_controller(
     _spell_on_stack(game, set_pool, "Grizzly Bears", controller=controller)
 
     assert game.queue_from_hand(0, "Probe Backlash", target_stack_index=0).supported
-    _settle(game)
+    settle(game)
 
     expected = [20, 20]
     expected[controller] = 18

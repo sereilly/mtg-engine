@@ -97,7 +97,7 @@ from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, spec_roles
-from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import _mk_card, resolve_stack, settle
 
 PLAYER_KINDS = {"player", "player_or_planeswalker", "any", "opponent"}
 ME, OPP = 0, 1
@@ -589,19 +589,6 @@ def fresh(card, built):
         card, built["placements"], window=built["window"], grave=built["grave"],
         stack=built["stack"],
     )
-
-
-def settle(game) -> None:
-    """Everything a cast leaves owed: the stack resolved, the prompts it armed
-    answered by default, and state-based actions checked (CR 704.3) — a
-    creature dealt lethal damage is still on the battlefield until they are,
-    and a measure taken before would count it as alive."""
-    for _ in range(6):
-        resolve_stack(game)
-        game.auto_resolve_pending_choices()
-        game.check_state_based_actions()
-        if not game.stack and not game.pending_choices:
-            return
 
 
 def run_out(game) -> None:

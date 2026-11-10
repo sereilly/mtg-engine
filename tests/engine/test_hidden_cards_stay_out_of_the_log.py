@@ -63,7 +63,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import OracleInstruction
 from engine.targeting import derive_activation_spec, derive_cast_spec
-from tests.helpers import _nosick, full_census, resolve_stack, stable_sample
+from tests.helpers import _nosick, full_census, stable_sample, settle
 
 #: A step whose kind names one of these moves a card through a hidden zone, or
 #: exiles one, or turns one face down — the population, read off the program.
@@ -301,14 +301,6 @@ def _table(by_name, *, on_board=(), in_hand=()) -> tuple[Game, dict]:
     return game, {"bears": bears, "mask": masks[1]}
 
 
-def _settle(game) -> None:
-    for _ in range(12):
-        resolve_stack(game)
-        if not game.pending_choices:
-            return
-        game.auto_resolve_pending_choices()
-
-
 def _aimed(game, entries, aim) -> dict:
     """The target arguments naming *aim* (a permanent) if the picker offers
     it, else seat 1, else the picker's first entry."""
@@ -347,7 +339,7 @@ def drive(by_name, card, shape, index, *, aim_at_mask=False) -> Game | None:
     )
     aim = held["mask"] if aim_at_mask else None
     game.start_turn(0)
-    _settle(game)
+    settle(game)
     if on_board and shape == "activated":
         slot = next(
             (i for i, p in enumerate(game.players[0].battlefield) if p.card is card), None,
@@ -375,7 +367,7 @@ def drive(by_name, card, shape, index, *, aim_at_mask=False) -> Game | None:
     elif on_board:
         # An upkeep trigger: the turn after next is this seat's again.
         game.start_next_turn()
-        _settle(game)
+        settle(game)
         game.start_next_turn()
     elif shape == "activated":
         if not game.activate_from_hand(0, card.name).supported:
@@ -388,15 +380,15 @@ def drive(by_name, card, shape, index, *, aim_at_mask=False) -> Game | None:
             return None
         if not game.queue_from_hand(0, card.name, **aimed).supported:
             return None
-    _settle(game)
+    settle(game)
     # Delayed abilities: "at the beginning of your next end step" (Necropotence)
     # and "at the beginning of your next upkeep" (Three Wishes).
     game.resolve_end_step(0)
-    _settle(game)
+    settle(game)
     game.start_next_turn()
-    _settle(game)
+    settle(game)
     game.start_next_turn()
-    _settle(game)
+    settle(game)
     return game
 
 

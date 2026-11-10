@@ -33,7 +33,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import declare_attack
+from tests.helpers import declare_attack, settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -58,18 +58,6 @@ def _set_down(game: Game, seat: int, name: str) -> Permanent:
     game.players[seat].battlefield.append(permanent)
     game._sync_control()
     return permanent
-
-
-def _settle(game: Game) -> None:
-    for _ in range(100):
-        if game.stack:
-            game.resolve_top_of_stack()
-            continue
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            continue
-        return
-    raise AssertionError(game.log[-8:])
 
 
 def _board(wurm_seat: int):
@@ -134,7 +122,7 @@ def test_a_dying_wurm_sees_the_creatures_dying_beside_it(road, wurm_seat):
     game, wurm, giants = _board(wurm_seat)
     before = [player.life for player in game.players]
     ROADS[road](game, wurm, giants)
-    _settle(game)
+    settle(game)
     assert not any(
         p.card.name in (WURM, "Hill Giant") for p in game.all_permanents()
     ), [p.card.name for p in game.all_permanents()]

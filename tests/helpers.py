@@ -161,8 +161,8 @@ def resolve_stack(game, *, limit: int = 200) -> int:
     the stack is what makes this a safe swap for the bare loop.
 
     So this is not "settle the game". A prompt owed with an empty stack is left
-    alone; call ``auto_resolve_pending_choices`` directly when that is what you
-    mean.
+    alone, and no state-based actions are performed: :func:`settle` is the
+    helper that brings a game to rest.
 
     Returns the number of stack objects resolved. Raises rather than looping
     forever when nothing can progress — a prompt nothing defaults is a bug in the
@@ -197,6 +197,138 @@ def resolve_stack(game, *, limit: int = 200) -> int:
     raise AssertionError(
         f"the stack did not drain in {limit} iterations; {len(game.stack)} "
         f"object(s) left, owed {[c.kind for c in game.pending_choices]}"
+    )
+
+
+def _owed_prompts(game):
+    """Every decision still open on either queue, oldest first: the prompt
+    queue (``pending_choices``), then CR 614's (``pending_replacement_choices``).
+    A choice kept queued *closed* on purpose (Word of Command's, which its
+    spell finishes as it resolves) is not owed."""
+    from engine.pending_choices import spec_for
+
+    for choice in list(game.pending_choices):
+        if spec_for(choice.kind).open_for(game, choice):
+            yield choice
+    yield from list(game.pending_replacement_choices)
+
+
+def _still_owed(game, choice) -> bool:
+    from engine.pending_choices import spec_for
+
+    if any(queued is choice for queued in game.pending_replacement_choices):
+        return True
+    return any(queued is choice for queued in game.pending_choices) and (
+        spec_for(choice.kind).open_for(game, choice)
+    )
+
+
+def _answer_by_default(game, choice) -> None:
+    """The registry's default for one owed decision — the answer
+    ``auto_resolve_pending_choices`` (or, for a CR 614 offer,
+    ``auto_resolve_pending_replacement_choices``) gives it."""
+    if any(queued is choice for queued in game.pending_replacement_choices):
+        game.resolve_replacement_choice(
+            choice.player_index, choice.default_option, kind=choice.kind
+        )
+    else:
+        game.auto_resolve_choice(choice)
+
+
+def _at_rest_report(game) -> str:
+    return (
+        f"stack {[item.card.name for item in game.stack]}, owed "
+        f"{[(c.kind, c.player_index) for c in game.pending_choices]}"
+        f" + {[(c.kind, c.player_index) for c in game.pending_replacement_choices]}"
+        f", last log {game.log[-5:]}"
+    )
+
+
+def settle(game, *, answers=None, defaults: bool = True, limit: int = 200):
+    """Bring *game* to rest: every owed prompt answered, the stack resolved,
+    state-based actions performed, round again until none of the three has
+    anything to do.
+
+    Removes the two traps :func:`resolve_stack` sets, both of which cost a
+    group a debugging round:
+
+    * **An offer owed with an empty stack.** At a headless table a step's
+      window resolves a trigger and pops it, and the "you may" it asks stays
+      queued with nothing on the stack (Hystrodon's draw, made in the combat
+      damage step) — ``resolve_stack`` returns at once and the board reads as
+      though the trigger did nothing. This answers it.
+    * **No state-based actions.** ``resolve_stack`` resolves through
+      ``resolve_top_of_stack``, so a creature a resolution dealt lethal damage
+      to is still on the battlefield afterwards. This resolves through the
+      engine's own unit of play (``Game.resolve_next_object``: the resolution
+      and CR 704.3's check after it, in one trigger window, holding the object
+      for an answer where the table does, ``holds_for_answers``) and checks
+      again whenever the stack is empty (CR 117.5).
+
+    A prompt is answered before the next object resolves (CR 608.2: the
+    resolution that asked is not over until it is), oldest first:
+
+    * by ``answers[choice.kind](game, choice)`` when *answers* names its kind
+      — a callable that gives the answer through the engine's own funnel
+      (``lambda game, c: game.confirm_optional_pay(c.player_index, accept=True)``);
+      raises if the choice is still owed afterwards (the answer was refused);
+    * otherwise by its registry default (``auto_resolve_choice``, the answer an
+      AI or headless seat takes) — **an interactive seat's prompt included**,
+      which is ``resolve_stack``'s other surprise, stated here instead.
+
+    ``defaults=False`` answers only what *answers* names and **stops at the
+    first other prompt the game waits on**, returning it, so a test can read
+    what was asked; a notification nothing waits on (``hand_reveal``) is left
+    queued and does not stop it. Otherwise returns None. A table with a
+    ``prompt_driver`` has its prompts handed to the driver first.
+
+    Steps no step: a step's turn-based actions and the walk through combat are
+    :func:`drive_combat`'s. Stops quietly once the game is over (CR 104.1).
+    Raises, naming what is owed, when the stack stops moving with nothing left
+    to answer, and when *limit* rounds pass without the game coming to rest.
+    """
+    from engine.pending_choices import spec_for
+
+    answers = dict(answers or {})
+    for _ in range(limit):
+        if game.is_game_over():
+            return None
+        if game.drive_owed_prompts():
+            continue
+        owed = None
+        for choice in _owed_prompts(game):
+            if choice.kind in answers or defaults or spec_for(choice.kind).holds_priority:
+                owed = choice
+                break
+        if owed is not None:
+            if owed.kind in answers:
+                answers[owed.kind](game, owed)
+                if _still_owed(game, owed):
+                    raise AssertionError(
+                        f"the answer given for {owed.kind!r} (seat "
+                        f"{owed.player_index}) left it owed: {_at_rest_report(game)}"
+                    )
+            elif defaults:
+                _answer_by_default(game, owed)
+            else:
+                return owed
+            continue
+        if game.stack:
+            if not game.resolve_next_object(pause_for_choices=game.holds_for_answers()):
+                if game.is_game_over():
+                    return None
+                raise AssertionError(
+                    "the stack stopped moving with nothing left to answer: "
+                    f"waiting on {game.waiting_prompt()!r}; {_at_rest_report(game)}"
+                )
+            continue
+        # CR 117.5: the check a player makes before receiving priority with
+        # the stack empty — which may put a trigger there, or ask something.
+        if game.check_state_based_actions() or game.stack:
+            continue
+        return None
+    raise AssertionError(
+        f"the game did not come to rest in {limit} rounds: {_at_rest_report(game)}"
     )
 
 
@@ -455,6 +587,129 @@ def declare_attack(game, attacker_seat: int, *, blocks: "dict | None" = None) ->
     ok, why = game.declare_blockers(defender_seat, dict(blocks or {}))
     assert ok, why
     return attackers
+
+
+def _combat_waits_on(game) -> str:
+    """What a combat step that did not move is waiting for, in words a test
+    author can act on."""
+    step, active = game.current_step, game.active_player_index
+    if step == "declare_attackers" and not game.combat_attackers_locked:
+        return (
+            f"seat {active}'s attack declaration (CR 508.1): game.declare_attackers, "
+            "or tests.helpers.declare_attack"
+        )
+    if step == "declare_blockers" and not game.combat_blockers_locked:
+        if game.is_camouflage_active():
+            return "the defender's Camouflage piles (game.assign_camouflage_piles)"
+        seat = game._pending_block_declarer()
+        return (
+            f"seat {seat}'s block declaration (CR 509.1): game.declare_blockers("
+            f"{seat}, {{blocker slot: attacker slot}}), or declare_attack(blocks=...)"
+        )
+    if step == "combat_damage" and not game.combat_damage_resolved:
+        return (
+            "a combat damage assignment an interactive seat makes (CR 510.1c-d, "
+            f"702.19b; trample asks {game.trample_assignments_to_ask()}): "
+            "game.resolve_combat_damage(seat, attacker_damage=...)"
+        )
+    if game.step_held_open():
+        return f"the step held open on {game.waiting_prompt()!r}"
+    return "nothing this helper can name"
+
+
+def drive_combat(
+    game, *, through: str = "end_of_combat", answers=None, defaults: bool = True,
+    limit: int = 30,
+):
+    """Walk *game*'s combat forward from wherever it is until the step named
+    *through* has ended, settling each step before it is left. Typically called
+    after :func:`declare_attack`; from a main phase it begins the combat phase.
+
+    **The default carries through the end of combat step**, so the "at end of
+    combat" triggers — Time Elemental's delayed sacrifice, Wall of Nets, a
+    Basilisk's destruction — fire and resolve, and combat is over (CR 511.3)
+    when it returns. That is the trap it removes: the engine fires those
+    triggers as the end of combat step is *left* (``end_combat``), not as it
+    begins (CR 511.2), so a drive that advances until the step reads
+    ``end_of_combat`` (at a headless table, one ``advance_combat_phase()`` from
+    declare blockers) never fires them, and the creature the trigger
+    sacrifices is still on the battlefield.
+
+    ``through="combat_damage"`` stops on arriving in the end of combat step,
+    with the damage dealt and every trigger it set off resolved. The engine
+    deals combat damage as the combat damage step begins (CR 510.1 and 510.2
+    are turn-based actions), so ``through="declare_blockers"`` stands *in* the
+    combat damage step with the damage already dealt.
+
+    Each step is settled (:func:`settle`, with *answers* and *defaults*) before
+    it is left, and the damage step is entered with ``allow_damage_skip=False``
+    — the engine's own road for a player who holds priority there — so an offer
+    a step's trigger makes is answered in that step. At a headless table the
+    engine leaves a step without waiting for one (``window_left_unfinished``
+    is False there by design), which is how Hystrodon's "you may draw" was
+    still owed in the postcombat main phase.
+
+    The stepping is the engine's (``advance_combat_phase``); this only decides
+    when to stop. The declarations stay the test's: a step waiting on attackers,
+    blockers or a damage assignment raises naming what it waits on. Returns the
+    prompt it stopped at under ``defaults=False`` (see :func:`settle`), else
+    None; stops quietly once the game is over (CR 104.1).
+    """
+    steps = list(game._phase_steps("combat"))
+    if through not in steps:
+        raise ValueError(f"through={through!r} is not a combat step: {steps}")
+    goal = steps.index(through)
+
+    def position():
+        if game.current_turn_phase != "combat" or game.current_step not in steps:
+            return None
+        return steps.index(game.current_step)
+
+    entered = position() is not None
+    if not entered and game._next_phase_after(game.current_turn_phase) != "combat":
+        # ``advance_combat_phase`` begins a combat from anywhere it is asked
+        # to, so a second drive after the first had finished would start a
+        # combat phase the turn never had.
+        raise ValueError(
+            f"not in combat, and the turn has no combat phase next after "
+            f"{game.current_turn_phase}"
+        )
+    furthest = position() if entered else -1
+    for _ in range(limit):
+        owed = settle(game, answers=answers, defaults=defaults)
+        if owed is not None or game.is_game_over():
+            return owed
+        here = position()
+        if here is None:
+            if entered:
+                return None
+        else:
+            # A step earlier than one already reached is a *second* combat
+            # phase (Relentless Assault): the one this was driving is over.
+            if here < furthest or here > goal:
+                return None
+            furthest = here
+        before = (
+            game.turn, game.current_turn_phase, game.current_step, game.held_step,
+            game.combat_attackers_locked, game.combat_blockers_locked,
+            game.combat_damage_resolved, len(game.stack), len(game.log),
+        )
+        game.advance_combat_phase(allow_damage_skip=False)
+        entered = True
+        after = (
+            game.turn, game.current_turn_phase, game.current_step, game.held_step,
+            game.combat_attackers_locked, game.combat_blockers_locked,
+            game.combat_damage_resolved, len(game.stack), len(game.log),
+        )
+        if after == before and not any(True for _ in _owed_prompts(game)):
+            raise AssertionError(
+                f"combat stopped in {game.current_step} waiting on "
+                f"{_combat_waits_on(game)}"
+            )
+    raise AssertionError(
+        f"combat did not get through {through} in {limit} steps; it is in "
+        f"{game.current_turn_phase}/{game.current_step}"
+    )
 
 
 def combat_ids(game, body: dict) -> dict:

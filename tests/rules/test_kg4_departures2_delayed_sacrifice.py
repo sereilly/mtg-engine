@@ -18,7 +18,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 _CARDS = {card.name: card for card in load_catalog()}
 
@@ -41,18 +41,6 @@ def _set_down(game: Game, seat: int, name: str) -> Permanent:
     return permanent
 
 
-def _settle(game: Game) -> None:
-    for _ in range(100):
-        if game.stack:
-            resolve_stack(game)
-            continue
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            continue
-        return
-    raise AssertionError(game.log[-8:])
-
-
 def _resolved(game: Game, name: str) -> int:
     return sum(1 for line in game.log if line == f"{name} ability resolved")
 
@@ -63,7 +51,7 @@ def _activate(game: Game, name: str, target: Permanent, ability_index: int) -> N
         target_permanent_ids=[target.permanent_id],
     )
     assert result.supported, result
-    _settle(game)
+    settle(game)
 
 
 @pytest.mark.cr("701.21a", "603.10a")
@@ -79,7 +67,7 @@ def test_the_delayed_sacrifice_is_heard_by_whenever_you_sacrifice():
     assert game.is_on_battlefield(bears)
 
     game.resolve_end_step(0)
-    _settle(game)
+    settle(game)
 
     assert not game.is_on_battlefield(bears)
     assert [card.name for card in game.players[0].graveyard] == ["Grizzly Bears"]
@@ -101,7 +89,7 @@ def test_urzas_miter_reads_the_delayed_sacrifice_as_one():
     _activate(game, "Celestial Sword", thopter, ability_index=0)
 
     game.resolve_end_step(0)
-    _settle(game)
+    settle(game)
 
     assert not game.is_on_battlefield(thopter)
     assert [card.name for card in game.players[0].graveyard] == ["Ornithopter"]
@@ -122,7 +110,7 @@ def test_each_delayed_sacrifice_is_its_own_event():
     _activate(game, "Krovikan Elementalist", bears, ability_index=1)
 
     game.resolve_end_step(0)
-    _settle(game)
+    settle(game)
 
     assert not game.is_on_battlefield(jester)
     assert not game.is_on_battlefield(bears)

@@ -45,7 +45,7 @@ from engine.card_loader import load_catalog
 from engine.models import CardDefinition, Permanent
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, settle
 
 _POOL = {card.name: card for card in load_catalog()}
 
@@ -94,12 +94,6 @@ def _duel(*, mine=(), theirs=(), hand=(), interactive=False) -> Game:
     return game
 
 
-def _settle(game: Game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-
-
 def _permanent(game: Game, name: str) -> Permanent:
     return next(p for p in game.all_permanents() if p.card.name == name)
 
@@ -146,7 +140,7 @@ def test_tunnel_destroys_a_kindred_wall(interactive):
         0, "Tunnel", target_player_index=1, target_permanent_ids=[idol.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert not game.is_on_battlefield(idol), game.log[-3:]
     assert _present(game, "Wall of Stone") and _present(game, "Grizzly Bears")
 
@@ -171,7 +165,7 @@ def test_ali_baba_taps_a_kindred_wall():
     assert _offered(_ability_spec(game, "Ali Baba")) == ["Test Wall Idol"]
     idol = _permanent(game, WALL.name)
     assert _activate(game, "Ali Baba", idol).supported
-    _settle(game)
+    settle(game)
     assert idol.tapped, game.log[-3:]
 
 
@@ -229,13 +223,13 @@ def test_krosan_warchief_regenerates_a_kindred_beast():
     ]
     idol = _permanent(game, BEAST.name)
     assert _activate(game, "Krosan Warchief", idol).supported
-    _settle(game)
+    settle(game)
     assert idol.regeneration_shield == 1, game.log[-3:]
     result = game.cast_from_hand(
         0, "Disenchant", target_player_index=0, target_permanent_ids=[idol.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert game.is_on_battlefield(idol), game.log[-4:]
     assert idol.tapped and idol.regeneration_shield == 0
 
@@ -253,7 +247,7 @@ def test_vitality_charm_may_regenerate_a_kindred_beast():
         target_permanent_ids=[idol.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert idol.regeneration_shield == 1, game.log[-3:]
 
 
@@ -265,7 +259,7 @@ def test_animal_sanctuary_counters_a_kindred_cat():
     assert _offered(_ability_spec(game, "Animal Sanctuary", 1)) == ["Test Cat Idol"]
     idol = _permanent(game, CAT.name)
     assert _activate(game, "Animal Sanctuary", idol, ability_index=1).supported
-    _settle(game)
+    settle(game)
     assert int(idol.metadata.get("plus_counters", 0)) == 1, game.log[-3:]
 
 
@@ -278,7 +272,7 @@ def test_goblin_wizard_protects_a_kindred_goblin():
     ]
     idol = _permanent(game, GOBLIN.name)
     assert _activate(game, "Goblin Wizard", idol, ability_index=1).supported
-    _settle(game)
+    settle(game)
     assert ("color", "W") in game._protection_qualities(idol), game.log[-3:]
 
 
@@ -342,7 +336,7 @@ def test_arms_dealer_may_sacrifice_a_kindred_goblin(interactive):
     idol = _permanent(game, GOBLIN.name)
     giant = _permanent(game, "Hill Giant")
     assert _activate(game, "Arms Dealer", giant, cost_permanent_ids=[idol.permanent_id]).supported
-    _settle(game)
+    settle(game)
     assert not game.is_on_battlefield(idol)
     assert giant.damage_marked == 4, game.log[-3:]
     assert _present(game, "Arms Dealer")
@@ -361,7 +355,7 @@ def test_crookclaw_elder_taps_a_kindred_bird_for_its_cost():
         cost_permanent_ids=[elder.permanent_id, idol.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert elder.tapped and idol.tapped
     assert len(game.players[0].hand) == hand + 1, game.log[-3:]
 
@@ -375,7 +369,7 @@ def test_aether_charge_triggers_on_a_kindred_beast_entering():
     target opponent or planeswalker." """
     game = _duel(mine=[_POOL["Aether Charge"]], hand=[BEAST])
     assert game.cast_from_hand(0, BEAST.name).supported
-    _settle(game)
+    settle(game)
     assert game.players[1].life == 16, game.log[-4:]
 
 
@@ -390,7 +384,7 @@ def test_rotlung_reanimator_triggers_when_a_kindred_cleric_dies():
         0, "Shatter", target_player_index=0, target_permanent_ids=[idol.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert sorted(p.card.name for p in game.controlled_by(0)) == [
         "Rotlung Reanimator", "Zombie Token",
     ], game.log[-4:]
@@ -403,7 +397,7 @@ def test_riptide_director_counts_a_kindred_wizard():
     game = _duel(mine=[_POOL["Riptide Director"], WIZARD, _POOL["Grizzly Bears"]])
     hand = len(game.players[0].hand)
     assert game.queue_permanent_ability(0, "Riptide Director").supported
-    _settle(game)
+    settle(game)
     assert len(game.players[0].hand) == hand + 2, game.log[-3:]
 
 
@@ -414,7 +408,7 @@ def test_tivadars_crusade_destroys_a_kindred_goblin():
     game = _duel(hand=[_POOL["Tivadar's Crusade"]],
                  theirs=[GOBLIN, _POOL["Raging Goblin"], _POOL["Grizzly Bears"]])
     assert game.cast_from_hand(0, "Tivadar's Crusade").supported
-    _settle(game)
+    settle(game)
     assert sorted(p.card.name for p in game.all_permanents()) == ["Grizzly Bears"], game.log[-3:]
 
 
@@ -434,7 +428,7 @@ def test_animate_wall_may_enchant_a_kindred_wall():
         0, "Animate Wall", target_player_index=0, target_permanent_ids=[idol.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     aura = _permanent(game, "Animate Wall")
     assert aura.metadata.get("attached_to") is idol, game.log[-3:]
 
@@ -500,5 +494,5 @@ def test_chaos_charm_may_destroy_wall_of_shadows():
         target_permanent_ids=[shadows.permanent_id],
     )
     assert result.supported, result.details
-    _settle(game)
+    settle(game)
     assert not game.is_on_battlefield(shadows), game.log[-3:]

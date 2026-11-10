@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from engine import Game, PlayerState
 from engine.models import Permanent
-from tests.helpers import resolve_stack
+# ``settle`` — the end of a headless step: every default still owed taken,
+# the stack resolved, state-based actions performed — is the shared one.
+from tests.helpers import settle
 
 #: Where a card named by a W1G8 test is looked up, in order. Odyssey first, so
 #: a name the set prints is always the set's own card; the rest are the sets
@@ -67,15 +69,6 @@ def leave(game, permanent):
     seat = game.controller_index_of(permanent)
     game.remove_from_battlefield(permanent)
     game._permanent_to_graveyard(game.players[seat], permanent)
-
-
-def settle(game):
-    """Drain the stack, take every default still owed, run state-based
-    actions — the end of a headless step."""
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    resolve_stack(game)
-    game.check_state_based_actions()
 
 
 def upkeep(game, seat=0):

@@ -35,7 +35,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.special_actions import take_special_action
-from tests.helpers import resolve_stack
+from tests.helpers import settle
 
 _HOMES = {
     "Forest": "LEA", "Island": "LEA", "Grizzly Bears": "LEA", "Counterspell": "LEA",
@@ -76,13 +76,6 @@ def _names(cards) -> list[str]:
     return [getattr(entry, "card", entry).name for entry in cards]
 
 
-def _settle(game) -> None:
-    resolve_stack(game)
-    game.auto_resolve_pending_choices()
-    game.auto_resolve_pending_replacement_choices()
-    resolve_stack(game)
-
-
 def _exile_on_the_wire(game, viewer, seat: int) -> list:
     from web.serialization import _serialize_player
 
@@ -106,7 +99,7 @@ def test_psychic_purge_triggers_when_an_opponents_coercion_takes_it(set_pool, in
     game.resolve_top_of_stack()
     if interactive:
         assert game.confirm_revealed_hand_pick(1, 0)
-    _settle(game)
+    settle(game)
 
     assert _names(game.players[0].graveyard) == ["Psychic Purge"]
     assert game.players[1].life == 15, game.log
@@ -127,7 +120,7 @@ def test_the_second_card_mind_warp_takes_has_the_same_cause_as_the_first(set_poo
     (second,) = game.pending_choices
     assert second.data.get("_cause_seat") == 1
     assert game.confirm_revealed_hand_pick(1, 0)
-    _settle(game)
+    settle(game)
 
     assert game.players[0].hand == []
     assert game.players[1].life == 15, game.log
@@ -158,7 +151,7 @@ def test_a_card_discarded_to_wand_of_ith_is_discarded(set_pool, held, expected):
     (offer,) = game.pending_choices
     assert (offer.kind, offer.player_index) == ("optional_pay", 1)
     assert game.confirm_optional_pay(1, accept=False)
-    _settle(game)
+    settle(game)
 
     assert [p.life for p in game.players] == expected["lives"], game.log
     assert _names(game.players[1].graveyard) == expected["graveyard"]
@@ -175,7 +168,7 @@ def test_a_card_discarded_to_sirocco_is_discarded(set_pool):
     assert game.queue_from_hand(0, "Sirocco", target_player_index=1).supported
     game.resolve_top_of_stack()
     assert game.confirm_optional_pay(1, accept=False)
-    _settle(game)
+    settle(game)
 
     assert _names(game.players[1].graveyard) == ["Counterspell"]
     assert game.players[1].life == 18, game.log
@@ -193,7 +186,7 @@ def test_a_card_discarded_to_breathstealers_crypt_is_discarded_and_knows_whose_c
     _put(game, set_pool, 1, "Megrim")
     game._draw_with_replacements(game.players[0], 1)
     assert game.confirm_discard_unless_pay_life(0, accept=False)
-    _settle(game)
+    settle(game)
     assert _names(game.players[0].graveyard) == ["Grizzly Bears"]
     assert game.players[0].life == 18, game.log
 
@@ -202,7 +195,7 @@ def test_a_card_discarded_to_breathstealers_crypt_is_discarded_and_knows_whose_c
         _put(game, set_pool, crypt_seat, "Breathstealer's Crypt")
         game._draw_with_replacements(game.players[0], 1)
         assert game.confirm_discard_unless_pay_life(0, accept=False)
-        _settle(game)
+        settle(game)
         assert _names(game.controlled_by(0)) == board, (crypt_seat, game.log)
 
 
@@ -213,7 +206,7 @@ def test_the_cards_balance_takes_from_a_hand_are_discarded(set_pool):
     _put(game, set_pool, 0, "Megrim")
 
     assert game.queue_from_hand(0, "Balance").supported
-    _settle(game)
+    settle(game)
 
     assert game.players[1].hand == []
     assert sorted(_names(game.players[1].graveyard)) == ["Forest", "Island"]
@@ -231,7 +224,7 @@ def test_circling_vultures_discarding_itself_is_a_discard(set_pool):
     assert take_special_action(
         game, 0, _card(set_pool, "Circling Vultures"), "discard_from_hand",
     ) is None
-    _settle(game)
+    settle(game)
 
     assert _names(game.players[0].graveyard) == ["Circling Vultures"]
     assert game.players[0].life == 18, game.log
@@ -249,7 +242,7 @@ def test_memory_jars_exiled_hands_are_face_down_to_every_viewer(set_pool):
     _put(game, set_pool, 0, "Memory Jar")
 
     assert game.activate_permanent_ability(0, "Memory Jar").supported
-    _settle(game)
+    settle(game)
     assert _names(game.players[0].graveyard) == ["Memory Jar"]
     assert _names(game.players[0].exile) == ["Terror", "Giant Growth"]
     for viewer in (0, 1, None):
@@ -257,7 +250,7 @@ def test_memory_jars_exiled_hands_are_face_down_to_every_viewer(set_pool):
         assert _exile_on_the_wire(game, viewer, 1) == ["<hidden>"], viewer
 
     game.resolve_end_step(0)
-    _settle(game)
+    settle(game)
 
     assert _names(game.players[0].hand) == ["Terror", "Giant Growth"]
     assert _names(game.players[1].hand) == ["Counterspell"]
@@ -279,6 +272,6 @@ def test_grollub_pays_each_opponent_the_damage_it_is_dealt(set_pool, seats, live
     grollub = _put(game, set_pool, 0, "Grollub")
 
     assert game.queue_from_hand(1, "Shock", target_permanent_ids=[grollub.permanent_id]).supported
-    _settle(game)
+    settle(game)
 
     assert [p.life for p in game.players] == lives, game.log

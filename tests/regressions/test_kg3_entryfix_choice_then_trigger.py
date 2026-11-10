@@ -60,6 +60,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 
 from tests.regressions.test_kg3_entry_choice_census import _choosers
+from tests.helpers import settle
 
 _C = {card.name: card for card in load_catalog()}
 _ENTRY_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
@@ -115,23 +116,10 @@ def _table(person: bool) -> Game:
 def _place(game: Game, seat: int, card) -> Permanent:
     permanent = Permanent(card=_C[card] if isinstance(card, str) else card)
     game._put_permanent_onto_battlefield(seat, permanent, None)
-    _settle_defaults(game)
+    settle(game)
     # Placed before the road, so a creature it activates is not summoning sick.
     permanent.metadata["summoning_sickness_turn"] = -99
     return permanent
-
-
-def _settle_defaults(game: Game) -> None:
-    for _ in range(100):
-        owed = game.waiting_prompt()
-        if owed is not None:
-            game.take_choice_default(owed)
-        elif game.stack:
-            game.resolve_top_of_stack(pause_for_choices=game.holds_for_answers())
-        elif game.pending_choices:
-            game.auto_resolve_pending_choices()
-        else:
-            return
 
 
 # -- the roads ----------------------------------------------------------------
@@ -225,7 +213,7 @@ def _flickered(game, card):
         assert game.queue_from_hand(
             0, card.name, target_permanent_ids=[bears.permanent_id]
         ).supported
-        _settle_defaults(game)
+        settle(game)
         permanent = next(p for p in game.controlled_by(0) if p.card is card)
     else:
         permanent = _place(game, 0, card)

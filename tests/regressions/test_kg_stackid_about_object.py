@@ -41,7 +41,7 @@ from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import announces_a_target
 
-from tests.helpers import _nosick, resolve_stack, stable_sample
+from tests.helpers import _nosick, resolve_stack, stable_sample, settle
 
 #: One card in every STRIDE, by a digest of its name (``stable_sample``).
 STRIDE = 3
@@ -83,19 +83,6 @@ def _put(game: Game, seat: int, card) -> Permanent:
     return _nosick(permanent)
 
 
-def _settle(game: Game) -> None:
-    for _ in range(60):
-        if game.pending_choices:
-            game.auto_resolve_pending_choices()
-            game.auto_resolve_pending_replacement_choices()
-            continue
-        if not game.stack:
-            return
-        if not game.resolve_top_of_stack():
-            game.auto_resolve_pending_choices()
-            game.auto_resolve_pending_replacement_choices()
-
-
 def _combat(card, road: str, *, watcher=None, interactive=()):
     """*card* on the side of the combat *road* puts it, with a Bystander and a
     Relic on each side so a printed target has something to choose. Returns
@@ -127,7 +114,7 @@ def _combat(card, road: str, *, watcher=None, interactive=()):
         host = attacker
     if "Aura" in card.type_line:
         attach_aura(source, host)
-    _settle(game)
+    settle(game)
 
     announced: list[tuple[object, list]] = []
     real_announce = game._announce_targeting
@@ -161,7 +148,7 @@ def _combat(card, road: str, *, watcher=None, interactive=()):
         return game, announced
     if not game.declare_attackers(0, [slot])[0]:
         return game, announced
-    _settle(game)
+    settle(game)
     if game.current_step != "declare_blockers":
         game.advance_combat_phase()
     blocks = {}
@@ -174,9 +161,9 @@ def _combat(card, road: str, *, watcher=None, interactive=()):
         blocks = {blocking: attacking}
     if not game.declare_blockers(1, blocks)[0]:
         return game, announced
-    _settle(game)
+    settle(game)
     game.advance_combat_phase()
-    _settle(game)
+    settle(game)
     return game, announced
 
 

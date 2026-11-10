@@ -31,7 +31,7 @@ from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import OracleInstruction
-from tests.helpers import _nosick, resolve_stack
+from tests.helpers import _nosick, settle
 
 #: The library every probe looks through or searches, top first: one card of
 #: each type a printed narrowing in the pool could ask for, each with a name
@@ -130,14 +130,7 @@ def _drive(by_name, card, shape, index=None) -> Game | None:
     game.enforce_mana_costs = False
     game.start_turn(0)
 
-    def settle() -> None:
-        for _ in range(12):
-            resolve_stack(game)
-            if not game.pending_choices:
-                return
-            game.auto_resolve_pending_choices()
-
-    settle()
+    settle(game)
     if on_board and shape == "activated":
         result = game.activate_permanent_ability(0, card.name, ability_index=index)
         if not result.supported:
@@ -150,7 +143,7 @@ def _drive(by_name, card, shape, index=None) -> Game | None:
     elif on_board:
         # An upkeep trigger: the turn after next is this seat's again.
         game.start_next_turn()
-        settle()
+        settle(game)
         game.start_next_turn()
     elif shape == "activated":
         # An ability activated from the hand ("{1}{U}, Discard this card:").
@@ -170,7 +163,7 @@ def _drive(by_name, card, shape, index=None) -> Game | None:
                 ]}
         if not game.queue_from_hand(0, card.name, **aimed).supported:
             return None
-    settle()
+    settle(game)
     return game
 
 
