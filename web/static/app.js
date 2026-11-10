@@ -3086,6 +3086,8 @@ function chosenAbilityMana(card) {
   if (entry.symbols_by_cost && typeof entry.symbols_by_cost === "object") {
     stated.symbolsByCost = entry.symbols_by_cost;
   }
+  // How many, where the board decides it (Viridian Joiner's power).
+  if (Number.isInteger(entry.amount)) stated.amount = entry.amount;
   return stated;
 }
 
@@ -10619,7 +10621,8 @@ function applyOpponentLibraryDrawPrompt(info) {
       const index = Number(btn.dataset.opponentLibrary);
       try {
         await sendAction({ seat, action: "opponent_library_draw_confirm", option_index: index });
-        updateActionHint(`${source}: exiled the top card of ${String(options[index] ?? "that")} library.`);
+        const whose = options[index] != null ? `${String(options[index])}'s` : "that";
+        updateActionHint(`${source}: exiled the top card of ${whose} library.`);
       } catch (e) {
         updateActionHint(e.message, true);
       }
@@ -26175,7 +26178,13 @@ function renderBoard(state) {
   });
   renderZoneCards("selfSideboardCards", me.sideboard || []);
   renderZoneCards("oppGraveyardCards", opp.graveyard, { zoneSeat: oppSeat, zoneKind: "graveyard" });
-  renderZoneCards("oppExileCards", opp.exile || []);
+  // The opponent's exile is a cast zone too: a permission can open a card in
+  // *another* player's exile to this viewer — Shared Fate's face-down cards
+  // ("you may play cards you own exiled with Shared Fate", shown to their
+  // exiler by name), Grinning Totem's search — listed under
+  // `castable_from_zones` with `owner_seat` that opponent. Rendered with no
+  // seat and kind, the pile showed them and offered nothing to click.
+  renderZoneCards("oppExileCards", opp.exile || [], { zoneSeat: oppSeat, zoneKind: "exile" });
   renderZoneCards("oppAnteCards", opp.ante || []);
   renderZoneCards("oppCommandCards", opp.command_zone || []);
 
