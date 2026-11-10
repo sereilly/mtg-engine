@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING
 
 from .ai_standing import permanent_worth
 from .ai_weighed_cast import _effect_steps
-from .combat_assignment import combat_damage_assigned_by
+from .combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE, combat_damage_assigned_by
 
 if TYPE_CHECKING:
     from .game import Game
@@ -282,16 +282,21 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
     blocker_leaves = leaves_the_fight(game, blocker, blocking=True)
     if attacker_leaves or blocker_leaves:
         return blocker_leaves, attacker_leaves
+    pumped = block_pair_pumps(game, attacker, blocker)
 
     def dealt(source, recipient) -> int:
         amount = combat_damage_assigned_by(source)
+        if pumped[id(source)][0] and not source.metadata.get(ASSIGNS_NO_COMBAT_DAMAGE):
+            amount = max(0, source.effective_power + pumped[id(source)][0])
         if amount and _would_be_prevented(game, source, recipient, amount):
             return 0
         return amount
 
     def lethal(source, recipient) -> int:
         """Damage from *source* that would destroy *recipient*."""
-        remaining = max(0, recipient.effective_toughness - recipient.damage_marked)
+        remaining = max(
+            0, recipient.effective_toughness + pumped[id(recipient)][1] - recipient.damage_marked,
+        )
         if remaining > 0 and game._has_keyword(source, "deathtouch"):
             return 1
         return remaining
@@ -311,6 +316,12 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
     on_blocker = on_attacker = 0
     fighting, dead, out = "fighting", "dead", "out"
     blocker_state = attacker_state = fighting
+    # A pump that leaves no toughness puts the creature in the graveyard
+    # before any damage (CR 704.5f): a 2/1 blocking a flanker.
+    if blocker.effective_toughness + pumped[id(blocker)][1] <= 0:
+        blocker_state = dead
+    if attacker.effective_toughness + pumped[id(attacker)][1] <= 0:
+        attacker_state = dead
 
     def destroyed(saved: "str | None") -> str:
         if saved == STAYS:
@@ -337,6 +348,88 @@ def fight_outcome(game: "Game", attacker: "Permanent", blocker: "Permanent") -> 
         on_attacker += to_attacker
     settle()
     return blocker_state == dead, attacker_state == dead
+
+
+#: The trigger conditions on each side of a block whose P/T changes the fight
+#: before its damage: the attacker's "becomes blocked" (flanking's -1/-1 on
+#: the blocker, Pygmy Troll's +1/+1) and the blocker's "blocks".
+_BLOCKED_PUMP_CONDITIONS = frozenset({"creature_becomes_blocked", "creature_blocks_or_blocked_by"})
+_BLOCKS_PUMP_CONDITIONS = frozenset({
+    "creature_blocks", "creature_blocks_or_blocked_by", "creature_attacks_or_blocks",
+})
+
+
+def block_pair_pumps(game: "Game", attacker: "Permanent", blocker: "Permanent") -> dict:
+    """``{id(creature): (power, toughness)}`` for the two — what their own
+    triggers on this block add before combat damage: "Whenever this creature
+    becomes blocked by a creature without flanking, the blocking creature
+    gets -1/-1" (flanking, CR 702.25a: ``pump_block_pair``), "…becomes
+    blocked by a creature, this creature gets +1/+1" (Pygmy Troll:
+    ``pump_self``), and the blocker's own "Whenever this creature blocks"
+    pumps. Which blocker a trigger fires for is the engine's own question
+    (``events.trigger_subject_matches`` on its ``blocker`` subject). Steps
+    behind a condition or a choice are left out; nothing is added once the
+    attacker is blocked — the triggers have fired."""
+    from .events import trigger_subject_matches
+    from .trigger_utils import matching_triggers
+
+    found = {id(attacker): [0, 0], id(blocker): [0, 0]}
+    if getattr(attacker, "blocked", False):
+        return {key: tuple(value) for key, value in found.items()}
+    sides = (
+        (attacker, blocker, _BLOCKED_PUMP_CONDITIONS, True),
+        (blocker, attacker, _BLOCKS_PUMP_CONDITIONS, False),
+    )
+    for source, other, conditions, attacking in sides:
+        seat = game.controller_index_of(source)
+        for trigger in matching_triggers(source.effective_card, condition_kinds=conditions):
+            if attacking and trigger.condition.payload.get("blocker_filter") and not (
+                trigger_subject_matches(
+                    game, trigger, "blocker", blocker, observer=seat, source=attacker,
+                )
+            ):
+                continue
+            for step in _plain_steps(trigger.instruction):
+                payload = step.payload or {}
+                if step.kind == "pump_self":
+                    receiver = source
+                elif step.kind == "pump_block_pair":
+                    receiver = other
+                else:
+                    continue
+                power = _one_on_one(payload.get("power"), payload)
+                toughness = _one_on_one(payload.get("toughness"), payload)
+                if power is not None and toughness is not None:
+                    found[id(receiver)][0] += power
+                    found[id(receiver)][1] += toughness
+    return {key: tuple(value) for key, value in found.items()}
+
+
+def _one_on_one(amount, payload: dict) -> "int | None":
+    """A pump's printed amount, or "+1/+1 … for each creature blocking it"
+    (Elvish Berserker: ``times_x`` over a ``blocking_source`` count) with the
+    one blocker a fight here has. None for any other amount."""
+    if isinstance(amount, int) and not isinstance(amount, bool):
+        return amount
+    count = payload.get("x_from_count") or {}
+    if isinstance(amount, dict) and isinstance(amount.get("times_x"), int) and count.get(
+        "blocking_source"
+    ):
+        return amount["times_x"]
+    return None
+
+
+def _plain_steps(instruction) -> list:
+    """*instruction*'s steps, a ``sequence`` opened and nothing else — what
+    happens whenever the ability resolves."""
+    if instruction is None:
+        return []
+    if instruction.kind == "sequence":
+        return [
+            leaf for child in (instruction.payload or {}).get("steps") or ()
+            for leaf in _plain_steps(child)
+        ]
+    return [instruction]
 
 
 def compelled_blocks(game: "Game", defending_player_index: int) -> "dict[int, int]":
@@ -421,6 +514,7 @@ __all__ = [
     "REGENERATES",
     "STAYS",
     "best_compelled_blocker",
+    "block_pair_pumps",
     "compelled_block_declined",
     "compelled_blocks",
     "compelled_block_worth",

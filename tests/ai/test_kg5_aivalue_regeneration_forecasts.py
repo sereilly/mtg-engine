@@ -170,17 +170,14 @@ def test_a_first_striker_blocks_a_shielded_attacker():
 
 
 def _self_shielding_creatures() -> list:
-    """The shipped creatures with "Regenerate this creature" — less those
-    with a trigger of their own on blocking or being blocked (flanking's
-    -1/-1, Pygmy Troll's +1/+1), which change the fight after the blocks and
-    which no forecast here reads (a separate gap, named in kg5's report)."""
+    """The shipped creatures with "Regenerate this creature" — their own
+    block triggers included (Cadaverous Knight's flanking, Pygmy Troll's
+    +1/+1 on becoming blocked: ``ai_compelled_blocks.block_pair_pumps``)."""
     found = []
     for card in sorted(_catalog().values(), key=lambda each: each.name):
         if "Creature" not in (card.type_line or ""):
             continue
         program = compile_card_oracle(card)
-        if any("block" in trigger.condition.kind for trigger in program.triggered_abilities):
-            continue
         if program.supported and any(
             ability.instruction is not None
             and ability.instruction.kind == "grant_regeneration_to_self"
