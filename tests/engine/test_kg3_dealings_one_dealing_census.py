@@ -55,6 +55,10 @@ _NOT_ONE_DEALING = {
         "Mana Clash's ruling (2004-10-04): \"Each point of damage is dealt "
         "separately, so if you are damaged twice by this spell, each time is "
         "considered a separate time this source deals damage\"",
+    ("handlers/damage.py", "_deal_each_its_own_event"):
+        "two printed sentences the lowering reads as one divided instruction "
+        "(Magma Burst kicked, oracle_types.SEPARATE_DEALINGS): followed in the "
+        "order written, two events (CR 608.2c)",
 }
 
 #: The names a function opens a dealing by: ``begin``, and the split

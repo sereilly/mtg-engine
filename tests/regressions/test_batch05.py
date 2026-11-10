@@ -591,8 +591,10 @@ class TestJadeMonolith:
             0, "Jade Monolith", target_player_index=0, target_permanent_index=2, permanent_index=0
         )
         assert result.supported
-        assert bear_b.metadata.get("redirect_damage_to_player") == 0
-        assert bear_a.metadata.get("redirect_damage_to_player") is None
+        from engine.damage_redirects import redirects_on
+
+        assert [r.new_recipient for r in redirects_on(bear_b)] == [p1]
+        assert redirects_on(bear_a) == []
 
         # Damage that would hit the chosen creature is redirected to its controller.
         game.cast_from_hand(0, "Lightning Bolt", target_player_index=0, target_permanent_index=2)

@@ -91,7 +91,7 @@ def test_616_1e_redirects_default_ahead_of_shields_for_both_recipients():
     creature_orders = {c.key: c.order for c in damage_candidates(bear)}
     player_orders = {c.key: c.order for c in damage_candidates(PlayerState(name="P"))}
 
-    assert creature_orders["_redirect_damage_to_player"] < creature_orders["_prevention_pool"]
+    assert creature_orders["_apply_recorded_redirect"] < creature_orders["_prevention_pool"]
     assert creature_orders["_prevent_desert_damage"] < creature_orders["_prevention_pool"]
     assert player_orders["_redirect_damage_to_bodyguard"] < player_orders["_prevention_pool"]
 
@@ -271,11 +271,14 @@ def test_616_1g_an_effect_on_a_contained_event_is_chosen_after_the_outer_one():
     inner event happening within `apply`, not from a rule about it. What the
     outer choice settles is whether the inner event exists at all: the
     creature's own shield is never spent, because the damage left."""
+    from engine.damage_redirects import DamageRedirect, add_redirect
+
     bear = Permanent(card=_mk_creature_card("Bear", 2, 2))
     bear.damage_prevention_pool = 5
-    bear.metadata["redirect_damage_to_player"] = 1
     p1 = PlayerState(name="P1", battlefield=[bear], life=20)
     p2 = PlayerState(name="P2", life=20)
+    # Jade Monolith's record, sending the creature's damage to P2.
+    add_redirect(bear, DamageRedirect(new_recipient=p2, uses=1, source_name="Jade Monolith"))
     p2.damage_prevention_pool = 2
     game = Game(players=[p1, p2])
 
@@ -798,8 +801,10 @@ def test_120_1a_a_described_set_sweep_reaches_only_creatures():
 
 def _closer_eye_game(seats: int, armed_seat: int):
     """*seats* players, one of them holding Eye for an Eye's generic charge."""
+    from engine.next_damage import DamageMirror, add_mirror
+
     players = [PlayerState(name=chr(ord("A") + index)) for index in range(seats)]
-    players[armed_seat].mirror_damage_charges = 1
+    add_mirror(players[armed_seat], DamageMirror(source_name="Eye for an Eye"))
     game = Game(players=players)
     game.enforce_mana_costs = False
     game.interactive_seats = set()

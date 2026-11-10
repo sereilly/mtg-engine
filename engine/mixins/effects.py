@@ -45,10 +45,20 @@ from ..replacements import apply_replacements
 from ..oracle import compile_card_oracle, lex_oracle_text
 from ..trigger_utils import (iter_triggered_abilities, make_trigger_event,
                              matching_triggers)
-from ..damage_redirects import source_matches
+from ..damage_redirects import dealing_moment, source_matches
+from ..next_damage import applicable_mirror, drop_spent_mirrors
 from ..destruction_events import (RESOLVING, announce_destroyed,
                                   destruction_finished)
 from ..search_filters import card_has_any_type
+
+
+def _mirror_the_total(game, event: dict, used: list, amount: int) -> None:
+    """Eye for an Eye's damage for one instance, as the dealing it was spent in
+    finishes (``simultaneous_damage.finish``): *amount* is everything the
+    source dealt the record's holder in that dealing. One function object for
+    every record, so ``defer_afterward`` adds a later chunk to the entry the
+    first one opened."""
+    game._deal_mirrored_damage(event["recipient"], amount, event.get("source"))
 
 
 def _damage_word_matches(trig, combat: bool) -> bool:
@@ -548,21 +558,6 @@ class EffectsMixin:
                 return chosen
         return None
 
-    def _damage_source_matches(self, chosen, source) -> bool:
-        """Whether an incoming damage *source* is the *chosen* one (Jade Monolith's
-        "a source of your choice"). No recorded choice matches anything (legacy /
-        AI activations); an unknown incoming source never consumes a specific
-        choice — the shield keeps waiting for its source."""
-        if chosen is None:
-            return True
-        if source is None:
-            return False
-        if chosen is source:
-            return True
-        chosen_card = getattr(chosen, "card", chosen)
-        source_card = getattr(source, "card", source)
-        return chosen_card is source_card
-
     def _turn_face_up(self, permanent) -> None:
         """Illusionary Mask: a face-down creature *it* put face down is turned
         face up any time it would deal damage, damage would be dealt to it, or
@@ -614,7 +609,7 @@ class EffectsMixin:
                 restart=restart, asks=asks, unpreventable=unpreventable,
                 cant_be_prevented=cant_be_prevented, source_seat=source_seat,
             ),
-            combat=combat, source=source,
+            combat=combat, source=source, amount=amount,
         ):
             return 0
         # Illusionary Mask: turn a face-down creature face up when damage would
@@ -1112,7 +1107,7 @@ class EffectsMixin:
                 target, amount, source, then=then, restart=restart, asks=asks,
                 cant_be_prevented=cant_be_prevented, combat=combat,
             ),
-            combat=combat, source=source,
+            combat=combat, source=source, amount=amount,
         ):
             return 0
         # Illusionary Mask: a face-down creature that would deal damage (e.g.
@@ -1142,7 +1137,7 @@ class EffectsMixin:
             self._on_player_dealt_damage(target, outcome.dealt, source)
             if not combat:
                 self._record_noncombat_damage_to_opponent(target, outcome.dealt, source)
-            self._apply_mirror_damage(target, outcome.dealt, source)
+            self._apply_mirror_damage(target, outcome.dealt, source, combat=combat)
             # CR 702.15b, the creature seam's way: now, or into the combat
             # damage step's dealing for a redirected combat chunk.
             self._apply_or_tally_lifelink(event, outcome.dealt)
@@ -1175,14 +1170,24 @@ class EffectsMixin:
             return
         self.players[seat].noncombat_damage_dealt_to_opponents_this_turn += dealt
 
-    def _apply_mirror_damage(self, target: PlayerState, damage: int, source) -> None:
+    def _apply_mirror_damage(
+        self, target: PlayerState, damage: int, source, *, combat: bool = False,
+    ) -> None:
         """Eye for an Eye: the damage still happens, and its source's controller
         is dealt the same amount.
 
         The caster picks "a source of your choice", so only damage from a
-        matching source mirrors; a generic charge (no source picked) mirrors the
-        next event from any source. One entry per damage event, and entries are
+        matching source mirrors; a record that named none mirrors the next
+        event from any source (``next_damage.DamageMirror``). Records are
         finite, so a mirrored mirror can't loop forever.
+
+        **One instance** (CR 615.8; the project owner's ruling, 2026-11-07):
+        spent on a chunk of a simultaneous dealing, the record mirrors every
+        chunk that source deals *target* in that dealing — Cuombajj Witches
+        naming you twice is one instance of 2 — and "Eye for an Eye deals that
+        much damage" once, for the total, as the dealing finishes
+        (``simultaneous_damage.defer_afterward``), the way Honorable Passage's
+        damage back is dealt. A chunk dealt alone is mirrored at once.
 
         Called from every path that reduces a player's life: _deal_damage_to_player
         for spells and abilities, and the combat damage step directly (combat
@@ -1190,13 +1195,23 @@ class EffectsMixin:
         back through _deal_damage_to_player without double-preventing)."""
         if damage <= 0:
             return
-        matched_mirror = self._match_chosen_damage_source(target.mirror_damage_sources, source)
-        if matched_mirror is None and target.mirror_damage_charges <= 0:
+        dealing = dealing_moment(self, combat=combat, source=source)
+        record = applicable_mirror(target, source, dealing)
+        if record is None:
             return
-        if matched_mirror is not None:
-            target.mirror_damage_sources.remove(matched_mirror)
-        else:
-            target.mirror_damage_charges -= 1
+        record.spend(dealing, source)
+        drop_spent_mirrors(target)
+        if dealing is not None and record.occasion is not None and record.occasion.moment is dealing:
+            simultaneous_damage.defer_afterward(
+                dealing, record, _mirror_the_total,
+                {"recipient": target, "source": source}, [record], damage,
+            )
+            return
+        self._deal_mirrored_damage(target, damage, source)
+
+    def _deal_mirrored_damage(self, target: PlayerState, damage: int, source) -> None:
+        """Eye for an Eye's own damage, *damage* to the controller of *source*
+        (the source whose damage to *target* it mirrors)."""
         # "…deals that much damage to **that source's controller**" — CR 109.5,
         # which is the question ``damage_source_seat`` answers for every damage
         # event this engine runs: the control seam for a permanent, the seat it

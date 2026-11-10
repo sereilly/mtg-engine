@@ -240,16 +240,22 @@ def test_704_5g_reads_the_permanent_s_own_text_before_burying_it():
 
 
 @pytest.mark.cr("616.1e")
-def test_616_1e_a_replacement_that_consumes_the_event_runs_before_a_shield():
+def test_616_1e_a_seat_nobody_asks_weighs_the_counters_against_the_shield():
     """CR 616.1e gives the affected player the choice of which effect applies
-    first, and the registered ``order`` is the default a non-interactive seat
-    takes. A replacement that turns damage into counters *consumes* the event,
-    so applying it first leaves the shield unspent — and applying the shield
-    first would spend its points on damage that was never going to be marked.
+    first. The registered ``order`` puts the replacement that turns damage
+    into counters ahead of the shield (``choose_effect``'s stated order):
+    applied first it *consumes* the event and leaves the shield unspent. But
+    the counters stay for good and the shield's points last the turn, so the
+    default a seat nobody asks takes — measured on scratch copies
+    (``engine/measured_effect_order.py``, kg5) — applies the shield first:
+    the 2 damage is prevented, no counter arrives, and 1 point is left.
 
-    The rule permits either; this pins which one the engine picks, because that
-    choice is worth points of shield to the affected player.
+    The rule permits either; this pins which one the engine picks, because
+    that choice is two -1/-1 counters to the affected player.
     """
+    from engine.damage_events import damage_candidates
+    from engine.effect_ordering import choose_effect
+
     game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
     perm = Permanent(
         card=_w1g3r_creature(
@@ -262,13 +268,19 @@ def test_616_1e_a_replacement_that_consumes_the_event_runs_before_a_shield():
     )
     game.players[0].battlefield.append(perm)
     add_shield(perm, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+    event = {"recipient": perm, "amount": 2, "source": None, "combat": False}
+    applicable = [c for c in damage_candidates(perm, event) if c.applies(game, event)]
+    assert len(applicable) == 2, [c.key for c in applicable]
+    assert choose_effect(game, 0, applicable).key != "_prevention_pool", (
+        "the stated order puts the replacement first"
+    )
 
     assert _damage_dealt(game, perm, 2) == 0
     assert perm.damage_marked == 0
-    assert shields_of_kind(perm, PREVENT_NEXT_N)[0].amount == 3, (
-        "the shield was not spent on an event the replacement consumed"
+    assert shields_of_kind(perm, PREVENT_NEXT_N)[0].amount == 1, (
+        "the shield took the damage"
     )
-    assert perm.effective_toughness == 3, "and the counters arrived instead"
+    assert perm.effective_toughness == 5, "and no counter arrived"
 
 
 @pytest.mark.cr("122.1a")

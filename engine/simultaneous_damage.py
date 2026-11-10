@@ -252,17 +252,25 @@ class SimultaneousDamage:
     #: the batched "one or more … deal combat damage to a player" triggers.
     damagers_by_defender: dict[int, list] = field(default_factory=dict)
     #: While a split damage sentence's steps run (:func:`begin_sentence`): each
-    #: chunk that joins this dealing, as ``(recipient, deal)`` — *deal* is the
-    #: damage seam's own call, made again once every step has run — in the
-    #: order the steps produced them. None for every other dealing, and once
-    #: :func:`deal_sentence` starts dealing them.
+    #: chunk that joins this dealing, as ``(recipient, deal, source, amount)``
+    #: — *deal* is the damage seam's own call, made again once every step has
+    #: run — in the order the steps produced them. None for every other
+    #: dealing, and once :func:`deal_sentence` starts dealing them.
     agenda: list | None = None
+    #: The collected chunks not dealt yet, as ``[recipient, source, amount]``
+    #: rows: what CR 615.8's instance still holds at a recipient once the
+    #: sentence starts dealing (:func:`still_to_come`), for a shield that
+    #: absorbs a share of the instance's total (Dark Sphere's half, Forcefield's
+    #: all but 1). A chunk's row goes as the chunk is dealt.
+    pending: list = field(default_factory=list)
     #: The last steps (*then*) of the loops that ran while :attr:`agenda` was
     #: collecting, run after the collected chunks have been dealt.
     closers: list = field(default_factory=list)
     #: CR 615.8: one instance of damage from a source is everything it deals
-    #: in this dealing. Each source-keyed "next time" shield or redirect spent
-    #: on one of its chunks opened a ``shields.SharedNextTime`` here
+    #: in this dealing. Each source-keyed "next time" shield, redirect or
+    #: mirror (``next_damage.DamageMirror``) spent on one of its chunks opened
+    #: a ``shields.SharedNextTime`` here — and so did each recipient-keyed one
+    #: (Glarecaster), whose time is the dealing too
     #: (``SharedNextTime.use`` appends it), open for that source's other
     #: chunks and closed as the dealing finishes.
     occasions: list = field(default_factory=list)
@@ -391,18 +399,52 @@ def begin_sentence(game, *, source) -> SimultaneousDamage | None:
     return dealing
 
 
-def collect(game, recipient, deal, *, combat: bool, source) -> bool:
+def collect(game, recipient, deal, *, combat: bool, source, amount: int = 0) -> bool:
     """Record a chunk for its split sentence's one APNAP-ordered loop instead
     of dealing it: True when the open dealing is collecting
     (:func:`begin_sentence`) and the chunk joins it, and then the caller — one
     of the two damage seams — returns at once, as it does for an event that
     stopped to ask (nothing has happened; *deal* is the call made again, its
-    ``then`` with it). False: deal it now."""
+    ``then`` with it). False: deal it now. *amount* is the chunk's printed
+    damage, kept for :func:`still_to_come`."""
     dealing = joined(game, combat=combat, source=source)
     if dealing is None or dealing.agenda is None:
         return False
-    dealing.agenda.append((recipient, deal))
+    dealing.agenda.append((recipient, deal, source, amount))
+    dealing.pending.append([recipient, source, int(amount or 0)])
     return True
+
+
+def still_to_come(game, event: dict) -> int:
+    """The damage the open dealing still holds for this event's recipient from
+    this event's source: its collected chunks not dealt yet. Pure.
+
+    CR 615.8's instance is everything a source deals in one dealing, and a
+    split sentence naming one recipient twice (Cuombajj Witches, the Orcish
+    Artillery aimed at its own controller) hands it two chunks there — so a
+    shield absorbing a **share** of the instance (half, all but N) reads the
+    total, not the chunk in front of it (``shields.Shield.would_prevent``).
+    Only a split sentence holds chunks back; a sweep deals each recipient one
+    chunk per source, and the combat damage step one per attacker, so this is
+    0 for every other event."""
+    dealing = joined(
+        game, combat=bool(event.get("combat")), source=event.get("source"),
+    )
+    if dealing is None:
+        return 0
+    recipient, source = event.get("recipient"), event.get("source")
+    return sum(
+        amount for held, by, amount in dealing.pending
+        if held is recipient and by is source
+    )
+
+
+def _dealt_from_agenda(dealing: SimultaneousDamage, recipient, source, amount: int) -> None:
+    """A collected chunk is being dealt: its row leaves :attr:`pending`."""
+    for index, (held, by, owed) in enumerate(dealing.pending):
+        if held is recipient and by is source and owed == amount:
+            del dealing.pending[index]
+            return
 
 
 def deal_sentence(game, dealing: SimultaneousDamage | None) -> None:
@@ -424,8 +466,16 @@ def deal_sentence(game, dealing: SimultaneousDamage | None) -> None:
     chunks, dealing.agenda = dealing.agenda or [], None
     closers, dealing.closers = dealing.closers, []
     ordered = in_apnap_order(game, chunks, affected=lambda chunk: chunk[0])
+
+    def dealt(recipient, deal, source, amount):
+        def step() -> None:
+            _dealt_from_agenda(dealing, recipient, source, amount)
+            deal()
+
+        return step
+
     run_resumable(
-        game, [deal for _recipient, deal in ordered] + closers,
+        game, [dealt(*chunk) for chunk in ordered] + closers,
         lambda step: step(), then=lambda: finish(game, dealing),
     )
 
@@ -583,8 +633,9 @@ def _close_occasions(game, dealing: SimultaneousDamage) -> None:
     for occasion in dealing.occasions:
         occasion.closed = True
     dealing.occasions = []
-    from . import damage_redirects, shields
+    from . import damage_redirects, next_damage, shields
 
     for holder in (*game.players, *game.all_permanents()):
         shields.drop_spent(holder)
         damage_redirects.drop_spent(holder)
+        next_damage.drop_spent_mirrors(holder)

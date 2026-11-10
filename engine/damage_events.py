@@ -446,13 +446,20 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     event.setdefault("source_seat", damage_source_seat(game, event.get("source")))
     mark_turn_unpreventable(game, event)
     kind = damage_kind(event["recipient"])
+    # CR 616.1e's default for a seat nobody asks is measured on scratch copies
+    # (``engine/measured_effect_order.py``), not read off the orders.
+    from .measured_effect_order import measured_damage_default
+
     trace = apply_in_order(
         game,
         event,
         damage_candidates(event["recipient"], event),
         chooser_index=affected_seat(game, event["recipient"]),
         stop=_settled,
-        ask=None if restart is None else order_prompt_asker(kind, restart),
+        ask=None if restart is None else order_prompt_asker(
+            kind, restart, default=measured_damage_default,
+        ),
+        default=measured_damage_default,
     )
     if trace.suspended:
         take_replaced(event)

@@ -299,15 +299,17 @@ def test_614_7a_zero_damage_consumes_no_shield():
 def test_616_1_multiple_shields_apply_in_sequence_to_one_event():
     """A cap and a numeric shield both apply to the same damage: the cap takes
     the event down to 1, then the shield absorbs that last point. Each is
-    consumed exactly once."""
+    consumed exactly once. (Forcefield's cap answers the named attacker's
+    *combat* damage — "…would deal combat damage to you" — so the event is
+    combat damage.)"""
     game, p1, p2 = _game()
     attacker = Permanent(card=_mk_creature("Attacker"))
     p2.battlefield.append(attacker)
-    p1.combat_damage_cap_one_charges = 1
+    p1.forcefield_capped_sources.append(attacker)
     p1.damage_prevention_pool = 5
 
-    assert _damage_dealt(game, p1, 6, source=attacker) == 0
-    assert p1.combat_damage_cap_one_charges == 0
+    assert _damage_dealt(game, p1, 6, source=attacker, combat=True) == 0
+    assert p1.forcefield_capped_sources == []
     assert p1.damage_prevention_pool == 4
 
 

@@ -61,6 +61,7 @@ has to fire.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 #: "…the next time that source would deal damage this turn, it **deals double
@@ -89,14 +90,28 @@ _COMBAT_ONLY = {
     DAMAGE_PREVENTED_NEXT: COMBAT_DAMAGE_PREVENTED_NEXT,
 }
 
-#: Every key, for the end-of-turn sweep that is these records' whole duration.
-#: Named together so the sweep cannot pick up one of them and leave another
-#: running for the rest of the game — the failure a second spelling produces
-#: here is a coin flip whose losing half never expires.
-NEXT_DAMAGE_KEYS = (
+_RIDER_KEYS = (
     DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT,
     COMBAT_DAMAGE_DOUBLED_NEXT, COMBAT_DAMAGE_PREVENTED_NEXT,
 )
+
+
+def names_key(key: str) -> str:
+    """Where the cards that armed *key*'s riders are named, beside the count:
+    a list, oldest first, one entry per rider (``""`` for one armed with no
+    card to name). CR 616.1e's ``effect_order`` option names the card that
+    generated the effect (``effect_ordering.option_text``) — the count alone
+    names nothing, and the object it sits on is the *source* the rider
+    watches, not what armed it (Desperate Gambit's option read "(Warmonger)")."""
+    return f"{key}_by"
+
+
+#: Every key, for the end-of-turn sweep that is these records' whole duration.
+#: Named together so the sweep cannot pick up one of them and leave another
+#: running for the rest of the game — the failure a second spelling produces
+#: here is a coin flip whose losing half never expires. The name records go
+#: with their counts for the same reason.
+NEXT_DAMAGE_KEYS = _RIDER_KEYS + tuple(names_key(key) for key in _RIDER_KEYS)
 
 
 def rider_key(key: str, *, combat_only: bool = False) -> str:
@@ -116,11 +131,16 @@ def _spent_in(moment: Any, source: Any, key: str, *, combat: bool) -> bool:
     the source's other chunks of it (``SimultaneousDamage.next_time_riders``),
     and the dealing's finish is the end of it. *moment* is the dealing
     (``damage_redirects.dealing_moment``), None outside one."""
+    return bool(_spent_rows(moment, source, key, combat=combat))
+
+
+def _spent_rows(moment: Any, source: Any, key: str, *, combat: bool) -> list:
+    """The ``(source, key, name)`` rows of :func:`_spent_in`. Pure."""
     spent = getattr(moment, "next_time_riders", None)
     if not spent:
-        return False
+        return []
     keys = (key, _COMBAT_ONLY[key]) if combat else (key,)
-    return any(held is source and spent_key in keys for held, spent_key in spent)
+    return [row for row in spent if row[0] is source and row[1] in keys]
 
 
 def armed_for_event(source: Any, key: str, *, combat: bool, moment: Any = None) -> int:
@@ -154,14 +174,35 @@ def spend_for_event(source: Any, key: str, *, combat: bool, moment: Any = None) 
         return
     narrowed = _COMBAT_ONLY[key]
     charged = narrowed if combat and armed(source, narrowed) > 0 else key
+    name = (_names(source, charged) or [""])[0]
     spend(source, charged)
     spent = getattr(moment, "next_time_riders", None)
     if spent is not None:
-        spent.append((source, charged))
+        spent.append((source, charged, name))
 
 
-def arm(source: Any, key: str, times: int = 1) -> bool:
-    """Record that *source*'s next *times* damage events carry the *key* rider.
+def names_for_event(source: Any, key: str, *, combat: bool, moment: Any = None) -> list[str]:
+    """The cards that armed the riders of *key*'s kind answering **this**
+    event (:func:`armed_for_event`'s riders), for CR 616.1e's option to name
+    beside its label. Pure. A rider armed with no card names nothing."""
+    names = list(_names(source, key))
+    if combat:
+        names += _names(source, _COMBAT_ONLY[key])
+    names += [row[2] for row in _spent_rows(moment, source, key, combat=combat)]
+    return [name for name in names if name]
+
+
+def _names(source: Any, key: str) -> list[str]:
+    """*key*'s name record on *source*, aligned with its count. Pure."""
+    metadata = getattr(source, "metadata", None)
+    if not metadata:
+        return []
+    return list(metadata.get(names_key(key)) or ())[:armed(source, key)]
+
+
+def arm(source: Any, key: str, times: int = 1, *, by: str | None = None) -> bool:
+    """Record that *source*'s next *times* damage events carry the *key* rider,
+    armed by the card named *by* (:func:`names_key`).
 
     False when there is nothing to write on — a source that is not a permanent
     (see the module docstring) or no source at all, which is what an effect
@@ -171,7 +212,10 @@ def arm(source: Any, key: str, times: int = 1) -> bool:
     metadata = getattr(source, "metadata", None)
     if metadata is None or getattr(source, "permanent_id", None) is None:
         return False
+    names = _names(source, key)
+    names += [""] * (armed(source, key) - len(names)) + [str(by or "")] * int(times)
     metadata[key] = int(metadata.get(key) or 0) + int(times)
+    metadata[names_key(key)] = names
     return True
 
 
@@ -193,8 +237,125 @@ def spend(source: Any, key: str) -> None:
     metadata = getattr(source, "metadata", None)
     if not metadata:
         return
+    names = _names(source, key)[1:]
     remaining = armed(source, key) - 1
     if remaining > 0:
         metadata[key] = remaining
+        metadata[names_key(key)] = names
     else:
         metadata.pop(key, None)
+        metadata.pop(names_key(key), None)
+
+
+# ---------------------------------------------------------------------------
+# The rider a recipient names: Eye for an Eye
+# ---------------------------------------------------------------------------
+
+
+@dataclass(eq=False)
+class DamageMirror:
+    """"The next time a source of your choice would deal damage to you this
+    turn, instead that source deals that much damage to you and Eye for an Eye
+    deals that much damage to that source's controller." (Eye for an Eye.)
+
+    The riders above with the recipient named: what the chosen source deals
+    **to you** carries "and ~ deals that much damage to that source's
+    controller" — still dealt to you, by the original source, the second
+    damage dealt by the card (its ruling, 2009-02-01). "A source of your
+    choice" may be a spell, which no marker can sit on (the module docstring),
+    so this record hangs on the recipient it names and records its source —
+    the home a shield or a redirect has, for their reason. It replaces two
+    ``PlayerState`` fields named for the card (``mirror_damage_charges`` /
+    ``mirror_damage_sources``), which were spent one chunk at a time.
+
+    source      -- the chosen source, matched by identity
+                   (``damage_redirects.source_matches``); None for an
+                   announcement that named none (an AI or headless cast)
+    source_name -- the card that armed it, for the log
+    uses        -- 1: "the next time"
+    occasion    -- CR 615.8's instance (``shields.SharedNextTime``,
+                   ``by_source``): the use spent on a chunk of a simultaneous
+                   dealing opens it there, open for that source's other chunks
+                   to this recipient until the dealing finishes — one instance,
+                   everything the source deals in one dealing (the project
+                   owner's ruling, 2026-11-07); a sourceless record binds to the
+                   first source it is spent on
+    """
+
+    source: Any = None
+    source_name: str | None = None
+    uses: int = 1
+    occasion: Any = None
+
+    @property
+    def spent(self) -> bool:
+        """Used up — a record still open for the rest of the dealing it was
+        spent in is not, until that dealing finishes."""
+        if self.uses > 0:
+            return False
+        return self.occasion is None or self.occasion.closed
+
+    def open_for(self, dealing: Any, source: Any) -> bool:
+        """Whether a chunk from *source* in *dealing* is this record's. Pure."""
+        if self.uses > 0:
+            from .damage_redirects import source_matches
+
+            return source_matches(self.source, source)
+        return self.occasion is not None and self.occasion.open_at(dealing, source)
+
+    def spend(self, dealing: Any, source: Any) -> None:
+        """Charge the chunk against the record. The mutating half: the use,
+        and inside a dealing the instance it opens there (a later chunk of
+        that instance charges nothing)."""
+        if self.uses <= 0:
+            return
+        self.uses -= 1
+        from .shields import SharedNextTime
+
+        self.occasion = SharedNextTime(by_source=True)
+        self.occasion.use(dealing, source)
+
+
+#: Where the records hang off a recipient — an attribute, for the reason
+#: ``shields._SHIELDS_ATTR`` is one: a ``PlayerState`` carries it without
+#: learning what a mirror is.
+_MIRRORS_ATTR = "_damage_mirrors"
+
+
+def mirrors_on(recipient: Any) -> list[DamageMirror]:
+    """The mirror records *recipient* holds, created on first use."""
+    records = getattr(recipient, _MIRRORS_ATTR, None)
+    if records is None:
+        records = []
+        setattr(recipient, _MIRRORS_ATTR, records)
+    return records
+
+
+def add_mirror(recipient: Any, record: DamageMirror) -> DamageMirror:
+    mirrors_on(recipient).append(record)
+    return record
+
+
+def applicable_mirror(recipient: Any, source: Any, dealing: Any) -> DamageMirror | None:
+    """The record a chunk from *source* to *recipient* in *dealing* carries,
+    oldest first — one still open for its instance before a fresh one. Pure."""
+    live = [record for record in mirrors_on(recipient) if not record.spent]
+    for record in live:
+        if record.uses <= 0 and record.open_for(dealing, source):
+            return record
+    for record in live:
+        if record.open_for(dealing, source):
+            return record
+    return None
+
+
+def drop_spent_mirrors(recipient: Any) -> None:
+    """Forget the records that are used up."""
+    records = getattr(recipient, _MIRRORS_ATTR, None)
+    if records:
+        records[:] = [record for record in records if not record.spent]
+
+
+def clear_mirrors(recipient: Any) -> None:
+    """The cleanup step: "this turn" is over."""
+    mirrors_on(recipient).clear()

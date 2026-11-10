@@ -48,7 +48,6 @@ from .. import simultaneous_damage
 from ..damage_events import deal_damage
 from ..effect_ordering import in_apnap_order
 from ..models import Permanent
-from ..damage_redirects import end_simultaneous_redirects
 from ..prevention.static import end_simultaneous_damage
 from ..resumption import run_resumable
 
@@ -462,7 +461,9 @@ class CombatDamageStepMixin:
                 # controller takes the same amount. Applied here rather than by
                 # routing through _deal_damage_to_player, which would run the event
                 # a second time.
-                self._apply_mirror_damage(defender, outcome.dealt, source_attacker)
+                self._apply_mirror_damage(
+                    defender, outcome.dealt, source_attacker, combat=True,
+                )
                 # "…deals damage to a player/opponent" (Hypnotic Specter), CR
                 # 903.10a's commander tally, the batched "one or more … deal
                 # combat damage to a player" and the delayed "whenever <it>
@@ -502,8 +503,6 @@ class CombatDamageStepMixin:
             # Phantom that paid one counter for being blocked by two creatures
             # pays again in the next step, not again in this one.
             end_simultaneous_damage(self)
-            # …and a shared "next time" one of its chunks opened (Glarecaster).
-            end_simultaneous_redirects(self)
 
             # Written before the state-based check, so a loss follows its damage.
             if sum(life_lost_by_defender.values()) > 0:

@@ -167,6 +167,17 @@ X_FROM_COUNT_PER_RECIPIENT = "x_from_count_per_recipient"
 # never carries it, because two sentences are two events.
 ONE_DEALING = "one_dealing"
 
+# The other side of the same line, on a divided ``deal_damage``: its targets
+# are **two printed sentences** the lowering read as one instruction — "Magma
+# Burst deals 3 damage to any target. If this spell was kicked, it deals 3
+# damage to another target." (``grammar/lowering/damage.kicked_second_damage_target``)
+# — so each target is dealt its own event, in the order announced (CR 608.2c:
+# the instructions are followed in the order written), never one dealing:
+# CR 615.8's "next instance of damage from that source" is the first
+# sentence's alone, as Illuminate's two sentences are two. Read by
+# ``handlers/damage``'s divided branch.
+SEPARATE_DEALINGS = "separate_dealings"
+
 # The resolution-scratchpad key a discard offered to several seats records its
 # per-seat tally under — ``{seat: cards discarded}`` — read by the damage that
 # is sized from it ("3 minus the number of cards **they** discarded this way",

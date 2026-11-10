@@ -30,7 +30,8 @@ from ..damage_source_colors import damage_source_colors
 from ..effect_ordering import source_names
 from ..models import PlayerState
 from ..named_counters import add_counters
-from ..next_damage import DAMAGE_PREVENTED_NEXT, armed_for_event, spend_for_event
+from ..next_damage import (DAMAGE_PREVENTED_NEXT, armed_for_event,
+                           names_for_event, spend_for_event)
 from .registry import (
     CHOSEN_SOURCE_ONE_SHOT, CONTROLLER_BLANKET, MATCHING_BLANKET,
     SHARED_COLOR_BLANKET, SPELL_CLASS_BLANKET, STATIC_POINTS,
@@ -841,10 +842,15 @@ def _applies_chosen_source_one_shot(game, event: dict) -> bool:
 
 
 def _chosen_source_one_shot_sources(game, event: dict) -> list:
-    """The source carrying the marker, which records no arming card (Desperate
-    Gambit's losing flip): the option names the object it is on."""
-    source = event.get("source")
-    return [] if source is None else [source]
+    """The cards that armed the riders answering this event (Desperate
+    Gambit's losing flip, Impulsive Maneuvers'), by the name record beside the
+    count (``next_damage.names_key``) — not the source the rider sits on,
+    which is what it watches. Pure."""
+    return names_for_event(
+        event.get("source"), DAMAGE_PREVENTED_NEXT,
+        combat=bool(event.get("combat")),
+        moment=event_dealing_moment(game, event),
+    )
 
 
 @prevention_effect(

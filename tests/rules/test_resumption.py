@@ -437,10 +437,14 @@ def test_616_1e_a_suspended_blocker_resumes_the_loops_it_was_nested_in():
     The contention is Jade Monolith's redirect against a prevention pool on one
     attacker (CR 616.1g's pairing), whose controller is the seat asked."""
     attacked, spared = _attacker("Attacker One", 2, 2), _attacker("Attacker Two", 2, 2)
+    from engine.damage_redirects import DamageRedirect, add_redirect, redirects_on
+
     attacked.damage_prevention_pool = 5
-    attacked.metadata["redirect_damage_to_player"] = 0
     first, second = _attacker("Blocker One", 2, 3), _attacker("Blocker Two", 2, 3)
     game = _combat([attacked, spared], [PlayerState(name="P1", battlefield=[first, second])])
+    redirect = add_redirect(attacked, DamageRedirect(
+        new_recipient=game.players[0], uses=1, source_name="Jade Monolith",
+    ))
     game.interactive_seats = {0}
     game._set_phase_and_step("combat", "declare_blockers")
     ok, message = game.declare_blockers(1, {0: 0, 1: 1})
@@ -458,7 +462,7 @@ def test_616_1e_a_suspended_blocker_resumes_the_loops_it_was_nested_in():
     _pick(game, 0, "_prevention_pool")
 
     assert attacked.damage_prevention_pool == 3, "the chosen shield absorbed the 2"
-    assert attacked.metadata.get("redirect_damage_to_player") == 0, (
+    assert redirects_on(attacked) == [redirect] and redirect.uses == 1, (
         "the redirect is the default and is still armed"
     )
     assert attacked.damage_marked == 0

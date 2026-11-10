@@ -148,6 +148,10 @@ _NOT_APNAP = {
         "simultaneous_damage.deal_sentence once it is made (kg4 `dealings`)",
     ("phases/combat_damage_step.py", "resolve_all_combat_damage"):
         "first-strike and regular passes, not recipients (CR 510.4)",
+    ("handlers/damage.py", "_deal_each_its_own_event"):
+        "two printed sentences (Magma Burst kicked), not recipients dealt at "
+        "once: two events in the order written (CR 608.2c), each asked as it "
+        "is dealt",
 }
 
 

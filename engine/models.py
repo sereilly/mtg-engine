@@ -1255,17 +1255,6 @@ class PlayerState:
     combat_damage_cap_one_charges: int = 0
     forcefield_capped_sources: list = field(default_factory=list)
     reverse_damage_charges: int = 0
-    # Eye for an Eye: one-shot "the next damage dealt to you this turn is also
-    # dealt to its source's controller" charges. Consumed in
-    # _deal_damage_to_player; expire at cleanup. This is the generic fallback
-    # used when no specific source was chosen (AI / headless casts); a human pick
-    # is recorded in mirror_damage_sources instead.
-    mirror_damage_charges: int = 0
-    # Eye for an Eye with a chosen "source of your choice": the specific Permanent
-    # or spell (a CardDefinition) the caster picked. Only damage from a matching
-    # source is mirrored back to that source's controller, then the entry is
-    # consumed. Cleared at cleanup.
-    mirror_damage_sources: list = field(default_factory=list)
     # The chosen-source half of the Reverse Damage shields above; a view over the
     # same collection (see the prevention block near the top of this class).
     reverse_damage_sources: list = field(default_factory=list)
@@ -1475,7 +1464,8 @@ PlayerState.combat_damage_cap_one_charges = _shields.charge_view(
     _shields.PREVENT_ALL_BUT,
     _shields.make_capped_charge,
     """Forcefield shields armed without a chosen attacker (AI / headless
-    activations): the next damage event from any source is capped to 1."""
+    activations): the next combat damage an unblocked creature would deal is
+    capped to 1."""
 )
 PlayerState.forcefield_capped_sources = _shields.list_view(
     _shields.PREVENT_ALL_BUT,

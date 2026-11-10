@@ -33,6 +33,7 @@ from ..damage_redirects import clear_redirects
 from ..land_mana_swaps import clear_swaps as clear_land_mana_swaps
 from ..mana_spending import clear_turn_permissions as clear_turn_mana_spending
 from ..library_top import clear_reveal_grants
+from ..next_damage import clear_mirrors
 from ..shields import END_OF_TURN, clear_shields
 from ..text_changes import end_until_eot_text_changes
 from ..turn_replacements import clear_turn_replacements
@@ -230,8 +231,8 @@ class CleanupStepMixin:
             # record re-asks whether the named card is still on top
             # (engine/library_top.grant_holds).
             clear_reveal_grants(player, END_OF_TURN)
-            player.mirror_damage_charges = 0
-            player.mirror_damage_sources = []
+            # Eye for an Eye's "this turn" (``next_damage.DamageMirror``).
+            clear_mirrors(player)
             player.channel_active_until_eot = False
             # "For one spell **this turn**" (North Star): an unused permission
             # expires with the turn, the same way an unused regeneration shield

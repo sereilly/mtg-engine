@@ -17,14 +17,18 @@ The census is by shape, from the compiled programs: every source-keyed "next
 time" line in both manifest roles, and the record its instruction arms —
 
 * a **shield** (``shields.Shield``: ``Shield.spend`` opens the occasion),
-* a **redirect** (``damage_redirects.DamageRedirect``: ``DamageRedirect.spend``),
-* a **rider** on the source (``engine/next_damage.py``: the dealing's
-  ``next_time_riders``),
+* a **redirect** (``damage_redirects.DamageRedirect``: ``DamageRedirect.spend``;
+  Jade Monolith's since kg5),
+* a **rider** (``engine/next_damage.py``): on the source (the dealing's
+  ``next_time_riders``), or on the recipient it names
+  (``next_damage.DamageMirror``, Eye for an Eye's since kg5:
+  ``DamageMirror.spend`` opens the occasion),
 
-all three reached by the occasion, or one of two **single-recipient legacy
-records** (Jade Monolith's metadata pair, Eye for an Eye's mirror charges),
-which are outside it and left (see ``_LEGACY``). A card whose line arms a record
-of no known family fails here until it is classified.
+all three reached by the occasion. A card whose line arms a record of no known
+family fails here until it is classified — there is no exemption: the two
+single-recipient legacy records kg4 left by name (Jade Monolith's metadata
+pair, ``PlayerState.mirror_damage_*``) are gone, and their boards (Cuombajj
+Witches naming one object twice) are ``tests/rules/test_kg5_prevent_legacy_instances.py``.
 
 And every card a sweep can meet — the source-keyed line whose recipient is not
 one object — is named against the board in
@@ -75,20 +79,11 @@ _FAMILY = {
     "redirect_chosen_source_damage_off_target_until_eot": "redirect",
     "double_next_damage_from_chosen_source": "rider",
     "prevent_next_damage_from_chosen_source": "rider",
-    "jade_monolith_redirect": "legacy",
-    "arm_mirror_damage": "legacy",
+    "jade_monolith_redirect": "redirect",
+    "arm_mirror_damage": "rider",
 }
 #: The families whose one-use record shares its instance across a dealing.
 _SHARED = {"shield", "redirect", "rider"}
-#: The two records outside the occasion, and why each is left: a field named
-#: for the card that writes it (``damage_redirects``' docstring), with **one**
-#: printed recipient, so it meets a second chunk of one instance only when one
-#: dealing hits that recipient twice — a split sentence naming it for both
-#: halves. Left for the round that moves them onto ``DamageRedirect``.
-_LEGACY = {
-    "Jade Monolith": "metadata pair on the one target creature",
-    "Eye for an Eye": "PlayerState.mirror_damage_* on the one player",
-}
 
 _RULES = "tests/rules/test_kg4_615_next_instance.py"
 #: Each card a sweep can meet, and the board that drives it.
@@ -184,7 +179,7 @@ def _population():
 def test_every_source_keyed_next_time_arms_a_record_the_dealing_reaches():
     """By shape: each line's compiled program arms a shield, a redirect or a
     rider — the three records whose one-use form shares its instance across
-    a dealing — or one of the two named single-recipient legacy records."""
+    a dealing — and nothing is exempt."""
     population = _population()
     assert len(population) >= _POPULATION_FLOOR, len(population)
     unknown = sorted(name for name, (_, families, _) in population.items() if not families)
@@ -196,12 +191,7 @@ def test_every_source_keyed_next_time_arms_a_record_the_dealing_reaches():
         name: line for name, (line, families, _) in population.items()
         if not families & _SHARED
     }
-    assert set(outside) == set(_LEGACY), outside
-    for name in _LEGACY:
-        line, _families, several = population[name]
-        assert not several, (
-            f"{name}'s legacy record now reaches several recipients: {line}"
-        )
+    assert outside == {}, outside
 
 
 def test_the_cards_a_sweep_can_meet_are_each_driven():

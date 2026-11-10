@@ -147,10 +147,11 @@ class TestEyeForAnEye:
         return game, p1, p2, chosen, other
 
     def test_chosen_source_is_recorded_by_identity(self, arn_by_name):
+        from engine.next_damage import mirrors_on
+
         game, p1, _, chosen, _ = self._armed_game(arn_by_name)
-        assert p1.mirror_damage_sources == [chosen]
-        # No generic charge when a specific source was picked.
-        assert p1.mirror_damage_charges == 0
+        # One record, naming the chosen source — no generic one beside it.
+        assert [record.source for record in mirrors_on(p1)] == [chosen]
 
     def test_only_the_chosen_source_mirrors(self, arn_by_name):
         game, p1, p2, chosen, other = self._armed_game(arn_by_name)
@@ -158,31 +159,37 @@ class TestEyeForAnEye:
         game._deal_damage_to_player(p1, 3, source=other)
         assert p1.life == 17
         assert p2.life == 20
-        assert p1.mirror_damage_sources == [chosen]
+        from engine.next_damage import mirrors_on
+
+        assert [record.source for record in mirrors_on(p1)] == [chosen]
 
         # Damage from the chosen source is mirrored to its controller.
         game._deal_damage_to_player(p1, 2, source=chosen)
         assert p1.life == 15
         assert p2.life == 18
-        # One-shot: the entry is consumed.
-        assert p1.mirror_damage_sources == []
+        # One-shot: the record is consumed.
+        assert mirrors_on(p1) == []
 
     def test_headless_cast_keeps_the_generic_charge(self, arn_by_name):
         # AI/headless casts pick no source, so any source's damage mirrors.
         p1 = PlayerState(name="P1", hand=[arn_by_name["Eye for an Eye"]])
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)
+        from engine.next_damage import mirrors_on
+
         game.cast_from_hand(0, "Eye for an Eye")
         game.resolve_top_of_stack()
-        assert p1.mirror_damage_charges == 1
+        assert [record.source for record in mirrors_on(p1)] == [None]
         game._deal_damage_to_player(p1, 4)
         assert (p1.life, p2.life) == (16, 16)
-        assert p1.mirror_damage_charges == 0
+        assert mirrors_on(p1) == []
 
     def test_sources_expire_at_cleanup(self, arn_by_name):
+        from engine.next_damage import mirrors_on
+
         game, p1, _, _, _ = self._armed_game(arn_by_name)
         game.resolve_cleanup_step(0)
-        assert p1.mirror_damage_sources == []
+        assert mirrors_on(p1) == []
 
 
 # ---------------------------------------------------------------------------

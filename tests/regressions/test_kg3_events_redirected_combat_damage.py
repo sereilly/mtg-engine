@@ -149,5 +149,7 @@ def test_every_redirect_hand_off_says_whether_it_is_combat_damage():
             calls.append(where)
             if "combat" not in {keyword.arg for keyword in node.keywords}:
                 silent.append(where)
-    assert len(calls) >= 6, calls
+    # Five since kg5: Jade Monolith's own hand-off went with its interceptor
+    # (it arms the general recorded redirect, whose hand-off is counted).
+    assert len(calls) >= 5, calls
     assert silent == [], silent

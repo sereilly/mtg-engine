@@ -376,7 +376,7 @@ def test_w1g7_goblin_psychopath_one_time_covers_every_blocker(set_pool, monkeypa
     assert game.players[0].life == 15
     assert [c.name for c in game.players[1].graveyard] == []
     assert [c.name for c in game.players[0].graveyard] == ["Goblin Psychopath"]
-    # The time is over once the step's dealing is (``end_simultaneous_redirects``).
+    # The time is over once the step's dealing is (``simultaneous_damage.finish``).
     assert _w1g7_redirects_on(game.players[0]) == []
 
 

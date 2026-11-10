@@ -67,7 +67,7 @@ INSTANCED: dict[str, Instances] = {}
 # recipients and for the same reason: a shield spent on damage that then leaves
 # for someone else is a shield wasted on nothing. CR 616.1e permits either order;
 # this is the default a non-interactive seat takes.
-REDIRECT_WHOLE_EVENT = 1  # Jade Monolith, Veteran Bodyguard
+REDIRECT_WHOLE_EVENT = 1  # Veteran Bodyguard
 REDIRECT_ONE_POINT = 2  # Personal Incarnation
 SOURCE_TYPE_SHIELD = 3  # Desert Nomads / Camel
 # The general recorded redirect (engine/damage_redirects.py) — Shimian Night
@@ -577,9 +577,16 @@ def take_replaced(event: dict) -> bool:
     return bool(event.pop(REPLACED, False))
 
 
-def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
+def order_prompt_asker(
+    kind: str, restart: Callable[[], Any], *, default: Callable | None = None,
+) -> Callable:
     """An ``ask`` hook for :func:`~engine.effect_ordering.apply_in_order` that
     puts CR 616.1e's choice to the affected player.
+
+    *default* is the answer a seat nobody asks takes — and the prompt's own
+    default for a seat that stops answering — in place of ``choose_effect``'s
+    stated order: ``default(game, chooser_index, applicable, event)``. A
+    damage event passes a measured one (``engine/measured_effect_order.py``).
 
     *restart* re-runs the whole event once the answer arrives. It has to be the
     caller's own re-invocation, not a resumption of this process: an event is
@@ -592,6 +599,11 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
     headless play never queue and never suspend.
     """
 
+    def pick(game, chooser_index, applicable, event):
+        if default is not None:
+            return default(game, chooser_index, applicable, event)
+        return choose_effect(game, chooser_index, applicable)
+
     def ask(game, chooser_index, applicable, event):
         recorded = _recorded_order(game, kind, chooser_index)
         if recorded is not None:
@@ -599,9 +611,9 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
             for key in recorded:
                 if key in by_key:
                     return by_key[key]
-            return choose_effect(game, chooser_index, applicable)
+            return pick(game, chooser_index, applicable, event)
         if chooser_index is None or not game.asks_a_person(chooser_index):
-            return choose_effect(game, chooser_index, applicable)
+            return pick(game, chooser_index, applicable, event)
         # "<effect> (<source>)": what each effect does and what generates it,
         # so two that do the same thing — or one that does what an exemplar
         # card does — can be told apart (``effect_ordering.option_text``).
@@ -620,7 +632,7 @@ def order_prompt_asker(kind: str, restart: Callable[[], Any]) -> Callable:
             # contends with, every other effect by its order) — the answer
             # the prompt's own default gives, so a seat that stops answering
             # is not handed the first option instead.
-            _default_key=choose_effect(game, chooser_index, applicable).key,
+            _default_key=pick(game, chooser_index, applicable, event).key,
             _restart=restart,
         )
         game.log.append(

@@ -895,10 +895,13 @@ def test_w1g7_equal_treatment_ends_with_the_turn(set_pool):
 
 
 def test_w1g7_equal_treatment_and_a_shield_contend_by_cr_616(set_pool):
-    """One contention set with the prevention shields (CR 616.1): by default
-    the 2 is set first, so Hypochondria's "prevent the next 3" absorbs all of
-    a 5 — and its last point still stops a later 1, which Equal Treatment has
-    made a 2, to 1."""
+    """One contention set with the prevention shields (CR 616.1), the default
+    a seat nobody asks takes measured on scratch copies
+    (``engine/measured_effect_order.py``): on a 5 the 2 is set first, so
+    Hypochondria's "prevent the next 3" absorbs all of it with a point left;
+    on a later 1 that last point goes first — the 1 is prevented and Equal
+    Treatment has nothing left to make a 2 (where its stated order, the 2
+    first, dealt 1); the next 1 is a 2."""
     game, _ = _w1g7_equal_treatment_board(set_pool)
     target = game.players[1]
     game.players[1].battlefield.append(
@@ -910,7 +913,7 @@ def test_w1g7_equal_treatment_and_a_shield_contend_by_cr_616(set_pool):
     ).supported
     _w1g7_resolve_stack(game)
     assert _w1g7_damage_dealt(game, target, 5) == 0
-    assert _w1g7_damage_dealt(game, target, 1) == 1
+    assert _w1g7_damage_dealt(game, target, 1) == 0
     assert _w1g7_damage_dealt(game, target, 1) == 2
 
 

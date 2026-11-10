@@ -416,6 +416,13 @@ _COMPUTED_ATTRIBUTE_WRITES: dict[str, str] = {
     "engine/shields.py::shields_on": (
         "the shield collection's attribute on a recipient, not a zone."
     ),
+    "engine/next_damage.py::mirrors_on": (
+        "the mirror-record collection's attribute on a recipient (Eye for an "
+        "Eye, _MIRRORS_ATTR), not a zone — the shape of the two above."
+    ),
+    "engine/measured_effect_order.py::_score": (
+        "the measuring flag (MEASURING) on a scratch copy, a bool, not a zone."
+    ),
     "engine/turn_replacements.py::turn_replacements_on": (
         "the turn-replacement collection's attribute on a player (W1G7, TOR), "
         "not a zone — the shape of the three collections above."

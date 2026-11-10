@@ -804,7 +804,7 @@ def redirect_next_damage_from_source_until_eot(
         # case damage from all of those sources is redirected" (ruling
         # 2004-10-04). Glarecaster's occasion above, with one recipient: spent
         # at the first chunk's moment and open for every other chunk of it
-        # (CR 510.2's one dealing), closed by the combat damage step's tail.
+        # (CR 510.2's one dealing), closed as that dealing finishes.
         # ``uses=1`` spent itself on the first blocker's damage and let the
         # second land on the Treefolk.
         add_redirect(

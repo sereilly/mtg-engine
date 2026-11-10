@@ -30,9 +30,10 @@ from ..shields import (
     make_whole_charge,
     make_whole_source,
 )
+from ..damage_redirects import DamageRedirect, add_redirect
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
-from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm,
-                           rider_key)
+from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT,
+                           DamageMirror, add_mirror, arm, rider_key)
 from ..game_types import single_chosen_id, single_slot
 from ._amounts import resolve_amount
 from ._targets import (default_announced_permanent, divided_target_permanent,
@@ -1157,33 +1158,31 @@ def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: 
     """Jade Monolith: "The next time a source of your choice would deal damage to
     target creature this turn, that source deals that damage to you instead."
 
-    The controller chooses the target creature (target_permanent_index on the
-    target player's battlefield) AND the damage source (choices["chosen_source"]: a
-    battlefield permanent or a stack spell's card). The next damage that source
-    would deal to the creature is redirected to the controller; with no recorded
-    source choice (AI/legacy activations) any source's damage is redirected.
+    The general CR 614.9 record (``damage_redirects.DamageRedirect``) on the
+    target creature: one use, the chosen source (``choices["chosen_source"]``:
+    a permanent, or a stack spell's card) or any source for an announcement
+    that named none (an AI or headless activation), the caster taking the
+    damage. As a record it is CR 615.8's instance like every other one-use
+    redirect — spent inside a simultaneous dealing, it moves the source's other
+    chunks of that dealing to the creature too — and its source is matched by
+    identity (``damage_redirects.source_matches``): a second Rod of Ruin is not
+    the one that was named. It was a metadata pair named for the card, spent
+    per chunk and matched by card.
     """
     caster = context.caster
     target_creature = resolve_target_permanent(game, context)
     if target_creature is not None:
-        caster_idx = game.players.index(caster)
-        target_creature.metadata["redirect_damage_to_player"] = caster_idx
-        # Who armed it, for the redirect's log line and CR 616.1e's option.
-        target_creature.metadata["redirect_damage_by"] = context.card.name
         chosen_source = context.choices.get("chosen_source")
-        if chosen_source is not None:
-            target_creature.metadata["redirect_damage_source"] = chosen_source
-            source_name = getattr(getattr(chosen_source, "card", chosen_source), "name", "source")
-            game.log.append(
-                f"{context.card.name} marks {target_creature.card.name} for damage "
-                f"redirect to {caster.name} (source: {source_name})"
-            )
-        else:
-            target_creature.metadata.pop("redirect_damage_source", None)
-            game.log.append(
-                f"{context.card.name} marks {target_creature.card.name} for damage "
-                f"redirect to {caster.name}"
-            )
+        add_redirect(target_creature, DamageRedirect(
+            new_recipient=caster, source=chosen_source, uses=1,
+            source_name=context.card.name,
+        ))
+        named = getattr(getattr(chosen_source, "card", chosen_source), "name", "source")
+        game.log.append(
+            f"{context.card.name} marks {target_creature.card.name} for damage "
+            f"redirect to {caster.name}"
+            + (f" (source: {named})" if chosen_source is not None else "")
+        )
     return True, "resolved"
 
 
@@ -1215,12 +1214,13 @@ def arm_mirror_damage(game: Game, instruction: OracleInstruction, context: Oracl
     """Eye for an Eye: the next damage dealt to you this turn by "a source of
     your choice" also hits that source's controller for the same amount.
 
-    Mirrors Reverse Damage's shape: the caster picks the source — a permanent on
-    any battlefield (target_permanent_index) or a spell on the stack
-    (stack_target) — and only damage from that source is mirrored, matched by
-    identity in _deal_damage_to_player. With no chosen source (AI / headless
-    casts) fall back to a generic charge that mirrors the next damage event from
-    any source."""
+    One ``next_damage.DamageMirror`` on the caster: the caster picks the
+    source — a permanent on any battlefield (target_permanent_index) or a spell
+    on the stack (stack_target) — and only damage from that source is
+    mirrored, matched by identity. With no chosen source (AI / headless casts)
+    the record answers to the next damage event from any source. One instance
+    (CR 615.8): spent inside a simultaneous dealing, it mirrors everything that
+    source deals the caster in that dealing (``Game._apply_mirror_damage``)."""
     caster = context.caster
     if context.stack_target is not None:
         # A spell on the stack: match later by its card identity (the same
@@ -1228,15 +1228,14 @@ def arm_mirror_damage(game: Game, instruction: OracleInstruction, context: Oracl
         chosen = context.stack_target.card
     else:
         chosen = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
+    add_mirror(caster, DamageMirror(source=chosen, source_name=getattr(context.card, "name", None)))
     if chosen is not None:
-        caster.mirror_damage_sources.append(chosen)
         source_card = getattr(chosen, "card", chosen)
         game.log.append(
             f"{caster.name}: the next damage {getattr(source_card, 'name', 'a source')} "
             f"deals to them this turn is mirrored to its controller ({context.card.name})"
         )
     else:
-        caster.mirror_damage_charges += 1
         game.log.append(
             f"{caster.name}: the next damage dealt to them this turn is mirrored "
             f"to its source's controller ({context.card.name})"
@@ -1747,7 +1746,8 @@ def _arm_next_damage_rider(
     card_name = getattr(context.card, "name", "an effect")
     source = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
     combat_only = bool(instruction.payload.get("combat_only"))
-    if source is None or not arm(source, rider_key(key, combat_only=combat_only)):
+    by = getattr(context.card, "name", None)
+    if source is None or not arm(source, rider_key(key, combat_only=combat_only), by=by):
         game.log.append(
             f"{card_name}: "
             + ("that creature is gone" if source_from == "event_subject"
