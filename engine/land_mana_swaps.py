@@ -1032,6 +1032,7 @@ __all__ = [
     "COLORS", "END_OF_TURN", "LandManaSwap", "ManaSubstitution", "add_swap",
     "clear_swaps", "could_produce_under_substitutions", "ordered_substitutions",
     "payment_colors", "permanent_substitutions_on", "production_snapshot",
+    "record_color_for",
     "replaces_symbol", "static_substituted_symbol", "static_substitution_for",
     "static_substitutions_for", "summary_symbol_for", "swapped_productions",
     "source_wide_swap", "apply_source_wide_swap",
