@@ -329,3 +329,36 @@ def test_destroy_each_creature_that_blocked_at_end_of_combat_after_the_attacker_
     drive_combat(game)
 
     assert not game.is_on_battlefield(wall)
+
+
+@pytest.mark.cr("509.1g", "506.4")
+def test_sorrows_path_with_a_blocker_whose_attacker_left(catalog_by_name):
+    """Sorrow's Path: "Choose two target blocking creatures controlled by the
+    same opponent. If each of those creatures could block all creatures that
+    the other is blocking, remove both of them from combat. Each one then
+    blocks all creatures the other was blocking." The first Hill Giant is
+    bolted, so the Bears that blocked it is blocking nothing — still a legal
+    target. The 2009-10-01 ruling: "if all the creatures that one of the
+    targeted creatures was blocking have left combat, then the other targeted
+    creature is considered to be able to block all creatures the first
+    creature is blocking. If the ability has its full effect, the second
+    creature will be removed from combat but not returned to combat; it
+    doesn't block anything." """
+    game, (first, second, _path), (orphan, partner) = _table(
+        catalog_by_name, attackers=["Hill Giant", "Hill Giant"],
+        blockers=["Grizzly Bears", "Grizzly Bears"], blocks={0: 0, 1: 1},
+        mine=["Sorrow's Path"], opponent_hand=["Lightning Bolt"],
+    )
+    _cast(game, 1, "Lightning Bolt", first)
+    game.get_combat_state()
+    assert orphan.is_blocking and game.creatures_blocked_by(orphan) == []
+
+    result = game.queue_permanent_ability(
+        0, "Sorrow's Path", target_permanent_ids=[orphan.permanent_id, partner.permanent_id],
+    )
+    assert result.supported, result.details
+    settle(game)
+
+    assert game.creatures_blocked_by(orphan) == [second]
+    assert not partner.is_blocking, "removed from combat and not returned"
+    assert second.blocked
