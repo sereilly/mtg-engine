@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**46 of 6414 supported cards (0.7%)** carry at least one name-keyed entry, across **50 entries** in 6 registries. The pool is 6414 cards, 100.0% supported.
+**45 of 6414 supported cards (0.7%)** carry at least one name-keyed entry, across **49 entries** in 6 registries. The pool is 6414 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **204 hand-written entries** covering **187 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **199 hand-written entries** covering **183 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -23,7 +23,7 @@ Held at this rate, supporting the 26,113-card release line would need about **20
 | LEA | 290 | 290 (100.0%) | 25 (8.6%) | 388 | 23 (5.9%) | 28 | 9.7 |
 | LEB | 292 | 292 (100.0%) | 25 (8.6%) | 389 | 23 (5.9%) | 28 | 9.6 |
 | 2ED | 292 | 292 (100.0%) | 25 (8.6%) | 389 | 23 (5.9%) | 28 | 9.6 |
-| ARN | 78 | 78 (100.0%) | 15 (19.2%) | 107 | 13 (12.1%) | 16 | 20.5 |
+| ARN | 78 | 78 (100.0%) | 14 (17.9%) | 107 | 12 (11.2%) | 15 | 19.2 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
 | 3ED | 296 | 296 (100.0%) | 20 (6.8%) | 389 | 19 (4.9%) | 22 | 7.4 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
@@ -60,7 +60,7 @@ Held at this rate, supporting the 26,113-card release line would need about **20
 | 8ED | 342 | 342 (100.0%) | 0 (0.0%) | 399 | 0 (0.0%) | 0 | 0.0 |
 | MRD | 291 | 291 (100.0%) | 0 (0.0%) | 455 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| **Whole pool (shipped, deduped)** | **6414** | **6414 (100.0%)** | **46 (0.7%)** | **10105** | **42 (0.4%)** | **50** | **0.8** |
+| **Whole pool (shipped, deduped)** | **6414** | **6414 (100.0%)** | **45 (0.7%)** | **10105** | **41 (0.4%)** | **49** | **0.8** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so five of these rows (LEA, LEB, 2ED, 3ED, 4ED) are one data point wearing five hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
@@ -68,7 +68,7 @@ Held at this rate, supporting the 26,113-card release line would need about **20
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 41 | 42 |
+| `CARD_LINE_INSTRUCTIONS` | 40 | 41 |
 | `ON_LEAVE_BATTLEFIELD` | 4 | 4 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -109,7 +109,6 @@ Held at this rate, supporting the 26,113-card release line would need about **20
 - **Nafs Asp** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Nether Shadow** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Old Man of the Sea** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
-- **Oubliette** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Personal Incarnation** (`CARD_LINE_INSTRUCTIONS`) — 2 lines
 - **Power Sink** (`ON_SPELL_COUNTERED`)
 - **Pyramids** (`CARD_LINE_INSTRUCTIONS`) — 1 line

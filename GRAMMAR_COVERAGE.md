@@ -19,7 +19,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | LEA | 290 | 388 | 89.7% | 87.9% | 50.8% | 178 |
 | LEB | 292 | 389 | 89.7% | 87.9% | 50.9% | 179 |
 | 2ED | 292 | 389 | 89.7% | 87.9% | 50.9% | 179 |
-| ARN | 78 | 108 | 83.3% | 79.6% | 57.4% | 51 |
+| ARN | 78 | 108 | 84.3% | 80.6% | 58.3% | 52 |
 | ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
 | 3ED | 296 | 389 | 91.0% | 88.9% | 52.7% | 184 |
 | LEG | 310 | 431 | 89.6% | 88.4% | 58.7% | 217 |
@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7274** |
+| **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -68,7 +68,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 867 | 449 | expected a subject |  |
 | 188 | 95 | unrecognized effect verb |  |
-| 136 | 70 | unconsumed text |  |
+| 135 | 69 | unconsumed text |  |
 | 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
 | 41 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -94,7 +94,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-7274 cards, 8568 lines.
+7275 cards, 8569 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -8354,6 +8354,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target opponent reveals their hand. You choose a creature card from it. That player discards that card.`
 - **Otarian Juggernaut**
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +3/+0 and attacks each combat if able.`
+- **Oubliette**
+  - `When this enchantment enters, target creature phases out until this enchantment leaves the battlefield. Tap that creature as it phases in this way. (Auras and Equipment phase out with it. While permanents are phased out, they're treated as though they don't exist.)`
 - **Outbreak**
   - `Choose a creature type. All creatures of that type get -1/-1 until end of turn.`
 - **Outmaneuver**
