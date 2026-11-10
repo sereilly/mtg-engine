@@ -227,6 +227,14 @@ class ActivationAction:
     # ability printing one cost, and the engine's default
     # (`activation_cost_alternatives.default_alternative_index`) otherwise.
     alternative_cost_index: int | None = None
+    # Which permanents pay a "Sacrifice a Goblin" cost (CR 602.2b through
+    # 601.2b), by id — the activation path's ``cost_permanent_ids``, and
+    # `CastAction.cost_permanent_ids`' twin. None is the engine's
+    # deterministic pick; named for every sacrifice the chooser weighs
+    # (`ai_activation_rehearsal._sacrifice_priced_activation`): the cheapest
+    # to lose, or the reading the effect is measured by ("damage equal to the
+    # sacrificed artifact's mana value", Bosh).
+    cost_permanent_ids: list[int] | None = None
 
 
 @dataclass(frozen=True)
@@ -371,6 +379,9 @@ def activation_announcement(action: ActivationAction) -> dict:
         "mana_color": action.new_color,
         # Which printed activation cost ("{3}, {T} or {U}, {T}") is paid.
         "alternative_cost_index": action.alternative_cost_index,
+        # CR 601.2b via 602.2b: which permanents pay the sacrifice (see
+        # `ActivationAction.cost_permanent_ids`).
+        "cost_permanent_ids": action.cost_permanent_ids,
     }
 
 

@@ -83,9 +83,81 @@ def victims_to_weigh(
     return sorted(kept[:VICTIM_READINGS_WEIGHED], key=cost)
 
 
+def activation_sacrifice_choices(
+    game, seat: int, source: Permanent, ability, *, spare: "Permanent | None" = None,
+) -> "list[tuple[int, ...] | None]":
+    """The ways *seat* could pay *ability*'s "Sacrifice <a printed number of>
+    <noun phrase>" cost (CR 602.2b through 601.2b), cheapest first, as the
+    ``permanent_id`` tuples the activation path's ``cost_permanent_ids``
+    takes — for the activation chooser to rehearse
+    (``ai_activation_rehearsal._sacrifice_priced_activation``).
+
+    * Where the effect reads what the sacrifice ate ("Bosh deals damage
+      equal to the sacrificed artifact's mana value"), one victim per
+      distinct reading (:func:`victims_to_weigh`) — the activated twins of
+      the six cast cards this module was written for.
+    * Otherwise the one choice of the printed number of permanents that are
+      cheapest to lose (``ai_standing.permanent_loss``: a land beyond the
+      ones a seat needs is a spare), the engine's own order
+      (``Game.sacrifice_preference_key``: the source kept for last) on a tie.
+
+    The candidates are the engine's own (``Game._sacrifice_cost_candidates``).
+    *spare* — the permanent the ability is aimed at — is not offered while
+    any other will do: a pump paid for with its own target is a pump on
+    nothing. ``[None]`` (the engine's default) for a conjoined second
+    sacrifice ("a creature and a Swamp"), which one list of ids does not
+    say; ``[]`` when the board cannot pay.
+    """
+    from .ai_standing import permanent_loss
+
+    cost = ability.cost
+    count = cost.sacrifice_count if isinstance(cost.sacrifice_count, int) else 1
+    candidates = game._sacrifice_cost_candidates(cost, seat, source)
+    if spare is not None and len([p for p in candidates if p is not spare]) >= count:
+        candidates = [p for p in candidates if p is not spare]
+    if len(candidates) < count:
+        return []
+    if cost.sacrifice_also_filter is not None:
+        return [None]
+
+    def order(permanent):
+        return game.sacrifice_preference_key(permanent, source)
+
+    characteristic = characteristic_read_off_the_sacrifice([ability.instruction])
+    if characteristic is not None and count == 1:
+        return [
+            (victim.permanent_id,)
+            for victim in victims_to_weigh(candidates, characteristic, order)
+        ]
+    cheapest = sorted(
+        candidates,
+        key=lambda permanent: (permanent_loss(game, seat, permanent), order(permanent)),
+    )
+    return [tuple(permanent.permanent_id for permanent in cheapest[:count])]
+
+
+def eats_a_land_it_needs(game, seat: int, permanent_ids) -> bool:
+    """Whether sacrificing the permanents *permanent_ids* name leaves *seat*
+    controlling fewer lands than ``ai_standing.LANDS_WORTH_KEEPING`` — a land
+    out of the ones a limited deck needs to cast what it holds, which the
+    standing prices at a card and a land drop whatever the seat's hand asks
+    of it. False for no named permanents (the engine's default pick, which
+    this reader cannot see)."""
+    from .ai_standing import LANDS_WORTH_KEEPING
+
+    named = set(permanent_ids or ())
+    if not named:
+        return False
+    lands = [permanent for permanent in game.controlled_by(seat) if permanent.has_type("land")]
+    eaten = sum(1 for permanent in lands if permanent.permanent_id in named)
+    return bool(eaten) and len(lands) - eaten < LANDS_WORTH_KEEPING
+
+
 __all__ = [
     "SACRIFICE_READ_KEY",
     "VICTIM_READINGS_WEIGHED",
+    "activation_sacrifice_choices",
+    "eats_a_land_it_needs",
     "characteristic_read_off_the_sacrifice",
     "sacrificed_reading",
     "victims_to_weigh",

@@ -33,6 +33,7 @@ from .ai_activation_rehearsal import (
     _moves_something,
     _queue_activation,
     _rehearse_activation,
+    _sacrifice_priced_activation,
     _sized_x_activation,
     _text_change_activation,
 )
@@ -271,17 +272,25 @@ def _activation_candidate(
     if _host_refusal(game, player_index, permanent, ability.instruction):
         return None
 
-    # A cost paid in permanents or cards is a trade this policy cannot
-    # price: Atog's "+2/+2 until end of turn" is worth an artifact only
-    # sometimes, and the score below reads the *effect* alone. Skipping is
-    # the honest floor — the alternative is an AI that eats its own board
-    # every main phase for a pump that wears off. Derived from the compiled
-    # cost, so it reaches every card printed this way and names none.
+    # A cost paid in cards is a trade this policy cannot price: the score
+    # below reads the *effect* alone, and a card spent on a pump that wears
+    # off is a card gone. Skipping is the honest floor. Derived from the
+    # compiled cost, so it reaches every card printed this way and names none.
     #
     # **Except a discard that takes a card with madness** (CR 702.35a)
     # whose madness cost the board can pay beside the ability: that card
     # is not spent but offered for less (`_madness_discard_index`), so the
     # trade is priced — by the offer's own rehearsal when it is made.
+    #
+    # **A cost paid in permanents is priced by rehearsal** (kg5): "Sacrifice
+    # an artifact: This creature gets +2/+2 until end of turn" (Atog) is worth
+    # an artifact only sometimes, and only carrying it out on a copy — the
+    # victim gone, read through the fight before a combat — says when
+    # (:func:`_sacrifice_is_weighed`, ``ai_activation_rehearsal.
+    # _sacrifice_priced_activation``). Declined here, 173 non-mana abilities
+    # in both manifest roles were never activated by an AI seat: Goblin
+    # Lookout's and Orc General's pumps, Squirrel Wrangler's Squirrels, Bosh's
+    # fling and the thirteen others whose effect reads what was sacrificed.
     madness_discard = (
         _madness_discard_index(
             game, player_index, ability, dict(ability.cost.mana),
@@ -290,7 +299,8 @@ def _activation_candidate(
         if ability.cost.discard_cards and ability.cost.sacrifice_filter is None
         else None
     )
-    if ability.cost.sacrifice_filter is not None or (
+    sacrifice_weighed = _sacrifice_is_weighed(ability.cost)
+    if (ability.cost.sacrifice_filter is not None and not sacrifice_weighed) or (
         ability.cost.discard_cards and madness_discard is None
     ):
         # A conjoined sacrifice ("a creature **and a Swamp**", Viscerid
@@ -898,6 +908,20 @@ def _activation_candidate(
         chosen_keyword=chosen_keyword,
         alternative_cost_index=alternative_cost_index,
     )
+    if sacrifice_weighed:
+        # The permanent the cost eats, named (`ActivationAction.
+        # cost_permanent_ids`) and weighed by rehearsal with the rest of the
+        # cost: the cheapest to lose, or — where the effect reads what it ate
+        # ("…damage equal to the sacrificed artifact's mana value", Bosh) —
+        # each distinct reading the board offers. At instant speed the
+        # cheapest reading is proposed and its caller's rehearsal disposes,
+        # as for every proposal there. An X beside it is not announced.
+        if x_symbols:
+            return None
+        return _sacrifice_priced_activation(
+            game, player_index, permanent, ability, candidate,
+            at_instant_speed=_AT_INSTANT_SPEED.get(),
+        )
     if x_symbols:
         return _sized_x_activation(game, player_index, permanent, ability, candidate)
     if word_choices:
@@ -1036,6 +1060,16 @@ def _gives_up_its_source(cost) -> bool:
         or getattr(cost, "exile_self", False)
         or getattr(cost, "return_self_to_hand", False)
     )
+
+
+def _sacrifice_is_weighed(cost) -> bool:
+    """Whether *cost* sacrifices a printed number of permanents chosen as it
+    is paid ("Sacrifice a Goblin", "Sacrifice two lands", "…another Orc or
+    Goblin") — a trade the chooser prices by rehearsal. Not "any number of
+    creatures" (Sword of the Ages: naming none pays nothing, and what to name
+    is a search) nor "Sacrifice X lands" (an X this chooser does not
+    announce beside a sacrifice)."""
+    return cost.sacrifice_filter is not None and isinstance(cost.sacrifice_count, int)
 
 
 def _exists_to_be_given_up(permanent) -> bool:

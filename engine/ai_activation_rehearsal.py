@@ -21,6 +21,7 @@ from .ai_actions import ActivationAction, activation_announcement
 from .ai_payment import _plan_land_taps, tap_planned_lands
 from .ai_rehearsal import Rehearsal, rehearse
 from .ai_scoring import _leaves_nothing, _worth_proposing
+from .ai_standing import LOST
 from .ai_text_changes import WORTH_FLOOR, ability_text_change_worth
 from .ai_valuation import source_becomes_an_aura
 from .game import Game
@@ -78,6 +79,9 @@ def _rehearse_activation(
             if action.old_color or action.new_color else ()
         ) + (("through_combat",) if through_combat else ()) + (
             ("source_tapped",) if source_taps else ()
+        ) + (
+            ("victims", tuple(action.cost_permanent_ids))
+            if action.cost_permanent_ids else ()
         ),
         without=paid_for if taps else None,
         without_key=(
@@ -360,3 +364,79 @@ def _sized_x_activation(
         if worth is not None and worth > best_worth + 1e-9:
             best, best_worth = sized, worth
     return best
+
+
+def _sacrifice_priced_activation(
+    game: Game, seat: int, permanent, ability, candidate: ActivationAction,
+    *, at_instant_speed: bool = False,
+) -> ActivationAction | None:
+    """*candidate* — an ability whose cost sacrifices permanents the activator
+    chooses ("Sacrifice a Goblin", CR 602.2b through 601.2b) — naming the
+    permanents it is paid with, or None when no choice is worth paying.
+
+    Each choice the board offers (``ai_sacrifice_victims.
+    activation_sacrifice_choices``: the cheapest to lose, or one victim per
+    reading where the effect is measured by what it ate) is rehearsed **with
+    the whole cost paid** (`_land_ability_worth`, never cost-neutral: the
+    victim is the price), read through the fight before a combat, and the
+    one leaving the seat furthest ahead once the turn is over is proposed —
+    the cheaper of two equals. At *at_instant_speed* the first (cheapest)
+    choice is proposed as it stands: every proposal there is rehearsed by its
+    caller (``ai_policy.choose_instant_speed_activation``).
+
+    **A land the seat needs is paid only for the game** (``ai_sacrifice_
+    victims.eats_a_land_it_needs``): a choice leaving the seat fewer lands
+    than ``ai_standing.LANDS_WORTH_KEEPING`` is proposed only where its
+    rehearsal swings the game itself (``DECIDES_THE_GAME``) — a Zuran Orb's
+    life against lethal damage, not Squirrel Wrangler's two 1/1s, which the
+    standing prices above a land (a token's body against the land's card and
+    drop) and which, made every turn, ate a four-land board down to nothing.
+    ``ai_casts.BUYBACK_PERMANENTS_KEPT`` keeps the same six before a buyback
+    is paid in lands, for the same reason.
+
+    The score stays the flat one: a sacrifice's rehearsed worth outranking
+    the flat abilities beside it is the trade the Oblivion Stone note in
+    ``ai_abilities._activation_candidate`` declines for every ability that
+    gives up a permanent.
+    """
+    from dataclasses import replace
+
+    from .ai_sacrifice_victims import activation_sacrifice_choices, eats_a_land_it_needs
+
+    aimed = (
+        game.permanent_at(candidate.target_player_index, candidate.target_permanent_index)
+        if isinstance(candidate.target_permanent_index, int) else None
+    )
+    choices = activation_sacrifice_choices(game, seat, permanent, ability, spare=aimed)
+    if not choices:
+        return None
+    named = [
+        replace(candidate, cost_permanent_ids=list(ids) if ids else None)
+        for ids in choices
+    ]
+    best: ActivationAction | None = None
+    best_worth = 0.0
+    for action in named:
+        needed = eats_a_land_it_needs(game, seat, action.cost_permanent_ids)
+        if at_instant_speed:
+            if not needed:
+                return action
+            rehearsal = _rehearse_activation(game, seat, action)
+            if rehearsal is not None and rehearsal.accepted and (
+                rehearsal.lasting >= DECIDES_THE_GAME
+            ):
+                return action
+            continue
+        worth = _land_ability_worth(game, seat, action)
+        if worth is not None and needed and worth < DECIDES_THE_GAME:
+            continue
+        if worth is not None and worth > best_worth + 1e-9:
+            best, best_worth = action, worth
+    return best
+
+
+#: A rehearsed swing that wins or saves the game: half of
+#: ``ai_standing.LOST``, the price the standing puts on a seat with nothing
+#: left to draw — so a loss avoided or inflicted, on either reading, clears it
+#: and nothing short of one does.
+DECIDES_THE_GAME = LOST / 2
