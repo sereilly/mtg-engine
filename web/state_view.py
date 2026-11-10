@@ -840,7 +840,7 @@ def _compute_graveyard_abilities(session: Session, player_index: int) -> list[di
                 )
             if ability.cost.sacrifice_filter is not None:
                 entry["sacrifice_choices"] = [
-                    {"permanent_id": perm.permanent_id, "name": perm.card.name}
+                    {"permanent_id": perm.permanent_id, "name": perm.effective_card.name}
                     for perm in game.controlled_by(player_index)
                     if subject_matches(
                         game, perm, ability.cost.sacrifice_filter, observer=player_index,
@@ -854,7 +854,7 @@ def _compute_graveyard_abilities(session: Session, player_index: int) -> list[di
                 # candidates are the charger's own (``_tap_cost_candidates``),
                 # so the picker offers exactly what the cost may tap.
                 entry["tap_choices"] = [
-                    {"permanent_id": perm.permanent_id, "name": perm.card.name}
+                    {"permanent_id": perm.permanent_id, "name": perm.effective_card.name}
                     for perm in game._tap_cost_candidates(ability.cost, player_index)
                 ]
                 entry["tap_count"] = int(ability.cost.tap_count)
@@ -942,7 +942,7 @@ def _zone_cast_cost_choice(
             "x": counted_x,
             "count": None if counted_x else count,
             "choices": [
-                {"id": perm.permanent_id, "name": perm.card.name}
+                {"id": perm.permanent_id, "name": perm.effective_card.name}
                 for perm in game._additional_cost_candidates(
                     player_index, cost, giving_up=verb
                 )

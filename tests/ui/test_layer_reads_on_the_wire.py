@@ -272,9 +272,11 @@ def test_a_clone_reports_the_copied_cards_mana_cost_and_base_pt(pool):
     assert wire["mana_cost"] == "{1}{G}"
     assert (wire["base_power"], wire["base_toughness"]) == (2, 2)
     assert (wire["power"], wire["toughness"]) == (2, 2)
-    # The physical card is still a Clone: the name is what the action API
-    # addresses it by, and the art is deliberately its own.
-    assert wire["name"] == "Clone"
+    # CR 707.2: the name is a copiable value too, so the copy is named Grizzly
+    # Bears; the physical card is still a Clone, which ``printed_name`` says
+    # (the art is deliberately its own, and the action API answers to both).
+    assert wire["name"] == "Grizzly Bears"
+    assert wire["printed_name"] == "Clone"
 
 
 def test_an_animated_land_blocking_a_band_is_offered_the_702_22k_assignment(pool):

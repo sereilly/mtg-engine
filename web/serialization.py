@@ -385,7 +385,20 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # new object and gets a new id, so a held id can never quietly start
         # naming something else.
         "id": perm.permanent_id,
-        "name": perm.card.name,
+        # CR 707.2: a copy's name is a copiable value, so it is the copied
+        # object's — Sculpting Steel copying Iron Myr *is* an Iron Myr, and
+        # every seat reads its name plate, its preview and the prompts that
+        # offer it so. Off ``effective_card``, as the mana cost, the P/T and
+        # the text below already were; this read the printed card.
+        "name": perm.effective_card.name,
+        # …and the card it is printed on, which the art (above) stays — the
+        # physical card a zone change carries away (the copy effect ends as
+        # it leaves, CR 400.7). What the client matches a card *across zones*
+        # by (a bounced copy is a Sculpting Steel in hand) and what a pasted
+        # raw state rebuilds (``debug_actions._card_for_raw_permanent``). The
+        # same as ``name`` for anything that is not a copy; a face-down
+        # permanent's is the blank's (CR 708.2a), never the card it hides.
+        "printed_name": perm.card.name,
         # CR 708: this permanent is face down. Public — every player sees a
         # face-down card on the table — and the whole of what anyone but its
         # controller learns: every other field here is the face-down 2/2's
@@ -1116,7 +1129,15 @@ def _serialize_stack_item(item, game: Game) -> dict:
     # ``triggered_`` prefix every `upkeep_effect` trigger lacks and every
     # `triggered_counter` activation carries.
     is_triggered = item.ability_kind == "triggered"
-    label = item.card.name if item_type == "spell" else f"{item.card.name} ability"
+    # An ability is named by its source as it is now (CR 707.2): a Clone
+    # copying Prodigal Sorcerer activates a *Prodigal Sorcerer's* ability. The
+    # stack object keeps the printed card for its art, as the permanent does.
+    source_name = (
+        item.source_permanent.effective_card.name
+        if item.is_ability and item.source_permanent is not None
+        else item.card.name
+    )
+    label = item.card.name if item_type == "spell" else f"{source_name} ability"
 
     target_permanent_name = None
     target_permanent_seat = None
@@ -1135,14 +1156,14 @@ def _serialize_stack_item(item, game: Game) -> dict:
             target_permanent_index = placed[0][1] if placed else None
         if placed and not several:
             target_permanent_seat, _index, first = placed[0]
-            target_permanent_name = first.card.name
+            target_permanent_name = first.effective_card.name
     elif single_slot(slots) is not None and item.target_player_index is not None:
         p_idx = item.target_player_index
         slot = single_slot(slots)
         if 0 <= p_idx < len(game.players):
             bf = game.players[p_idx].battlefield
             if 0 <= slot < len(bf):
-                target_permanent_name = bf[slot].card.name
+                target_permanent_name = bf[slot].effective_card.name
                 target_permanent_seat = p_idx
 
     source_permanent_seat = None

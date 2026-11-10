@@ -203,13 +203,13 @@ def _describe(game, seat: int, slots, colours, *, paying_for=None) -> list[dict]
             continue
         entry = {
             "id": permanent.permanent_id,
-            "name": permanent.card.name,
+            "name": permanent.effective_card.name,
             "mana_color": colour,
             "land": bool(permanent.has_type("land")),
         }
         if position in costs:
             entry["cost_taps"] = [
-                {"id": tapped.permanent_id, "name": tapped.card.name}
+                {"id": tapped.permanent_id, "name": tapped.effective_card.name}
                 for tapped in costs[position].tapped
             ]
         described.append(entry)

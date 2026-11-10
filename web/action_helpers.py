@@ -364,6 +364,14 @@ def _find_card_in_hand(player: PlayerState, card_name: str):
         None,
     )
 
+def _answers_to_name(permanent: Permanent, name: str) -> bool:
+    """Whether *name* is one a request may name *permanent* by: the name it has
+    (CR 707.2 — a copy's is the copied object's, which is what the wire sends
+    as ``name``) or the card it is printed on (the wire's ``printed_name``,
+    which a client written before the copy's name moved still sends)."""
+    return name in (permanent.effective_card.name, permanent.card.name)
+
+
 def _find_controlled_permanent(
     player: PlayerState,
     permanent_name: str | None,
@@ -373,7 +381,7 @@ def _find_controlled_permanent(
         if permanent_index < 0 or permanent_index >= len(player.battlefield):
             return None
         permanent = player.battlefield[permanent_index]
-        if permanent_name and permanent.card.name != permanent_name:
+        if permanent_name and not _answers_to_name(permanent, permanent_name):
             return None
         return permanent_index, permanent
 
@@ -381,7 +389,7 @@ def _find_controlled_permanent(
         return None
 
     for idx, permanent in enumerate(player.battlefield):
-        if permanent.card.name == permanent_name:
+        if _answers_to_name(permanent, permanent_name):
             return idx, permanent
     return None
 

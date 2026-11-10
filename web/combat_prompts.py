@@ -106,7 +106,7 @@ def _unblocked_recipient(game, attacker_idx: int) -> dict:
         return {
             "kind": "planeswalker",
             "id": walker.permanent_id,
-            "name": walker.card.name,
+            "name": walker.effective_card.name,
         }
     return {
         "kind": "player",
@@ -424,7 +424,7 @@ def _build_divided_assignment_info(session: Session, viewer_seat: int | None) ->
             "damage": damage,
             "defending_seat": defending_index,
             "creatures": [
-                {"id": creature.permanent_id, "name": creature.card.name}
+                {"id": creature.permanent_id, "name": creature.effective_card.name}
                 for creature in game.controlled_by(defending_index)
                 if creature.is_creature
             ],

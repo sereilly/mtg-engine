@@ -746,7 +746,9 @@ class BattlefieldCanvas {
     for (const fx of this.fxAnims) {
       if (!fx.suppressKey) continue;
       const data = incoming.get(fx.suppressKey);
-      if (!data || data.card?.name !== fx.card?.name) {
+      // The stack card that became this permanent is matched by the card it
+      // is printed on: a copy entering is named what it copies.
+      if (!data || _physicalName(data.card) !== _physicalName(fx.card)) {
         this.suppressedKeys.delete(fx.suppressKey);
         fx.suppressKey = null;
       }
@@ -1057,9 +1059,9 @@ class BattlefieldCanvas {
         let id;
         if (auraCounts.has(key)) {
           // Cards with attachments get their own slot for the aura fan.
-          const n = (occ.get(`base:${card.name}`) || 0) + 1;
-          occ.set(`base:${card.name}`, n);
-          id = `base:${card.name}#${n}`;
+          const n = (occ.get(`base:${_pileIdentity(card)}`) || 0) + 1;
+          occ.set(`base:${_pileIdentity(card)}`, n);
+          id = `base:${_pileIdentity(card)}#${n}`;
         } else if (card.face_down === true) {
           // Every face-down permanent is a slot of its own (CR 708): they all
           // share one name, so a name pile would stack a face-down Silent
@@ -1067,7 +1069,7 @@ class BattlefieldCanvas {
           // board, and leave a target pickable only as "the top one" on both.
           id = `facedown:${Number.isInteger(card.id) ? card.id : key}`;
         } else {
-          id = `pile:${card.name}${card.is_token ? "|token" : ""}`;
+          id = `pile:${_pileIdentity(card)}${card.is_token ? "|token" : ""}`;
         }
         let g = groups.get(id);
         if (!g) {
@@ -1876,7 +1878,7 @@ class BattlefieldCanvas {
 
     if (isPermanentSpell) {
       const landed = (brandNew || []).find(
-        (bi) => !bi._fxClaimed && bi.seat === item.caster_index && bi.card?.name === card?.name
+        (bi) => !bi._fxClaimed && bi.seat === item.caster_index && _physicalName(bi.card) === _physicalName(card)
       );
       if (landed) {
         landed._fxClaimed = true;
@@ -5629,6 +5631,26 @@ function _beamParticles() {
 // (web/serialization._serialize_arriving).
 function _isEntering(card) {
   return !!card && card.entering === true;
+}
+
+// The card a permanent is printed on (`printed_name`), where its `name` is the
+// copied object's (CR 707.2: Sculpting Steel copying Iron Myr is named Iron
+// Myr). What moves between zones is the physical card — the spell on the stack
+// that becomes this permanent, the card a bounce puts in hand — so a match
+// across zones reads this. Anything else (a stack card, a hand card, a
+// permanent that copies nothing) has one name.
+function _physicalName(card) {
+  return (card && (card.printed_name || card.name)) || "";
+}
+
+// What a pile groups by: permanents drawn as ONE stack must look alike, and a
+// copy wears its own art (the server keeps the copier's) under the copied
+// name — so a Clone copying Grizzly Bears piles with neither a real Grizzly
+// Bears nor a Clone copying Serra Angel. A permanent that copies nothing keys
+// by its name alone, as every pile always has.
+function _pileIdentity(card) {
+  const printed = _physicalName(card);
+  return printed && printed !== card.name ? `${card.name}@${printed}` : card.name;
 }
 
 function _isFlyer(card) {

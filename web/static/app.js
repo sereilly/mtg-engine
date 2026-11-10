@@ -921,9 +921,12 @@ function buildCombatDamageStrikes(prev, firstStrikePass, regularPass, sentPastBl
     const deathtouch = cardHasKeyword(attackerCard, "deathtouch");
     const trample = cardHasKeyword(attackerCard, "trample");
 
-    const pastCount = past.get(attackerCard.name) || 0;
+    // The log line may name a copy by either of its names (the copied
+    // object's, CR 707.2, or the card it is printed on).
+    const pastName = past.get(attackerCard.name) ? attackerCard.name : physicalCardName(attackerCard);
+    const pastCount = past.get(pastName) || 0;
     const goesPast = attackerStrikes && (blockerIndices.length > 0 || attackerCard.blocked) && pastCount > 0;
-    if (goesPast) past.set(attackerCard.name, pastCount - 1);
+    if (goesPast) past.set(pastName, pastCount - 1);
 
     let powerLeft = attackerStrikes && !goesPast ? power : 0;
     const blockers = [];
@@ -21588,6 +21591,18 @@ function normalizeCardName(card) {
   return card.name || "";
 }
 
+// The card a permanent is printed on, where its `name` is the copied object's
+// (CR 707.2: Sculpting Steel copying Iron Myr is named Iron Myr, and
+// `printed_name` says Sculpting Steel). A card that moves between zones is the
+// physical card — the copy effect ends as it leaves (CR 400.7) — so a match
+// ACROSS zones (a bounce flying to hand, the multiset diffs below) reads this.
+// Everything a person reads keeps `name`. A hand or graveyard card, and a
+// permanent that copies nothing, have one name.
+function physicalCardName(card) {
+  if (!card || typeof card === "string") return normalizeCardName(card);
+  return card.printed_name || card.name || "";
+}
+
 function normalizeImageUri(card) {
   if (!card || typeof card === "string") return null;
   return card.image_uri || null;
@@ -26374,12 +26389,12 @@ function addedHandIndices(prevHand, nextHand) {
 function removedZoneEntries(before, after) {
   const afterCounts = new Map();
   for (const c of after || []) {
-    const k = normalizeCardName(c);
+    const k = physicalCardName(c);
     afterCounts.set(k, (afterCounts.get(k) || 0) + 1);
   }
   const out = [];
   (before || []).forEach((card, index) => {
-    const k = normalizeCardName(card);
+    const k = physicalCardName(card);
     const n = afterCounts.get(k) || 0;
     if (n > 0) afterCounts.set(k, n - 1);
     else out.push({ index, card });
@@ -26454,8 +26469,8 @@ function collectHandArrivalFlights(prev, next, viewerSeat) {
         // Prefer this seat's own zones, then anyone else's: a card returns to
         // its OWNER's hand, so an opponent's board can be where it comes from.
         source =
-          takeRemoval((r) => r.seat === s && normalizeCardName(r.card) === name) ||
-          takeRemoval((r) => normalizeCardName(r.card) === name);
+          takeRemoval((r) => r.seat === s && physicalCardName(r.card) === name) ||
+          takeRemoval((r) => physicalCardName(r.card) === name);
         if (!source && draws > 0) {
           draws -= 1;
           source = { seat: s, zone: "library", index: null, card: null };
