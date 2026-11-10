@@ -11,7 +11,9 @@ Four tables, by the word a condition opens with: "whenever"
 the beginning of", and the trailing ", if ..." clauses an effect may carry
 (:func:`_extract_if_condition`). CR 603.1 makes "when" and "whenever" one kind
 of ability, so a "when" line the "when" table misses is asked of the
-"whenever" table with the word swapped (:func:`_parse_trigger_condition`).
+"whenever" table with the word swapped, and a "whenever" line about the
+source's own event the "whenever" table misses of the "when" table
+(:func:`_parse_trigger_condition`).
 
 A named group is **delimited** by its pattern and **read** elsewhere:
 :func:`_resolve_subject_groups` hands a ``<name>_subject`` to the noun parser
@@ -631,6 +633,23 @@ def _match_trigger_patterns(
     return None
 
 
+def _a_row_matches(
+    text: str, patterns: tuple[tuple[str, re.Pattern[str]], ...]
+) -> bool:
+    """Whether any row of *patterns* matches *text*, whatever its subject
+    groups say.
+
+    The gate on the "when"/"whenever" retry in :func:`_parse_trigger_condition`.
+    :func:`_match_trigger_patterns` answers None both when no row matched and
+    when one matched a phrase it cannot test, and the second is a *refusal*:
+    the row exists so that the condition is not read by a wider pattern
+    instead. Asked of the other table, such a line could find exactly that
+    wider row — the retry is for an event this table does not name, never for
+    one it names and refuses.
+    """
+    return any(pattern.match(text) for _, pattern in patterns)
+
+
 def _resolve_subject_groups(payload: dict) -> dict | None:
     """Turn every delimited group in *payload* into the value the dispatcher
     reads, or return None if one of them says something it cannot test.
@@ -757,6 +776,28 @@ def _parse_trigger_condition(normalized_line: str) -> tuple[TriggerCondition | N
         if cond:
             remainder = normalized_line[len(cond.raw_text):].lstrip(" ,")
             return cond, remainder
+        # The retry below, the other way round: "**Whenever** this creature
+        # dies, …" is the "when" table's `dies` printed with the other word,
+        # and was refused here while its grammar half read it. Asked only
+        # when no "whenever" row *matched* — see `_a_row_matches` — and only
+        # of the source's own events ("whenever this …", which is also what
+        # a card naming itself collapses to). Those are the rows the "when"
+        # table holds that this one does not: an object enters, dies or
+        # leaves once, so the one-shot word is how they are printed. The
+        # same table's other rows end in a bare `.+` for a short self-name
+        # ("when barrin enters"), which on an arbitrary "whenever" line
+        # would read past its comma into the effect; a condition that spans
+        # the comma is not this one. The grammar's twin is
+        # `grammar/triggers._parse_trigger_event`'s "whenever" fallback.
+        if (
+            normalized_line.startswith("whenever this ")
+            and not _a_row_matches(normalized_line, _COMPILED_WHENEVER_PATTERNS)
+        ):
+            as_when = "when " + normalized_line[len("whenever "):]
+            cond = _match_trigger_patterns(as_when, _COMPILED_WHEN_PATTERNS, "whenever")
+            if cond and "," not in cond.raw_text:
+                remainder = as_when[len(cond.raw_text):].lstrip(" ,")
+                return cond, remainder
 
     if normalized_line.startswith("when "):
         cond = _match_trigger_patterns(normalized_line, _COMPILED_WHEN_PATTERNS, "when")
@@ -772,14 +813,17 @@ def _parse_trigger_condition(normalized_line: str) -> tuple[TriggerCondition | N
         # event nobody had copied refusing its "when" printing while the engine
         # fired it happily for "whenever". The remainder is sliced off the
         # rewritten line because that is the string the pattern matched; the
-        # condition still reports the word the card printed.
-        as_whenever = "whenever " + normalized_line[len("when "):]
-        cond = _match_trigger_patterns(
-            as_whenever, _COMPILED_WHENEVER_PATTERNS, "when"
-        )
-        if cond:
-            remainder = as_whenever[len(cond.raw_text):].lstrip(" ,")
-            return cond, remainder
+        # condition still reports the word the card printed. The "whenever"
+        # branch above asks the same question of this table, under the same
+        # gate: only when no row here matched at all.
+        if not _a_row_matches(normalized_line, _COMPILED_WHEN_PATTERNS):
+            as_whenever = "whenever " + normalized_line[len("when "):]
+            cond = _match_trigger_patterns(
+                as_whenever, _COMPILED_WHENEVER_PATTERNS, "when"
+            )
+            if cond:
+                remainder = as_whenever[len(cond.raw_text):].lstrip(" ,")
+                return cond, remainder
 
     if normalized_line.startswith("at "):
         cond = _match_trigger_patterns(normalized_line, _COMPILED_AT_PATTERNS, "at")
