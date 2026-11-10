@@ -1188,6 +1188,42 @@ def host_effect_by_the_moment(instruction: OracleInstruction | None) -> bool:
     return len({_effect_side(step) for step in steps} - {None}) > 1
 
 
+#: Steps of an attachment's ability that take its host away from the host's
+#: controller: "When enchanted land becomes tapped, destroy it" (Kudzu,
+#: Blight), "sacrifice that creature" (Lingering Death), "that spell or
+#: ability's controller gains control of that creature" (Fractured Loyalty).
+HOST_LOSING_KINDS = frozenset({
+    "destroy_attached_permanent",
+    "sacrifice_attached_permanent",
+    "give_control_of_attached_to_player",
+})
+
+
+def host_trigger_side(instruction: OracleInstruction | None) -> str | None:
+    """Whose permanent a **triggered** ability's host should be — "you",
+    "opponent", or None — read off the steps that land on the permanent its
+    source is attached to (:data:`HOST_KINDS`, and :data:`HOST_LOSING_KINDS`
+    as the denial they are), wrappers and modes opened, the other steps of
+    the ability (Kudzu's "That land's controller may attach this Aura to a
+    land of their choice") left out; the denial wins where steps differ.
+
+    :func:`host_effect_side` asks it of an activated ability, whose every
+    step must land on the host because the Aura's controller pays for it. A
+    trigger is paid for by nobody: its host steps are what the Aura does to
+    whatever it enchants, which is the question an Aura's cast-target chooser
+    asks (``ai_targets._aura_harms_its_host``)."""
+    if instruction is None:
+        return None
+    sides = {
+        "opponent" if step.kind in HOST_LOSING_KINDS else _effect_side(step)
+        for step in _side_steps(instruction)
+        if step.kind in HOST_LOSING_KINDS or _acts_on_the_host(step)
+    } - {None}
+    if "opponent" in sides:
+        return "opponent"
+    return "you" if "you" in sides else None
+
+
 #: The step that taps **or** untaps its target, which way being the state the
 #: target is in (Twiddle's toggle).
 _TOGGLE_KINDS = frozenset({"tap_or_untap_target"})
@@ -1300,10 +1336,12 @@ def untap_target_order(permanents: list) -> list:
 
 
 __all__ = [
+    "HOST_LOSING_KINDS",
     "UNTAP_TARGET_KINDS",
     "ability_target_side",
     "cast_helps_the_player_it_names",
     "denies_its_target",
+    "host_trigger_side",
     "named_counter_marks_for_harm",
     "instruction_target_side",
     "spell_denies_its_own_target",

@@ -36,6 +36,7 @@ from .ai_target_sides import (
     best_counted_target_seat,
     entry_trigger_target_side,
     host_effect_side,
+    host_trigger_side,
     spell_denies_its_own_target,
     spell_target_side,
 )
@@ -276,6 +277,31 @@ def _aura_harms_its_host(card: CardDefinition) -> bool:
         _HARMFUL_AURA_MARKER_WORDS.search(text) is not None
         or _HARMFUL_AURA_PATTERN.search(text) is not None
         or _host_abilities_harm_it(card)
+        or _host_triggers_harm_it(card, text)
+    )
+
+
+#: An Aura's printed gift to its host — "Enchanted creature gets +3/+3"
+#: (Spinal Graft, Unstable Mutation), "…has first strike and trample"
+#: (Aggression): the boon a host-harming trigger beside it is the price of,
+#: so such an Aura stays on its controller's side.
+_HOST_GIFT = re.compile(r"\benchanted [a-z]+ (?:gets \+|has |gains )")
+
+
+def _host_triggers_harm_it(card: CardDefinition, text: str) -> bool:
+    """Whether *card*'s triggered abilities work against its host
+    (``ai_target_sides.host_trigger_side``: "When enchanted land becomes
+    tapped, destroy it", Kudzu and Blight; "Whenever enchanted creature
+    becomes tapped, put a -0/-2 counter on it", Spirit Shackle) while its
+    text gives the host nothing (:data:`_HOST_GIFT`). No marker above reads
+    a destruction, so the AI cast Kudzu on its own Forest — and destroyed the
+    land the first time it tapped it for mana (kg5). Read off the compiled
+    program, so it names no card."""
+    if _HOST_GIFT.search(text):
+        return False
+    return any(
+        host_trigger_side(trigger.instruction) == "opponent"
+        for trigger in compile_card_oracle(card).triggered_abilities
     )
 
 
