@@ -41,7 +41,8 @@ count** in `SimulationReport` (`interaction_count`, `lands_played`,
 `casts_before_blocks`, `activations_at_instant_speed`,
 `activations_from_graveyard`, `refused_casts`, `refused_attacks`,
 `rehearsals_raised`, `special_actions_taken`, `refused_special_actions`,
-`cards_from_outside_game`, `face_down_casts`, `mulligans_taken`, the combat
+`cards_from_outside_game`, `face_down_casts`, `mulligans_taken`,
+`controlled_turns` (a seat's turn another seat decided, CR 723), the combat
 counts). A run that
 cast nothing exits 1. A new piece of the turn arrives with its count. CR 116
 special actions are weighed in `engine/ai_special_actions.py`, before the
@@ -145,8 +146,9 @@ first combat.
   never the log or a process-wide counter, and a seeded run in one process
   plays as in a fresh one (`tests/ai/test_kg4_determinism_rehearsal_seed.py`,
   `test_kg4_determinism_process_state.py`). An opponent's mode choice (CR
-  700.2e) and a copy offer's reply are the prompts rehearsed inside a
-  rehearsal, one level down (`ai_prompt_picks._one_level_deeper`), so a
+  700.2e), a copy offer's reply and a copy of an exiled card cast during a
+  resolution (Isochron Scepter, `ai_policy.choose_copy_cast`) are the prompts
+  rehearsed inside a rehearsal, one level down (`ai_prompt_picks._one_level_deeper`), so a
   caster's rehearsal prices the answer it will get.
 - **A copy sees what its seat sees** (`ai_scratch_copy.conceal_from`, CR
   400.2): libraries reshuffled and other hands redealt before anything is

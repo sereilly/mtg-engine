@@ -154,8 +154,11 @@ and you can open this file directly whenever its subject is yours.
   (`aura_attachment.py`). The templates read "enchanted" and "equipped"
   alike (CR 301.5f).
 - `engine/equipment.py` — Equipment (CR 301.5), equip as a rewrite, attach
-  (CR 701.3); `equip_refusal` is the one legality predicate, also asked by the
-  CR 704.5n sweep. An Equipment is supported only if its equip ability compiles
+  (CR 701.3); `equip_refusal` is the one legality predicate for moving an
+  Equipment, also asked by the CR 704.5n sweep and by the AI's equip planner,
+  and the activation's target picker asks `equip_target_refusal` (an
+  Equipment that is a creature may activate equip, which then does nothing,
+  CR 301.5c). An Equipment is supported only if its equip ability compiles
   and every effect line is claimed.
 - Text-keyed derivation tables (parameters are payload, and the support gate
   reads the same table the dispatch does): `combat_restrictions.py` (CR 506; its
