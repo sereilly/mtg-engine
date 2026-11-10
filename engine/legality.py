@@ -705,10 +705,20 @@ def _inside_an_offer(instructions, wanted) -> bool:
     A slot that *does* carry a quantifier is never asked: "You may tap or untap
     **target** creature" (Twiddle) is an offer about a target CR 601.2c has
     already chosen.
+
+    **Only the caster's offer.** "Target player discards two cards unless
+    **they** discard an artifact card" (Wrench Mind) lowers to a ``may`` whose
+    actor is that player, with the artifact discard — no quantifier of its
+    own — on the taken branch: an offer made *to the target*, which the
+    caster announced whatever it answers. Read as an offer, the spell owed no
+    target, so its bare cast named nobody and resolved on the default seat
+    even behind an Ivory Mask (Mirrodin's promotion rehearsal,
+    ``test_player_target_resolution_census``). Measured over both manifest
+    roles, Experimental Overload's "you may" is the only other slot read here.
     """
     for instruction in instructions:
         for step in _iter_instruction_tree(instruction):
-            if step.kind != "may":
+            if step.kind != "may" or step.payload.get("actor", "you") != "you":
                 continue
             offered = tuple(step.payload.get("action") or ())
             if any(
