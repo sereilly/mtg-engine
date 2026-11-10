@@ -449,7 +449,9 @@ class CombatDamageStepMixin:
                 # controller takes the same amount. Applied here rather than by
                 # routing through _deal_damage_to_player, which would run the event
                 # a second time.
-                self._apply_mirror_damage(defender, outcome.dealt, source_attacker)
+                self._apply_mirror_damage(
+                    defender, outcome.dealt, source_attacker, combat=True,
+                )
                 # "…deals damage to a player/opponent" (Hypnotic Specter), CR
                 # 903.10a's commander tally, the batched "one or more … deal
                 # combat damage to a player" and the delayed "whenever <it>

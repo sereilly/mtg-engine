@@ -459,7 +459,9 @@ class TestEyeForAnEye:
         resolve_stack(game)
         game._set_phase_and_step("combat", "combat_damage")
         game.resolve_combat_damage(0)
-        assert p2.mirror_damage_sources == []
+        from engine.next_damage import mirrors_on
+
+        assert mirrors_on(p2) == []
         game._deal_damage_to_player(p2, 2, source=attacker)
         assert p2.life == 15
         assert p1.life == 17, "no second mirror"

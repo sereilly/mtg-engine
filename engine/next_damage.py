@@ -61,6 +61,7 @@ has to fire.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 #: "…the next time that source would deal damage this turn, it **deals double
@@ -244,3 +245,117 @@ def spend(source: Any, key: str) -> None:
     else:
         metadata.pop(key, None)
         metadata.pop(names_key(key), None)
+
+
+# ---------------------------------------------------------------------------
+# The rider a recipient names: Eye for an Eye
+# ---------------------------------------------------------------------------
+
+
+@dataclass(eq=False)
+class DamageMirror:
+    """"The next time a source of your choice would deal damage to you this
+    turn, instead that source deals that much damage to you and Eye for an Eye
+    deals that much damage to that source's controller." (Eye for an Eye.)
+
+    The riders above with the recipient named: what the chosen source deals
+    **to you** carries "and ~ deals that much damage to that source's
+    controller" — still dealt to you, by the original source, the second
+    damage dealt by the card (its ruling, 2009-02-01). "A source of your
+    choice" may be a spell, which no marker can sit on (the module docstring),
+    so this record hangs on the recipient it names and records its source —
+    the home a shield or a redirect has, for their reason. It replaces two
+    ``PlayerState`` fields named for the card (``mirror_damage_charges`` /
+    ``mirror_damage_sources``), which were spent one chunk at a time.
+
+    source      -- the chosen source, matched by identity
+                   (``damage_redirects.source_matches``); None for an
+                   announcement that named none (an AI or headless cast)
+    source_name -- the card that armed it, for the log
+    uses        -- 1: "the next time"
+    occasion    -- CR 615.8's instance (``shields.SharedNextTime``,
+                   ``by_source``): the use spent on a chunk of a simultaneous
+                   dealing opens it there, open for that source's other chunks
+                   to this recipient until the dealing finishes — one instance,
+                   everything the source deals in one dealing (the project
+                   owner's ruling, 2026-11-07); a sourceless record binds to the
+                   first source it is spent on
+    """
+
+    source: Any = None
+    source_name: str | None = None
+    uses: int = 1
+    occasion: Any = None
+
+    @property
+    def spent(self) -> bool:
+        """Used up — a record still open for the rest of the dealing it was
+        spent in is not, until that dealing finishes."""
+        if self.uses > 0:
+            return False
+        return self.occasion is None or self.occasion.closed
+
+    def open_for(self, dealing: Any, source: Any) -> bool:
+        """Whether a chunk from *source* in *dealing* is this record's. Pure."""
+        if self.uses > 0:
+            from .damage_redirects import source_matches
+
+            return source_matches(self.source, source)
+        return self.occasion is not None and self.occasion.open_at(dealing, source)
+
+    def spend(self, dealing: Any, source: Any) -> None:
+        """Charge the chunk against the record. The mutating half: the use,
+        and inside a dealing the instance it opens there (a later chunk of
+        that instance charges nothing)."""
+        if self.uses <= 0:
+            return
+        self.uses -= 1
+        from .shields import SharedNextTime
+
+        self.occasion = SharedNextTime(by_source=True)
+        self.occasion.use(dealing, source)
+
+
+#: Where the records hang off a recipient — an attribute, for the reason
+#: ``shields._SHIELDS_ATTR`` is one: a ``PlayerState`` carries it without
+#: learning what a mirror is.
+_MIRRORS_ATTR = "_damage_mirrors"
+
+
+def mirrors_on(recipient: Any) -> list[DamageMirror]:
+    """The mirror records *recipient* holds, created on first use."""
+    records = getattr(recipient, _MIRRORS_ATTR, None)
+    if records is None:
+        records = []
+        setattr(recipient, _MIRRORS_ATTR, records)
+    return records
+
+
+def add_mirror(recipient: Any, record: DamageMirror) -> DamageMirror:
+    mirrors_on(recipient).append(record)
+    return record
+
+
+def applicable_mirror(recipient: Any, source: Any, dealing: Any) -> DamageMirror | None:
+    """The record a chunk from *source* to *recipient* in *dealing* carries,
+    oldest first — one still open for its instance before a fresh one. Pure."""
+    live = [record for record in mirrors_on(recipient) if not record.spent]
+    for record in live:
+        if record.uses <= 0 and record.open_for(dealing, source):
+            return record
+    for record in live:
+        if record.open_for(dealing, source):
+            return record
+    return None
+
+
+def drop_spent_mirrors(recipient: Any) -> None:
+    """Forget the records that are used up."""
+    records = getattr(recipient, _MIRRORS_ATTR, None)
+    if records:
+        records[:] = [record for record in records if not record.spent]
+
+
+def clear_mirrors(recipient: Any) -> None:
+    """The cleanup step: "this turn" is over."""
+    mirrors_on(recipient).clear()

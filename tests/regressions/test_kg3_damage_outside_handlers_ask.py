@@ -295,8 +295,8 @@ def _martyrs(game):
 
 
 def _jade_monolith(game):
-    """``redirects._redirect_damage_to_player``: the creature's damage is
-    dealt to seat 0 instead."""
+    """``redirects._apply_recorded_redirect`` (Jade Monolith's record): the
+    creature's damage is dealt to seat 0 instead."""
     _put(game, 0, "Jade Monolith")
     bear = _put(game, 0, "Grizzly Bears")
     sorcerer = _put(game, 1, "Prodigal Sorcerer")

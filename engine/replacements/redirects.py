@@ -3,10 +3,9 @@
 ``engine/damage_redirects.py`` is what a redirect *is* — the recorded
 ``DamageRedirect`` a resolving effect arms — and this module registers what one
 does when damage would be dealt: the general recorded redirect (Shimian Night
-Stalker, Nova Pentacle), offered as a choice where the printed sentence says
-"you may"; Veteran Bodyguard's untapped protector and the source class it
-answers to; Jade Monolith's chosen source dealing its damage to a creature to
-the Monolith's controller instead; and Personal Incarnation's one point to its owner. The chosen-colour spell redirect's
+Stalker, Nova Pentacle, Jade Monolith), offered as a choice where the printed
+sentence says "you may"; Veteran Bodyguard's untapped protector and the source
+class it answers to; and Personal Incarnation's one point to its owner. The chosen-colour spell redirect's
 matcher is here too, for ``damage_redirects`` to read.
 
 Every redirect is ordered ahead of every prevention shield, for the reason
@@ -249,65 +248,6 @@ def _redirect_damage_to_bodyguard(game, payload: dict) -> ReplacementOutcome | N
         then=lambda _dealt: game.log.append(
             f"{bodyguard.card.name} takes {amount} damage instead of "
             f"{recipient.name} (redirect)"
-        ),
-    )
-    return ReplacementOutcome(replaced=True)
-
-
-def _jade_monolith_seat(game, payload: dict) -> int | None:
-    """The seat Jade Monolith's redirect would send this damage to, or None when
-    it does not apply — the chosen source has to match, and an unrecorded choice
-    matches anything (legacy / AI activations)."""
-    recipient = payload["recipient"]
-    if payload["amount"] <= 0:
-        return None
-    seat = recipient.metadata.get("redirect_damage_to_player")
-    if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
-        return None
-    chosen_source = recipient.metadata.get("redirect_damage_source")
-    if not game._damage_source_matches(chosen_source, payload.get("source")):
-        return None
-    return seat
-
-
-def _applies_jade_monolith(game, payload: dict) -> bool:
-    return _jade_monolith_seat(game, payload) is not None
-
-
-def _jade_monolith_sources(game, payload: dict) -> list:
-    """The card that armed the creature's redirect (Jade Monolith), by the
-    name its handler wrote beside the record (``redirect_damage_by``). Pure."""
-    named = payload["recipient"].metadata.get("redirect_damage_by")
-    return [named] if named else []
-
-
-@replacement_effect(
-    "damage_to_creature", REDIRECT_WHOLE_EVENT, applies=_applies_jade_monolith,
-    redirects=True, sources=_jade_monolith_sources,
-    label="That source deals the damage to the redirect's controller instead",
-)
-def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None:
-    """Jade Monolith: "The next time a source of your choice would deal damage
-    to target creature this turn, that source deals that damage to you
-    instead." Redirects the whole instance (combat damage included) — but only
-    when the damage comes from the chosen source."""
-    permanent = payload["recipient"]
-    amount = payload["amount"]
-    redirect_idx = _jade_monolith_seat(game, payload)
-    by = permanent.metadata.pop("redirect_damage_by", None)
-    permanent.metadata.pop("redirect_damage_to_player", None)
-    permanent.metadata.pop("redirect_damage_source", None)
-    # "…**that source** deals that damage to you instead": the damage keeps its
-    # source (CR 614.9 moves the recipient, nothing else), so a Circle of
-    # Protection naming its colour still applies and its lifelink still gains.
-    # It was handed over with no source at all.
-    taker = game.players[redirect_idx]
-    deal_redirected_damage(
-        game, taker, amount, source=payload.get("source"),
-        combat=bool(payload.get("combat")),
-        then=lambda _dealt: game.log.append(
-            f"Damage to {permanent.card.name} redirected to {taker.name}"
-            + (f" ({by})" if by else "")
         ),
     )
     return ReplacementOutcome(replaced=True)

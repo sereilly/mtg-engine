@@ -1495,14 +1495,16 @@ def test_eye_for_an_eye_mirrors_damage_to_source_controller(arn_by_name, all_car
     game = _mk_game(p1, p2)
     game.cast_from_hand(0, "Eye for an Eye", target_player_index=1)
     game.resolve_stack()
-    assert p1.mirror_damage_charges == 1
+    from engine.next_damage import mirrors_on
+
+    assert [record.source for record in mirrors_on(p1)] == [None]
 
     # Orcish Artillery: "{T}: deals 2 damage to any target and 3 damage to you."
     game.activate_permanent_ability(1, "Orcish Artillery", target_player_index=0)
 
     assert p1.life == 18            # the damage still happens
     assert p2.life == 20 - 3 - 2    # its own 3, plus the mirrored 2
-    assert p1.mirror_damage_charges == 0  # one-shot
+    assert mirrors_on(p1) == []  # one-shot
 
 
 def test_unstable_mutation_decays_the_enchanted_creature(arn_by_name, all_cards):

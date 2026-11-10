@@ -67,7 +67,7 @@ INSTANCED: dict[str, Instances] = {}
 # recipients and for the same reason: a shield spent on damage that then leaves
 # for someone else is a shield wasted on nothing. CR 616.1e permits either order;
 # this is the default a non-interactive seat takes.
-REDIRECT_WHOLE_EVENT = 1  # Jade Monolith, Veteran Bodyguard
+REDIRECT_WHOLE_EVENT = 1  # Veteran Bodyguard
 REDIRECT_ONE_POINT = 2  # Personal Incarnation
 SOURCE_TYPE_SHIELD = 3  # Desert Nomads / Camel
 # The general recorded redirect (engine/damage_redirects.py) — Shimian Night

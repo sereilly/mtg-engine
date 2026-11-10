@@ -208,18 +208,19 @@ class TestJadeMonolithSourceChoice:
             source_seat=1, source_permanent_index=0,
         )
         assert result.supported
-        assert bears.metadata.get("redirect_damage_to_player") == 0
-        assert bears.metadata.get("redirect_damage_source") is p2.battlefield[0]
+        from engine.damage_redirects import redirects_on
+
+        (record,) = redirects_on(bears)
+        assert record.new_recipient is p1
+        assert record.source is p2.battlefield[0]
 
         # A Lightning Bolt (a different source) is NOT redirected: it hits the Bears.
         game.cast_from_hand(0, "Lightning Bolt", target_player_index=0, target_permanent_index=1)
         assert p1.life == 20  # nothing redirected
         assert bears not in p1.battlefield  # 3 damage killed the 2/2
-        # The shield is still waiting for its chosen source.
-        assert any(
-            perm.metadata.get("redirect_damage_source") is not None
-            for perm in p1.battlefield
-        ) is False  # (the bears died; shield died with them)
+        # The record was still waiting for its chosen source when the Bears
+        # died, and went with them.
+        assert not any(redirects_on(perm) for perm in p1.battlefield)
 
     def test_chosen_spell_source_is_redirected(self, cards):
         game, p1, p2, bears = self._setup(cards)

@@ -261,8 +261,10 @@ class SimultaneousDamage:
     #: collecting, run after the collected chunks have been dealt.
     closers: list = field(default_factory=list)
     #: CR 615.8: one instance of damage from a source is everything it deals
-    #: in this dealing. Each source-keyed "next time" shield or redirect spent
-    #: on one of its chunks opened a ``shields.SharedNextTime`` here
+    #: in this dealing. Each source-keyed "next time" shield, redirect or
+    #: mirror (``next_damage.DamageMirror``) spent on one of its chunks opened
+    #: a ``shields.SharedNextTime`` here — and so did each recipient-keyed one
+    #: (Glarecaster), whose time is the dealing too
     #: (``SharedNextTime.use`` appends it), open for that source's other
     #: chunks and closed as the dealing finishes.
     occasions: list = field(default_factory=list)
@@ -583,8 +585,9 @@ def _close_occasions(game, dealing: SimultaneousDamage) -> None:
     for occasion in dealing.occasions:
         occasion.closed = True
     dealing.occasions = []
-    from . import damage_redirects, shields
+    from . import damage_redirects, next_damage, shields
 
     for holder in (*game.players, *game.all_permanents()):
         shields.drop_spent(holder)
         damage_redirects.drop_spent(holder)
+        next_damage.drop_spent_mirrors(holder)

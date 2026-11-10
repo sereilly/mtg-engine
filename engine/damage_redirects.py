@@ -9,10 +9,10 @@ would get every one of those numbers wrong in the same direction.
 
 This module is what a redirect **is**; ``engine/replacements/redirects.py`` registers what
 one **does** — the same split ``engine/shields.py`` and ``engine/prevention/``
-have, and for the same reason. Two card-specific redirects predate it (Jade
-Monolith's ``redirect_damage_to_player`` metadata pair and Personal
-Incarnation's charge counter), each a field named after the card that writes it;
-this is the general record a new redirection card arms instead of a new field.
+have, and for the same reason. One card-specific redirect predates it
+(Personal Incarnation's charge counter), a field named after the card that
+writes it; this is the general record a new redirection card arms instead of
+a new field (Jade Monolith's metadata pair moved onto it in kg5).
 
 A redirect is a small closed set of facts, none of them a card name:
 
