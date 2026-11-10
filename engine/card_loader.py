@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
@@ -12,6 +14,66 @@ REQUIRED_FIELDS = ("name", "mana_cost", "cmc", "type_line")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / "cards" / "manifest.json"
+
+#: Names a measured set this process reads as shipped — the promotion, in
+#: memory. ``MTG_PROMOTE=DST pytest <census files>`` runs the censuses over
+#: ``load_catalog()`` with Darksteel in the pool, at its printing-ordered place,
+#: without editing ``cards/manifest.json``: the rehearsal's catalog censuses
+#: (Mirrodin's first rehearsal: 11 of its 14 new reds) run inside the wave, by
+#: the group that widened the table, instead of at the promotion. It is never
+#: a gate: the shipped pool's guards (front-end safety, card format) fail on
+#: the set's unsupported cards, as they would on the real move. The
+#: integration scripts refuse to run under it (``scripts/integration/_env.sh``)
+#: except ``census_rehearsal.sh``, and ``check_all`` refuses too.
+PROMOTE_ENV = "MTG_PROMOTE"
+_promotion_announced = False
+
+
+def promoted_code() -> str | None:
+    """The set :data:`PROMOTE_ENV` reads as shipped in this process, or None."""
+    code = os.environ.get(PROMOTE_ENV, "").strip().upper()
+    return code or None
+
+
+def _manifest_roles(manifest_path: str | Path) -> tuple[list[dict], list[dict]]:
+    """The manifest's ``sets`` and ``measured`` lists, with the in-memory
+    promotion (:data:`PROMOTE_ENV`) applied — the one read of the file.
+
+    The promoted entry moves from ``measured`` into ``sets`` before the first
+    shipped set released after it (``scripts/integration/promote.py``'s
+    position), so ``original_printing`` is decided as the real promotion will
+    decide it. For the repo's manifest an unknown or already-shipped code
+    raises, naming what could be promoted; a test's own manifest that does not
+    measure the code is read as written.
+    """
+    global _promotion_announced
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    shipped = list(manifest["sets"])
+    measured = list(manifest.get("measured", ()))
+    code = promoted_code()
+    if code is None:
+        return shipped, measured
+    entry = next((e for e in measured if e["code"].upper() == code), None)
+    if entry is None:
+        if Path(manifest_path).resolve() != MANIFEST_PATH.resolve():
+            return shipped, measured
+        if any(e["code"].upper() == code for e in shipped):
+            raise ValueError(f"{PROMOTE_ENV}={code}: {code} already ships")
+        known = ", ".join(e["code"] for e in measured) or "nothing (measured is empty)"
+        raise ValueError(f"{PROMOTE_ENV}={code}: not a measured set; the manifest measures {known}")
+    measured.remove(entry)
+    index = next(
+        (i for i, e in enumerate(shipped) if e["released"] > entry["released"]),
+        len(shipped),
+    )
+    shipped.insert(index, entry)
+    if not _promotion_announced:
+        _promotion_announced = True
+        sys.stderr.write(
+            f"card_loader: {PROMOTE_ENV}={code} — the measured set is read as "
+            "shipped in this process (a rehearsal, never a gate)\n"
+        )
+    return shipped, measured
 
 
 def _to_tuple_list(value: object) -> tuple[str, ...]:
@@ -173,9 +235,10 @@ def manifest_sets(manifest_path: str | Path = MANIFEST_PATH) -> list[dict]:
     ``file``, so a caller that wants to *name* the set in output — a script
     reporting which pool it just covered — does not have to open the manifest
     a second time and risk disagreeing with this one about what ships.
+
+    Under :data:`PROMOTE_ENV` the promoted measured set is among them.
     """
-    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    return list(manifest["sets"])
+    return _manifest_roles(manifest_path)[0]
 
 
 def manifest_set(
@@ -255,9 +318,10 @@ def manifest_measured_sets(manifest_path: str | Path = MANIFEST_PATH) -> list[di
     moves up to ``sets`` when the support work is done. Without this split the
     only two options are shipping a set the app cannot play or not measuring it
     at all.
+
+    Under :data:`PROMOTE_ENV` the promoted set is not among them.
     """
-    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    return list(manifest.get("measured", ()))
+    return _manifest_roles(manifest_path)[1]
 
 
 def register_measured_set(

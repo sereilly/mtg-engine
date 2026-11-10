@@ -23,7 +23,19 @@ ran in 1,412 s and the quick pass in under 180. So:
 - **A file or test named on the command line runs whole** — `pytest
   tests/ai/test_ai_simulator.py` runs its full-marked tests too — because
   naming a file is asking about it. A folder, or no argument, is the quick
-  pass. An IDE running one test passes its node id, so it runs.
+  pass. An IDE running one test passes its node id, so it runs. **`--quick`**
+  keeps the quick pass in the files named too: an agent's list of 70–170
+  files, some holding hour-long AI censuses, is a question about the files'
+  quick tests (`scripts/tests_for_diff.py` passes it).
+- **`-m full` is a full-pass selection**: a marker expression that picks the
+  `full` tests (and not the unmarked ones) turns the full pass on, so `pytest
+  -m full tests/ai` runs CI's full-only shard instead of collecting nothing.
+- **Every run records its tests' times** in ``.test_timings.json`` at the
+  root of the tree (:data:`TIMINGS_FILE`, gitignored), merged by node id, so
+  a picker can say what a list of files costs before it starts
+  (``scripts/tests_for_diff.py``).
+- **``MTG_PROMOTE``** (``engine.card_loader.PROMOTE_ENV``) is named in the
+  run's header: a run with a measured set read as shipped is a rehearsal.
 - **A large run compiles the pool once per engine, not once per process.**
   Before collection (which compiles the pool, below) each process fills its
   compile cache from the store ``engine/program_store.py`` writes to
@@ -40,6 +52,7 @@ The hooks are imported into ``tests/conftest.py``, which is what registers them.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -56,7 +69,15 @@ REPORT_THRESHOLD_SECONDS = 2 * FULL_THRESHOLD_SECONDS
 #: reading it imports no engine code (`tests/engine/test_program_store.py`).
 NO_STORE_ENV = "MTG_NO_PROGRAM_STORE"
 
+#: Named by ``engine.card_loader.PROMOTE_ENV``; spelled here so the header
+#: imports no engine code.
+PROMOTE_ENV = "MTG_PROMOTE"
+#: Each test's seconds (setup + call + teardown) by node id, merged run by run.
+TIMINGS_FILE = ".test_timings.json"
+
 _slow_unmarked: list[tuple[float, str]] = []
+#: node id -> [seconds, marked full], this run's, on the controller.
+_timings: dict[str, list] = {}
 
 
 def pytest_addoption(parser):
@@ -66,17 +87,59 @@ def pytest_addoption(parser):
              "whole-pool censuses) and every sampled census whole — the "
              "promotion gate's run (tests/passes.py)",
     )
+    parser.addoption(
+        "--quick", action="store_true", default=False,
+        help="the quick pass even in the files named on the command line, "
+             "which otherwise run whole (tests/passes.py)",
+    )
 
 
 def is_full_pass(config) -> bool:
     return bool(config.getoption("full", default=False))
 
 
+def selects_full_tests(markexpr: str) -> bool:
+    """Whether a ``-m`` expression picks the ``full`` tests and not the
+    unmarked ones — ``full``, ``full and not ui`` — rather than merely
+    tolerating them (``not cr`` picks an unmarked test too)."""
+    if not markexpr or FULL_MARK not in markexpr:
+        return False
+    from _pytest.mark.expression import Expression
+
+    try:
+        expression = Expression.compile(markexpr)
+    except Exception:  # pytest reports a malformed expression itself
+        return False
+    return bool(expression.evaluate(lambda name: name == FULL_MARK)) and not (
+        expression.evaluate(lambda name: False)
+    )
+
+
 def pytest_configure(config):
+    option = getattr(config, "option", None)
+    if (
+        option is not None
+        and not is_full_pass(config)
+        and selects_full_tests(getattr(option, "markexpr", "") or "")
+    ):
+        # `-m full` without `--full` used to deselect every full test before
+        # the expression ran, and collected nothing (exit 5).
+        option.full = True
     if is_full_pass(config):
         # Before xdist starts its workers, so they inherit it.
         os.environ[FULL_CENSUS_ENV] = "1"
     _note_the_engine(config)
+
+
+def pytest_report_header(config):
+    code = os.environ.get(PROMOTE_ENV, "").strip()
+    if code:
+        return [
+            f"{PROMOTE_ENV}={code}: the measured set is read as shipped — a "
+            "rehearsal, never a gate (the shipped-pool guards fail on its "
+            "unsupported cards)"
+        ]
+    return []
 
 
 def _named_files(config) -> set[Path]:
@@ -97,7 +160,7 @@ def pytest_collection_modifyitems(config, items):
     # a full-pass test it cannot show is one nobody can click to run.
     if is_full_pass(config) or config.option.collectonly:
         return
-    named = _named_files(config)
+    named = set() if config.getoption("quick", default=False) else _named_files(config)
     left = [
         item for item in items
         if item.get_closest_marker(FULL_MARK) is not None
@@ -248,10 +311,46 @@ def rewarm_compile_cache() -> None:
 def pytest_runtest_logreport(report):
     # On the xdist controller every worker's reports arrive here, durations
     # and keywords included.
-    if report.when != "call" or FULL_MARK in report.keywords:
+    full = FULL_MARK in report.keywords
+    entry = _timings.setdefault(report.nodeid, [0.0, full])
+    entry[0] += report.duration
+    if report.when != "call" or full:
         return
     if report.duration >= REPORT_THRESHOLD_SECONDS:
         _slow_unmarked.append((report.duration, report.nodeid))
+
+
+def timings_path(root: Path) -> Path:
+    return Path(root) / TIMINGS_FILE
+
+
+def read_timings(root: Path) -> dict[str, list]:
+    """The recorded times under *root*: node id -> [seconds, marked full]."""
+    try:
+        return json.loads(timings_path(root).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Merge this run's times into :data:`TIMINGS_FILE`, on the controller.
+
+    By node id, so a run of three files refreshes three files' rows and
+    keeps the rest: the last full pass's times stand until something re-runs
+    them. Written atomically — two runs in one tree finish in either order."""
+    config = session.config
+    if hasattr(config, "workerinput") or config.option.collectonly or not _timings:
+        return
+    root = Path(str(config.rootpath))
+    merged = read_timings(root)
+    merged.update({nodeid: [round(s, 3), full] for nodeid, (s, full) in _timings.items()})
+    target = timings_path(root)
+    scratch = target.with_name(f"{target.name}.{os.getpid()}.tmp")
+    try:
+        scratch.write_text(json.dumps(merged, sort_keys=True), encoding="utf-8")
+        os.replace(scratch, target)
+    except OSError:
+        scratch.unlink(missing_ok=True)
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):

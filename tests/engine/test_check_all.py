@@ -177,3 +177,26 @@ def test_the_headroom_report_looks_where_the_guards_look():
     assert roots["per-set test files"] == ("tests/sets", "test_*.py")
     for _label, _cap, root, glob in check_all.SIZE_GUARDS:
         assert list((REPO / root).glob(glob)), f"{root}/{glob} matches nothing"
+
+
+def test_workers_reach_every_check_that_takes_them_and_no_other():
+    """An agent under a memory budget ran parse_coverage's step by hand
+    because check_all could not pass `--workers` on."""
+    for script in check_all.TAKES_WORKERS:
+        assert '"--workers"' in (REPO / script).read_text(encoding="utf-8"), script
+    assert any(cmd[0] in check_all.TAKES_WORKERS for _, cmd in check_all.COMMANDS)
+    for _, cmd in check_all.COMMANDS:
+        widened = check_all._with_workers(cmd, 2)
+        if cmd[0] in check_all.TAKES_WORKERS:
+            assert widened == [*cmd, "--workers", "2"]
+        else:
+            assert widened == cmd
+        assert check_all._with_workers(cmd, None) == cmd
+
+
+def test_check_all_refuses_the_in_memory_promotion(monkeypatch, capsys):
+    """A check under MTG_PROMOTE reads a pool that is not the tree's."""
+    monkeypatch.setenv("MTG_PROMOTE", "DST")
+    monkeypatch.setattr(check_all, "_run", lambda *a: (_ for _ in ()).throw(AssertionError("ran a check")))
+    assert check_all.main([]) == 2
+    assert "census_rehearsal.sh" in capsys.readouterr().out

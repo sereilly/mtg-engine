@@ -7,6 +7,9 @@
 #   - $SCRATCH/yield.txt     — the ingest's red tests, one path per line;
 #   - $SCRATCH/surprises.txt — every file a full gate turned red that this
 #                              list did not hold (it grows; that is the point);
+#   - every census over a registry the merged branches added members to or
+#     removed members from (scripts/tests_for_diff.py --censuses, against
+#     $MEETING_BASE) — the class Mirrodin's wave-close gate found eight of;
 #   - the structural guards below.
 # Never a hand-picked list per merge. A path that does not exist is refused,
 # because xdist reports a typo as "no tests ran" and exits 0.
@@ -39,12 +42,17 @@ read_list() { [ -f "$1" ] && tr -d '\r' < "$1"; }
 BASE="${MEETING_BASE:-main}"
 CHANGED=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- tests/; git diff --cached --name-only --diff-filter=AM -- tests/)
 SETS=$(ls tests/sets/test_"${ROUND}"_*.py 2>/dev/null)
-FILES=$(printf "%s\n" $CHANGED $SETS $(read_list "$SCRATCH/yield.txt") $(read_list "$SCRATCH/surprises.txt") $GUARDS | grep '\.py$' | sort -u)
+CENSUSES=""
+if [ -f scripts/tests_for_diff.py ]; then
+  CENSUSES=$("$PY" scripts/tests_for_diff.py --censuses --list --base "$BASE") || { echo "tests_for_diff.py failed"; exit 3; }
+  echo "$CENSUSES" > "$GATE/meeting_censuses_$tag.txt"
+fi
+FILES=$(printf "%s\n" $CHANGED $SETS $CENSUSES $(read_list "$SCRATCH/yield.txt") $(read_list "$SCRATCH/surprises.txt") $GUARDS | grep '\.py$' | sort -u)
 missing=0
 for f in $FILES; do [ -f "$f" ] || { echo "NO SUCH FILE: $f"; missing=1; }; done
 [ "$missing" -eq 1 ] && exit 3
 echo "$FILES" > "$GATE/meeting_files_$tag.txt"
-echo "meeting-point files: $(echo "$FILES" | wc -l) (changed since $BASE)"
+echo "meeting-point files: $(echo "$FILES" | wc -l) (changed since $BASE; $(echo "$CENSUSES" | grep -c .) registry censuses)"
 "$PY" -m pytest -n "$workers" --dist worksteal -q -p no:cacheprovider $FILES > "$GATE/meeting_$tag.log" 2>&1
 code=$?
 echo "exit=$code" >> "$GATE/meeting_$tag.log"

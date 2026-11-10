@@ -22,7 +22,11 @@ Usage::
 
 The run list is fixed and spans the pool by era, so the two readings are of
 the same games; there is no ``--set`` for the reason `oracle_diff` has none.
-A compare that differs prints the first lines where each moved run diverges.
+A compare that differs prints the first lines where each moved run diverges,
+how many places it diverged in, and writes each moved run's whole diff and its
+new log under ``<snapshot>/compare/`` (``<run>.diff``, ``<run>.after.log``):
+the first hunk is rarely the decision that moved, and reading the rest used to
+mean re-running the game.
 **A diff is not always a defect** — a change that is meant to alter play
 (a new AI weight, a rules fix) moves the runs it reaches, and the reading is
 then "these games, at this line", which is what the reviewer needs. For a
@@ -121,8 +125,13 @@ def _read(path: Path) -> list[str]:
     return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
 
 
+#: How many lines of each moved run's diff the compare prints; the rest is in
+#: ``<snapshot>/compare/<run>.diff``.
+PRINTED_LINES = 40
+
+
 def compare_dirs(old: Path, new: Path) -> list[tuple[str, list[str]]]:
-    """Each run whose summary or log moved, with the first lines of its diff."""
+    """Each run whose summary or log moved, with the whole of its diff."""
     moved = []
     for code, seed, games in RUNS:
         name = run_name(code, seed, games)
@@ -139,8 +148,22 @@ def compare_dirs(old: Path, new: Path) -> list[tuple[str, list[str]]]:
                     )
                 )
         if diff:
-            moved.append((name, diff[:40]))
+            moved.append((name, diff))
     return moved
+
+
+def keep_compare(snapshot: Path, scratch: Path, moved: list[tuple[str, list[str]]]) -> Path:
+    """Write each moved run's whole diff and its new log beside the snapshot."""
+    out = snapshot / "compare"
+    out.mkdir(parents=True, exist_ok=True)
+    for stale in out.iterdir():
+        stale.unlink()
+    for name, diff in moved:
+        (out / f"{name}.diff").write_text("\n".join(diff) + "\n", encoding="utf-8")
+        after = scratch / f"{name}.log"
+        if after.exists():
+            (out / f"{name}.after.log").write_text(after.read_text(encoding="utf-8"), encoding="utf-8")
+    return out
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -173,10 +196,14 @@ def main(argv: list[str] | None = None) -> int:
     with tempfile.TemporaryDirectory(prefix="sim_fingerprint_") as scratch:
         run_all(Path(scratch), args.workers)
         moved = compare_dirs(args.snapshot, Path(scratch))
+        kept = keep_compare(args.snapshot, Path(scratch), moved)
     print(f"compare: {len(moved)} moved of {len(RUNS)} seeded runs")
     for name, diff in moved:
-        print(f"\n== {name}")
-        print("\n".join(diff))
+        hunks = sum(line.startswith("@@") for line in diff)
+        print(f"\n== {name}: diverges in {hunks} place(s); whole diff {kept / (name + '.diff')}")
+        print("\n".join(diff[:PRINTED_LINES]))
+        if len(diff) > PRINTED_LINES:
+            print(f"... {len(diff) - PRINTED_LINES} more line(s) in the .diff")
     return 1 if moved else 0
 
 

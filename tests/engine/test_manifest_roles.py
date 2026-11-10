@@ -226,3 +226,54 @@ def test_registration_requires_the_entry_shape(manifest_copy):
 
     with pytest.raises(ValueError, match="missing"):
         register_measured_set({"code": "ZZZ"}, manifest_path=manifest_copy)
+
+
+# ---------------------------------------------------------------------------
+# MTG_PROMOTE — the promotion, in memory
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def promoting(monkeypatch):
+    from engine import card_loader
+
+    # setenv first, so monkeypatch restores the variable's absence.
+    monkeypatch.setenv(card_loader.PROMOTE_ENV, "")
+    monkeypatch.setattr(card_loader, "_promotion_announced", True)
+    return lambda code: monkeypatch.setenv(card_loader.PROMOTE_ENV, code)
+
+
+def test_a_promoted_set_is_read_as_shipped_at_its_printing_place(manifest_copy, promoting):
+    """The rehearsal's catalog censuses run inside the wave: the measured set
+    joins `sets` where the real promotion will put it (before the first set
+    released after it), so `original_printing` is decided as it will be."""
+    from engine.card_loader import register_measured_set
+
+    register_measured_set(_entry("ZZZ", "1996-01-01"), manifest_path=manifest_copy)
+    before = [e["code"] for e in manifest_sets(manifest_copy)]
+    promoting("zzz")
+    after = [e["code"] for e in manifest_sets(manifest_copy)]
+    later = next(e["code"] for e in manifest_sets(manifest_copy) if e["released"] > "1996-01-01")
+    assert after.index("ZZZ") == after.index(later) - 1
+    assert [c for c in after if c != "ZZZ"] == before
+    assert "ZZZ" not in manifest_measured_codes(manifest_copy)
+    assert manifest_copy.parent / "ZZZ_cards.json" in manifest_set_paths(manifest_copy)
+
+
+def test_a_promotion_of_an_unknown_set_names_what_could_be_promoted(promoting):
+    """A typo resolving to the unpromoted pool would rehearse nothing, green."""
+    promoting("NOPE")
+    with pytest.raises(ValueError, match="not a measured set"):
+        manifest_sets()
+
+
+def test_a_promotion_of_a_shipped_set_is_refused(promoting):
+    promoting(manifest_set_codes()[0])
+    with pytest.raises(ValueError, match="already ships"):
+        manifest_sets()
+
+
+def test_a_tests_own_manifest_that_does_not_measure_the_code_is_read_as_written(manifest_copy, promoting):
+    before = manifest_sets(manifest_copy)
+    promoting("ZZZ")
+    assert manifest_sets(manifest_copy) == before

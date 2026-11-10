@@ -20,11 +20,20 @@ is how many modules are inside the band, because a cap crossed at integration
 is the expensive kind — it fires on nobody's branch, with two groups' additions
 summed, and the integrator has to find the seam with none of the work in hand.
 Derived on every run, so it cannot go stale the way a written-down list would.
+
+``--workers N`` is handed to every check that takes it (parse_coverage, whose
+default is eight processes, ~1.4 GB together): an agent under a memory budget
+ran its six steps by hand because this could not pass it.
+
+It refuses to run under ``MTG_PROMOTE`` (``engine.card_loader.PROMOTE_ENV``):
+the in-memory promotion is a rehearsal, and a check run under it reads a pool
+that is not the tree's.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import time
@@ -51,6 +60,16 @@ FRESHNESS_COMMANDS: list[tuple[str, list[str]]] = [
     ("Set progress report", ["scripts/set_progress.py"]),
     ("Verification markdown", ["scripts/verification_markdown.py"]),
 ]
+
+
+#: The checks that take ``--workers``; ``main`` appends it when it is asked for.
+TAKES_WORKERS = frozenset({"scripts/parse_coverage.py"})
+
+
+def _with_workers(argv: list[str], workers: int | None) -> list[str]:
+    if workers is None or argv[0] not in TAKES_WORKERS:
+        return argv
+    return [*argv, "--workers", str(workers)]
 
 
 def _run(name: str, argv: list[str]) -> tuple[str, float, subprocess.CompletedProcess]:
@@ -129,18 +148,35 @@ def build_parser() -> argparse.ArgumentParser:
             "briefed knowing where the next integration-time split will land."
         ),
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=(
+            "Processes for the checks that take them (parse_coverage: default "
+            "8, ~1.4 GB together). Under a memory budget, pass the budget."
+        ),
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    promoted = os.environ.get("MTG_PROMOTE", "").strip()
+    if promoted:
+        print(
+            f"MTG_PROMOTE={promoted} is set: the checks would read {promoted} as "
+            "shipped, a pool that is not this tree's. Unset it; the rehearsal is "
+            "scripts/integration/census_rehearsal.sh."
+        )
+        return 2
 
     if args.caps:
         report_caps()
 
     rows: list[tuple[str, float, subprocess.CompletedProcess]] = []
     for name, cmd in COMMANDS:
-        rows.append(_run(name, cmd))
+        rows.append(_run(name, _with_workers(cmd, args.workers)))
     if args.freshness:
         for name, cmd in FRESHNESS_COMMANDS:
             rows.append(_run(name, cmd))

@@ -36,7 +36,9 @@ from tests.passes import (  # noqa: F401
     pytest_addoption,
     pytest_collection_finish,
     pytest_collection_modifyitems,
+    pytest_report_header,
     pytest_runtest_logreport,
+    pytest_sessionfinish,
     pytest_terminal_summary,
 )
 

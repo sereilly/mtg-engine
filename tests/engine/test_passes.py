@@ -273,3 +273,70 @@ def test_no_test_is_marked_slow():
         if re.search(r"\bpytest\.mark\.slow\b", source_text(path))
     ]
     assert not marked, f"{marked} use the retired `slow` mark: mark them `full`"
+
+
+def test_quick_keeps_the_quick_pass_in_the_files_named():
+    """`--quick`: a picker's list of files is a question about their quick
+    tests, not an hour of AI censuses inside them."""
+    config, _ = _config(args=(str(HERE.relative_to(REPO)),))
+    config.getoption = lambda name, default=None: name == "quick" or default
+    assert _run(config) == ["quick_here", "quick_there"]
+
+
+@pytest.mark.parametrize("expression, selects", [
+    ("full", True),
+    ("full and not ui", True),
+    ("not full", False),
+    ("not cr", False),          # picks an unmarked test too
+    ("full or not full", False),
+    ("cr", False),
+    ("", False),
+])
+def test_a_marker_expression_that_picks_the_full_tests_is_the_full_pass(expression, selects):
+    assert passes.selects_full_tests(expression) is selects
+
+
+def test_minus_m_full_turns_the_full_pass_on(monkeypatch):
+    """`pytest -m full` collected nothing (exit 5): the quick pass dropped the
+    full tests before the expression ran."""
+    monkeypatch.setenv(passes.FULL_CENSUS_ENV, "0")
+    monkeypatch.delenv(passes.FULL_CENSUS_ENV)
+    monkeypatch.setattr(passes, "_note_the_engine", lambda config: None)
+    option = SimpleNamespace(markexpr="full", full=False, collectonly=False)
+    config = SimpleNamespace(option=option, getoption=lambda name, default=None: getattr(option, name, default))
+    passes.pytest_configure(config)
+    assert option.full is True and passes.is_full_pass(config)
+    import os
+
+    assert os.environ.get(passes.FULL_CENSUS_ENV) == "1"
+
+
+def test_a_run_merges_its_times_by_node_id(tmp_path, monkeypatch):
+    """A run of a few files refreshes their rows and keeps the rest — the last
+    full pass's times stand until something re-runs them."""
+    passes.timings_path(tmp_path).write_text(
+        '{"a.py::kept": [9.0, true], "a.py::rerun": [1.0, false]}', encoding="utf-8"
+    )
+    monkeypatch.setattr(passes, "_timings", {})
+    for when, seconds in (("setup", 0.5), ("call", 2.0), ("teardown", 0.25)):
+        passes.pytest_runtest_logreport(SimpleNamespace(
+            nodeid="a.py::rerun", when=when, duration=seconds, keywords={},
+        ))
+    config = SimpleNamespace(option=SimpleNamespace(collectonly=False), rootpath=tmp_path)
+    passes.pytest_sessionfinish(SimpleNamespace(config=config), 0)
+    assert passes.read_timings(tmp_path) == {
+        "a.py::kept": [9.0, True], "a.py::rerun": [2.75, False],
+    }
+
+
+def test_a_promoted_run_says_so_in_its_header(monkeypatch):
+    monkeypatch.setenv(passes.PROMOTE_ENV, "DST")
+    assert "rehearsal" in " ".join(passes.pytest_report_header(None))
+    monkeypatch.delenv(passes.PROMOTE_ENV)
+    assert passes.pytest_report_header(None) == []
+
+
+def test_the_header_names_the_engines_promote_variable():
+    from engine.card_loader import PROMOTE_ENV
+
+    assert passes.PROMOTE_ENV == PROMOTE_ENV

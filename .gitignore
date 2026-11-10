@@ -55,3 +55,7 @@ logs/
 
 # engine/program_store.py: the compiled pool, one file per engine fingerprint
 .program_store/
+
+# tests/passes.py: each test's seconds by node id, merged run by run (read by scripts/tests_for_diff.py)
+.test_timings.json
+.test_timings.json.*.tmp
