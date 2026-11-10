@@ -51,6 +51,13 @@ def test_jeskai_elder_loots_from_an_empty_hand(set_pool, interactive):
     declare_attack(game, 0)
     game.advance_combat_phase()
     assert game.players[1].life == 19  # a 1/2
+    if interactive:
+        # At a table with a person the damage step gives the active player
+        # priority over what the damage set off (CR 510.3, 117.4): the
+        # trigger resolves once both have passed.
+        assert [item.card.name for item in game.stack] == ["Jeskai Elder"], game.log[-4:]
+        game.pass_priority(0)
+        game.pass_priority(1)
     assert [c.kind for c in game.pending_choices] == ["optional_pay"], game.log[-4:]
     if interactive:
         assert game.resolve_pending_choice("optional_pay", 0, accept=True)

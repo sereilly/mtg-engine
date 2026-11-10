@@ -171,6 +171,13 @@ def _doors_spent(session: Session) -> set:
     return session.ai_doors_spent[1]
 
 
+#: The bound on an AI-only table's cast loop in one main phase — the
+#: simulator's (``ai_simulator._MAX_CASTS_PER_MAIN_PHASE``): a turn's mana in a
+#: limited deck does not reach it, so a spell that untaps lands or returns
+#: itself cannot loop.
+_MAX_CASTS_A_MAIN_PHASE = 8
+
+
 def _ai_step(session: Session) -> bool:
     """Run one AI action for the current turn.
 
@@ -204,6 +211,18 @@ def _ai_step(session: Session) -> bool:
     if not _ai_holds_priority(game, seat):
         return True
 
+    # **An object on the stack and the AI holding priority over it** — its own
+    # trigger, or what a resolution left: the seat answers priority as the
+    # exchange answers it and passes, so the person beside it is asked before
+    # anything resolves (`_ai_answers_over_the_stack`). Nothing a main phase
+    # plays is played over a stack; the step's advance used to drain it.
+    # Before the upkeep's window below, whose triggers (Copper Tablet) are
+    # objects like any other: asked after it, they were drained by the
+    # step's leaving with nobody asked.
+    if game.stack and has_human_opponent:
+        _ai_answers_over_the_stack(session, seat)
+        return False
+
     # **The seat's own upkeep is a priority window it answers**, for an
     # ability of a card in its graveyard ("Activate only during your
     # upkeep": Hammer of Bogardan, Necrosavant): the upkeep stopped here for
@@ -212,22 +231,6 @@ def _ai_step(session: Session) -> bool:
     # played here; with nothing done, the step is left.
     if game.current_turn_phase == "beginning" and game.current_step == "upkeep":
         return not _ai_answer_priority(session, seat)
-
-    # **An object on the stack and the AI holding priority over it** — its own
-    # trigger, or what a resolution left: the seat answers priority as the
-    # exchange answers it (`engine.ai_priority.act_at_priority`, which lets
-    # the seat's own object resolve) and passes, so the person beside it is
-    # asked before anything resolves (CR 117.3d, 117.4). Nothing a main phase
-    # plays is played over a stack; the step's advance used to drain it.
-    if game.stack and has_human_opponent:
-        if game.priority_player_index is None:
-            game.start_priority_window(seat)
-        act = act_at_priority(game, seat)
-        if act is not None and act.supported:
-            game.note_priority_action_taken(seat)
-        _auto_resolve_ai_pending(session)
-        _run_priority_exchange(session, seat)
-        return False
 
     # choose_cast_action covers sorcery-speed plays (enchantments, sorceries,
     # creatures, artifacts, lands), which are legal only during the active player's
@@ -253,8 +256,18 @@ def _ai_step(session: Session) -> bool:
     if not sorcery_speed_ok:
         return not _ai_answers_priority(session, seat)
 
-    cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
-    if cast_action is not None:
+    # **At a table of AI seats alone, the cast door is a loop**, the
+    # simulator's own main phase (`ai_simulator._play_casts`): cast until the
+    # chooser proposes nothing, bounded as that loop is bounded. A settling
+    # cast hands nobody priority, so there is no round to pause for — and
+    # this door cast once and went on, so an `ai_vs_ai` web AI holding two
+    # Grizzly Bears and four Forests cast the second Bears in its second main
+    # phase, every main phase of every game. At a table with a person each
+    # cast pauses for the round below and the next `ai_step` comes back here.
+    cast_action = choose_cast_action(game, seat)
+    for _cast in range(_MAX_CASTS_A_MAIN_PHASE):
+        if cast_action is None:
+            break
         # `hand_index` indexes the zone `from_zone` names — the hand, the
         # command zone for a commander cast (CR 903.8), or a graveyard, an
         # exile or a library an effect has opened (CR 601.3: a flashback card)
@@ -306,11 +319,14 @@ def _ai_step(session: Session) -> bool:
                 # on an AI seat no client action can ever advance.
                 _run_priority_exchange(session, seat)
                 return False  # paused — human has priority over the spell on the stack
-        else:
-            game.cast_from_hand(
-                seat, card_to_cast.name, **cast_announcement(cast_action),
-            )
-            _auto_resolve_ai_pending(session)
+            break
+        result = game.cast_from_hand(
+            seat, card_to_cast.name, **cast_announcement(cast_action),
+        )
+        _auto_resolve_ai_pending(session)
+        if not result.supported or game.is_game_over():
+            break
+        cast_action = choose_cast_action(game, seat)
 
     # The activation doors below take the engine's **queue** form at a table
     # with a person — the object stays on the stack and priority goes round
@@ -419,6 +435,26 @@ def _ai_step(session: Session) -> bool:
         _auto_resolve_ai_pending(session)
 
     return True
+
+
+def _ai_answers_over_the_stack(session: Session, seat: int) -> None:
+    """*seat*, the active AI at a table with a person, holds priority (or is
+    about to: nobody is recorded holding it in a step that gives it) over an
+    object on the stack: it answers as the exchange answers every AI seat
+    (`engine.ai_priority.act_at_priority`, which lets the seat's own object
+    resolve) and passes, so the person is asked before anything resolves
+    (CR 117.3d, 117.4).
+
+    Asked by ``_ai_step`` and by the AI turn's walker as it arrives at a step
+    with objects on the stack (``_advance_ai_turn``)."""
+    game = session.game
+    if game.priority_player_index is None:
+        game.start_priority_window(seat)
+    act = act_at_priority(game, seat)
+    if act is not None and act.supported:
+        game.note_priority_action_taken(seat)
+    _auto_resolve_ai_pending(session)
+    _run_priority_exchange(session, seat)
 
 
 def _ai_answers_priority(session: Session, seat: int) -> bool:
@@ -701,16 +737,27 @@ def _priority_round(session: Session, result: str | None, *, leave_step: bool = 
         if result == "awaiting_choice":
             # The resolution stopped to ask somebody something, so nobody has
             # priority until they answer (CR 117.3b) and the object stays on the
-            # stack. An AI chooser's prompt was answered by
-            # _auto_resolve_ai_pending above — the object has left the stack —
-            # so priority can go round again on its behalf. A human's is still
-            # owed: stop here and surface it. Asking the queue rather than the
-            # optional-pay list is what makes that true of the search, the
-            # discard and the mode choice as well.
-            chooser = session.game.priority_player_index
-            still_owed = chooser is not None and session.game.waiting_prompt(chooser)
-            if not still_owed and chooser is not None and _seat_type(session, chooser) == "ai":
-                result = session.game.pass_priority(chooser)
+            # stack. A person's question is still owed: stop here and surface
+            # it. Asking the queue rather than the optional-pay list is what
+            # makes that true of the search, the discard and the mode choice
+            # as well.
+            if session.game.waiting_prompt() is not None:
+                break
+            # An AI seat's was answered by _auto_resolve_ai_pending above, and
+            # the answer finished the resolution: the object has left the
+            # stack and the **active player** receives priority (CR 117.3b,
+            # ``_release_stack_item``) — asked as any seat receiving priority
+            # is, below, and on its own turn over an empty stack left to its
+            # next ``ai_step``. This passed that priority on unasked, so an AI
+            # that cast Eladamri's Call in its main phase never cast the
+            # Benalish Hero it fetched: the person's pass ended the phase.
+            holder = session.game.priority_player_index
+            if (
+                holder is not None
+                and _seat_type(session, holder) == "ai"
+                and (holder != session.current_turn or bool(session.game.stack))
+            ):
+                result = _ai_respond_to_priority(session, holder)
                 continue
             break
 
@@ -771,6 +818,26 @@ def _advance_ai_turn(session: Session) -> None:
         # the person — and not while a declaration is still owed
         # (`_hold_at_flagged_step`).
         if _hold_at_flagged_step(session):
+            return
+
+        # **Nor a step with objects on the stack, flagged or not.** A step
+        # the walk arrives at with its triggers on the stack — "at the
+        # beginning of combat on your turn" (CR 507.2), the damage step's
+        # (CR 510.3), "at end of combat" (CR 511.2), the end step's (CR
+        # 513.1), the beginning phase's (``turn_steps`` stops there for
+        # them) — gives the active AI priority over them, and the person is
+        # asked before they resolve (CR 117.4): the AI answers and passes
+        # (``_ai_answers_over_the_stack``). The next ``_advance_phase``
+        # drained them in the step's window instead, so on an AI's turn only
+        # its declarations' triggers ever went round the table.
+        active = game.active_player_index
+        if (
+            game.stack
+            and game.waiting_prompt() is None
+            and _person_besides(session, active)
+            and _ai_holds_priority(game, active)
+        ):
+            _ai_answers_over_the_stack(session, active)
             return
 
         prev_turn = session.current_turn
@@ -858,6 +925,13 @@ def _advance_phase(session: Session) -> None:
             # with a sensible default assignment so a multi-blocked attacker (which
             # the engine defers for manual assignment) doesn't deadlock the step.
             _ai_assign_combat_damage(session)
+            # What the damage set off goes round before the step is left
+            # (CR 510.3, 117.4), as the engine's own damage road leaves it
+            # (``CombatPhaseMixin._leave_combat_step``): the walk hands it.
+            if game.stack and _person_besides(session, game.active_player_index):
+                if game.priority_player_index is None:
+                    game.start_priority_window(game.active_player_index)
+                return
         elif (
             step == "combat_damage"
             and not game.combat_damage_resolved

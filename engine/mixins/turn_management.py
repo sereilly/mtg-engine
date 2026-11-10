@@ -301,8 +301,10 @@ class TurnManagementMixin:
         self.turn_phases_remaining = phases_after("beginning")
         # The new turn's per-seat ordinal — what "your last turn" (Giant
         # Turtle) and "its controller's next turn" (Wall of Dust) compare
-        # against. A skipped turn (Time Vault) still increments: the skip is
-        # decided after the turn has begun, and the ordinal records beginnings.
+        # against. It records turns taken: a skipped turn never reaches this
+        # hook (CR 500.11 — the engine's skips are spent by
+        # ``_compute_next_active_player``, Time Vault's is decided as the turn
+        # would begin, ``Game.seat_after_skipped_turn``).
         self.seat_turn_counts[player_index] = self.seat_turn_counts.get(player_index, 0) + 1
         self.active_player_index = player_index
         # CR 723.1: a control from an earlier turn ends as this one begins,
@@ -400,9 +402,11 @@ class TurnManagementMixin:
         # `start_turn` flow was already right by the time anyone had priority.
         # What was stale is the window *between* this bookkeeping and that
         # recompute — and `web/turn_steps._begin_turn` returns to the client
-        # inside it, three ways: Time Vault's skip prompt, Winter Orb's
-        # untap-land selection and Old Man of the Sea's keep-tapped choice. A
-        # player answering any of those saw last turn's P/T and keywords.
+        # inside it, two ways: Winter Orb's untap-land selection and Old Man
+        # of the Sea's keep-tapped choice. A player answering either saw last
+        # turn's P/T and keywords. (Time Vault's skip is asked before this
+        # hook, as the turn would begin: the board it is answered on is the
+        # last turn's, which is the true one.)
         self._recalculate_lord_buffs()
         self._refresh_dynamic_creatures()
 

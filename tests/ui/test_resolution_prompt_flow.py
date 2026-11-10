@@ -205,6 +205,15 @@ def test_an_ai_seats_own_upkeep_prompt_does_not_stall_the_turn(set_pool):
     _only_findable_shrine(game.players[1], pool["Sanctum of Tranquil Light"])
 
     client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
+    # The upkeep trigger goes round before it resolves (CR 117.4; kg5
+    # webturn2: the AI's upkeep stops with its priority open over it) — the
+    # AI's step hands it to the person, whose pass resolves it.
+    for _ in range(6):
+        state = _state(sid, 0)
+        if not state["stack"]:
+            break
+        action = "pass_priority" if state["priority_player"] == 0 else "ai_step"
+        client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": action})
 
     state = _state(sid, 0)
     assert state["stack"] == []

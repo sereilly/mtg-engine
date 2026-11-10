@@ -288,6 +288,10 @@ def test_w1g1_mask_of_memory_draws_two_then_discards_one(set_pool, interactive):
 
     _w1g1_declare_attack(game, 0)
     game.advance_combat_phase()
+    # At a table with a person the damage step holds what the damage set off
+    # for priority (CR 510.3, 117.4): every player passes, and it resolves.
+    while game.stack and not game.pending_choices and game.priority_player_index is not None:
+        game.pass_priority(game.priority_player_index)
     # The trigger resolves in the damage step and offers the draw (an
     # ``optional_pay`` prompt, CR 608.2d).
     offer = game.pending_choices[0]

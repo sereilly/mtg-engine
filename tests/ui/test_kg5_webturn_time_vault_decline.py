@@ -6,9 +6,10 @@ which runs ``Game.begin_turn_bookkeeping`` before anything else, so a person
 declining the skip began their turn a second time: ``seat_turn_counts`` rose by
 two, and every "your last turn" / "its controller's next turn" ordinal against
 it (``engine/turn_state.py``: Giant Turtle, Wall of Dust) named the wrong turn.
-The decline now resumes the turn after its bookkeeping
-(``turn_steps._turn_after_its_bookkeeping``), and is refused when no skip is
-being asked (it began the whole turn again, untap step and all).
+The decline now begins the turn once — since kg5 webturn2 the skip is asked
+before the bookkeeping, so the decline is what runs it
+(``turn_steps._take_the_turn``) — and is refused when no skip is being asked
+(it began the whole turn again, untap step and all).
 """
 
 from __future__ import annotations
@@ -116,7 +117,8 @@ def test_declining_time_vaults_skip_keeps_last_turn_and_next_turn_honest():
         blocks={wall.permanent_id: bears.permanent_id},
     )
     assert any("Wall of Dust" in line and "block" in line.lower() for line in game.log), game.log
-    assert game.seat_turn_counts[0] == 2
+    # Asked as the turn would begin: it has not begun (kg5 webturn2).
+    assert game.seat_turn_counts[0] == 1
 
     _ok(sid, 0, action="time_vault_decline")
     assert game.seat_turn_counts[0] == 2, game.seat_turn_counts
@@ -173,7 +175,7 @@ def test_every_web_road_into_a_turn_begins_it_once(monkeypatch):
         # them priority (after its land, CR 116.3 / 117.3d), until the
         # person's turn begins and asks the skip.
         for _ in range(60):
-            if game.active_player_index == 0 and session.time_vault_pending:
+            if session.current_turn == 0 and session.time_vault_pending:
                 return
             if game.priority_player_index == 0:
                 send(0, action="pass_priority")
@@ -217,7 +219,7 @@ def test_every_web_road_into_a_turn_begins_it_once(monkeypatch):
         else:
             send(0, action="next_phase")
     ai_turn()
-    # Turn 5 is skipped: turn 6 (the AI) begins.
+    # Turn 5 is skipped: the AI's turn begins under that number.
     send(0, action="time_vault_skip", card_name="Time Vault")
     assert game.active_player_index == 1
 

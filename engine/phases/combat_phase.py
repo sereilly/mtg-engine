@@ -664,12 +664,21 @@ class CombatPhaseMixin:
                 self.resolve_all_combat_damage(self.active_player_index, **announced)
 
             def leave_the_damage_step() -> None:
-                if not allow_damage_skip:
+                if not allow_damage_skip or (
+                    self.interactive_seats and self.stack and not self.is_game_over()
+                ):
                     # A player flagged the combat-damage step (hold priority). Combat
                     # damage has been dealt as the turn-based action (CR 510.1c); leave a
                     # priority window open for the active player (CR 510.4) instead of
                     # resolving the stack through to end-of-combat, so the flagged player
                     # can respond. The next advance (once players pass) moves on normally.
+                    #
+                    # …and at a table with a person whenever the damage set
+                    # something off (CR 510.3: the active player receives
+                    # priority after the damage; CR 117.4: an object resolves
+                    # once every player has passed), as the declare blockers
+                    # step's lock does. The window drained it with nobody
+                    # asked: Hypnotic Specter's discard on either seat's turn.
                     if self._receives_priority("combat_damage"):
                         self.start_priority_window(self.active_player_index)
                     return

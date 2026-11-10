@@ -525,6 +525,10 @@ def _w1g6_cannibal_connects(set_pool, their_yard, *, blocked=False):
         if game.stack or game.pending_choices or game.current_step == "postcombat_main":
             break
         game.advance_combat_phase()
+    # At a table with a person the damage step holds what the damage set off
+    # for priority (CR 510.3, 117.4): every player passes, and it resolves.
+    while game.stack and not game.pending_choices and game.priority_player_index is not None:
+        game.pass_priority(game.priority_player_index)
     return game  # _w1g6_cannibal_connects
 
 
