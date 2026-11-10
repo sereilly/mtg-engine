@@ -43,13 +43,12 @@ from the seeded RNG; a rehearsal restores what its copy drew.
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
 
 from . import ai_cast_trace as cast_trace
 from .ai_weighed_cast import (
     PermittedCast,
-    cast_weighed,
     casting_under,
-    considering_mode,
     hand_waiver,
     permitted_casts,
     castable_commanders,
@@ -61,43 +60,22 @@ from .ai_valuation import (copies_for_the_spells_before_it, entry_sacrifice_is_u
 from .faces import castable_faces
 from .game import Game
 from .models import CardDefinition
-from .oracle import compile_card_oracle
 from .ai_mana_sources import _land_symbols
-from .ai_payment import tap_planned_lands, _cost_for, _plan_land_taps
+from .ai_payment import tap_planned_lands, _cost_for, _paying_for, _plan_land_taps
 from .ai_actions import (
     CastAction,
     ActivationAction,
     cast_announcement,
-    _zone_seat,
     hand_spells,
     spell_being_cast,
     zone_being_cast_from,
-    _announced_mode,
-    _cast_zone,
 )
 from .ai_scoring import (
     _IN_THE_ABSTRACT,
-    _rehearse_announcement,
-    _names_an_unweighed_seat,
     _worth_proposing,
-    _choose_target_for_spell,
     _pick_x_value,
-    not_worth_proposing,
 )
-from .ai_cast_gates import (
-    _aimed_under_target_requirements,
-    _can_cast_with_targets,
-    _caster_can_make_its_sacrifices,
-)
-from .ai_targets import (
-    _cast_graveyard_denial,
-    _choose_role_targets,
-    _choose_single_object_target,
-    _guarded_stack_target,
-    _chosen_stack_target,
-)
-from .ai_divisions import choose_divided_targets
-from .ai_text_changes import choose_object_or_spell
+from .ai_cast_gates import payable_alternative_indices
 from .ai_abilities import (
     choose_activation_action,
     _abilities_weighed,
@@ -109,11 +87,7 @@ from .ai_abilities import (
 from .ai_casts import (
     _priced_candidate,
     _cast_candidate,
-    _every_mode_worth_casting,
-    _modes_weighed,
-    _note_modes_not_weighed,
 )
-from .ai_cast_score import finished_cast_candidate
 from .ai_player_control import plays_for_another
 
 
@@ -501,7 +475,8 @@ def choose_instant_speed_activation(
     the target chosen), and a rehearsal disposes: the activation carried out
     on a copy against the same table with nothing activated — the object on
     the stack resolving, the declared combat dealt — and made only where what
-    it does outlasts the turn, as `_combat_instant_candidate` asks of a cast.
+    it does outlasts the turn, as a cast weighed at instant speed is held to
+    (``ai_scoring.held_at_instant_speed``).
     That chooser prices every non-damage ability alike, so its pick is a
     proposal and not a decision: a regeneration shield in front of a burn
     spell is worth a creature, the same shield with nothing coming is worth
@@ -623,95 +598,84 @@ def holds_an_ability_it_could_activate(game: Game, player_index: int) -> bool:
 
 
 def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastAction | None:
-    """The instant this seat casts **now** — in response to what is on the
-    stack, or in the declare-blockers step — or None.
+    """The spell this seat casts **now** — in response to what is on the
+    stack, in combat, or at another seat's end step — or None.
 
     The answer to priority of both callers that play a seat nobody asks: the
     web AI's (`web/game_flow._ai_respond_to_priority`) and the AI
     simulator's (`ai_simulator`'s `Game.priority_driver`), each through
-    `cast_chosen_instant`. **Every mode of a modal instant is weighed here as
-    it is in the main phase** (`_cast_candidate`): this is the one moment a
-    mode whose target is a spell on the stack can be announced at all, and
-    with no mode named Dromar's Charm never countered anything and Treva's
-    Charm never exiled an attacker.
+    `cast_chosen_instant`.
+
+    **Every spell is built by the main phase's builder**
+    (``ai_casts._priced_candidate`` at ``speed="instant"``): its gates
+    (the printed timing, the additional and alternative costs, a seat's last
+    life point, an entry that gives back more than it brings), every variant
+    (each mode, an entwine, a kicker and every other optional cost, an
+    alternative cost — Force of Will in response with no Island untapped —,
+    each size of an X paid in life, an X its target fixes), every target
+    chooser (an Aura's host, several targets, a division, a spell on the
+    stack) and its payment (told what it pays for, so restricted mana and a
+    source that pays by being sacrificed count). What the speed changes is
+    how the finished cast is read: a permanent is rehearsed as a spell is,
+    the rest of a combat is fought before the blocks, and nothing is cast
+    whose every trace is gone by the end of the turn or that scores under
+    the floor (``ai_scoring.read_at_instant_speed``,
+    ``ai_cast_score.kept_above_the_floor``). Until kg5 this chooser was a
+    builder of its own, a thinner copy of that one that had none of the
+    variants and half the gates.
 
     **Not only instants**: every spell the engine lets the seat cast now
     (`_instant_speed_offers`) — a creature with flash, a sorcery "you may cast
-    as though it had flash", an Aura under Mirage's permission — each at the
-    moment such a spell is worth weighing (`_weighed_at_instant_speed_now`).
+    as though it had flash", an Aura under Mirage's permission, a commander
+    with flash in the command zone — each at the moment such a spell is worth
+    weighing (`_weighed_at_instant_speed_now`).
     """
     offered = _instant_speed_offers(game, player_index)
     best: CastAction | None = None
-    # One deliberation for the whole hand: every instant weighed here answers
+    # One deliberation for the whole hand: every spell weighed here answers
     # the same stack and the same combat, so each is measured against one
     # reading of how that goes with nothing cast.
     with deliberating():
-        for hand_index, card, under in offered:
-            with cast_trace.entry(
-                game, player_index, card, from_zone=_cast_zone_of(under),
-                zone_index=hand_index, permission=under, speed="instant",
-            ) as traced:
-                chosen = traced.returns(_instant_cast_in_each_mode(
-                    game, player_index, card, hand_index, under,
-                ))
+        for offer in offered:
+            chosen = _priced_candidate(
+                game, player_index, offer.spell, offer.index,
+                from_zone=offer.zone, extra_generic=offer.tax, under=offer.under,
+                speed="instant",
+            )
             if chosen is not None and _is_better_cast(chosen, best):
                 best = chosen
-
     return best
 
 
-def _cast_zone_of(under: "PermittedCast | None") -> str:
-    """The zone a cast under *under* leaves: the hand where there is none."""
-    return "hand" if under is None else under.zone
+class _InstantOffer(NamedTuple):
+    """One spell `choose_combat_instant_cast_action` weighs: where it is
+    (``zone``, ``index``), the permission it is cast under (CR 601.3, or None)
+    and the commander tax a cast from the command zone carries (CR 903.8)."""
+
+    index: int
+    spell: CardDefinition
+    under: "PermittedCast | None"
+    zone: str = "hand"
+    tax: int = 0
 
 
-def _instant_cast_in_each_mode(
-    game: Game, player_index: int, card: CardDefinition, hand_index: int,
-    under: "PermittedCast | None",
-) -> CastAction | None:
-    """`choose_combat_instant_cast_action` for one offered spell: each mode
-    weighed (`_combat_instant_candidate`), the best kept — and for "choose one
-    or more" every mode worth casting, in one cast."""
-    built: list[CastAction] = []
-    chosen: CastAction | None = None
-    modes = _modes_weighed(game, player_index, card)
-    _note_modes_not_weighed(card, modes)
-    for mode_index in modes:
-        with considering_mode(card, mode_index), casting_under(under):
-            candidate = _combat_instant_candidate(
-                game, player_index, card, hand_index
-            )
-        if candidate is None:
-            continue
-        built.append(candidate)
-        # Strictly better only: equal modes of one card keep printed order.
-        if chosen is None or candidate.score > chosen.score:
-            chosen = candidate
-    if len(built) > 1 and compile_card_oracle(card).modes_at_least:
-        # "Choose one or more —": every mode worth casting, in one cast.
-        chosen = _every_mode_worth_casting(
-            built, chosen, game=game, seat=player_index,
-        ) or chosen
-    return chosen
-
-
-def _instant_speed_offers(
-    game: Game, player_index: int,
-) -> "list[tuple[int, CardDefinition, PermittedCast | None]]":
-    """What `choose_combat_instant_cast_action` weighs: ``(zone index, spell,
-    the permission it is cast under)`` for each spell *player_index* may cast
-    now and would weigh casting now (`_weighed_at_instant_speed_now`).
+def _instant_speed_offers(game: Game, player_index: int) -> "list[_InstantOffer]":
+    """What `choose_combat_instant_cast_action` weighs: each spell
+    *player_index* may cast now and would weigh casting now
+    (`_weighed_at_instant_speed_now`).
 
     The hand's, then those an effect lets the seat cast from somewhere else
     (CR 601.3; `ai_weighed_cast.permitted_casts`) — a flashback instant in its
     graveyard (Moment's Peace, Sylvan Might), which is castable in this window
-    exactly as the hand's are. A hand card is weighed under the waiver that
-    covers it, if one does (`hand_waiver`), as the main-phase chooser weighs
-    it.
+    exactly as the hand's are — then a commander in the command zone that may
+    be cast now (CR 903.8, `ai_weighed_cast.castable_commanders`: Niambi,
+    Esteemed Speaker's flash), as the main-phase chooser walks the same three.
+    A hand card is weighed under the waiver that covers it, if one does
+    (`hand_waiver`), as the main-phase chooser weighs it.
     """
     player = game.players[player_index]
-    offered: "list[tuple[int, CardDefinition, PermittedCast | None]]" = [
-        (
+    offered = [
+        _InstantOffer(
             hand_index, card,
             hand_waiver(game, player_index, player.hand[hand_index], card, hand_index),
         )
@@ -719,9 +683,14 @@ def _instant_speed_offers(
         if _weighed_at_instant_speed_now(game, player_index, card)
     ]
     offered += [
-        (permitted.index, permitted.spell, permitted)
+        _InstantOffer(permitted.index, permitted.spell, permitted, permitted.zone)
         for permitted in permitted_casts(game, player_index)
         if _weighed_at_instant_speed_now(game, player_index, permitted.spell)
+    ]
+    offered += [
+        _InstantOffer(zone_index, card, None, "command", tax)
+        for zone_index, card, tax in castable_commanders(game, player_index)
+        if _weighed_at_instant_speed_now(game, player_index, card)
     ]
     return offered
 
@@ -754,7 +723,7 @@ def _weighed_at_instant_speed_now(
     if the block it makes pays (``ai_rehearsal.pays_before_the_blocks``).
     Everything else is weighed in every window an instant is: a flashed Aura
     is a combat trick, a flashed sorcery an instant with a surcharge. In each
-    case the rehearsal decides (`_combat_instant_candidate`).
+    case the rehearsal decides (``ai_scoring.read_at_instant_speed``).
     """
     from .cast_timing import casts_at_instant_speed
 
@@ -789,14 +758,18 @@ def holds_an_instant_it_could_pay_for(game: Game, player_index: int) -> bool:
     """Whether `choose_combat_instant_cast_action` could propose anything at
     all: *player_index* holds a spell the chooser weighs now (an instant, or
     anything else it may cast at instant speed — `_instant_speed_offers`; or
-    may cast one from elsewhere) whose mana its board can pay, by the
-    chooser's own gates — the X it would
-    announce (`_pick_x_value`; an X of 0 is never proposed), the cost it
-    would be charged (`_cost_for`, under the permission being weighed) and the
-    tap plan (`_plan_land_taps`).
+    may cast one from elsewhere) whose price its board can pay, by the
+    chooser's own gates — the X it would announce (`_pick_x_value`; an X of 0
+    is never proposed), the cost it would be charged (`_cost_for`, under the
+    permission being weighed, with a commander's tax) and the tap plan
+    (`_plan_land_taps`, told what it pays for — `_paying_for` — as the
+    chooser's plan is, so restricted mana and a source that pays by being
+    sacrificed count) — or a printed alternative cost it could pay instead
+    (CR 118.9, `ai_cast_gates.payable_alternative_indices`: Force of Will with
+    no Island untapped).
 
     **The cheap question asked before the dear one.** The chooser rehearses
-    every instant it weighs on a copy of the game, and a table that gives
+    every spell it weighs on a copy of the game, and a table that gives
     priority before every resolution and at every step's end asks it dozens
     of times a turn; most of those asks are of a seat holding no instant, or
     tapped out. Every candidate the chooser builds passes these same gates,
@@ -804,15 +777,19 @@ def holds_an_instant_it_could_pay_for(game: Game, player_index: int) -> bool:
     mana costs unenforced, where the chooser asks no plan.
     """
     player = game.players[player_index]
-    for _index, card, under in _instant_speed_offers(game, player_index):
+    for offer in _instant_speed_offers(game, player_index):
         if not game.enforce_mana_costs:
             return True
-        with casting_under(under):
-            x_value = _pick_x_value(game, player, card)
+        with casting_under(offer.under), _paying_for(offer.spell):
+            x_value = _pick_x_value(game, player, offer.spell, offer.tax)
             if x_value == 0:
                 continue
-            required = _cost_for(game, player, card, x_value)
+            required = _cost_for(game, player, offer.spell, x_value, extra_generic=offer.tax)
             if _plan_land_taps(game, player, required) is not None:
+                return True
+            if offer.under is None and payable_alternative_indices(
+                game, player_index, offer.spell, offer.index,
+            ):
                 return True
     return False
 
@@ -834,252 +811,6 @@ def cast_chosen_instant(
     card = spell_being_cast(zone_being_cast_from(game, seat, action), action)
     action = tap_planned_lands(game, seat, action)
     return card, game.queue_from_hand(seat, card.name, **cast_announcement(action))
-
-
-def _combat_instant_candidate(
-    game: Game, player_index: int, card: CardDefinition, hand_index: int
-) -> CastAction | None:
-    """`_instant_candidate`, as one attempt of the decision's trace
-    (``ai_cast_trace.attempt``) in the mode being weighed."""
-    if cast_trace.silent():
-        return _instant_candidate(game, player_index, card, hand_index)
-    with cast_trace.attempt(
-        game, player_index, card, mode_index=_announced_mode(card),
-        from_zone=_cast_zone(card), zone_index=hand_index,
-    ):
-        return _instant_candidate(game, player_index, card, hand_index)
-
-
-#: The least an instant-speed cast scores to be made at all.
-INSTANT_SCORE_FLOOR = 2.0
-
-
-def _instant_candidate(
-    game: Game, player_index: int, card: CardDefinition, hand_index: int
-) -> CastAction | None:
-    """`choose_combat_instant_cast_action` for one instant, in the mode being
-    weighed (`_announced_mode`) and under the permission being weighed
-    (`ai_weighed_cast.cast_weighed`: a flashback instant in the graveyard) — or
-    None when it is not worth casting now. *hand_index* indexes the zone that
-    permission names, the hand where there is none."""
-    player = game.players[player_index]
-    under = cast_weighed(card)
-    if not _can_cast_with_targets(game, player_index, card):
-        return cast_trace.dropped(
-            "no legal announcement: the engine's cast gates refuse it"
-            " (_can_cast_with_targets)"
-        )
-    if (
-        under is not None
-        and under.cost is not None
-        and game._unpayable_alternative_cost(
-            player_index, card, under.cost,
-            spell_hand_index=hand_index if under.zone == "hand" else None,
-        ) is not None
-    ):
-        # What a required alternative cost asks beside its mana — see
-        # `ai_casts._cast_candidate_announcing`.
-        return cast_trace.dropped(
-            "the permission's alternative cost cannot be paid beside its mana"
-            " (CR 118.9b)"
-        )
-    # "Counter target spell **if it's red**": which spell, or no cast at all
-    # when the guard holds for none of them (`_guarded_stack_target`).
-    stack_target = _guarded_stack_target(game, player_index, card)
-    if stack_target == ():
-        return cast_trace.dropped("no spell on the stack meets its guard")
-
-    target = _choose_target_for_spell(card, player_index, game)
-    x_value = _pick_x_value(game, player, card)
-    if x_value == 0:
-        return cast_trace.dropped("its X would be 0: a price paid for nothing")
-    # CR 601.2d, for the same reason `_cast_candidate` asks it: Pyrokinesis
-    # and Contagion are instants with an alternative cost, so this is the
-    # chooser that offers them during combat — and a divided spell proposed
-    # with no division is refused at announcement.
-    divided = choose_divided_targets(game, player_index, card, x_value)
-    if divided is not None and not divided:
-        return cast_trace.dropped("a divided spell with no lawful division (CR 601.2d)")
-    # The same "would the resolution do anything" questions the main-phase
-    # chooser asks (`_cast_candidate`), for the same reasons: a one-object
-    # spell names its permanent on the side the effect wants or is not
-    # cast, and a spell that sacrifices what its caster lacks is not cast.
-    target_permanent_index: int | None = None
-    target_permanent_ids: list[int] | None = None
-    tap_indices: tuple[int, ...] = ()
-    tap_colors: tuple[str, ...] = ()
-
-    # The mana before the target, for `ai_casts._cast_candidate_announcing`'s reason:
-    # weighing a target is a rehearsal apiece, and a spell the lands cannot
-    # pay for has none worth weighing.
-    if game.enforce_mana_costs:
-        required = _cost_for(game, player, card, x_value)
-        plan = _plan_land_taps(game, player, required)
-        if plan is None:
-            return cast_trace.dropped("unaffordable: the lands cannot pay its cost")
-        tap_indices, tap_colors = plan
-    if stack_target is None:
-        # A spell targeting a spell with no guard to choose by: which one, by
-        # rehearsal, where there is more than one (`_chosen_stack_target`).
-        stack_target = _chosen_stack_target(game, player_index, card, target)
-        if stack_target == ():
-            return cast_trace.dropped("no spell on the stack worth naming")
-    # A spell naming several **roles** is answered role by role, as the
-    # main-phase chooser answers it (`_choose_role_targets`). This chooser asked
-    # only the one-object question, which a roles spell answers "not mine" —
-    # so an instant with two differently-restricted targets (Shower of Sparks,
-    # Fiery Justice's kin) was proposed here naming neither, refused by the
-    # cast gate for "requires 2 targets", and proposed again at the next
-    # window. With a role on the stack (Suffocating Blast) this is also the
-    # only chooser that ever sees a spell to name.
-    roles = _choose_role_targets(game, player_index, card) if divided is None else None
-    role_refs: "list[dict] | None" = None
-    text_words: tuple = (None, None)
-    if roles is not None:
-        if roles == ():
-            return cast_trace.dropped(
-                "a spell naming roles with no legal chain of targets (CR 601.2c)"
-            )
-        (
-            target, target_permanent_index, target_permanent_ids, role_stack,
-            role_refs,
-        ) = roles
-        if role_stack is not None:
-            stack_target = role_stack
-    elif divided is None and (chosen := choose_object_or_spell(
-        game, player_index, card, target, x_value=x_value,
-    )) is not None:
-        # "Target spell or permanent" and a text change's words, as the
-        # main-phase chooser weighs them (`ai_text_changes`).
-        if chosen == ():
-            return cast_trace.dropped(
-                "no spell or permanent worth naming, or no words worth changing"
-                " (ai_text_changes)"
-            )
-        target = chosen.seat
-        target_permanent_index = chosen.permanent_index
-        target_permanent_ids = chosen.permanent_ids
-        if chosen.stack_index is not None:
-            stack_target = chosen.stack_index
-        text_words = (chosen.old_color, chosen.new_color)
-    elif divided is None:
-        single = _choose_single_object_target(
-            game, player_index, card, target, x_value=x_value,
-        )
-        if single == ():
-            return cast_trace.dropped("no legal target on the side the effect wants")
-        if single is not None:
-            target, target_permanent_index, target_permanent_ids = single
-    # ...and the same graveyard a denial is aimed at (`_cast_graveyard_denial`).
-    if target_permanent_index is None and divided is None:
-        buried = _cast_graveyard_denial(game, player_index, card)
-        if buried is not None:
-            target, target_permanent_index = buried
-    # The same hold the main-phase chooser applies (`_cast_candidate`): what an
-    # opponent's Flagbearer demands of this announcement.
-    aimed = _aimed_under_target_requirements(
-        game, player_index, card, _cast_zone(card),
-        target, target_permanent_index, target_permanent_ids,
-        list(divided) if divided else None,
-    )
-    if aimed is None:
-        return cast_trace.dropped(
-            "it cannot obey what an opponent's permanent demands of its targets"
-            " (Standard Bearer)"
-        )
-    target, target_permanent_index, target_permanent_ids, held_division = aimed
-    if divided:
-        divided = held_division
-    if not _caster_can_make_its_sacrifices(game, player_index, card):
-        return cast_trace.dropped("it cannot make the sacrifice its own resolution asks for")
-
-    candidate = CastAction(
-        card_name=card.name,
-        target_player_index=target,
-        x_value=x_value,
-        land_tap_indices=tap_indices,
-        score=0.0,
-        hand_index=hand_index,
-        target_permanent_index=target_permanent_index,
-        target_permanent_ids=target_permanent_ids,
-        divided_targets=list(divided) if divided else None,
-        land_tap_colors=tap_colors,
-        mode_index=_announced_mode(card),
-        target_stack_index=stack_target,
-        target_role_refs=role_refs,
-        old_color=text_words[0],
-        new_color=text_words[1],
-        # Where the card is and which permission the cast names — "hand" and
-        # no alternative cost for every candidate this chooser built before.
-        from_zone=_cast_zone(card),
-        zone_seat=_zone_seat(player_index, under),
-        alternative_cost=under is not None and under.alternative_cost,
-    )
-    # What casting it **now** would do, measured against what happens with
-    # nothing cast: the spell on the stack resolving, the declared combat
-    # dealing its damage (`ai_rehearsal.rehearse`). That comparison is the
-    # whole of what the words "damage", "destroy", "prevent" and "tap" in a
-    # card's text used to stand for here — a counterspell is worth the spell
-    # it stops, a pump is worth the blocker it saves and the attacker that
-    # dies to it — and a response that changes nothing is not made.
-    rehearsal = _rehearse_announcement(
-        game, player_index, card, cast_announcement(candidate), planned=candidate,
-    )
-    if blocks_still_to_come(game):
-        # Before the blocks: read again with the rest of the combat fought
-        # (the blocks declared by the policy, the damage dealt), and cast
-        # here only for a block it adds that pays — an ambush. Everything
-        # else waits for the declare-blockers step, or the end step.
-        if rehearsal is None or not rehearsal.accepted:
-            return cast_trace.dropped(
-                "before the blocks, and the rehearsal was not run or was refused"
-            )
-        fought = _rehearse_announcement(
-            game, player_index, card, cast_announcement(candidate),
-            planned=candidate, through_combat=True,
-        )
-        if not pays_before_the_blocks(rehearsal, fought):
-            return cast_trace.dropped(
-                "before the blocks, and it adds no block that pays"
-                " (pays_before_the_blocks)"
-            )
-        rehearsal = fought
-    elif blocks_owed(game) and rehearsal is not None and rehearsal.accepted:
-        # A response before the blocks (an attack trigger on the stack): the
-        # copy resolves the stack and then owes the blocks, so it is read
-        # with the rest of the combat fought — or the attack it answers deals
-        # no damage on either copy.
-        fought = _rehearse_announcement(
-            game, player_index, card, cast_announcement(candidate),
-            planned=candidate, through_combat=True,
-        )
-        if fought is not None:
-            rehearsal = fought
-    if (refused := not_worth_proposing(rehearsal)) is not None:
-        return cast_trace.dropped(refused)
-    if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
-        return cast_trace.dropped(
-            "no rehearsal could be run, and the cast would name one seat of"
-            " several unweighed"
-        )
-    if rehearsal is not None and rehearsal.lasting <= 0.0:
-        # Nothing it does outlasts the turn: a pump with no fight to decide,
-        # a shield with nothing coming, a tap of something already tapped.
-        # The seat's own main phase is where such a card is still worth a
-        # cast; a response is held for a moment it changes.
-        return cast_trace.dropped(
-            f"nothing it does outlasts the turn (lasting {rehearsal.lasting:+.2f}):"
-            " a response is held for a moment it changes"
-        )
-    # Scored where every cast candidate is (`ai_cast_score.finished_cast_candidate`):
-    # what it does, the zone's bonus and the stack's.
-    finished = finished_cast_candidate(game, player_index, card, candidate, rehearsal)
-    if finished.score < INSTANT_SCORE_FLOOR:
-        return cast_trace.dropped(
-            f"its score {finished.score:.2f} is under the instant-speed floor"
-            f" {INSTANT_SCORE_FLOOR}"
-        )
-    return finished
 
 
 def _is_better_cast(candidate: CastAction, current: CastAction | None) -> bool:

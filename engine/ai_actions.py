@@ -468,6 +468,26 @@ _OFFERS_ANNOUNCED: ContextVar["dict[str, int] | None"] = ContextVar(
 )
 
 
+#: The **speed** the candidate being built is weighed at: ``"main"`` — its
+#: seat's own main phase with an empty stack (``ai_policy.choose_cast_action``
+#: and the casts a resolution offers) — or ``"instant"``, every other moment
+#: priority finds the seat (``ai_policy.choose_combat_instant_cast_action``).
+#: Set around the one call that builds a candidate (``ai_casts._cast_candidate``,
+#: whose *speed* it is) for `_OFFERS_ANNOUNCED`'s reason. **One builder makes
+#: both**: every gate, variant and target chooser is the same at either speed,
+#: and the speed changes only how the finished cast is *read* — a permanent
+#: rehearsed as a spell is, the rest of a combat fought before the blocks,
+#: nothing proposed that leaves nothing behind it (``ai_scoring.read_at_instant_speed``),
+#: and the score floor (``ai_cast_score.kept_above_the_floor``).
+_SPEED_WEIGHED: ContextVar[str] = ContextVar("ai_cast_speed_weighed", default="main")
+
+
+def weighed_at_instant_speed() -> bool:
+    """Whether the candidate being built is weighed at instant speed (see
+    `_SPEED_WEIGHED`)."""
+    return _SPEED_WEIGHED.get() == "instant"
+
+
 def _announced_mode(card: CardDefinition) -> int | None:
     """CR 601.2b's *mode* answer for the candidate being built: the mode
     *card* is being weighed in, or None for a spell that names none.

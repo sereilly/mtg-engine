@@ -44,7 +44,10 @@ from .ai_target_sides import (
 )
 from .ai_rehearsal import (
     Rehearsal,
+    blocks_owed,
+    blocks_still_to_come,
     deliberating,
+    pays_before_the_blocks,
     priced_by_the_fight,
     rehearse,
     rehearsing,
@@ -579,6 +582,69 @@ def _weighed_through_the_fight(
         game, seat, card, announcement, planned=planned, through_combat=True,
     )
     return rehearsal if fought is None else fought
+
+
+def read_at_instant_speed(
+    game: Game, seat: int, card: CardDefinition, planned: "CastAction",
+    rehearsal: Rehearsal | None,
+) -> "tuple[Rehearsal | None, str | None]":
+    """*rehearsal* — of the finished cast *planned*, weighed at instant speed
+    (``ai_actions.weighed_at_instant_speed``) — read as that moment reads it:
+    ``(the reading, None)``, or ``(…, why it is not proposed)``.
+
+    `_weighed_through_the_fight`'s sibling, for the moments after the
+    attackers are declared. **Before the blocks**
+    (``ai_rehearsal.blocks_still_to_come``) the cast is read again with the
+    rest of the combat fought — the blocks declared by the policy, the damage
+    dealt — and made there only for a block it adds that pays
+    (``ai_rehearsal.pays_before_the_blocks``): an ambush. Everything else
+    waits for the declare-blockers step, or the end step. **In a response
+    before the blocks** (``blocks_owed``: an attack trigger on the stack) the
+    copy resolves the stack and then owes the blocks, so it is read with the
+    rest of that combat fought, or the attack it answers deals no damage on
+    either copy.
+
+    The one place these readings are made, for the builder of a single mode
+    (``ai_casts._announced_candidate``) and of an entwined cast
+    (``ai_entwine.entwined_cast``) alike — the instant-speed chooser was a
+    builder of its own until kg5, and made them for one mode at a time.
+    """
+    if blocks_still_to_come(game):
+        if rehearsal is None or not rehearsal.accepted:
+            return rehearsal, "before the blocks, and the rehearsal was not run or was refused"
+        fought = _rehearse_announcement(
+            game, seat, card, cast_announcement(planned),
+            planned=planned, through_combat=True,
+        )
+        if not pays_before_the_blocks(rehearsal, fought):
+            return rehearsal, (
+                "before the blocks, and it adds no block that pays"
+                " (pays_before_the_blocks)"
+            )
+        return fought, None
+    if blocks_owed(game) and rehearsal is not None and rehearsal.accepted:
+        fought = _rehearse_announcement(
+            game, seat, card, cast_announcement(planned),
+            planned=planned, through_combat=True,
+        )
+        if fought is not None:
+            return fought, None
+    return rehearsal, None
+
+
+def held_at_instant_speed(rehearsal: Rehearsal | None) -> "str | None":
+    """Why a cast weighed at instant speed that `not_worth_proposing` passed
+    is held all the same, or None: nothing it does outlasts the turn — a pump
+    with no fight to decide, a shield with nothing coming, a tap of something
+    already tapped. The seat's own main phase is where such a card is still
+    worth a cast; a response is held for a moment it changes. A cast nobody
+    could rehearse is not held here."""
+    if rehearsal is not None and rehearsal.lasting <= 0.0:
+        return (
+            f"nothing it does outlasts the turn (lasting {rehearsal.lasting:+.2f}):"
+            " a response is held for a moment it changes"
+        )
+    return None
 
 
 def _leaves_nothing(rehearsal: Rehearsal) -> bool:

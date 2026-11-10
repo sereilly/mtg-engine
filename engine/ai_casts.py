@@ -2,8 +2,12 @@
 in each of its modes, at each answer to its optional costs.
 
 :func:`_cast_candidate` is the builder every cast chooser asks — for the
-hand, the command zone (CR 903.8) and every zone an effect opens (CR 601.3)
-— inside one deliberation (``ai_rehearsal.deliberating``). It works inward:
+hand, the command zone (CR 903.8) and every zone an effect opens (CR 601.3),
+in a seat's own main phase and **at instant speed** alike (its *speed*,
+``ai_actions._SPEED_WEIGHED``: until kg5 the instant-speed chooser was a
+thinner builder of its own, with none of the variants below and half the
+gates) — inside one deliberation (``ai_rehearsal.deliberating``). It works
+inward:
 
 * each **mode** the caster may announce (:func:`_cast_candidate_in_each_mode`,
   CR 700.2), and for "choose one or more" every mode worth casting at once
@@ -17,7 +21,9 @@ hand, the command zone (CR 903.8) and every zone an effect opens (CR 601.3)
   (:func:`_cast_candidate_announcing`): its gates (``ai_cast_gates``), its
   targets (``ai_targets``, ``ai_divisions``), its X, its payment
   (``ai_payment``), and the rehearsal that decides whether it is worth
-  proposing (``ai_scoring``).
+  proposing (``ai_scoring``) — read, at instant speed, as that moment reads
+  it (``ai_scoring.read_at_instant_speed``, ``held_at_instant_speed``,
+  ``ai_cast_score.kept_above_the_floor``).
 
 :func:`_priced_candidate` is a candidate with its plan told what it pays for,
 refused where the payment would spend a permanent the cast itself names.
@@ -31,7 +37,7 @@ from itertools import combinations, product
 from dataclasses import replace
 
 from . import ai_cast_trace as cast_trace
-from .ai_cast_score import finished_cast_candidate
+from .ai_cast_score import finished_cast_candidate, kept_above_the_floor
 from .ai_weighed_cast import (
     SPELL_TYPES,
     PermittedCast,
@@ -74,7 +80,9 @@ from .ai_actions import (
     cast_announcement,
     _zone_seat,
     hand_spells,
+    weighed_at_instant_speed,
     _OFFERS_ANNOUNCED,
+    _SPEED_WEIGHED,
     _announced_mode,
     _announced_steps,
     _cast_zone,
@@ -92,7 +100,9 @@ from .ai_scoring import (
     _pays_x_in_life,
     _choose_target_for_spell,
     _pick_x_value,
+    held_at_instant_speed,
     not_worth_proposing,
+    read_at_instant_speed,
 )
 from .ai_cast_gates import (
     _cast_life_price,
@@ -115,6 +125,8 @@ from .ai_targets import (
     _choose_several_targets,
     _NOT_OBJECT_SPECS,
     _choose_single_object_target,
+    _chosen_stack_target,
+    _guarded_stack_target,
 )
 from .ai_divisions import choose_divided_targets
 from .ai_text_changes import choose_object_or_spell
@@ -123,14 +135,22 @@ from .ai_text_changes import choose_object_or_spell
 def _priced_candidate(
     game: Game, seat: int, spell: CardDefinition, zone_index: int, *,
     from_zone: str = "hand", extra_generic: int = 0,
-    under: "PermittedCast | None" = None,
+    under: "PermittedCast | None" = None, speed: str = "main",
 ) -> "CastAction | None":
     """`_cast_candidate` with the plan told what it pays for (`_paying_for`),
-    or None where the payment would spend a permanent the cast names."""
+    or None where the payment would spend a permanent the cast names.
+
+    **What both cast choosers ask**, at either *speed* (``"main"`` or
+    ``"instant"``, `_cast_candidate`'s): the main phase's and the one that
+    answers priority (``ai_policy.choose_combat_instant_cast_action``). The
+    instant-speed chooser planned without being told what it paid for until
+    kg5, so restricted mana ("Spend this mana only to cast an instant or
+    sorcery spell", Vodalian Arcanist) and a source that pays by being
+    sacrificed (Lotus Petal) never counted toward a response."""
     with _paying_for(spell):
         candidate = _cast_candidate(
             game, seat, spell, zone_index, from_zone=from_zone,
-            extra_generic=extra_generic, under=under,
+            extra_generic=extra_generic, under=under, speed=speed,
         )
     if candidate is None:
         return None
@@ -211,7 +231,15 @@ def _buyback_mana_is_spare(
     paid too, the mana is not spare and the offer is declined.
 
     Free mana (a game not enforcing costs) is always spare.
+
+    **At instant speed the other spells are the ones castable now**
+    (``cast_timing.casts_at_instant_speed``, the engine's question): at an
+    opponent's end step a sorcery in hand cannot be cast beside this one,
+    and the lands untap before it can be cast at all, so it spends none of
+    the mana a buyback would.
     """
+    from .cast_timing import casts_at_instant_speed
+
     if not game.enforce_mana_costs:
         return True
     player = game.players[player_index]
@@ -219,10 +247,13 @@ def _buyback_mana_is_spare(
     with_offer = dict(spell)
     for symbol, amount in offer.mana.cost_at(None).items():
         with_offer[symbol] = with_offer.get(symbol, 0) + amount
+    at_instant_speed = weighed_at_instant_speed()
     for other_index, other in hand_spells(player):
         if from_zone == "hand" and other_index == hand_index:
             continue
         if other.primary_type == "land" or cast_announces_x(other, from_zone="hand"):
+            continue
+        if at_instant_speed and not casts_at_instant_speed(other, game, player_index):
             continue
         # A card in *hand*, priced as one: a deck repeats one definition per
         # copy, so the hand's copy of the spell being weighed from a graveyard
@@ -399,15 +430,28 @@ def _cast_candidate(
     from_zone: str = "hand",
     extra_generic: int = 0,
     under: "PermittedCast | None" = None,
+    speed: str = "main",
 ) -> CastAction | None:
     """`_cast_candidate_in_each_mode` inside one deliberation: every mode,
     offer and target of *card* this decision weighs is measured against one
-    reading of the table with nothing cast (``ai_rehearsal.deliberating``)."""
-    with deliberating():
-        return _cast_candidate_in_each_mode(
-            game, player_index, card, hand_index,
-            from_zone=from_zone, extra_generic=extra_generic, under=under,
-        )
+    reading of the table with nothing cast (``ai_rehearsal.deliberating``).
+
+    *speed* is the moment the cast is weighed at (``ai_actions._SPEED_WEIGHED``):
+    ``"main"``, or ``"instant"`` for a cast made with priority anywhere else.
+    The same builder either way — every gate, every variant loop, every target
+    chooser below — and the speed only changes how the finished cast is read
+    (`_announced_candidate`'s last step)."""
+    if speed not in ("main", "instant"):
+        raise ValueError(f"speed is 'main' or 'instant', not {speed!r}")
+    token = _SPEED_WEIGHED.set(speed)
+    try:
+        with deliberating():
+            return _cast_candidate_in_each_mode(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic, under=under,
+            )
+    finally:
+        _SPEED_WEIGHED.reset(token)
 
 
 def _cast_candidate_in_each_mode(
@@ -461,7 +505,7 @@ def _cast_candidate_in_each_mode(
             under = hand_waiver(game, player_index, hand[hand_index], card, hand_index)
     with cast_trace.entry(
         game, player_index, card, from_zone=from_zone, zone_index=hand_index,
-        permission=under, extra_generic=extra_generic,
+        permission=under, extra_generic=extra_generic, speed=_SPEED_WEIGHED.get(),
     ) as traced:
         return traced.returns(_best_of_the_modes(
             game, player_index, card, hand_index,
@@ -1040,6 +1084,14 @@ def _announced_candidate(
             "its printed timing forbids casting it now "
             "(cast_restrictions.check_cast_timing)"
         )
+    # "Counter target spell **if it's red**": which spell, or no cast at all
+    # when the guard holds for none of them (`_guarded_stack_target`). A
+    # spell on the stack is only there to name at instant speed, or under a
+    # cast a resolution offers (a madness counterspell); with none on it the
+    # engine's gate above has already said no.
+    stack_target = _guarded_stack_target(game, player_index, card) if game.stack else None
+    if stack_target == ():
+        return cast_trace.dropped("no spell on the stack meets its guard")
 
     # X first: an X-draw spell's target choice depends on how many cards it
     # would draw (a spell that empties your own library is aimed elsewhere),
@@ -1229,6 +1281,17 @@ def _announced_candidate(
         buried = _cast_graveyard_denial(game, player_index, card)
         if buried is not None:
             target, target_permanent_index = buried
+    # The spell a cast whose target **is** a spell names: a role's or a
+    # "spell or permanent"'s choice above, the guard's, or — with no guard to
+    # choose by — the one whose answer its rehearsal measures most
+    # (`_chosen_stack_target`). After the mana is known to be there, because
+    # each candidate spell is a rehearsal.
+    if role_stack_index is not None:
+        stack_target = role_stack_index
+    elif stack_target is None and game.stack:
+        stack_target = _chosen_stack_target(game, player_index, card, target)
+        if stack_target == ():
+            return cast_trace.dropped("no spell on the stack worth naming")
     # "…that player must choose at least one Flagbearer on the battlefield if
     # able" (Standard Bearer): the announcement chosen above, held to what an
     # opponent's permanent demands of it — re-aimed where this seat can obey on
@@ -1253,6 +1316,12 @@ def _announced_candidate(
     # cast not proposed rather than one refused.
     if x_value is not None and isinstance(target_permanent_index, int):
         implied = game._x_implied_by_target(card, target, target_permanent_index, None)
+        if implied is not None:
+            x_value = implied
+    elif x_value is not None and isinstance(stack_target, int) and 0 <= stack_target < len(game.stack):
+        # ...and "Counter target spell with mana value X" (Spell Blast): the
+        # spell named fixes it, read off the same gate.
+        implied = game._x_implied_by_target(card, target, None, game.stack[stack_target])
         if implied is not None:
             x_value = implied
     if not _caster_can_make_its_sacrifices(game, player_index, card):
@@ -1452,7 +1521,7 @@ def _announced_candidate(
         land_tap_colors=tap_colors,
         optional_cost_payments=dict(offers) if announces_offer else None,
         mode_index=_announced_mode(card),
-        target_stack_index=role_stack_index,
+        target_stack_index=stack_target,
         target_role_refs=role_refs,
         old_color=text_words[0],
         new_color=text_words[1],
@@ -1473,8 +1542,19 @@ def _announced_candidate(
     # gate at a time: a discard at an empty hand, a sweeper with nothing to
     # sweep, a guard that cannot hold, a removal spell whose only target is
     # the caster's own. The swing is the score.
+    #
+    # **At instant speed a permanent is rehearsed too**, and the reading is
+    # the moment's (`ai_scoring.read_at_instant_speed`): measured against what
+    # happens with nothing cast — the spell on the stack resolving, the
+    # declared combat dealing its damage — which is the whole of what a
+    # counterspell, a pump in a block or a creature flashed in at an end step
+    # is worth; and nothing is cast whose every trace is gone by the end of
+    # the turn (`held_at_instant_speed`), or that scores under the floor
+    # (`ai_cast_score.kept_above_the_floor`). The seat's own main phase is
+    # where such a card is still worth a cast.
     rehearsal = None
-    if card.primary_type in SPELL_TYPES:
+    instant = weighed_at_instant_speed()
+    if card.primary_type in SPELL_TYPES or instant:
         rehearsal = _rehearse_announcement(
             game, player_index, card, cast_announcement(action), planned=action,
         )
@@ -1484,6 +1564,12 @@ def _announced_candidate(
             game, player_index, card, cast_announcement(action), rehearsal,
             planned=action,
         )
+        if instant:
+            rehearsal, held = read_at_instant_speed(
+                game, player_index, card, action, rehearsal,
+            )
+            if held is not None:
+                return cast_trace.dropped(held)
         if (refused := not_worth_proposing(rehearsal)) is not None:
             if rehearsal is not None and rehearsal.accepted and rehearsal.fleeting:
                 _HELD_AS_FLEETING.set(True)
@@ -1493,6 +1579,8 @@ def _announced_candidate(
                 "no rehearsal could be run, and the cast would name one seat of several"
                 " unweighed"
             )
+        if instant and (held := held_at_instant_speed(rehearsal)) is not None:
+            return cast_trace.dropped(held)
     elif (
         (body_needs_the_board(card) or entry_may_remove_itself(card))
         and not cast_announces_morph(game, player_index, card, action)
@@ -1517,4 +1605,6 @@ def _announced_candidate(
             return cast_trace.dropped(
                 "the rehearsed permanent is refused, or does not survive its arrival"
             )
-    return finished_cast_candidate(game, player_index, card, action, rehearsal)
+    return kept_above_the_floor(
+        finished_cast_candidate(game, player_index, card, action, rehearsal)
+    )

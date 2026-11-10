@@ -25,7 +25,13 @@ from engine.card_loader import manifest_set_path
 #: seat nobody asks began to give up the creatures it loses least by
 #: (``ai_prompt_picks.balance_sacrifices``) and seed 36's rounds kept their
 #: animated Forests; 37 is the first after it whose creature round takes one.
-SEED = 37
+#: 69 since kg5 ``aicast``, when the instant-speed chooser began to announce
+#: the X a target fixes: seed 37's Soul Net was countered by a Spell Blast at
+#: its mana value (before, the X was the most the lands paid and the
+#: rehearsal was refused), so no Soul Net saw the Forest die. Of 38-72 only
+#: 69 has a creature round take a Forest with Soul Net's life gained after it
+#: (50, 52, 60 and 67 take one, and no life is gained).
+SEED = 69
 
 
 @pytest.mark.full
