@@ -508,6 +508,48 @@ def test_if_its_a_goblin_card_put_it_onto_the_battlefield(top, entered, binned):
         assert len(_stay_lines(game)) == 1
 
 
+# --- a plain instant: the phrases that never named a card type ------------------
+#
+# These compiled on the base too — no refusal read a bare "card" or a
+# "nonland card" — and put a Lightning Bolt onto the battlefield. No card in
+# the pool prints them; the seam makes them exact.
+
+_BARE = (
+    "Reveal the top card of your library. Put it onto the battlefield.",
+    "Reveal cards from the top of your library until you reveal a nonland card. "
+    "Put that card onto the battlefield and the rest into your graveyard.",
+)
+
+
+@pytest.mark.cr("400.4a", "304.4")
+@pytest.mark.parametrize("text", _BARE)
+def test_a_plain_instant_a_reveal_names_stays_on_top_of_the_library(text):
+    spell = _spell("Test Bare Reveal", text)
+    game = _duel(hand=[spell], library=[_POOL["Lightning Bolt"]])
+    _cast(game, spell)
+    settle(game)
+    assert _on_battlefield(game) == [], game.log[-6:]
+    assert game.players[0].library[0].name == "Lightning Bolt"
+    assert len(_stay_lines(game)) == 1
+
+
+@pytest.mark.cr("400.4a", "304.4", "701.23a")
+def test_a_search_for_any_card_leaves_a_found_instant_in_the_library():
+    spell = _spell("Test Bare Search",
+                   "Search your library for a card, put it onto the battlefield, "
+                   "then shuffle.")
+    game = _duel(hand=[spell], library=[_POOL["Lightning Bolt"]])
+    _cast(game, spell)
+    game.resolve_top_of_stack()
+    assert game.resolve_pending_choice(
+        "search_library", 0, zone="library",
+        library_index=_names(game.players[0].library).index("Lightning Bolt"),
+    )
+    settle(game)
+    assert _on_battlefield(game) == []
+    assert "Lightning Bolt" in _names(game.players[0].library)
+
+
 # --- from a hand ------------------------------------------------------------------
 
 _PIPING = _spell("Test Goblin Piping",
