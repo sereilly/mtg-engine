@@ -344,6 +344,32 @@ def test_a_sweep_reanimation_returns_the_zombie_creatures_and_leaves_the_kindred
     assert len(_stay_lines(game)) == 1
 
 
+_LIVING_GOBLINS = _spell(
+    "Test Living Goblins",
+    "Each player exiles all Goblin cards from their graveyard, then sacrifices "
+    "all creatures they control, then puts all cards they exiled this way onto "
+    "the battlefield.",
+)
+
+
+@pytest.mark.cr("400.4a", "609.3")
+def test_living_death_with_a_creature_type_leaves_the_kindred_card_in_exile():
+    """Living Death's sentence with "Goblin cards", which compiled on the base
+    and put whatever its exile took onto the battlefield: the Goblin creature
+    comes back, the Kindred instant stays exiled (CR 400.4a, from exile)."""
+    game = _duel(hand=[_LIVING_GOBLINS], graveyard=[GOBLIN_TRICK, _POOL["Raging Goblin"]],
+                 mine=[_POOL["Grizzly Bears"]])
+    _cast(game, _LIVING_GOBLINS)
+    settle(game)
+    assert _on_battlefield(game) == ["Raging Goblin"], game.log[-6:]
+    assert _names(game.players[0].exile) == ["Test Goblin Trick"]
+    assert "Grizzly Bears" in _names(game.players[0].graveyard)
+    assert _stay_lines(game) == [
+        "Test Goblin Trick can't enter the battlefield and stays in P0's "
+        "exile (400.4a)"
+    ]
+
+
 # --- a revealed pile --------------------------------------------------------------
 
 _CLEARING = _spell(
