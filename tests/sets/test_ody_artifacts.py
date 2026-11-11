@@ -32,7 +32,7 @@ import pytest as _w1g2_pytest
 from engine import Game as _w1g2_Game, PlayerState as _w1g2_PlayerState
 from engine.ai_valuation import planned_mana_yield as _w1g2_planned_mana_yield
 from engine.board_payment import board_can_pay as _w1g2_board_can_pay
-from engine.mana_payment import is_mana_ability as _w1g2_is_mana_ability
+from engine.mana_abilities import is_mana_ability as _w1g2_is_mana_ability
 from engine.models import Permanent as _w1g2_Permanent
 from engine.oracle import compile_card_oracle as _w1g2_compile
 
@@ -484,7 +484,7 @@ def _w1g6_pool_of(game, seat=0):
 
 
 def test_w1g6_millikin_mills_then_makes_colourless_through_the_stack(set_pool):
-    from engine.mana_payment import is_mana_ability
+    from engine.mana_abilities import is_mana_ability
 
     lea, ody = set_pool("LEA"), set_pool("ODY")
     ability = _w1g6_compile(ody["Millikin"]).activated_abilities[0]

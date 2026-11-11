@@ -214,7 +214,7 @@ def _ordered(symbols) -> list[str]:
 def _every_step(instruction) -> tuple:
     """*instruction* and every step inside it, at any depth — an offer's
     branches included ("…unless any player pays {1}", Rhystic Cave)."""
-    from engine.mana_payment import _every_nested_step
+    from engine.mana_abilities import _every_nested_step
 
     if instruction is None:
         return ()

@@ -261,7 +261,7 @@ from engine.mana_could_produce import LANDS_FILTER_KEY as _W1G5_LANDS_FILTER_KEY
 from engine.mana_could_produce import (
     mana_lands_could_produce as _w1g5_lands_could_produce,
 )
-from engine.mana_payment import is_mana_ability as _w1g5_is_mana_ability
+from engine.mana_abilities import is_mana_ability as _w1g5_is_mana_ability
 from engine.models import Permanent as _W1G5Permanent
 from engine.oracle import compile_card_oracle as _w1g5_compile
 from tests.helpers import resolve_stack as _w1g5_resolve_stack

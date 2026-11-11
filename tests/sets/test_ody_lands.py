@@ -35,10 +35,8 @@ from engine.ai_payment import (
     planned_tap_ability as _w1g2_planned_tap_ability,
 )
 from engine.board_payment import board_can_pay as _w1g2_board_can_pay
-from engine.mana_payment import (
-    is_mana_ability as _w1g2_is_mana_ability,
-    taps_for_payment as _w1g2_taps_for_payment,
-)
+from engine.mana_abilities import is_mana_ability as _w1g2_is_mana_ability
+from engine.mana_payment import taps_for_payment as _w1g2_taps_for_payment
 from engine.models import Permanent as _w1g2_Permanent
 from engine.oracle import compile_card_oracle as _w1g2_compile
 from tests.helpers import resolve_stack as _w1g2_resolve_stack

@@ -39,7 +39,7 @@ from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.game_types import ChosenMode, OracleExecutionContext, StackItem
 from engine.legality import _activation_spec
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, usable_activated_abilities

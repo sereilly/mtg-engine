@@ -35,7 +35,7 @@ from engine.ai_valuation import ManaYield, planned_mana_yield
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.linked_exile import link_exiled_card
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -92,7 +92,7 @@ def _w2g5_pay(game, plan) -> None:
 
 def _w2g5_steps(instruction) -> tuple:
     """*instruction* and every step inside it."""
-    from engine.mana_payment import _every_nested_step
+    from engine.mana_abilities import _every_nested_step
 
     return (instruction, *_every_nested_step(instruction))
 

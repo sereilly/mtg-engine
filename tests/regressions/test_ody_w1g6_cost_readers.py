@@ -214,7 +214,7 @@ def test_only_a_loyalty_cost_or_a_mill_cost_takes_an_ability_out_of_cr_605_1a(
     the ability differs from the answer for its bare instruction on exactly
     those. A third reason appearing here is a reading somebody added without
     saying which rule it was."""
-    from engine.mana_payment import is_mana_ability
+    from engine.mana_abilities import is_mana_ability
 
     differing = [
         (name, ability)

@@ -36,7 +36,7 @@ from ...mana_combination import MANA_COMBINATION, split_refusal
 from ...mana_could_produce import NAMED_MANA_TYPE, named_mana_type
 from ...targeting import GRAVEYARD_TARGET_KIND, derive_activation_spec
 from ...target_roles import ROLE_SEATS
-from ...mana_payment import answer_color_choices, is_mana_ability
+from ...mana_abilities import answer_color_choices, is_mana_ability
 from ...events import emit
 from ...graveyard_order import graveyard_object_of
 from ...game_types import (as_graveyard_stamps, as_target_ids,
@@ -860,7 +860,7 @@ class AbilityActivationMixin:
         # **CR 605.3b: an activated mana ability does not use the stack.** Which
         # abilities those are is CR 605.1a, and CR 605.1a is a question about
         # what the whole ability *does* — so it is asked of
-        # ``mana_payment.is_mana_ability``, the one reader the five CR 602.5
+        # ``mana_abilities.is_mana_ability``, the one reader the five CR 602.5
         # gates at the top of this method already ask.
         #
         # It used to be a three-name set of instruction **kinds**

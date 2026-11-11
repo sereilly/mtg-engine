@@ -87,9 +87,9 @@ import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .mana_payment import (MANA_PRODUCING_KINDS, PIP_SYMBOLS, UNITS_UNCHANGED,
-                           ManaPayment, _every_nested_step, _prices_in_force,
-                           pips_payable_by, plan_payment)
+from .mana_abilities import MANA_PRODUCING_KINDS, _every_nested_step
+from .mana_payment import (PIP_SYMBOLS, UNITS_UNCHANGED, ManaPayment,
+                           _prices_in_force, pips_payable_by, plan_payment)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
@@ -436,7 +436,7 @@ def is_tap_cost_mana_ability(ability) -> bool:
     from dataclasses import replace
 
     from .activation_restrictions import prints_activation_restriction
-    from .mana_payment import carries_an_offer, is_mana_ability
+    from .mana_abilities import carries_an_offer, is_mana_ability
 
     instruction = getattr(ability, "instruction", None)
     if instruction is None or not getattr(ability, "supported", False):

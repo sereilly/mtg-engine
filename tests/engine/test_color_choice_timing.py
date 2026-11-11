@@ -33,7 +33,7 @@ from engine import Game, PlayerState
 from engine.activation_zones import GRAVEYARD, ability_functions_from
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.models import Permanent
 from engine.faces import castable_faces
 from engine.oracle import compile_card_oracle

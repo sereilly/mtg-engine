@@ -30,7 +30,7 @@ from engine.ai_combat import CombatOutcome, run_ai_combat_phase
 from engine.ai_valuation import _effect_steps, hampers_its_own_source
 from engine.cast_timing import casts_at_instant_speed
 from engine.faces import compilation_units
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities

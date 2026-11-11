@@ -32,7 +32,7 @@ from engine.ai_valuation import SOURCE_RETURN_KINDS
 from engine.ai_weighed_cast import _effect_steps
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units
-from engine.mana_payment import is_mana_ability as is_cr_mana_ability
+from engine.mana_abilities import is_mana_ability as is_cr_mana_ability
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities

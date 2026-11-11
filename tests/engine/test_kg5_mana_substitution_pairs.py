@@ -50,7 +50,7 @@ from engine.faces import compilation_units
 from engine.game_types import OracleExecutionContext
 from engine.land_mana_swaps import payment_colors, substitution_line, swapped_production
 from engine.mana_could_produce import lands_could_produce
-from engine.mana_payment import _every_nested_step
+from engine.mana_abilities import _every_nested_step
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 

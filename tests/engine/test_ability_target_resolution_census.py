@@ -72,7 +72,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.keywords import grant_keyword
 from engine.type_layer import SET_CARD_TYPES
 from engine.legality import _activation_spec, targeting_instruction
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.stack_targets import _target_instances, chosen_targets

@@ -152,7 +152,7 @@ def test_w1g9_a_painlands_colored_ability_never_uses_the_stack(set_pool, name, c
     seats interactive it resolves where it stands — the mana is in the pool and
     the damage is dealt with nothing for anybody to respond to (the card's own
     ruling: "It doesn't use the stack and can't be responded to")."""
-    from engine.mana_payment import is_mana_ability
+    from engine.mana_abilities import is_mana_ability
 
     game, land = _w1g9_land_game(set_pool, name)
     assert [is_mana_ability(a) for a in game.usable_abilities_of(land)] == [True, True]

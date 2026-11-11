@@ -321,7 +321,7 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         # makes already arrives on (``choices["new_color"]``, read by the "any
         # color", "{B} or {R}" and combination branches of ``add_mana_from_text``).
         # Stamped as ``color`` by the two sites that run a mana ability inline
-        # (``mana_payment.answer_color_choices``), and only onto a choice the
+        # (``mana_abilities.answer_color_choices``), and only onto a choice the
         # controller makes, so nothing on the stack path is ever pre-answered.
         #
         # Without it the activator's named colour was ignored and the prompt's

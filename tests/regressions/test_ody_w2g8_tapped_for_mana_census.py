@@ -59,7 +59,7 @@ from engine.auras import aura_additional_mana_on_tap, aura_additional_mana_rate
 from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.mixins.land_tapped_for_mana import (TAP_TRIGGER_KINDS,
                                                 _tap_trigger_steps)

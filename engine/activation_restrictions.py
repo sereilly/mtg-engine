@@ -1204,7 +1204,7 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
 #: **unless they're mana abilities**."). The list is payload like the one type
 #: — a permanent of any listed type is bound — and the exception is the same
 #: words Faith's Fetters prints on its Aura clause, answered by the same
-#: ``mana_payment.is_mana_ability`` the activation path asks: a mana ability is
+#: ``mana_abilities.is_mana_ability`` the activation path asks: a mana ability is
 #: defined by what it does (2017-03-14: "A mana ability is an ability that
 #: produces mana, not an ability that costs mana").
 _BAN_TYPE = r"(?:artifacts|creatures|enchantments|lands|planeswalkers)"
@@ -1269,7 +1269,7 @@ def global_activation_ban(game, permanent, ability=None) -> str | None:
             if banned["nonmana_only"]:
                 if ability is None:
                     continue
-                from .mana_payment import is_mana_ability
+                from .mana_abilities import is_mana_ability
 
                 if is_mana_ability(ability):
                     continue

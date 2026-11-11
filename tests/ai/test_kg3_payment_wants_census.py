@@ -41,7 +41,8 @@ from engine import mana_wants as wants_module
 from engine.activation_zones import HAND
 from engine.ai_payment import _PaymentPlanner, _paying_for
 from engine.flashback import printed_flashback_cost
-from engine.mana_payment import is_mana_ability, mana_cost_label, mana_cost_x_as_zero, plan_payment
+from engine.mana_abilities import is_mana_ability
+from engine.mana_payment import mana_cost_label, mana_cost_x_as_zero, plan_payment
 from engine.oracle import compile_card_oracle
 from engine.search_filters import card_has_type
 from engine.targeting import usable_activated_abilities

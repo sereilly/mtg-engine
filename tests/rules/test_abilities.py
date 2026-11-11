@@ -21,7 +21,7 @@ import pytest
 from engine.faces import compilation_units
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.oracle import compile_card_oracle, parse_activated_ability_cost
 
 
@@ -1650,7 +1650,7 @@ def test_113_6g_the_uncounterable_spell_is_still_a_legal_target():
 import dataclasses as _w3g5_dataclasses
 
 from engine.card_loader import manifest_set_paths as _w3g5_manifest_set_paths
-from engine.mana_payment import _every_nested_step as _w3g5_nested_steps
+from engine.mana_abilities import _every_nested_step as _w3g5_nested_steps
 from engine.named_counters import add_counters as _w3g5_add_counters
 
 
