@@ -59,7 +59,10 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   machine; at Judgment the owner's other work left ~18 GB, so three agents
   testing serially plus the integrator's `-n 2` meeting runs, and the full
   gate alone at `-n 4`; at kg ~55 GB was free and eleven agents ran at once
-  beside `-n 2` meeting runs. **And read it again before every launch and every
+  beside `-n 2` meeting runs; at kg5 the owner's game engine held ~13 GB and
+  9–17 GB stayed free, so gates ran at `-n 3` or `-n 4` and four of seven
+  wave-2 groups launched at once, the other three as wave-1 agents finished.
+  **And read it again before every launch and every
   gate**: at Onslaught free commit went from 29 GB to 0.8 GB and back within a
   day as the owner's own work opened and closed (a game engine; an IDE that
   starts a pytest discovery for every worktree added or removed — nineteen at
@@ -124,6 +127,10 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   popped a sibling's work into their own tree. Commit instead.
 - **Give each group a private scratch folder**
   (`.worktrees/scratch/<round>/<group>/`); a shared one gets overwritten.
+  **Save each group's final report verbatim the day it lands**
+  (`scratch/<round>/reports/<group>.md`), beside the merge notes: Phase 6 is
+  briefed from both, and kg5's had to be recovered from the session
+  transcript for it.
 - **Commit as each item lands, and before any long run on a commit.** An
   expired session stops every agent at once, and the ones with commits resume
   cheaply. Work in an exported tree or left uncommitted is invisible to a merge
@@ -214,8 +221,10 @@ And when writing one:
   `settle(game, defaults=False)` returns the first owed prompt instead of
   answering it. A combat is walked with `tests.helpers.drive_combat(game)`
   after `declare_attack`: it settles each step before leaving it and by
-  default leaves end of combat, where the engine fires "at end of combat"
-  triggers; `through="combat_damage"` stops on arriving there. Three Mirrodin
+  default leaves end of combat, so combat is over (CR 511.3); "at end of
+  combat" triggers fire as that step begins (CR 511.2), so
+  `through="combat_damage"`, which stops on arriving there, finds them
+  resolved and the creatures still in combat. Three Mirrodin
   groups lost a round each before these existed (forty-odd private copies
   replaced since). A probe builds its board with
   `scripts/integration/board.py`, and a client group sets up a live one with
@@ -287,7 +296,11 @@ And when writing one:
   commit it with its trackers regenerated (`chain_commit.sh`, which runs
   `regen.sh` — never an `--accept`), and fast-forward `main` only to a link
   whose full gate was read green. A red link is fixed in that link, then the
-  links above it are rebuilt or merged forward.
+  links above it are rebuilt or merged forward. **Short of memory, commit the
+  links with their scans and regenerate at a chain tip**: `regen.sh` runs
+  `parse_coverage` at eight processes on every link, and no group's branch
+  regenerates, so one regeneration at the tip (`parse_coverage --workers 3`)
+  covers every link beneath it (kg5 did it at two tips).
 - **Before staging a branch, `git status` its worktree and list its scratch for
   anything newer than its last commit** (`chain_stage.sh` refuses a dirty
   tree). Uncommitted work is a decision for the integrator that `git merge`
@@ -323,7 +336,13 @@ And when writing one:
   default, an entry road, combat assignment, log wording) also runs `tests/sets`
   whole (three per-set reds surfaced late in kg3). It takes about a minute
   at `-n 4`; Mirrodin skipped it for the graveyard's arrival seam and a full
-  gate found the Tempest Efreet red two links later.
+  gate found the Tempest Efreet red two links later. A link whose branch
+  changes what a wire field means runs `tests/ui` and `tests/regressions`
+  whole too: a test reading the payload through `web.app`'s `TestClient`
+  imports none of the modules the change edits, so neither `tests_for_diff`
+  nor the meeting names it (kg5's `client` made a copy's `name` its copiable
+  name; `test_batch15` looked a Copy Artifact up by the old one, and the red
+  waited seven links for a gate that ran `tests/regressions`).
 - **Two branches may share one meeting**: stage and commit the first link
   with its scans (oracle_diff, dups, missing and import names), stage the
   second on it, and run the meeting at the top. A red is bisected onto the
@@ -378,7 +397,10 @@ And when writing one:
   is not seeded per session — run the test in one process under
   `random.seed(0..N)`: Onslaught's Phase 5 flake (Tangle Wire's trigger
   order over the wire) failed 3 of 120 that way, and the cause was an AI
-  hand the fixture had left full.
+  hand the fixture had left full. kg5's `ai_vs_ai` web census was green in
+  a meeting run and red in a folder run of the same tree for that reason: a
+  session's seed builds its decks and coin flip and nothing else (Known
+  gaps; how a web test seeds itself is `.claude/rules/tests.md`'s).
 - **Resolve a conflict with a script that asserts what it read**
   (`resolve_both.py`, `merge_blocks.py`): bytes in and out, line endings kept,
   every conflict region asserted to be the one that was read. A replayable
@@ -468,7 +490,18 @@ on at least one resolution.
   channel's arity **and** its element type in one round, at one reader, never by
   another local normalisation.
 - **A semantic collision** — one branch splits a kind, another's table assumed
-  one — merges textually clean; only running the tests between merges finds it.
+  one; one moves every caller onto a new seam, another adds a caller of the
+  old one — merges textually clean, and the tests between merges find it only
+  where one reaches that caller. **So every brief asks the report for each
+  function it touched in a file another group's row names, and that list is
+  the merge's reading list**: read each one in the merged tree against the
+  sibling's report before the meeting. kg5's kindred added a single find
+  calling `shuffle_library_of` where grammar had put every search shuffle
+  behind `shuffle_after_search` (Tithe's one shuffle); the merge was clean and
+  the read caught it. A function one branch moved and another edited
+  conflicts in its old home alone: resolve that file to the mover's side and
+  apply the edit in the new home (`aiact` moved `_rehearse_activation` into
+  `ai_activation_rehearsal` while `airesp` changed one of its lines).
 - **A pool-wide guard from one branch turns red on a card another branch
   touched.** Drive the card before touching either side. If the guard asserted
   more than its invariant, restate the invariant with the engine's own predicate
@@ -484,6 +517,14 @@ on at least one resolution.
 - **A seeded simulation test asserts its subject was exercised, never how
   often.** A count over a seeded game is a statement about every other card in
   a set still being implemented; the floor is one.
+- **A seeded AI row red only under several AI branches together is reseeded
+  once, after the last AI branch merges** — not at each link, where the next
+  AI branch moves the games again. Each branch is green alone; carry the red
+  as known, read again at each link by what it names, and reseed on the tip
+  with a search that holds each candidate seed to the test's own assertions.
+  kg5 reseeded two that way (`test_kg5_mana_substitution_simulation` 5151 to
+  5155, `test_kg_layers_ai_balance_and_deaths` 69 to 141;
+  `scratch/kg5/tools/reseed_*.py`).
 - **A new `PlayerState` or `Game` field is read by every `vars()` walker** —
   `ai_rehearsal.position_digest` and the AI censuses' board signatures. One that
   moves on every resolution (a graveyard arrival stamp) reads as a lasting
@@ -1191,68 +1232,22 @@ drained the colour-blind planner with a test on the neighbouring board (the
 Angel already face down), and Legions' Phase 5 found Onslaught's own board
 (the Angel cast face down) still stranding its turn-up.
 
-- **"At end of combat" triggers fire as the step is left, not as it begins**
-  (CR 511.2: "as the end of combat step begins"). `_enter_combat_step
-  ("end_of_combat")` gives the active player priority first, and the delayed
-  trigger goes on the stack only at `end_combat`: an Unsummon cast in that
-  window resolves before Time Elemental's trigger exists, and a source removed
-  there (Wall of Nets) would never trigger. Found by the speed round while
-  writing `drive_combat` (`scratch/speed/helpers/probe3.py`). *Clears:* any
-  turn-structure round. *Parts:* fire the step's "at end of combat" triggers
-  on entering it, before priority; `drive_combat`'s default still leaves the
-  step (its docstring says why), and `tests/engine/test_settle_and_drive_combat_helpers.py`'s
-  Time Elemental test pins today's order — re-read it with the fix.
-- **The AI's instant-speed cast builder is a thinner copy of the main one**
-  (`ai_policy._combat_instant_candidate` beside `ai_casts._announced_candidate`;
-  inventoried by the speed round's `explain_cast` work, which moved both onto
-  one scoring finisher). At instant speed it plans without `_paying_for`
-  (restricted mana and sacrifice-for-mana sources never count, and
-  `_plan_spends_what_it_names` does not apply — `_PaymentContext`'s docstring
-  calls that intended "in combat"); never builds entwine, kicker or another
-  optional cost, an alternative cost (Force of Will is planned on its mana
-  cost), X paid in life, several targets, an Aura's host, X implied by the
-  target, sacrifice victims or a command-zone cast; and lacks the printed-timing,
-  additional-cost, last-life-point, entry give-back and arrival gates (the
-  legality ones mostly surface as a refused rehearsal). *Clears:* an AI round.
-  *Parts:* `_announced_candidate`'s gates and variant loops as one function both
-  choosers call, the instant-speed readings a post-step; a census of the
-  payment context at instant speed first. `explain_cast` and
-  `test_ai_cast_explain.py`'s guard make the refactor measurable.
-- **The trigger table retries a "when" line as "whenever", not the reverse**,
-  so "Whenever this creature dies, …" parses in the grammar and is refused at
-  the trigger-condition table (`scripts/probe_line.py` names it). No shipped
-  card prints it; a future set's will. *Clears:* the set that prints one.
-  *Parts:* the reverse retry, or a row.
+- **Two `DamageRedirect` records on one creature are one candidate**, oldest
+  first, so CR 616.1e's choice between them is never offered: Jade Monolith
+  beside Daughter of Autumn, Shimian Night Stalker or an en-Kor (kg5
+  `prevent`, which made Jade Monolith a record, measured it). Parts:
+  `damage_events.damage_candidates` hands the game and the event to
+  `replacement_candidates`, so an `instances=` registration expands for
+  damage; the recorded redirect registers `instances=`, one per applicable
+  record (a plural of `damage_redirects.applicable_redirect`). Smaller, same
+  subject: Eye for an Eye's mirrored damage is dealt with no source, where
+  its ruling (2009-02-01) has Eye for an Eye deal it, so a Circle of
+  Protection: White cannot prevent it; Forcefield's shield lasts to the end
+  of combat though it prints "this turn". Seen, not measured: the Phantoms'
+  `prevention/static.SIMULTANEOUS_RIDER_SPENT` is kept for combat damage
+  alone, and a non-combat dealing can have several sources now. *Clears:* a
+  prevention round.
 
-- **Four "next time" readings left beside CR 615.8's ruling.** kg4 settled
-  CR 615.8 by the owner's ruling (2026-11-07): a source-keyed "next time" is
-  one instance — everything its source deals in one simultaneous dealing
-  (`damage_redirects.dealing_moment`, `shields.SharedNextTime` `by_source`,
-  closed by `simultaneous_damage.finish`;
-  `tests/regressions/test_kg4_615_next_instance_census.py`). Left, each
-  measured by kg4/615:
-  - Jade Monolith and Eye for an Eye keep legacy single-recipient records
-    (the `redirect_damage_to_player` metadata pair; `PlayerState.mirror_damage_*`),
-    spent per chunk; they meet a second chunk only when one dealing hits
-    their one recipient twice (Cuombajj Witches naming one object twice).
-    Part: move them onto `DamageRedirect` and a rider record; the census
-    exempts them by name and fails if either reaches several recipients.
-  - Dark Sphere's "half" and Forcefield's "all but 1" are computed per
-    chunk; across a split sentence's two chunks at one recipient the share
-    should be of the instance's total (`Shield.would_prevent` needs the
-    running total).
-  - The recipient-keyed template keeps `damage_moment` (the resolving
-    object), wider than a dealing: Illuminate kicked with {2}{R} moves its
-    second sentence's damage to Glarecaster's controller too, and Mana
-    Clash moves every flip's damage against its ruling ("each point of
-    damage is dealt separately"). Part: `occasion_moment` always uses the
-    dealing; then `COMBAT_DEALING` and `end_simultaneous_redirects` go
-    (`scratch/kg4/615/probe_recipient.py`).
-  - Kicked Magma Burst is one divided instruction, so one dealing; whether
-    its kicker sentence is a second instance belongs to whoever owns the
-    division lowering.
-  *Clears:* a prevention round (the first two, the third), a lowering
-  round (the fourth).
 - **The API still announces a battlefield target by slot, and three zones
   share that keyword.** kg4's `ids` drained the holders: on every holder the
   slot channel is None or a list (`check_target_slots`, read through
@@ -1282,174 +1277,237 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     (a)'s zone keywords first.
   *Clears:* a round of its own, (a) then (b) then (c).
 
+- **A payable Alliances toll is charged after Land Equilibrium, so its
+  controller is never offered paying first.** Since kg5 an entry asks CR
+  616.1e's question (`_begin_entry` returns `entry_awaiting.ENTRY_SUSPENDED`;
+  Worms of the Earth's "can't" is its own `cant_enter_battlefield` event), but
+  a toll its land can pay (Lake of the Dead beside a Swamp, the six other
+  Alliances lands) is paid in the entry state, after Land Equilibrium, at a
+  seat nobody asks and at a person's alike: the player loses the extra land,
+  where Land Equilibrium's ruling (2009-10-01) lets them pay first, which can
+  switch it off (`scratch/kg5/asks/probe_payable.py`). The other order is
+  settled: with Land Equilibrium applied first, the toll then replaces the
+  entry inside its modified event and the "then sacrifices a land" still
+  happens (CR 614.6, 616.1f; the same ruling: "After applying one, if the
+  other one would still be applicable, it's then applied"). Parts (kg5
+  `entry2`):
+  1. `replacements/permanents.py`: a `would_enter_battlefield` registration
+     for the payable toll at order 18 (after `UNPAYABLE_ENTRY_SACRIFICE`'s 16
+     and Mox Diamond's 17, before Land Equilibrium's 20, so a seat nobody asks
+     pays first), applying while `_entry_sacrifice_refuses_entry` holds, the
+     candidates cover the count and the permanent is not marked paid (the
+     `ENTRY_TOLL_ANSWERED` arrangement); a seat nobody asks pays inline, and
+     CR 616.1f re-asks Land Equilibrium against the smaller board;
+  2. `choices/sacrifice.arm_forced_sacrifice` takes a continuation its
+     resolver calls after the sacrifice: the entry's re-run, for an asked
+     seat;
+  3. `ZoneFunnelsMixin._entry_question_owed` recognises any owed prompt
+     carrying the entry's `_restart`, not only `effect_order`, so the entry
+     suspends and the caller's `then` runs once;
+  4. `mixins/permanent_state._perform_entry_state` skips the toll for a
+     permanent marked paid;
+  5. a seat nobody asks changes order, so a sim fingerprint and new cases in
+     `tests/regressions/test_kg5_asks_contended_entry.py`.
+  Same seam: a permanent that becomes a land only through the copy it
+  chooses as it enters (Clone of an animated land, Sculpting Steel of an
+  artifact land) still enters under Worms of the Earth, where its ruling
+  (2008-08-01) sends it to the graveyard (CR 614.17d;
+  `scratch/kg5/entry2/probe_clone.py`) — part: ask `cant_enter_battlefield`
+  again in `_begin_entry` after `_initialize_permanent_state`'s copy choice,
+  and at `_finish_answered_entries` for an "as it enters" copy prompt; and at
+  an interactive seat Mox Diamond's answered toll re-enters without the
+  caller's `then` (no "put onto battlefield" line, the cast's `arrived` never
+  runs; `replacements/permanents._resolve_entry_discard_toll`, the base too).
+  *Clears:* an entry-seam round.
 
-- **CR 616.1e's choice is not put to a person for three events.** kg4 made a
-  death, a move into a graveyard and a discard ask the affected player
-  (`apply_replacements(..., joined=)`, `answered_restart`), and
-  `tests/engine/test_kg4_asks_replacement_sites.py` classes every call site
-  (asks, one registered effect — checked against the live registry — or
-  declined). Declined, each with its parts:
-  - `would_enter_battlefield` (`mixins/zone_funnels._begin_entry`): Land
-    Equilibrium beside an unpaid Alliances land toll; Containment Priest
-    beside a toll on an uncast creature. A suspended entry is not "did not
-    enter" (Land Equilibrium does not replace the entry), so the restart
-    re-runs `_begin_entry(put)` and `_finish_or_await` for the
-    `DeferredEntry`, callers that read `_put_permanent_onto_battlefield`'s
-    False as "replaced" tell it apart from "suspended", and a suspended
-    newcomer leaves an `entering_together` batch. Worms of the Earth stays
-    out of the choice (a CR 614.17 "can't").
-  - `land_mana_produced` (`land_tapped_for_mana._land_tapped_for_mana`): two
-    substitutions on one land (Infernal Darkness and a Deep Water record)
-    are picked by timestamp. `land_mana_swaps.swapped_production` returns
-    every applicable substitution, the registration takes one candidate per
-    producer (`instances=`), and the choice is made before the tap (it
-    happens mid-payment, CR 601.2g, and cannot resume) — a colour-like
-    choice on the tap action and the `ability_mana` wire, the AI's planner
-    told which.
-  - The chosen discard (`handlers/discards._resolve_one_discard`): its
-    else-branch runs Dodecapod, madness and the graveyard seam in order, so
-    neither is asked against Forbidden Crypt or Yawgmoth's Will on a discard
-    the player chose. Part: `discarded_card_destination(...,
-    leng_declined=True)`, keeping its "discarded X" line for a card the
-    discard's own effects did not take.
-  *Clears:* (a) an entry-seam round, (b) a mana round, (c) any round in
-  that handler.
+- **Whether a replaced land play is a play to what watches it is the
+  engine's reading, not a ruling.** A Lake of the Dead played with no Swamp
+  goes to the graveyard instead of entering; since kg5 the play spends the
+  land drop as the special action is taken (`resolution._resolve_card`: CR
+  305.2a counts the lands played, 116.2a), and Horn of Greed and Fastbond's
+  damage do not trigger, because a land play is the put (CR 701.18a) and a
+  replaced event triggers nothing (CR 603.2g); Fastbond's next land counts
+  the replaced one. Their rulings (2004-10-04) part a play from a put by an
+  effect and say nothing of a replaced play, and the other reading — the
+  play happened, so "whenever a player plays a land" triggers — is the same
+  rules read for the drop. *Clears:* the owner's ruling, then
+  `resolution._resolve_card`'s watchers if it goes the other way.
 
-- **At a flagged step on an AI's turn, an AI seat between the active AI and
-  the person passes without being asked** (`act_at_priority`). Not a
-  regression: unflagged, nobody is asked at such a step. Part: the loop in
-  `seats._hold_priority_for_human` moves to `game_flow._hold_at_flagged_step`
-  so it can call `_ai_respond_to_priority`, and turn_steps' upkeep and draw
-  holds go through it. Smaller, same area: Camouflage in the simulator
-  leaves the turn in declare blockers when the defender has no untapped
-  creature (`combat_phase`'s Camouflage branch should return only when
-  `interactive_seats` is set; nil in practice — the rehearsal stalls the
-  same way, so the AI never casts it then;
-  `scratch/kg4/unblocked/probe_camo.py`). *Clears:* a web-priority round.
+- **The web leaves a person unasked in three windows** (kg5 `webturn2` and
+  `cleanup`; every step the AI's turn arrives at with objects on the stack
+  goes round since kg5, `game_flow._ai_answers_over_the_stack`).
+  (a) A person's own upkeep and draw-step objects resolve unasked when the
+  step is not flagged (Copper Tablet;
+  `scratch/kg5/webturn2/probe_unasked_own.py`): `turn_steps._resolve_upkeep_step`
+  (the no-decision road) and `_finish_beginning_phase` need the AI turn's
+  deferral, and `_advance_after_upkeep_choices`, `_resume_deferred_upkeep`
+  and the Island Sanctuary road hand the person's pay answers into
+  `resolve_upkeep`, which would have to survive a deferred window.
+  (b) The End Turn button (`turn_steps._end_turn`) drains the end step's
+  objects with the AI never offered priority (Ball Lightning); the jump
+  itself is deliberate.
+  (c) A person is never given priority in the cleanup step (CR 514.3a): the
+  engine gives it only at a table a priority driver plays, and with an
+  interactive seat the window collapses to its outcome. Parts:
+  `phases/cleanup_step.resolve_cleanup_step`, when the table has an
+  interactive seat and 514.3a applies, leaves the objects on the stack, calls
+  `start_priority_window(active)` and `hold_step_open()`, and returns False;
+  a new `Game.close_cleanup_step()` begins another cleanup step once the
+  stack is empty and everyone has passed; `web/game_flow._advance_phase`
+  leaves a `"cleanup"` step through `_leave_step(session,
+  game.close_cleanup_step)` before `_start_next_turn`; `turn_steps._end_turn`
+  and `action_turn._action_cleanup_select` tell a False meaning "window
+  open" from one meaning "discard owed" (every False sets
+  `cleanup_required_discards` today); and a priority panel in the client's
+  cleanup step. Beside it: a hand a cleanup trigger fills past its maximum
+  (Thawing Glaciers' return) is discarded down by the AI's default in the
+  second pass, not by the person (`_action_cleanup_select` handles one
+  deferral); and CR 603.7g makes a flash Aura's delayed sacrifice as the
+  spell is cast, so a countered one still triggers, inertly, at cleanup,
+  which a mark on a permanent cannot say (part: a `DelayedTrigger` armed at
+  `_cast_onto_stack` and bound to the permanent at `_resolve_card`).
+  Seen, not measured: Time Vault untaps at the skip, not as the first thing
+  of the next turn taken (CR 614.10b; its ruling of 2008-10-01). *Clears:* a
+  web turn-flow round.
 
-- **`effect_order`'s default is `choose_effect`'s stated order, not a
-  measured one.** A measured order rebuilds the candidates on the scratch
-  copy (`replacement_candidates(kind, clone, event)`) and applies each first
-  choice there. *Clears:* an engine-defaults round.
-
+- **`effect_order`'s measured default covers a damage event's first
+  contended round only.** A seat nobody asks takes `choose_effect`'s stated
+  order everywhere else; there it takes the effect whose result costs the
+  affected seat least, each forced first on a scratch copy, a tie keeping the
+  stated order (`engine/measured_effect_order.measured_damage_default`,
+  `tests/rules/test_kg5_prevent_measured_effect_order.py`). Left, each
+  measured by kg5 `prevent`: a non-damage kind keeps the stated order (a copy
+  has no result to read without its caller: a per-kind result reader its
+  caller hands to `apply_in_order(default=)`); a later contended round of a
+  damage event is stated; an effect deferred to a dealing's finish is not
+  seen by the measurement; and the copy does not conceal hidden zones (no
+  damage contention reads one today). *Clears:* an engine-defaults round.
 
 - **AI leftovers.** The engine plays each correctly; the AI chooses badly or
-  not at all. From kg4's AI groups, each measured:
-  - Zealous Inquisitor's redirect is bought precombat where it is what makes
-    the attack: the attack policy (`ai_declarations` /
-    `ai_combat.declare_ai_attackers`) does not count an instant-speed trick
-    the seat holds; a rehearsal whose fight lets the copy's instant-speed
-    chooser act in declare blockers needs a priority driver on the copy
-    (`_fight_the_combat` has none).
-  - Lethal Vapors is activated by nobody (a safe floor): it needs
-    `seat_standing` to price `skip_turn_counts`, `foreign_activation_use` to
-    return a use for "removes its source, at a price to the activator", and
-    the worth of removing a "whenever a creature enters, destroy it"
-    permanent (the activator's castable creature cards against the
-    opponent's) — no reader has the third.
-  - One-shot artifacts keep their flat score (`_exists_to_be_given_up`), so
-    Feldon's Cane or Tormod's Crypt can be cracked over an empty graveyard.
-  - The AI never turns Mischievous Quanar face up in response to a spell
-    (`ai_special_actions` weighs `turn_face_up` only in its own main phase):
-    a response-window special-action chooser in `act_at_priority`.
-  - A copy with several targets or a mode keeps the original's targets on
-    every road (`_copy_reaim_is_one_slot`, single-slot `change_slots`).
-  - Combat gambles left unpriced: one-shots that are certainly lost (by
-    design: when to spend one is a timing question), Ebonblade Reaper's
-    "half your life", Loafing Giant's milled land, tolls behind a `may`
-    (Rotting Giant, Treacherous Vampire, Hasran Ogress), a defender not
-    reading an armed lost-flip redirect, Goblin Cadets' "becomes blocked".
-  - Pemmin's Aura is never cast onto an opponent's X/1 to kill it later
-    (`ai_targets._choose_aura_target` does not weigh the host ability).
-  - No graveyard road-back value (no measured decision needs it yet), and
-    `mana_wants` does not see the wants of a card a graveyard activation
-    brings back (Eternal Dragon's upkeep return tapped both Plains it needs).
-  - Vhati il-Dal is aimed at its controller's biggest creature
-    (`set_base_pt_target_until_eot` reads "you" by its category); the four
-    sacrifice-cost both-sides pumps (Goblin Soothsayer, Orc General, Goblin
-    Lookout, Squirrel Wrangler) are never activated.
-  - `ai_abilities._sized_x_activation` prices X without taxes (it could ask
-    `Game.activation_mana_charge`).
-  - Kudzu's `ai_targets._aura_harms_its_host` reads False (no marker for
-    "destroy it"), so its cast-target chooser probably puts it on the AI's
-    own land (unverified in a game; the pick reader works round it).
-  - The discard reader (`ai_prompt_picks.discard_order`) ignores flashback
-    (Careful Study's Firebolt against Engulfing Flames) and caster-side
-    payoffs (Gerrard's Verdict's life per land discarded).
+  not at all. From kg5's AI groups, each measured:
+  - Lethal Vapors is activated by nobody. `ai_standing.seat_standing` prices
+    a skipped turn since kg5 (`SKIPPED_TURN_WORTH`; an extra turn is
+    unpriced); left: `ai_valuation.foreign_activation_use` has no use for
+    "removes its source, at a price to the activator" (`destroy_self` and
+    `skip_next_turn`; Wall of Vipers is its one twin), which
+    `ai_foreign_activations._foreign_activation_candidate` would weigh by
+    rehearsal; and no reader prices a creature-entry lock (Lethal Vapors,
+    Spreading Plague, Suleiman's Legacy, Eye of Singularity): a standing term
+    for the creature cards a seat holds while one stands, read only on a
+    rehearsal copy (CR 400.2: `ai_prompt_picks` asks `seat_standing` of the
+    real table), which must not make casting a creature into the lock free.
+  - Power Conduit and Spike Rogue are never activated:
+    `ai_abilities._activation_candidate` declines every
+    `remove_counter_filter` cost. Parts: the sacrifice weighing's twin (each
+    permanent and counter kind, rehearsed with the whole cost paid), an
+    `ActivationAction.cost_counter_kind` that `activation_announcement`
+    forwards, and a standing that prices charge, fate and age counters.
+  - Quicksilver Elemental's {U} is never proposed: a two-step rehearsal (the
+    chooser again over the gained abilities, on the copy where the gain
+    resolved) and `ai_payment._plan_land_taps` honouring the activation's
+    "spend blue mana as though it were any color".
+  - Vhati il-Dal's mode is the `choose_one` default (its first, "base
+    power"): `ai_prompt_picks` does not weigh the two.
+  - Camouflage is never cast: `ai_policy._weighed_at_instant_speed_now`
+    holds an attacking seat's spells until the blocks, and its one window
+    is before them.
+  - Krark's Thumb's `ignore_coin` default
+    (`choices/numbers._default_ignore_coin`) keeps the win or heads where the
+    loss is better (Puppet's Verdict against bigger creatures, Winter Sky,
+    Impulsive Maneuvers on an opponent's attacker): a reader in
+    `ai_prompt_picks` that rehearses both coins.
+  - Tricks around the blocks. The rehearsal copy's fight answers the
+    deciding seat's own abilities after the blocks since kg5
+    (`ai_rehearsal._fight_priority_driver`); not read: a turn-up after the
+    blocks or in the end step, and a Licid's `end_own_continuous_effect` in
+    response (`ai_special_actions.special_action_in_response` asks the
+    response window alone); an instant held for the blocks (the cast chooser
+    does not price a card's other uses against holding it: Healing Salve's
+    life mode was cast where its shield was held for); the opponent's tricks,
+    whose hand on the copy is a redeal (M21 seed 7 lost Keen Glidemaster to
+    Heartfire Immolator); an unblocked attacker's pump; and inside a
+    rehearsal the attack policy still reads printed bodies.
+  - Combat and Aura prices: a payable toll's own price reads zero
+    (`ai_combat_triggers._walk_toll`); a host kill that takes several
+    activations is never chosen (`ai_targets._host_its_ability_kills`);
+    Consuming Ferocity's printed +1/+0 keeps it on its caster's creature
+    (`_HOST_GIFT`); Crown of Suspicion's sacrifice ability is not read;
+    Lumengrid Augur's untap payoff is unpriced (it breaks ties only); a
+    one-shot certainly lost stays unpriced by design (when to spend one is a
+    timing question).
+  - Picks (kg5 `ai2`): `ai_targets._role_chain`'s graveyard roles rank by
+    mana value with no can-enter check (Cruel Revival returns to a hand, so
+    no shipped card); a return to a library is unranked (Bone Harvest,
+    Reinforcements, Misinformation); Adarkar Unicorn's "{U} or {C}{U}" is not
+    a shape `planned_mana_yield` states, and cumulative upkeep is not a
+    `_PaymentPlanner` purpose; the 106 battlefield abilities whose cost
+    discards a card outside madness stay declined by policy.
+  - Overload is kicked against a two-drop (INV seed 7):
+    `ai_casts._times_worth_taking` takes "kicked" whenever the lands can pay,
+    the main phase's policy, which the instant-speed builder shares since
+    kg5.
   *Clears:* the next AI round.
 
-- **Balduvian Shaman can re-target an enchantment it already gave
-  cumulative upkeep**: the granted "Cumulative upkeep {1}" is a text line,
-  so `Permanent.has_keyword("cumulative upkeep")` is False and
-  `legality_enumeration`'s `without_keywords` keeps the Circle
-  (`scratch/kg4/client3/probe_cu.py`). *Clears:* a layer-6 keyword-grant
-  round.
+- **Three mana readers still skip what a substitution does** (kg5 `mana2`,
+  `scratch/kg5/mana2/probe_gaps.py`). (a) `land_mana_swaps.payment_colors`
+  starts from the printed summary, not from what a bare tap makes: Henge of
+  Ramos under Hall of Gemstone's {R} is offered {R} and {C}, and a tap asked
+  for {R} makes {C} (School of the Unseen and Castle Sengir are presumably
+  the same; only the Henge was driven) — part: `_base_symbols` reads
+  `board_payment.tap_alone_symbols`, guarding the controller lookup for a
+  land that has left when its tap event runs. (b) CR 106.7's fixpoint misses
+  a granted any-colour ability: `mana_could_produce.lands_could_produce`
+  reads the summary, so a Forest under Overlaid Terrain "could produce" {G}
+  alone. (c) The three hookless `plan_payment` calls in `legality_cast_spec`
+  (`cast_cost_offers`' kicker payable flag and repeatable-offer count,
+  `_optional_x_ceiling`) see no substitution, so a Plains under Infernal
+  Darkness pays {W} — part: pass `produces=self._land_payment_colors`; the AI
+  reads them, so it needs its own differential. *Clears:* a mana round.
 
-- **"That land could produce" reads `effective_produced_mana`, not CR
-  106.7's fixpoint**: an opponent's Reflecting Pool untapped by Benthic
-  Explorers offers all five colours; a land already gone (sacrificed) needs
-  the board as it last stood. The wire and the engine share
-  `mana_could_produce.types_that_land_could_produce`, so one fix serves
-  both. *Clears:* a mana round.
+- **A counted search that splits its finds between the battlefield and
+  another zone still refuses a card phrase that can name an instant or
+  sorcery** (`lowering/search.MIXED_SLOTS_ADMIT_A_NONPERMANENT`). Every other
+  road onto the battlefield asks CR 400.4a and CR 614.17 before it takes the
+  card since kg5 (`permanent_cards.stays_out_of_battlefield`; every caller of
+  `_put_permanent_onto_battlefield` held by
+  `tests/engine/test_kg5_kindred_entry_roads.py`), but this finder says which
+  find fills which slot only after the finds have left their zones. Parts:
+  `choices/search._resolve_search_library_picks` leaves a find that cannot
+  enter in its zone and marks it on the `search_destination` prompt beside
+  `_cards` and the searched seat; `_place_found_card` takes such a find only
+  into a slot that is not the battlefield; `_default_search_destination`
+  fills the other slots with such finds first. Beside it, not an entry road:
+  "Reveal the top card of your library. If it's a Goblin card, put it into
+  your hand" refuses (`lowering/reveal._lower_reveal_top` tests one card
+  type; `revealed_card_is` reads a creature type since kg5). No shipped card
+  prints either (Cultivate's finds are basic lands). *Clears:* the set that
+  prints one.
 
-- **CR 400.4a has no battlefield-entry seam** (an instant or sorcery card
-  that would enter the battlefield stays in its zone). Exact on a pool with
-  no Kindred card; each road that would put a "<creature type> card" onto
-  the battlefield refuses until it exists (`lowering/_filters.creature_type_card`).
-  Parts: one predicate (`handlers/hand.py`'s `_PERMANENT_CARD_TYPES` check
-  is the shape), asked by each road before it takes the card from its zone
-  (search single find and one-of-each, reanimation from any graveyard, the
-  targeted and the sweep reanimation, the sorted reveal, reveal-until and
-  the opponent's pick), then the refusals lifted; and the subtype-only
-  phrases that still refuse (`revealed_card_is`, `target_is_type`, the
-  each-seat put from hand). *Clears:* the set that ingests the first
-  Kindred card (Lorwyn).
+- **A copy of a roles spell, or of one printing "target" twice with
+  different descriptions, keeps the original's targets.** Since kg5 a copy
+  is offered new targets slot by slot on every road, several targets and
+  modes included (`stack_targets.change_slots`, CR 115.7d's
+  `new_target_options` / `may_keep_target`; a person answers one
+  `retarget_choice` per slot). Left (kg5 `airesp`): Donate, Decimate,
+  Cultural Exchange, Hull Breach's third mode and Reign of Chaos
+  (`change_slots` refuses the role channel, `_CHANGEABLE_CHANNELS`; 33 census
+  rows), and Deadshot, Fiery Justice, Gaea's Blessing, Dwell on the Past and
+  Krosan Reclamation (two descriptions). Parts: a per-role candidate walk
+  (`legality_roles._role_target_walk`) and a role-channel writer in
+  `stack_targets.apply_target_change`. The AI's re-aim is greedy per slot
+  (`ai_prompts.choose_copy_new_targets`), not a joint optimum. *Clears:* any
+  targets round.
 
-- **Oubliette's line is still a card hook** (`CARD_LINE_INSTRUCTIONS`); its
-  leave-the-battlefield half is real phasing since kg4. Parts: `PhaseOut`
-  gains an "until this <self> leaves the battlefield" window and the "Tap
-  that creature as it phases in this way." rider (`grammar/subject_verb.py`),
-  lowered to the existing kind with a `tapped` payload; a
-  `triggered_labels.py` row; the dead hook row goes (`test_card_lines`).
-  Smaller, same subject: Read the Runes discards at each answer (log order
-  only); the end step's delayed actions are a sweep, not stack objects;
-  "sacrifice it" and "its controller sacrifices it" are not told apart (a
-  delayed mark has no seat). *Clears:* a grammar round.
-
-- **Desperate Gambit's two markers name the marked source**, not Desperate
-  Gambit, in an `effect_order` option: a parallel name record in
-  `next_damage.arm` plus its key in `_EOT_METADATA_KEYS`. *Clears:* any
-  round in that handler.
-
-- **Infernal Denizen with one Swamp sacrifices neither** (its test cited
-  CR 701.17b, which is Mill; CR 609.3, "does only as much as possible",
-  reads the other way; the 2004-10-04 rulings say only that the Swamps must
-  be sacrificed if you can). *Clears:* a ruling check, then the card's
-  handler.
-
-- **CR 509.1g: a blocker stays a blocking creature until it is itself
-  removed from combat.** `_prune_combat_state` drops a blocker once all its
-  attackers have left combat by any road (death, bounce, and since Mirrodin's
-  W2G3 regeneration), so "blocking creature" filters stop seeing it; about 110
-  cards read blocking status. Reproduced in `scratch/mrd/w2g3/probe_regen3.py`
-  (Black Knight leaves `combat_blockers`). Parts: a blocking record that
-  outlives its attackers, read by the blocking filters; the damage passes
-  unchanged (CR 509.1h). *Clears:* a combat round.
-
-- **Tithe shuffles twice when both its searches run** (CR 701.23h: one search,
-  one shuffle; Mirrodin W2G4's census). Parts:
-  `grammar/imperative_verbs._parse_conditional_additional_search` flags both
-  `SearchLibrary` nodes "no own shuffle" and appends one `ShuffleLibrary`; the
-  flag reaches the payload (`no_shuffle`); the shuffle sites in
-  `mixins/stack/choices/search.py` and `handlers/search.py` go through one
-  helper that honours it; a test — both finds under Psychogenic Probe deal 2.
-  *Clears:* any round in the search handlers.
-
-- **The web's Time Vault decline runs `begin_turn_bookkeeping` a second time**
-  (`web/action_turn._action_time_vault_decline` calls `_begin_turn`):
-  `seat_turn_counts` rises by two (Giant Turtle, Wall of Dust read it) and
-  `last_own_turn_activity` re-folds the reset records (Arboria). Web games
-  only, when a person declines the skip. *Clears:* a web-turn round.
+- **Mishra's War Machine and Minion of Leshrac never offer their damage.**
+  `phases/upkeep_effects._on__upkeep_self__upkeep_damage_unless_cost`
+  discards `hand[0]` for the War Machine with nobody asked, where its ruling
+  (2004-10-04) lets its controller take the 3 damage instead; the Minion asks
+  which creature to sacrifice and never offers the 5
+  (`scratch/kg5/costs/probe_wm.py`). Part: lower both as a `may` whose action
+  is the discard or the sacrifice and whose `otherwise` is the damage and a
+  tap that asks whether the damage was dealt (the Minion's 2008-10-01 ruling:
+  damage all prevented, no tap). *Clears:* the round that takes the fused
+  upkeep kinds.
 
 - **`queue_from_hand(target_role_refs=…)` is overridden by the default target
   for a lone graveyard role** (`mixins/stack/casting.py`, `names_an_object`
@@ -1457,44 +1515,43 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   gets the default. The client sends the index channel, which is right.
   *Clears:* any casting round.
 
-- **Mirrodin's AI leftovers** (W2G5 measured each): Power Conduit is never
-  activated (no worth for removing charge, fate or age counters;
-  `ActivationAction` lacks `cost_permanent_ids` / `cost_counter_kind`);
-  Quicksilver Elemental's {U} is never proposed (it needs a two-step
-  rehearsal — gain, then the chooser over the gained abilities — and
-  `_plan_land_taps` honouring the activation-scoped blue permission); the
-  activated sacrifice twins (Bosh and 13 more) are never activated; the combat
-  forecasts (`ai_declarations._kills_back` / `_gang_kills`,
-  `ai_compelled_blocks.fight_outcome`) price a regeneration shield as
-  indestructible, where a shielded creature killed by first strike now deals
-  no regular damage. *Clears:* the next AI round.
+- **A copy's name in the effect handlers' sentences** (CR 707.2). Since kg5
+  a permanent is named by its name (`effective_card.name`) on the wire
+  (`printed_name` beside it) and in the engine's offered lists, refusals,
+  stack lines and state-based-action lines, and an ability by its source
+  (`stack_targets.source_name`;
+  `tests/engine/test_kg5_copies_copy_name_census.py`). Left, from kg5
+  `copies`' site census (275 sites over 3,149 copies,
+  `scratch/kg5/copies/census_dyn.py`): (1) `engine/handlers/*`, 228 sites —
+  an ability's source read as `context.card.name`, the source's printed card
+  ("Clone dealt 1 damage to P1"), and a subject as `perm.card.name`
+  ("Lightning Bolt dealt 3 damage to Clone"); (2) the delayed triggers'
+  names (`handlers/delayed.py` stores `source_name=context.card.name`;
+  `delayed_triggers`' mark events carry no source permanent, so "Clone
+  ability resolved" at end of combat); (3) `activation_charges.py`'s twelve
+  cost-payment lines ("A sacrificed Clone to activate its ability"); (4) the
+  107 prompt `card_name` labels the handlers arm, and the `choices/*` answer
+  lines echoing them; (5) `prevention/*`, `replacements/redirects.py`,
+  `replacements/damage_substitutions.py`, `mixins/effects.py`'s life lines
+  and `ai_combat.py`. Each is `source_name(context)` or
+  `effective_card.name`, swept census-driven, and never a protocol key
+  (`dead_name`, `lock_card_in_hand`, `control_seam`'s wire-addressing reads
+  find the physical card). And the client's prompt panel reads "Blockers: 0"
+  for a blocker whose attacker left combat (`app.js` counts the
+  `combat.blockers` pairs; the canvas draws it in combat since kg5).
+  *Clears:* a handlers round with no other group in the handlers (the
+  sweep); a client round (the count).
 
-- **Mirrodin's client and wire leftovers.** A copy's wire `name` is its
-  printed card's (`web/serialization`, `perm.card.name`) where CR 707.2 says
-  the copied object's (`copied_from` carries it; Sculpting Steel copying Iron
-  Myr reads "Sculpting Steel") — serialize the effective name and keep a
-  printed name for art, after a census of the client's name-keyed reads.
-  After a play from a zone the zone panel stays open; in a free-for-all it
-  does not say whose exile. Fatespinner's panel title still reads "Choose
-  one". Krark's Thumb's "ignore one" is never asked (the win is always kept;
-  no pool card rewards the other face). *Clears:* a client round.
-
-- **Seen in Mirrodin, not measured.** `ai_scratch_copy.conceal_from` may not
-  hide a face-down exiled card from a rehearsal copy (Shared Fate); other
-  face-down linked entries (Necropotence, Parallel Thoughts) may keep a stale
-  entry after their card leaves exile (W2G2 added
-  `linked_exile.forget_exiler_entries` for entries that record their exiler);
-  `handlers/_amounts` reads a sacrificed permanent's mana value off its
-  printed card, where a sacrificed copy should read the copied value (CR
-  707.2). *Clears:* a measure first.
-
-- **Seen, not measured.** `_SimulatedGame._steps_left_owing` lives in the
-  instance `__dict__`, so `position_digest` reads it in simulator games
-  only. And a choose-N prompt over identical permanents the canvas draws as
-  one stack (8ED's Primeval Force, "sacrifice three Forests", over a ×3
-  Forest stack): a click on the stack toggles its front card, and the other
-  two are reached only by the strips of them showing behind it. It works and
-  says so ("Selected 2/3"), but nothing tells a person where the second card
-  is. Part: during a multi-select prompt, a click on a grouped stack selects
-  its next unselected member (`battlefield-canvas.js`'s hit test).
-  *Clears:* a client round.
+- **A seeded web session does not seed the game's RNG.** The session's seed
+  (`SessionStore._resolve_seed`, `web/session_store.py`) builds the decks
+  (the seed plus the seat) and flips the pregame coin (`random.Random(seed +
+  2)` in `_begin_pregame`); the opening shuffle and every later shuffle, flip
+  and random pick read the module-level `random`, wherever the process's
+  earlier work left it. So two web games on one seed differ (kg5 `webturn2`),
+  and a web census's games depended on the order its tests ran in:
+  `tests/ui/test_kg5_webturn2_ai_vs_ai_casts.py` passed in a meeting run and
+  failed in a folder run of the same tree until it called `random.seed(seed)`
+  before creating its session. Part: the session's seed seeds the game's RNG
+  at the deal, as `run_ai_simulation` seeds the module RNG; sessions in one
+  server share that RNG, so one game per seed beside another table needs the
+  engine's random reads on an RNG the game owns. *Clears:* a web round.
