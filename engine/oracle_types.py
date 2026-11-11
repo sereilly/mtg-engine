@@ -1084,6 +1084,18 @@ SECRET_NUMBERS_BY_SEAT = "secret_numbers_by_seat"
 #: card reporting itself supported.
 CONDITION_DIFFERENCE = "condition_difference"
 
+#: How many counters, of every kind, were on the permanent a destroy step was
+#: aimed at, frozen beside ``destroyed_target`` before anything was destroyed
+#: (CR 608.2h). "Destroy target artifact. If that artifact had counters on it,
+#: put **that many** +1/+1 counters or charge counters on an artifact you
+#: control." (Dismantle; its 2020-08-07 ruling: "It doesn't matter what kind of
+#: counters the destroyed artifact had on it, only how many.") A record the
+#: ``destroy_target_permanent`` handler writes and ``_records._PRODUCES``
+#: declares; "that many" names it once
+#: ``grammar/rebinding.rebind_count_to_condition_counters`` has read the
+#: condition in front of it.
+DESTROYED_TARGET_COUNTERS = "destroyed_target_counters"
+
 #: What "**the chosen type**" / "**that type**" names when the ability that
 #: chose it is a *spell* (Turnabout). One card type, chosen by the controller of
 #: the resolving spell (CR 608.2d) in the sentence in front, and read back by

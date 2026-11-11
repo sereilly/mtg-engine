@@ -705,6 +705,25 @@ class DestroyedTargetWas:
     """
 
     filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
+class DestroyedTargetHadCounters:
+    """"Destroy target artifact. **If that artifact had counters on it**, put
+    that many +1/+1 counters or charge counters on an artifact you control."
+    (Dismantle.)
+
+    :class:`DestroyedTargetWas`' tense about the same object, asked of what was
+    *on* it rather than of what it was: counters are not a characteristic, so
+    no noun phrase carries the question, and a counter of any kind answers it
+    (the card's 2020-08-07 ruling: "It doesn't matter what kind of counters the
+    destroyed artifact had on it, only how many"). Last-known information for
+    its sibling's reason (CR 608.2h).
+
+    "That many" in the arm is the same number — the count this condition asked
+    about — and is written in by ``rebinding.rebind_count_to_condition_counters``
+    as the destroy's frozen record (``oracle_types.DESTROYED_TARGET_COUNTERS``).
+    """
 @dataclass(frozen=True)
 class DiscardedCardWas:
     """"If **the discarded card** was a land card" (Land's Edge).

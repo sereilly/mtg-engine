@@ -109,6 +109,21 @@ def _lower_remove_counter(
             "'all of them' names counters no condition in front of it counted",
             node=node,
         )
+    # "Remove all counters from all permanents." (Aether Snap.) Every kind at
+    # once (``named_counters.ANY_COUNTER_KIND``), which only the sweep below
+    # empties kind by kind; every other removal here reads one printed kind,
+    # and handed the sentinel would find no counter of it and remove nothing.
+    from ...named_counters import ANY_COUNTER_KIND
+
+    if node.counter == ANY_COUNTER_KIND and not (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "all"
+        and isinstance(node.count, ast.AllOf)
+    ):
+        raise LoweringError(
+            "counters of every kind are removed by the sweep over a described "
+            "set alone", node=node,
+        )
     # "**Target player** loses all poison counters." (Leeches.) A counter on a
     # seat rather than on an object, so it reaches neither the sweep below nor
     # any of the permanent removals under it — read first, because every one of
@@ -373,6 +388,29 @@ def _lower_move_counter(node: "ast.MoveCounter") -> tuple[OracleInstruction, ...
                 {"counter": node.counter, "filter": described},
             ),
         )
+    # "At the beginning of your upkeep, you may move a +1/+1 counter **from
+    # target creature onto this creature**." (Arcbound Fiend.) Afiya Grove's
+    # move below with its two ends swapped: the chosen object gives the counter
+    # up and the ability's own permanent takes it. Its own kind for the reason
+    # the sweep above is one — which end is the target is the whole of what
+    # differs, and a direction flag on the other kind would be a handler that
+    # answers two questions — while both share CR 122.5's one action
+    # (``handlers/counter_removal._move_counters``). A printed number only,
+    # and a target the picker can describe, for the reasons the function's
+    # docstring gives.
+    if (
+        _is_source(node.destination)
+        and isinstance(node.source, ast.TargetSpec)
+        and node.source.targeted
+    ):
+        count = _amount_payload(node.count)
+        if not isinstance(count, int) or count < 1:
+            raise LoweringError(
+                "a counter move carries a printed number of counters", node=node
+            )
+        onto_self: dict[str, object] = {"counter": node.counter, "count": count}
+        _describe_targets(onto_self, node.source)
+        return (OracleInstruction("move_counter_to_self", "", onto_self),)
     if not _is_source(node.source):
         raise LoweringError(
             "a counter is moved off the ability's own permanent", node=node

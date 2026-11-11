@@ -385,6 +385,18 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         # leaving the battlefield, which is exactly what last-known
         # information means.
         context.results["destroyed_target"] = victim
+        # "If that artifact had counters on it, put **that many** …"
+        # (Dismantle.) Every counter on it, of every kind, frozen at the same
+        # moment and for the same reason: after the destroy the object is a
+        # card in a graveyard with none (CR 122.2), and a target that survives
+        # (indestructible) is still asked about — the card's ruling puts the
+        # counters down either way.
+        from ..named_counters import counter_kinds_on
+        from ..oracle_types import DESTROYED_TARGET_COUNTERS
+
+        context.results[DESTROYED_TARGET_COUNTERS] = sum(
+            counter_kinds_on(victim).values()
+        )
         # "…Its power is equal to **that creature's power** and its toughness is
         # equal to **that creature's toughness**." (Broken Visage.) Frozen here
         # for the mana value's reason and one step more urgently: P/T is

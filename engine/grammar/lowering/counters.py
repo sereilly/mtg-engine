@@ -50,6 +50,7 @@ from ._counter_stores import lower_loyalty_counters
 from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, binds_block_pair, _RECORDED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 from ._seats import _CHOOSER_SEATS
+from ._amounts import recorded_count_spec
 
 
 #: Whose creature an *unchosen* counter placement lands on, and the word the
@@ -638,9 +639,19 @@ def _lower_put_counter(
     # counter. Refused where the phrase names no seat at all — "put a counter on
     # a creature" with no controller word is every creature on the table, and a
     # prompt listing them is a choice the card never offered.
+    #
+    # "If that artifact had counters on it, put **that many +1/+1 counters or
+    # charge counters on an artifact you control**." (Dismantle.) The same
+    # pick with the count an earlier step froze (``recorded_count_spec``, the
+    # ``x_from_count`` channel the placement step reads at dispatch) and either
+    # store: a P/T pair through ``add_counter_to_target``, a counter with no
+    # rules meaning of its own through ``add_named_counter_to_target`` — both
+    # read the pick off the same ``permanents_from`` record. The card's ruling
+    # (2020-08-07): "you choose which type of counters you want and choose an
+    # artifact you control" as it resolves, so nothing is targeted.
     if (
-        is_pt_counter(node.counter)
-        and not node.up_to
+        not node.up_to
+        and node.counter != "loyalty"
         and isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "a"
         and not node.subject.targeted
@@ -654,13 +665,30 @@ def _lower_put_counter(
                 "and nothing narrower",
                 node=node,
             )
-        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+        placed_count: dict[str, object] = {}
+        recorded = recorded_count_spec(node.count, produced, node)
+        if recorded is not None:
+            placed_count = {"count": "x", "x_from_count": recorded}
+        elif not isinstance(node.count, ast.Fixed) or node.count.value < 1:
             raise LoweringError(
-                "a chosen counter placement places one counter", node=node
+                "a chosen counter placement places a printed or recorded "
+                "number of counters", node=node,
             )
+        elif node.count.value != 1:
+            placed_count = {"count": node.count.value}
         chooser = _COUNTER_CHOOSERS[node.subject.filter.controller]
         described = _filter_payload(
             dataclasses.replace(node.subject.filter, controller=None)
+        )
+        # The printed noun, so the prompt asks for what the card names; a
+        # creature keeps the words every payload before Dismantle carries.
+        noun = (
+            node.subject.filter.card_types[-1]
+            if len(node.subject.filter.card_types) == 1 else "creature"
+        )
+        placing = (
+            "add_counter_to_target" if is_pt_counter(node.counter)
+            else "add_named_counter_to_target"
         )
         return (
             OracleInstruction(
@@ -674,12 +702,18 @@ def _lower_put_counter(
                     # game ends up asking one player about another's creatures.
                     "controlled_by": "chooser",
                     "filter": described,
-                    "prompt": f"Choose a creature to put a {node.counter} counter on.",
+                    "prompt": (
+                        f"Choose {'an' if noun[:1] in 'aeiou' else 'a'} {noun} "
+                        f"to put a {node.counter} counter on."
+                    ),
                 },
             ),
             OracleInstruction(
-                "add_counter_to_target", "",
-                {"counter": node.counter, "permanents_from": CHOSEN_PERMANENT},
+                placing, "",
+                {
+                    "counter": node.counter, "permanents_from": CHOSEN_PERMANENT,
+                    **placed_count,
+                },
             ),
         )
     # "…at the beginning of each of your draw steps, put a -1/-1 counter on

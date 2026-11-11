@@ -27,7 +27,8 @@ from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..nouns import parse_object_filter
 from ..phrases import (_expect_counter_kind, _parse_for_each,
-                       _parse_opponents_choice, _parse_per_each_objects,
+                       _parse_opponents_choice, _parse_per_each_counters,
+                       _parse_per_each_objects,
                        accept_graveyard_position,
                        accept_zone_possessive,
                        is_pt_counter, parse_pair_ordinal_subject,
@@ -521,6 +522,25 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         # have to guess which record was meant.
         counted = _parse_for_each_history(stream, parse_object_filter)
     if counted is None:
+        # "…you may put a +1/+1 counter on target artifact creature **for each
+        # +1/+1 counter on this permanent**." (CR 702.43a's modular, which
+        # ``engine/modular.py`` writes out for every Arcbound.) A pile of
+        # counters rather than a set of objects, so it is the shared counter
+        # reader's and asked **before** the board reader below, which would
+        # claim "for each fungus" as a creature type and leave "counter on
+        # that creature" unread (``_parse_per_each_counters``' own warning).
+        # One counter per counter: a printed count above one, or "up to", is
+        # a rate or a ceiling this node does not carry, and refuses.
+        per_counter_mark = stream.mark()
+        per_counter = _parse_per_each_counters(stream)
+        if per_counter is not None:
+            if up_to or count != ast.Fixed(1):
+                stream.reset(per_counter_mark)
+                raise stream.error(
+                    "a counter placed per counter is placed one at a time"
+                )
+            return dataclasses.replace(placement, count=per_counter)
+    if counted is None:
         # "…put a charge counter on this enchantment **for each untapped land
         # that player controls**." (Mana Cache.) The third "for each" a
         # placement can carry, and the only one over a *board*: what the board
@@ -751,6 +771,21 @@ def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
         if subject is None:
             raise stream.error("expected what to remove the counters from")
         return ast.RemoveCounter(subject, ast.COUNTERS_NAMED_BEFORE, ast.AllOf())
+    # "Remove **all counters** from all permanents" (Aether Snap). No kind at
+    # all: the card's ruling (2004-12-01) is that it "removes all counters from
+    # permanents, no matter what kind they are". CR 122.1's open kind space
+    # asked the other way round, which is the sentinel the cost reader already
+    # writes for "remove a counter from a permanent you control" (Power
+    # Conduit) — so one spelling of "any kind" reaches every reader, and the
+    # lowering admits it only where a handler empties every kind.
+    if stream.accept_phrase("all", "counters"):
+        from ...named_counters import ANY_COUNTER_KIND
+
+        stream.expect_word("from")
+        subject = parse_recipient(stream)
+        if subject is None:
+            raise stream.error("expected what to remove the counters from")
+        return ast.RemoveCounter(subject, ANY_COUNTER_KIND, ast.AllOf())
     if stream.accept_word("a", "an"):
         count: ast.Amount = ast.Fixed(1)
     else:

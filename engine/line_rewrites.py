@@ -196,6 +196,11 @@ def expand_ability_lines(
       If you can't, sacrifice the permanent." (``engine/fading.py``), one line
       each. From there it is the named-counter entry state and an ordinary
       upkeep trigger with a ``CouldNot`` branch, none of which know the word.
+    * a **modular** keyword line becomes the *two* abilities CR 702.43a says
+      it represents — "This permanent enters with N +1/+1 counters on it." and
+      "When this permanent is put into a graveyard from the battlefield, you
+      may put a +1/+1 counter on target artifact creature for each +1/+1
+      counter on this permanent." (``engine/modular.py``), fading's shape.
     * an **affinity** keyword line becomes the sentence CR 702.41a says it
       means — "This spell costs {1} less to cast for each [text] you
       control." (``engine/affinity.py``). From there it is the self-reduction
@@ -228,6 +233,7 @@ def expand_ability_lines(
     from .echo import expand_echo_lines
     from .entwine import expand_entwine_lines
     from .fading import expand_fading_lines
+    from .modular import expand_modular_lines
     from .self_reference import expand_short_self_references
 
     oracle_text = expand_short_self_references(
@@ -249,6 +255,11 @@ def expand_ability_lines(
     # CR 702.32a's, for echo's reason: a whole line in, whole lines out, read by
     # none of the rewrites below.
     oracle_text = expand_fading_lines(oracle_text)
+    # CR 702.43a's, fading's shape: a modular keyword line in, its two
+    # abilities out ("This permanent enters with N +1/+1 counters on it." and
+    # the "put into a graveyard from the battlefield" trigger), one line each
+    # (``engine/modular.py``). Read by none of the rewrites around it.
+    oracle_text = expand_modular_lines(oracle_text)
     # CR 702.33a's: "Kicker [cost]" *means* "You may pay an additional [cost] as
     # you cast this spell", which is the CR 601.2b offer buyback's first half
     # already becomes (``engine/cast_costs.py``). Its own statement for echo's

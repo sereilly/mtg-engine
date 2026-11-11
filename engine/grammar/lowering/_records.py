@@ -64,7 +64,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
-                             COUNTERS_REMOVED, DISCARDED_BY_SEAT,
+                             COUNTERS_REMOVED, DESTROYED_TARGET_COUNTERS,
+                             DISCARDED_BY_SEAT,
                              DISCARDED_CARDS_BY_SEAT, DREW_BY_SEAT,
                              DREW_COUNT, EXILED_BY_SEAT,
                              EXILED_CARDS_WITH_OWNERS, EXILED_THIS_WAY,
@@ -898,6 +899,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         # rather than one entry per loop iteration: "they" is every player at
         # once, so the sentence has one answer each and no loop to bind them.
         PER_OBJECT_SEAT_RECORDS["controller"],
+        # "If that artifact had counters on it, put **that many** …"
+        # (Dismantle.) How many counters it carried, frozen with the object —
+        # see ``oracle_types.DESTROYED_TARGET_COUNTERS``.
+        DESTROYED_TARGET_COUNTERS,
     ),
     # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
     # (Sacred Boon.) The shield object itself, because what it prevents is

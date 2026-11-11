@@ -170,6 +170,16 @@ def evaluate_record_condition(
             return False
         return subject_matches(game, victim, payload.get("filter") or {})
 
+    if kind == "destroyed_target_had_counters":
+        # "…**If that artifact had counters on it**, …" (Dismantle.) The count
+        # the destroy froze beside the object, before it destroyed anything
+        # (CR 608.2h) — a counter of any kind, by the card's 2020-08-07 ruling.
+        # Nothing recorded is a spell whose target had gone: nothing was
+        # destroyed, so nothing it had is asked about.
+        from ..oracle_types import DESTROYED_TARGET_COUNTERS
+
+        return int(context.results.get(DESTROYED_TARGET_COUNTERS, 0) or 0) > 0
+
     if kind == "revealed_card_is":
         # "If it's a creature or land card" (Track Down). Reads the card an
         # earlier step of this same resolution revealed, never the library:
