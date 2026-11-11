@@ -569,6 +569,32 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 elif stream.accept_word("or"):
                     separated = True
                 following = stream.peek_word()
+                # "target **artifact creature or black creature**" (Purge). A
+                # union of two whole noun phrases printing the same head noun
+                # twice: (artifact ∧ creature) ∨ (black ∧ creature), which is
+                # creature ∧ (artifact ∨ black) — exactly the filter "a black
+                # or artifact creature" (Soldevi Adnate) builds above, so it is
+                # read into that one. Held to one juxtaposed pair and a
+                # repeated head; anything wider keeps refusing.
+                if (
+                    separated
+                    and d.type_match == "all"
+                    and len(d.card_types) == 2
+                    and following is not None
+                    and (following in COLOR_WORDS or _singular(following) in CARD_TYPES)
+                    and _singular(str(stream.peek_word(1) or "")) == d.card_types[-1]
+                ):
+                    head = d.card_types[-1]
+                    member = (
+                        ("color", COLOR_WORDS[following])
+                        if following in COLOR_WORDS
+                        else ("card_type", _singular(following))
+                    )
+                    d.any_classes = (("card_type", d.card_types[0]), member)
+                    d.card_types = [head]
+                    d.type_match = "any"
+                    stream.advance(2)
+                    break
                 # "target land or **nonblack creature**" (Befoul). A union
                 # member carrying its own narrowing: the alternatives straddle
                 # nothing new — both are card types — but one of them is
