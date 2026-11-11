@@ -132,6 +132,7 @@ from .ai_targets import (
     _guarded_stack_target,
 )
 from .ai_divisions import choose_divided_targets
+from .ai_imprint import held_for_an_imprint
 from .ai_text_changes import choose_object_or_spell
 
 
@@ -502,6 +503,15 @@ def _cast_candidate_in_each_mode(
     This loop did not exist: the cast named no mode, the engine resolved the
     first bullet, and Crosis's Charm only ever bounced.
     """
+    # A card an imprint on the seat's own board would take this turn, and
+    # whose free cast every upkeep is worth something (Panoptic Mirror):
+    # held from the main phase's cast, which comes before the activation
+    # that imprints it (`ai_imprint.held_for_an_imprint`).
+    imprint_hold = (
+        held_for_an_imprint(game, player_index, card)
+        if under is None and from_zone == "hand" and _SPEED_WEIGHED.get() == "main"
+        else None
+    )
     if under is None and from_zone == "hand":
         hand = game.players[player_index].hand
         if 0 <= hand_index < len(hand):
@@ -510,6 +520,9 @@ def _cast_candidate_in_each_mode(
         game, player_index, card, from_zone=from_zone, zone_index=hand_index,
         permission=under, extra_generic=extra_generic, speed=_SPEED_WEIGHED.get(),
     ) as traced:
+        if imprint_hold is not None:
+            cast_trace.note(imprint_hold)
+            return traced.returns(None)
         return traced.returns(_best_of_the_modes(
             game, player_index, card, hand_index,
             from_zone=from_zone, extra_generic=extra_generic, under=under,

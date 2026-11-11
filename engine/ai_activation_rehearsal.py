@@ -420,9 +420,17 @@ def _sized_x_activation(
     """
     from dataclasses import replace
 
+    from .ai_imprint import empty_hand_imprint, imprint_worth
+
     player = game.players[seat]
     best: ActivationAction | None = None
     best_worth = 0.0
+    # "Imprint — {X}, {T}: You may exile an instant or sorcery card with mana
+    # value X from your hand." (Panoptic Mirror.) Read to the end of the turn
+    # the card leaving the hand is all there is to see, so each X is priced
+    # as the imprint it is (`ai_imprint.imprint_worth`): the card kept, and a
+    # free cast of it every upkeep.
+    imprint = empty_hand_imprint(game, permanent, ability)
     for x_value in range(1, X_ACTIVATION_SIZES + 1):
         taps: tuple[int, ...] = ()
         tap_colors: tuple[str, ...] = ()
@@ -440,7 +448,12 @@ def _sized_x_activation(
         sized = replace(
             candidate, x_value=x_value, land_tap_indices=taps, land_tap_colors=tap_colors,
         )
-        worth = _land_ability_worth(game, seat, sized)
+        worth = (
+            _land_ability_worth(game, seat, sized) if imprint is None
+            else imprint_worth(
+                game, seat, imprint, _rehearse_activation(game, seat, sized), x_value,
+            )
+        )
         if worth is not None and worth > best_worth + 1e-9:
             best, best_worth = sized, worth
     return best

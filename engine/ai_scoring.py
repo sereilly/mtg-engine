@@ -63,6 +63,7 @@ from .ai_valuation import (
     mana_ability_amount,
 )
 from .cast_costs import additional_costs, cast_announces_x
+from .cast_restrictions import window_closes_before_the_blocks
 from .classifier import classify_card
 from .faces import castable_faces
 from .game import Game
@@ -542,10 +543,14 @@ def _weighed_through_the_fight(
     Asked only where it can change the answer, because it is a whole combat
     on two copies: the seat's own precombat main phase
     (``Rehearsal.combat_ahead``: or a postcombat one in which the cast adds
-    a combat), and a cast some of whose good is gone by
-    the end of the turn — all of it (``fleeting``), or more of it than is
-    left (``now`` above ``lasting``). A removal spell, a draw, a discard are
-    priced by what they leave and are not asked twice.
+    a combat, or a combat after which the turn holds another), and a cast
+    some of whose good is gone by the end of the turn — all of it
+    (``fleeting``), or more of it than is left (``now`` above ``lasting``)
+    — or that added a combat to the turn (``Rehearsal.added_a_combat``,
+    CR 500.8: Savage Beating's second bullet, cast in its caster's own
+    combat, is an attack no reading without the fight sees). A removal
+    spell, a draw, a discard are priced by what they leave and are not
+    asked twice.
 
     Asked by the cast being built and by the choosers that pick its target
     (`ai_targets._best_target`, `ai_targets._better_than_the_seat`), because which creature a
@@ -563,7 +568,10 @@ def _weighed_through_the_fight(
         or not rehearsal.combat_ahead
     ):
         return rehearsal
-    if not priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting):
+    if not priced_by_the_fight(
+        rehearsal.now, rehearsal.lasting, rehearsal.fleeting,
+        added_a_combat=rehearsal.added_a_combat,
+    ):
         return rehearsal
     if (rehearsal.made_mana or rehearsal.opened_a_cast) and not priced_by_the_fight(
         rehearsal.now, rehearsal.lasting, False,
@@ -603,7 +611,11 @@ def read_at_instant_speed(
     rest of the combat fought — the blocks declared by the policy, the damage
     dealt — and made there only for a block it adds that pays
     (``ai_rehearsal.pays_before_the_blocks``): an ambush. Everything else
-    waits for the declare-blockers step, or the end step. **In a response
+    waits for the declare-blockers step, or the end step — except a card
+    whose printed window shuts before the blocks
+    (``cast_restrictions.window_closes_before_the_blocks``: Tears of Rage,
+    Teleport, Camouflage), which is read through the fight and made for what
+    it leaves, since there is no later step to wait for. **In a response
     before the blocks** (``blocks_owed``: an attack trigger on the stack) the
     copy resolves the stack and then owes the blocks, so it is read with the
     rest of that combat fought, or the attack it answers deals no damage on
@@ -621,6 +633,17 @@ def read_at_instant_speed(
             game, seat, card, cast_announcement(planned),
             planned=planned, through_combat=True,
         )
+        if window_closes_before_the_blocks(game, seat, card):
+            # A card whose printed window shuts before the blocks (Tears of
+            # Rage: "only during the declare attackers step") has no
+            # declare-blockers step to wait for: it is cast now for what the
+            # fight leaves, or not at all.
+            if fought is None or not fought.accepted:
+                return rehearsal, (
+                    "before the blocks, its last window, and the reading through"
+                    " the fight was not run or was refused"
+                )
+            return fought, None
         if not pays_before_the_blocks(rehearsal, fought):
             return rehearsal, (
                 "before the blocks, and it adds no block that pays"

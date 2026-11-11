@@ -458,6 +458,23 @@ class PermanentChoicesMixin:
                     self, choice.player_index, aura_card, live
                 )
                 live = [pick, *(perm for perm in live if perm is not pick)]
+        elif (
+            (choice.data.get("_payload") or {}).get("legal_host_for_source")
+            and live
+            and getattr(choice.data.get("_context"), "card", None) is not None
+        ):
+            # "When enchanted creature dies, return this card from your
+            # graveyard to the battlefield." (Screams from Within.) The host
+            # the source returns onto is its controller's choice, the same
+            # one Replenish's returning Auras make one branch up — so the
+            # same pick: a harmful Aura on the other side's creature, the
+            # one its -X/-X kills first.
+            from ....ai_targets import choose_returning_aura_host
+
+            pick = choose_returning_aura_host(
+                self, choice.player_index, choice.data["_context"].card, live
+            )
+            live = [pick, *(perm for perm in live if perm is not pick)]
         # …and the one ordering a *later sentence* asks for: "Prevent all combat
         # damage target creature would deal this turn **if it shares a color
         # with that permanent**" (Guard Dogs). The pick decides whether the

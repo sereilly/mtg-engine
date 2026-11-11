@@ -1518,3 +1518,135 @@ def test_w1g5_darksteel_reactor_wins_at_twenty_charge_counters(set_pool):
     assert not game.is_game_over()
 
 # ==== end W1G5 ======================================================
+
+
+# ==== W2G2 ==========================================================
+# The AI's policy on Darksteel's cards (wave 2): what a seat nobody asks
+# answers Aether Vial's upkeep offer with.
+
+from engine import Game as _W2G2Game
+from engine.models import Permanent as _W2G2Permanent
+from engine.models import PlayerState as _W2G2PlayerState
+from engine.named_counters import add_counters as _w2g2_add_counters
+from engine.named_counters import counters_on as _w2g2_counters_on
+from tests.helpers import settle as _w2g2_settle
+
+
+def _w2g2_vial_upkeep(set_pool, charge: int, hand, library) -> int:
+    """Aether Vial on seat 0 at *charge* counters, *hand* and *library* (LEA
+    names) its own, seat 0's turn begun with nobody asked: the counters once
+    the upkeep's offer has been answered."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    alice = _W2G2PlayerState(
+        name="Alice", hand=[lea[name] for name in hand],
+        library=[lea[name] for name in library],
+    )
+    bob = _W2G2PlayerState(name="Bob", library=[lea["Forest"]] * 3)
+    game = _W2G2Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    vial = _W2G2Permanent(card=dst["Aether Vial"])
+    game._put_permanent_onto_battlefield(0, vial, None)
+    game._sync_control()
+    if charge:
+        _w2g2_add_counters(vial, "charge", charge)
+    game.start_turn(0)
+    _w2g2_settle(game)
+    return _w2g2_counters_on(vial, "charge")
+
+
+def test_w2g2_aether_vial_counts_up_toward_the_cards_it_can_put(set_pool):
+    """"At the beginning of your upkeep, you may put a charge counter on this
+    artifact." At two with a Hill Giant (4) in hand, a counter is a step
+    toward the Giant: taken."""
+    assert _w2g2_vial_upkeep(set_pool, 2, ["Hill Giant"], ["Forest"] * 3) == 3
+
+
+def test_w2g2_aether_vial_holds_the_count_its_hand_card_needs(set_pool):
+    """At two with a Grizzly Bears (2) in hand, the Vial puts the Bears in
+    this turn; a counter would move it off them. Declined — even with a
+    Hill Giant beside the Bears to count toward later."""
+    assert _w2g2_vial_upkeep(
+        set_pool, 2, ["Grizzly Bears", "Hill Giant"], ["Forest"] * 3,
+    ) == 2
+
+
+def test_w2g2_aether_vial_stops_past_every_card_of_its_own(set_pool):
+    """W1G3 saw the AI count to seven in a deck whose largest creature was a
+    four. At four, with nothing above four in the hand or the library — the
+    seat knows what its library holds, if not in what order — declined; with
+    a Craw Wurm (6) still in the library, taken."""
+    assert _w2g2_vial_upkeep(
+        set_pool, 4, ["Forest"], ["Hill Giant", "Grizzly Bears", "Forest"],
+    ) == 4
+    assert _w2g2_vial_upkeep(
+        set_pool, 4, ["Forest"], ["Craw Wurm", "Forest", "Forest"],
+    ) == 5
+
+
+def _w2g2_mirror_table(set_pool, hand):
+    """Panoptic Mirror and five Mountains on seat 0's side, *hand* (LEA
+    names) in its hand, a Grizzly Bears and a Forest across the table;
+    costs enforced, nobody asked, seat 0's main phase."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    alice = _W2G2PlayerState(
+        name="Alice", hand=[lea[name] for name in hand], library=[lea["Mountain"]] * 8,
+    )
+    bob = _W2G2PlayerState(name="Bob", library=[lea["Forest"]] * 8)
+    game = _W2G2Game(players=[alice, bob])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    _w2g2_settle(game)
+    for seat, name in ((0, None), (1, "Grizzly Bears"), (1, "Forest")):
+        card = dst["Panoptic Mirror"] if name is None else lea[name]
+        permanent = _W2G2Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        permanent.metadata["summoning_sickness_turn"] = -99
+    for _ in range(5):
+        land = _W2G2Permanent(card=lea["Mountain"])
+        game._put_permanent_onto_battlefield(0, land, None)
+    game._sync_control()
+    return game, alice, bob
+
+
+def test_w2g2_panoptic_mirror_imprints_the_card_worth_most_and_casts_it_each_upkeep(set_pool):
+    """"Imprint — {X}, {T}: You may exile an instant or sorcery card with
+    mana value X from your hand. / At the beginning of your upkeep, you may
+    copy a card exiled with this artifact. If you do, you may cast the copy
+    without paying its mana cost." W1G3: the AI never imprinted — a
+    rehearsal read to the end of the turn saw only the card leave the hand.
+
+    Priced as the card kept and a free cast of it every upkeep, the Mirror
+    takes the Lightning Bolt (its free cast kills the Bears) over the Stone
+    Rain (a land): the cast chooser holds the Bolt for it and casts the Stone
+    Rain, the activation chooser imprints at X = 1, and the next upkeep's
+    copy of the Bolt is cast."""
+    from engine.ai_abilities import choose_activation_action
+    from engine.ai_actions import cast_announcement
+    from engine.ai_payment import tap_planned_lands
+    from engine.ai_policy import activate_chosen_ability, choose_cast_action
+    from engine.linked_exile import cards_still_exiled_with
+
+    game, alice, bob = _w2g2_mirror_table(set_pool, ["Lightning Bolt", "Stone Rain"])
+    cast = choose_cast_action(game, 0)
+    assert cast is not None and cast.card_name == "Stone Rain"
+    assert game.cast_from_hand(0, "Stone Rain", **cast_announcement(tap_planned_lands(game, 0, cast))).supported
+    _w2g2_settle(game)
+    assert choose_cast_action(game, 0) is None, "the Bolt is held for the imprint"
+    action = choose_activation_action(game, 0)
+    assert action is not None and action.permanent_name == "Panoptic Mirror"
+    assert action.x_value == 1
+    assert activate_chosen_ability(game, 0, action).supported
+    _w2g2_settle(game)
+    mirror = next(p for p in game.controlled_by(0) if p.card.name == "Panoptic Mirror")
+    assert [card.name for card, _owner in cards_still_exiled_with(game, mirror)] == ["Lightning Bolt"]
+    assert [c.name for c in alice.hand] == []
+    game.start_turn(1)
+    _w2g2_settle(game)
+    game.start_turn(0)
+    _w2g2_settle(game)
+    assert any("cast a copy of Lightning Bolt" in line for line in game.log)
+    assert "Grizzly Bears" in [c.name for c in bob.graveyard]
+
+# ==== end W2G2 ======================================================

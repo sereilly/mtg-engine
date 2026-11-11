@@ -80,6 +80,7 @@ from engine.ai_policy import (choose_cast_action,
                               choose_combat_instant_cast_action)
 from engine.ai_rehearsal import (
     combat_is_still_to_come,
+    combats_planned,
     forget_damage_history,
     position_digest,
     untap_for_the_next_turn,
@@ -650,6 +651,14 @@ def weighed(
     nothing**: a pump on a creature that had no fight to decide, a shield
     nothing came for, a Fog over a turn nobody attacked in.
 
+    **So is a cast that adds a combat** (CR 500.8), from whichever step of
+    its caster's turn it is made in (``ai_rehearsal.combats_planned``, the
+    rehearsal's ``added_a_combat``): Savage Beating's "untap all creatures
+    you control. After this phase, there is an additional combat phase",
+    cast in its caster's own combat, is the second attack, which no reading
+    that declares nothing makes — run out without it, the bullet measured
+    0.0 there and the untapped attacker read as all it moved.
+
     The fight is the engine's and the policies' that declare it, on real
     copies of a real board; the price is ``ai_valuation``'s standing. Nothing
     here goes through a rehearsal.
@@ -657,7 +666,11 @@ def weighed(
     # The spell's own card is not part of what the cast did — unless it is
     # back in the hand it left (buyback), and then nothing was spent.
     spent = CARD_WORTH * (0 if any(held is card for held in game.players[ME].hand) else 1)
-    to_come = in_main and combat_is_still_to_come(game, ME)
+    added = (
+        game.active_player_index == ME
+        and combats_planned(game) > combats_planned(before_cast)
+    )
+    to_come = (in_main and combat_is_still_to_come(game, ME)) or added
     spares = (scratch_copy(game), scratch_copy(before_cast)) if to_come else None
     now = standing_swing(untouched_now, standings(game), ME) + spent
     run_out(game)
@@ -674,7 +687,7 @@ def weighed(
         # No fight still to come (a response, a cast in combat): what is gone
         # by the end of the turn moved nothing that lasted.
         return swing, moved and not gone
-    if not priced_by_the_fight(now, lasting, gone):
+    if not priced_by_the_fight(now, lasting, gone, added_a_combat=added):
         return swing, moved
     fought, untouched_fought = spares
     # The fight's coin flips are its own: the row that follows this one is
@@ -1529,12 +1542,13 @@ SHADOWED = {
     # their library" takes the opposing hand away; seven cards each way
     # measures even.
     ("Temporal Cascade", 1): ([0], "the opposing hand shuffled away against seven cards drawn by each seat"),
-    # Darksteel's (W1G6), on the caster's own combat (its printed window):
-    # double strike on the unblocked attacker is its damage again now (1.75);
-    # "untap all creatures you control … an additional combat phase"
-    # measures 0.0 — the rehearsal runs a combat step out to the end step and
-    # fights no additional combat.
-    ("Savage Beating", 1): ([0], "double strike is the attacker's damage again now; the extra combat is fought by no reading"),
+    # Darksteel's Savage Beating is in neither table. On the caster's own
+    # combat (its printed window) its bullets measure 1.75 (double strike on
+    # the unblocked 2/2) and 2.0 ("untap all creatures you control … an
+    # additional combat phase": the second attack, fought since DST W2G2 —
+    # a cast that adds a combat is priced through the fight,
+    # ``ai_rehearsal.priced_by_the_fight``), and on either bullet's board the
+    # policy entwines it for 6.0: double strike in both combats.
 }
 
 #: Boards on which the cast the policy made measures **less** than some
