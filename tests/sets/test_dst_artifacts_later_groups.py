@@ -267,4 +267,48 @@ def test_w1g9_sundering_titan_asks_an_interactive_controller_across_both_boards(
     _w1g9_settle(game)
     assert _w1g9_names(alice) == [] and _w1g9_names(bob) == ["Plains"]
 
+
+
+def test_w1g9_gemini_engine_makes_an_attacking_twin_sacrificed_at_end_of_combat(set_pool):
+    """"Whenever this creature attacks, create a colorless Construct artifact
+    creature token named Twin that's attacking. Its power is equal to this
+    creature's power and its toughness is equal to this creature's toughness.
+    Sacrifice the token at end of combat." The Twin "enters as an untapped
+    attacking creature" (2004-12-01), deals its 3 beside the Engine's 3, and
+    is gone when combat ends (CR 511.2)."""
+    dst = set_pool("DST")
+    game, alice, bob = _w1g9_table(set_pool)
+    engine = _w1g9_put(game, 0, dst["Gemini Engine"])
+    _w1g9_attack_with(game, 0, [engine])
+    _w1g9_settle(game)
+    twin = next(p for p in alice.battlefield if p.card.name == "Twin")
+    assert twin.metadata.get("is_token") and twin.attacking and not twin.tapped
+    assert (twin.effective_power, twin.effective_toughness) == (3, 4)
+    assert twin.has_type("artifact") and twin.has_type("creature") and twin.has_type("Construct")
+    assert twin.effective_colors in ((), [], set(), frozenset())
+    _w1g9_drive_combat(game)
+    assert bob.life == 14
+    assert _w1g9_names(alice) == ["Gemini Engine"]
+
+
+def test_w1g9_gemini_engines_twin_copies_the_engines_pt_once(set_pool):
+    """The rulings (2004-12-01): with a Glorious Anthem the Engine is 4/5, the
+    Twin "starts as a 4/5, and then the Anthem gives it +1/+1, making the Twin
+    a 5/6"; and once created, its P/T "won't change if Gemini Engine's power and
+    toughness change" — a Giant Growth on the Engine leaves the Twin alone."""
+    dst = set_pool("DST")
+    game, alice, bob = _w1g9_table(set_pool)
+    _w1g9_put(game, 0, set_pool("7ED")["Glorious Anthem"])
+    engine = _w1g9_put(game, 0, dst["Gemini Engine"])
+    alice.hand.append(set_pool("2ED")["Giant Growth"])
+    _w1g9_attack_with(game, 0, [engine])
+    _w1g9_settle(game)
+    twin = next(p for p in alice.battlefield if p.card.name == "Twin")
+    assert (engine.effective_power, engine.effective_toughness) == (4, 5)
+    assert (twin.effective_power, twin.effective_toughness) == (5, 6)
+    assert game.cast_from_hand(0, "Giant Growth", target_permanent_ids=[engine.permanent_id]).supported
+    _w1g9_settle(game)
+    assert engine.effective_power == 7
+    assert (twin.effective_power, twin.effective_toughness) == (5, 6)
+
 # ==== end W1G9 ======================================================

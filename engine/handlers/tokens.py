@@ -22,7 +22,8 @@ from ..oracle_types import (EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
 from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
                       CREATED_TOKENS_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
                       default_token_name, make_token_card, tokens_said)
-from ._amounts import evaluate_count, per_recipient_amount, resolve_amount
+from ._amounts import (count_from_payload, evaluate_count, per_recipient_amount,
+                       resolve_amount)
 from ._chosen import count_spec_in_resolution
 from ._targets import one_recorded_permanent_id, resolve_target_permanent
 from .registry import effect_handler
@@ -437,9 +438,15 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     # created anyway.
     for key, field in (("power_from", "power"), ("toughness_from", "toughness")):
         recorded = payload.get(key)
-        if recorded is None:
+        stated = payload.get(f"{key}_spec")
+        if stated is not None:
+            # Gemini Engine's "equal to this creature's power": the source's
+            # number now, fixed onto the token (its ruling, 2004-12-01).
+            value = max(0, int(count_from_payload(game, context, stated) or 0))
+        elif recorded is None:
             continue
-        value = max(0, int(context.results.get(recorded, 0) or 0))
+        else:
+            value = max(0, int(context.results.get(recorded, 0) or 0))
         if field == "power":
             printed_power = value
         else:
