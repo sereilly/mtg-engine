@@ -1440,9 +1440,6 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     "spend blue mana as though it were any color".
   - Vhati il-Dal's mode is the `choose_one` default (its first, "base
     power"): `ai_prompt_picks` does not weigh the two.
-  - Camouflage is never cast: `ai_policy._weighed_at_instant_speed_now`
-    holds an attacking seat's spells until the blocks, and its one window
-    is before them.
   - Krark's Thumb's `ignore_coin` default
     (`choices/numbers._default_ignore_coin`) keeps the win or heads where the
     loss is better (Puppet's Verdict against bigger creatures, Winter Sky,
