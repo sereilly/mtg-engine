@@ -61,7 +61,11 @@ first combat and in response to another seat's object
   to is `ai_policy._weighed_at_instant_speed_now` (a creature at another
   seat's end step, in response when its entry trigger names a spell, or in
   the declare-attackers step of an attack on its seat, to block with; before
-  the blocks a seat that is not defending casts nothing).
+  the blocks a seat that is not defending casts nothing — except a card
+  whose printed window shuts before the blocks,
+  `cast_restrictions.window_closes_before_the_blocks`, asked of each
+  `CAST_RESTRICTIONS` row it prints: Tears of Rage, Teleport, Camouflage,
+  read through the fight and cast for what the fight leaves).
 - **Why a cast was or wasn't made**: `ai_cast_explain.explain_cast(game,
   seat, card)` asks the real chooser (`choose_cast_action` in the seat's own
   main phase on an empty stack, `choose_combat_instant_cast_action` otherwise;
@@ -122,7 +126,12 @@ first combat and in response to another seat's object
   the bottom choice), asked by the simulator (`take_opening_mulligans`, CR
   103.5's rounds), the web pregame (`web/pregame.py`, by the same rounds)
   and the no-pregame deal (`session_store._begin_pregame`); the cards owed are
-  `Game.mulligan_effective_count` (CR 103.5c's free first mulligan).
+  `Game.mulligan_bottom_owed` — `mulligan_effective_count` (CR 103.5c's free
+  first mulligan) less what a hand exchange already bottomed. "Any time you
+  could mulligan" (CR 103.5b, Serum Powder) is `engine/mulligan_exchanges.py`
+  and `Game.pregame_hand_exchange`: a seat exchanges a hand it would not keep
+  before it mulligans (`ai_mulligan.take_hand_exchanges`), then declares
+  again.
 - **Priority**: `Game.offer_priority` gives it in CR 117.3b–d order, before each
   resolution and at a step's end on an empty stack; inert without a driver, at
   a table with an interactive seat, and in the untap step. The simulator and
@@ -144,7 +153,9 @@ first combat and in response to another seat's object
   upkeep stops for it when the seat holds a graveyard ability. In the
   declare-attackers step before the blocks (`ai_rehearsal.blocks_still_to_come`)
   each proposal is read again through the rest of that combat and made only
-  where it adds a block that pays (`pays_before_the_blocks`), and a response
+  where it adds a block that pays (`pays_before_the_blocks`; a card whose
+  window shuts before the blocks is read for what the fight leaves instead,
+  `ai_scoring.read_at_instant_speed`), and a response
   there (`blocks_owed`) is read through that combat too; at instant speed the
   activation chooser weighs a tapped or summoning-sick permanent's abilities
   without {T}. The web AI seat acts only while it holds priority
@@ -186,7 +197,10 @@ first combat and in response to another seat's object
   rehearsed with the whole cost paid and its victim named
   (`_sacrifice_priced_activation`, `ActivationAction.cost_permanent_ids`). A
   precombat cast whose good is gone by the end of the turn is
-  rehearsed through the fight (`through_combat=True`), and such an ability
+  rehearsed through the fight (`through_combat=True`), and so is a cast
+  that adds a combat phase, from any step of its caster's turn
+  (`Rehearsal.added_a_combat`: `combats_planned` rose against the table with
+  nothing cast — Savage Beating's untap-and-fight-again); and such an ability
   that changes neither the attack nor the blocks
   (`Rehearsal.declarations_changed`) waits for the declare-blockers step;
   `_fight_the_combat` also finishes a combat already under way, from the step

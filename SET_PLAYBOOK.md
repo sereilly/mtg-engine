@@ -84,6 +84,12 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   still greps for the names of the functions it adds a caller to, because a
   caller census lists callers by name (Onslaught's
   `test_aura_host_protection` was red for four links after a branch added one).
+  Nor does it name a census reached through a seat's choice or a
+  trigger-condition kind rather than an import or a registry: Darksteel's
+  W1G3 shipped a red in the AI's graveyard-denial census it never ran, and
+  the conditional-grants and upkeep-window censuses surfaced only in the
+  rehearsal (each now in `surprises.txt`). A brief says to grep `tests/` for
+  the card names and the functions a change reaches.
   The full suite is the integrator's,
   one at a time: `-n 8` when the machine is yours, `-n 4` while agents run.
   The runner caps any `-n` at what free memory holds (`tests/memory_guard.py`
@@ -130,7 +136,13 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   **Save each group's final report verbatim the day it lands**
   (`scratch/<round>/reports/<group>.md`), beside the merge notes: Phase 6 is
   briefed from both, and kg5's had to be recovered from the session
-  transcript for it.
+  transcript for it. **A subagent cannot write a report file** (the file
+  tool refuses one; Darksteel's nine were each briefed to and refused), so
+  the hand-back in the session transcript is the only copy: a brief asks
+  for the report as the final message, and `extract_reports.py
+  <scratch>/reports <transcript-dir> --groups agents.json` writes each as
+  `<group>.md` — a resumed agent's follow-up as `<group>.2.md`, never over
+  it — and names the groups still owed.
 - **Commit as each item lands, and before any long run on a commit.** An
   expired session stops every agent at once, and the ones with commits resume
   cheaply. Work in an exported tree or left uncommitted is invisible to a merge
@@ -211,6 +223,13 @@ And when writing one:
   two types) was meant, and the printed subject said so. Rulings come from
   `bulk_rulings.py CODE <out>` (Scryfall's bulk file, one download; the
   per-card fetch is rate-limited).
+- **List the base's known reds in every brief, and ask for both
+  differentials before the first edit** (`oracle_diff snapshot` and
+  `sim_fingerprint snapshot`). Darksteel's wave-1 groups built base worktrees
+  to tell their reds from the base's, and three rebuilt a base fingerprint
+  from an export because the brief asked only for the first snapshot. The
+  same paragraph says **never `sed -i` a source file** — in Git Bash it
+  rewrites CRLF as LF (three Darksteel groups) — beside the heredoc warning.
 - **Put the test helpers in the common brief**, not in a mid-wave
   broadcast. A test reads the board after `tests.helpers.settle(game)` —
   every owed prompt answered (its default, or `answers={kind: fn}`), the
@@ -346,8 +365,11 @@ And when writing one:
 - **Two branches may share one meeting**: stage and commit the first link
   with its scans (oracle_diff, dups, missing and import names), stage the
   second on it, and run the meeting at the top. A red is bisected onto the
-  lower link in seconds. Mirrodin batched four pairs; none needed the
-  bisect.
+  lower link in seconds. Mirrodin batched four pairs, Darksteel three
+  pairs and two triples; none needed the bisect. A follow-up commit on a
+  branch already merged (a rehearsal red sent back to its group) is staged
+  under an alias, since its link name is taken: `git branch <round>/fu3
+  <round>/w1g3`, then `chain_stage.sh fu3 <tip>`.
 - **Name the `full`-marked structural guards in every group brief**
   (`tests/engine/test_face_blind_guards.py`, `test_grammar_layering.py`,
   `test_cast_prohibition_readers.py`): an agent's quick-pass `tests/engine` never
@@ -538,7 +560,7 @@ on at least one resolution.
 ### Per-set test files
 
 - **Open the set's per-set test files on `main` before the fan-out, one marked
-  section per group** (`open_test_files.py CODE <group>…`), each group's imports
+  section per group** (`open_test_files.py CODE <group>… [--later TYPES]`), each group's imports
   at the top of its own section. Every per-set conflict is then two appends and
   the union is mechanical. A group's tests in `tests/rules/` go in a file of its
   own.
@@ -560,7 +582,9 @@ on at least one resolution.
   meeting, mid-wave (Scourge's creatures file, nine sections, 2,601 lines at
   the seventh merge): when more than five groups open a section in one type's
   file, open its `_later_groups` sibling on the base and split the sections
-  between the two before the fan-out.
+  between the two before the fan-out (`open_test_files.py --later
+  creatures,artifacts`: the first half of the groups in the file, the rest in
+  its sibling — Darksteel's nine groups).
 
 ### Module splits
 
@@ -643,7 +667,13 @@ on at least one resolution.
 - **An ordered table stays whole even past the runway** (the prompt registry,
   the first-match-wins trigger table): a table whose order is behaviour does
   not scatter across modules. Dump a table or registry before and after — the
-  entries in order, each function by its code — and compare.
+  entries in order, each function by its code — and compare. **What makes
+  such a table long is often not its rows**: Darksteel's
+  `whenever_triggers.py` sat in the band at 1,807 lines, 78% of them the
+  rows' rationale. The notes moved to `engine/whenever_trigger_notes.py` in
+  the table's own order (a guard holds each note to one row), the rows
+  byte-identical and the table's dump equal, and the module fell to 526 —
+  a table in the band is measured for that before it is called unsplittable.
 - **A method over the runway on its own is cut into its rule's steps by
   script**: each step a run of the method's top-level statements copied
   verbatim into a helper, the run replaced by generated glue (the call, inputs
@@ -1410,9 +1440,6 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     "spend blue mana as though it were any color".
   - Vhati il-Dal's mode is the `choose_one` default (its first, "base
     power"): `ai_prompt_picks` does not weigh the two.
-  - Camouflage is never cast: `ai_policy._weighed_at_instant_speed_now`
-    holds an attacking seat's spells until the blocks, and its one window
-    is before them.
   - Krark's Thumb's `ignore_coin` default
     (`choices/numbers._default_ignore_coin`) keeps the win or heads where the
     loss is better (Puppet's Verdict against bigger creatures, Winter Sky,
@@ -1448,6 +1475,27 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     `ai_casts._times_worth_taking` takes "kicked" whenever the lands can pay,
     the main phase's policy, which the instant-speed builder shares since
     kg5.
+  - From Darksteel's W2G2, each measured: **a spell that does nothing is
+    proposed when a cast trigger pays for it** — the rehearsal gives the
+    spell's card back on the premise that every cast spends one, so the
+    Feather cycle's 1 life nets it positive (Hallow in response to Aether
+    Vial, a defender's Tears of Rage, seed 4242). Part: `ai_rehearsal.
+    _rehearse` resolves only the objects above the spell (its cast triggers,
+    CR 603.3) and reads the standing there; if the spell's own resolution
+    moves nothing beyond that, the card is not given back. **Weights held
+    for the owner's call**: Eater of Days is always cast (body 34.9 against
+    two `SKIPPED_TURN_WORTH` 16; permanents are not rehearsed); Lich's Tomb
+    scores a flat 2.3 at any life (part: a cast gate weighing the "don't
+    lose" static against the seat's life); Death Cloud's X=6 at 10 life read
+    +26.5 on its board, consistent with the standing. Seen in W2G1's whole
+    game: Nourish cast at 17 life with nothing threatening, and an untapped
+    Nim Abomination left to cost 3 life three end steps running. Found by
+    reading: Aggravated Assault's second-main activation is not read through
+    the combat it adds (`_read_through_the_fight` gates on
+    `combat_is_still_to_come` first); Aether Vial is never activated in the
+    simulations because the creatures it would put are cast for mana first
+    (the doors' order); Panoptic Mirror's imprint picks the lowest slot among
+    cards of one mana value.
   *Clears:* the next AI round.
 
 - **Three mana readers still skip what a substitution does** (kg5 `mana2`,
@@ -1551,3 +1599,39 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   at the deal, as `run_ai_simulation` seeds the module RNG; sessions in one
   server share that RNG, so one game per seed beside another table needs the
   engine's random reads on an RNG the game owns. *Clears:* a web round.
+
+- **Darksteel's engine and client leftovers, each measured.** (a) A damage
+  redirect re-issues the damage as a separate event, so a creature dealt
+  Incinerate's or Flamebreak's damage through a redirect is not stamped
+  "can't be regenerated" (`handlers/damage._after_dealt` reads the original
+  event; no ruling covers it). (b) The engine log names a restricted mana's
+  raw key ("spendable only on artifact_or_artifact_ability",
+  `handlers/mana.py`) where the wire's `restricted_mana_words` has the
+  sentence. (c) A granted ability's served text is lowercased by the Aura
+  reader ("{t}, unattach Heartseeker: …"). (d) To respond to a spell a person
+  must click it on the canvas stack within about a second, before the
+  client's auto-pass; Leonin Battlemage's "you may untap" is asked on every
+  cast while it is already untapped. (e) Not driven in a browser: Sundering
+  Titan's leaves-the-battlefield trigger, Leonin Bola's and Surestrike
+  Trident's granted abilities (text checked), the Cataclysm and Planar
+  Overlay paths of the restructured keep modal. *Clears:* (a) a damage
+  round; (b)–(e) a client round.
+
+- **The toolkit wishes Darksteel's groups wrote down** (each cost a round's
+  worth of minutes somewhere): `oracle_diff compare` cannot filter a new
+  defaulted field's spelling (W1G2's nine moves read as 2,407; its
+  `scratch/dst/w1g2/od_filtered.py` is the filter); `sim_fingerprint` has no
+  `snapshot --rev <commit>` (three groups rebuilt a base snapshot from an
+  export); `probe_line.py` shows no AST fields and not the innermost
+  `LoweringError`'s file and line (W1G2, W1G3, W1G9 each wrote a scratch
+  probe); `simulate_ai_games.py` and `checked_sim.py` take no pinned cards;
+  no `explain_cast` for an activation (W2G2); no `fails_before.sh <test>
+  <file…>` to show a test red against a module's base version (W2G3 swapped
+  files by hand four times); `tests_for_diff.py --list` writes CRLF paths
+  and reads from `main` by default (512 files for a wave-2 branch); no
+  canvas position handle for a browser test (W2G1's `scratch/dst/w2g1/pw.sh`)
+  and `serve_board.py` does not reload code; and **Phase 1's yield arrived
+  about 80 minutes into the wave**, every one of its 13 reds a census whose
+  population reads the measured set — a marker (or a `tests_for_diff` mode)
+  naming those tests would run them first, in minutes, and put the table in
+  the briefs. *Clears:* a toolkit round, before the next set.

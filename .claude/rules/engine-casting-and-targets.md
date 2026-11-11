@@ -95,8 +95,12 @@ and you can open this file directly whenever its subject is yours.
   "reduces only the amount of colored mana you pay" (Edgewalker,
   `CostReduction.colored_only`) never spills — `reduce_cost`, in one place.
   Every price the wire shows is the one the cast charges:
-  `cost_modifiers.cast_mana_charge` (increases, then reductions) is read by
-  the hand badge, the castable highlight and `ways`.
+  `cost_modifiers.cast_mana_charge` (increases, then reductions, then a
+  floor — Trinisphere's "costs three mana", `engine/cost_floors.py`, the last
+  step of CR 601.2f, applied in the one cast payment
+  `pool_payment._pay_cast_cost`, free and alternative casts included, and by
+  the AI's `ai_payment._cost_for`) is read by the hand badge, the castable
+  highlight and `ways`.
 
 ## Targets
 

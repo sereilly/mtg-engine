@@ -72,7 +72,10 @@ and you can open this file directly whenever its subject is yours.
 - `engine/object_colors.py`, `engine/color_census.py` — colour as a relation
   (`share_a_color`, `is_multicolored`, `of_each_color`) and as a count, both
   read through the layers. A card off the battlefield is asked through
-  `object_colors.card_colors` with its seat (Celestial Dawn): every card
+  `object_colors.card_colors` with its seat (Celestial Dawn) — and an
+  every-zone static answers it without one (Mycosynth Lattice's "All cards
+  that aren't on the battlefield, spells, and permanents are colorless",
+  `every_zone_color_override`, land cards included): every card
   matcher takes keyword-only `game=`/`owner=` and every call names both
   (`tests/engine/test_kg_colour_off_battlefield_reads.py`) — and its creature
   types through `object_creature_types.card_creature_types` (Conspiracy, CR
