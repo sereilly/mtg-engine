@@ -304,3 +304,58 @@ def test_w1g5_emissary_of_despair_drains_a_life_per_artifact_the_damaged_player_
     assert game.players[1].life == 18
 
 # ==== end W1G5 ======================================================
+
+
+# ==== W2G3 ==========================================================
+# W2G3's tests go between this line and the "end W2G3" line.
+
+from engine import Game as _W2G3Game, PlayerState as _W2G3PlayerState
+from engine.models import Permanent as _W2G3Permanent
+from tests.helpers import settle as _w2g3_settle
+
+
+def test_w2g3_neurok_prodigy_names_why_a_discard_cannot_pay(set_pool):
+    """"Discard an artifact card: Return this creature to its owner's hand."
+    A named card the phrase does not take is refused naming *that* — the
+    card is there, it is not an artifact card — rather than "no card at hand
+    position 0", which is the refusal for a position off the end of the hand
+    (W1G3's drive). Nothing is spent by either refusal; the artifact pays."""
+    island = set_pool("LEA")["Island"]
+    game = _W2G3Game(players=[
+        _W2G3PlayerState(name=f"P{seat}", library=[island] * 20)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    prodigy = _W2G3Permanent(card=set_pool("DST")["Neurok Prodigy"])
+    game._put_permanent_onto_battlefield(0, prodigy, None)
+    prodigy.metadata["summoning_sickness_turn"] = -99
+    game.players[0].hand.extend(
+        [set_pool("LEA")["Grizzly Bears"], set_pool("ATQ")["Ornithopter"]]
+    )
+    _w2g3_settle(game)
+
+    bears = game.activate_permanent_ability(0, "Neurok Prodigy", cost_hand_index=0)
+    assert not bears.supported
+    assert "Grizzly Bears does not answer its discard cost" in bears.details
+    assert "no card at hand position" not in bears.details
+    off_the_end = game.activate_permanent_ability(
+        0, "Neurok Prodigy", cost_hand_index=5,
+    )
+    assert not off_the_end.supported
+    assert "no card at hand position 5" in off_the_end.details
+    assert [card.name for card in game.players[0].hand] == [
+        "Grizzly Bears", "Ornithopter",
+    ]
+    assert game.is_on_battlefield(prodigy)
+
+    paid = game.activate_permanent_ability(0, "Neurok Prodigy", cost_hand_index=1)
+    assert paid.supported, paid.details
+    _w2g3_settle(game)
+    assert not game.is_on_battlefield(prodigy)
+    assert [card.name for card in game.players[0].hand] == [
+        "Grizzly Bears", "Neurok Prodigy",
+    ]
+    assert "Ornithopter" in [card.name for card in game.players[0].graveyard]
+
+# ==== end W2G3 ======================================================
