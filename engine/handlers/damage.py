@@ -30,6 +30,7 @@ from ..divided_damage import (DIVIDED_TARGETS, EVENLY, announced_no_targets,
 from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..named_counters import counters_on
+from ..regeneration import deny_regeneration_if_dealt
 from ..resumption import run_resumable
 from ..simultaneous_damage import begin_sentence, deal_at_once, deal_sentence
 from ..game_types import (single_chosen_id, single_slot, target_ids,
@@ -52,6 +53,29 @@ if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
     from ..oracle import OracleInstruction
+
+
+def _after_dealt(instruction, context, permanent):
+    """What one creature's damage event does with the amount it dealt, from
+    inside the event (``apply_damage_to_creature``'s ``then``).
+
+    The amount is recorded so a later instruction of the same resolution can
+    read it ("You gain life equal to the damage dealt"). And "A creature
+    **dealt damage this way** can't be regenerated this turn" (Incinerate) is
+    stamped here, on what was *dealt* — not before the damage, beside
+    Disintegrate's "it can't be regenerated", which is a ban on the target
+    that holds even if the damage is prevented (its 2004-10-04 ruling).
+    Prevented damage is not dealt (CR 615.1a), so a creature Test of Faith
+    shielded from all of it may still regenerate.
+    """
+    denies = bool(instruction.payload.get("no_regen_if_dealt"))
+
+    def then(dealt: int) -> None:
+        context.results["damage_dealt"] = dealt
+        if denies:
+            deny_regeneration_if_dealt(permanent, dealt)
+
+    return then
 
 
 def _record_damage_recipient(context, permanent, player=None) -> None:
@@ -1044,9 +1068,11 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 return True, "resolved"
         # A Jade Monolith redirect (source-aware) is handled inside
         # _mark_damage_on_permanent so combat and spell damage share one path.
-        # Disintegrate-style riders: the damaged creature can't be regenerated
+        # Disintegrate-style riders: the targeted creature can't be regenerated
         # this turn, and if it would die this turn it is exiled instead (a
         # replacement effect honored by _destroy_marked_creatures / _permanent_to_graveyard).
+        # Both are on the target whatever the damage does; Incinerate's "a
+        # creature dealt damage this way" waits for the damage (_after_dealt).
         if target_perm.is_creature:
             if instruction.payload.get("no_regen"):
                 target_perm.metadata["cant_be_regenerated_this_turn"] = True
@@ -1062,7 +1088,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {target_perm.card.name}",
             # Recorded so a later instruction in the same resolution can read it
             # ("You gain life equal to the damage dealt").
-            then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
+            then=_after_dealt(instruction, context, target_perm),
             asks=True,
             unpreventable=unpreventable,
             cant_be_prevented=cant_be_prevented,
@@ -1093,7 +1119,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         apply_damage_to_creature(
             game, victim, damage, source_permanent or card,
             log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {victim.card.name}",
-            then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
+            then=_after_dealt(instruction, context, victim),
             asks=True,
             unpreventable=unpreventable,
             cant_be_prevented=cant_be_prevented,

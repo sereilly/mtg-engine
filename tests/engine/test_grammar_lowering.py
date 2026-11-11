@@ -5256,20 +5256,38 @@ def test_the_single_target_damage_rider_still_carries():
     assert lowered.payload["no_regen"] is True
 
 
-def test_the_noun_form_of_the_damage_rider_is_the_same_rider():
+def test_the_noun_form_of_the_damage_rider_is_its_own_rider():
     """"**A creature dealt damage this way** can't be regenerated this turn"
     (Incinerate) is CR 701.19c written about the effect rather than about a
     pronoun — the damage twin of "A creature destroyed this way can't be
-    regenerated" — so it sets the one key both spellings set rather than
-    minting a second channel for the same sentence."""
-    (lowered,) = compile_line(
+    regenerated" — and it is **not** the pronoun's sentence under a second
+    spelling, so it sets a key of its own.
+
+    This test once pinned the two as one key on purpose. They are two
+    readings: the noun names what the damage was *dealt* to, and prevented
+    damage is not dealt (CR 615.1a), so a creature Test of Faith shielded
+    from all of Incinerate's damage may still regenerate; while Disintegrate's
+    "If it's a creature, it can't be regenerated" is "an effect of
+    Disintegrate and not an effect of the damage. It works even if the damage
+    is prevented or redirected" (its 2004-10-04 ruling). One key stamped
+    before the damage was Disintegrate's reading given to Incinerate
+    (tests/rules/test_dst_w2g3_damage_dealt_this_way.py drives both)."""
+    (noun,) = compile_line(
         "This spell deals 3 damage to any target. A creature dealt damage this "
         "way can't be regenerated this turn.",
         card_name="Probe",
     ).instructions
+    (pronoun,) = compile_line(
+        "This spell deals 3 damage to any target. If it's a creature, it "
+        "can't be regenerated this turn.",
+        card_name="Probe",
+    ).instructions
 
-    assert lowered.kind == "deal_damage"
-    assert lowered.payload["no_regen"] is True
+    assert noun.kind == pronoun.kind == "deal_damage"
+    assert noun.payload.get("no_regen_if_dealt") is True
+    assert "no_regen" not in noun.payload
+    assert pronoun.payload.get("no_regen") is True
+    assert "no_regen_if_dealt" not in pronoun.payload
 
 
 # --- FixA: "of their choice" leaves no payload key behind ---
