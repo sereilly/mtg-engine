@@ -690,6 +690,16 @@ def _lower_put_counter(
             "add_counter_to_target" if is_pt_counter(node.counter)
             else "add_named_counter_to_target"
         )
+        # A +1/+1 counter on "an artifact you control" is legal on one that is
+        # not a creature (Dismantle's ruling) and does nothing there until it
+        # becomes one, so a seat nobody asks puts it on a creature first — a
+        # preference on the default, never a narrowing of what may be chosen.
+        preference: dict[str, object] = (
+            {"default_prefers": "creature"}
+            if node.counter == "+1/+1"
+            and tuple(node.subject.filter.card_types) != ("creature",)
+            else {}
+        )
         return (
             OracleInstruction(
                 "choose_permanent", "",
@@ -706,6 +716,7 @@ def _lower_put_counter(
                         f"Choose {'an' if noun[:1] in 'aeiou' else 'a'} {noun} "
                         f"to put a {node.counter} counter on."
                     ),
+                    **preference,
                 },
             ),
             OracleInstruction(

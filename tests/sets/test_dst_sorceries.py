@@ -101,9 +101,11 @@ def test_w1g1_dismantle_puts_that_many_counters_on_an_artifact_you_control(set_p
     """"Destroy target artifact. If that artifact had counters on it, put that
     many +1/+1 counters or charge counters on an artifact you control." The
     count is what it had as it was destroyed (CR 608.2h) — the Bruiser's
-    three — and a seat nobody asks takes the +1/+1 option on its creature."""
+    three — and a seat nobody asks takes the +1/+1 option on its creature,
+    not on the noncreature artifact offered first."""
     dst = set_pool("DST")
     game = _w1g1_table(set_pool, hand=[dst["Dismantle"]])
+    pit = _w1g1_put(game, dst["Spawning Pit"], 0)
     worker = _w1g1_put(game, dst["Arcbound Worker"], 0)
     bruiser = _w1g1_put(game, dst["Arcbound Bruiser"], 1)
 
@@ -113,6 +115,7 @@ def test_w1g1_dismantle_puts_that_many_counters_on_an_artifact_you_control(set_p
 
     assert bruiser not in game.players[1].battlefield
     assert _w1g1_counters_on(worker, "+1/+1") == 4
+    assert _w1g1_kinds(pit) == {}
     # The Bruiser's own modular had only my Worker to name, and its seat
     # declined to feed an opponent's creature.
     assert "P1 declined Arcbound Bruiser (it would help an opponent's permanent)" in game.log
