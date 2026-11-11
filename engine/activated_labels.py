@@ -476,8 +476,6 @@ ACTIVATED_LABELS: dict[str, str] = {
     # a kind without one falls back to `activated_<category>` and silently
     # re-buckets its card. Promotion is where that debt comes due, by design.
     "change_supertype": "activated_characteristic",
-    # Neurok Transmuter's "…isn't an artifact": the same layer-4 bucket.
-    "lose_type": "activated_characteristic",
     "change_land_type_until": "activated_characteristic",
     "animate_target_until_eot": "activated_characteristic",
     "grant_self_ability_text": "activated_pump",

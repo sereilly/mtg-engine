@@ -790,9 +790,12 @@ def test_w2g4_no_colour_effect_in_the_pool_can_depend_on_another():
                 if animation.color:
                     animators[card.name] = animation
 
+    # Mycosynth Lattice (Darksteel, measured): "All cards that aren't on the
+    # battlefield, spells, and permanents are colorless" — every permanent,
+    # reach by nothing at all.
     assert set(statics) == {
-        "Celestial Dawn", "Darkest Hour", "Dralnu's Crusade", "Shifting Sky",
-        "Thran Lens",
+        "Celestial Dawn", "Darkest Hour", "Dralnu's Crusade", "Mycosynth Lattice",
+        "Shifting Sky", "Thran Lens",
     }
     for name, static in statics.items():
         # ``colors`` is the scope's colour narrowing ("**green** creatures
