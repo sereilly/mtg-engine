@@ -201,7 +201,7 @@ def _better_graveyard_pick(
     for seat, slot in (denial, own):
         rehearsal = _rehearse_announcement(
             game, player_index, card,
-            _announcement(card, target=seat, caster=player_index, permanent_index=slot),
+            _announcement(game, card, target=seat, caster=player_index, permanent_index=slot),
         )
         if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
             continue
@@ -766,7 +766,7 @@ def _weighed_seat_prefix(game: Game, caster_index: int, card: CardDefinition, pi
         rehearsal = _rehearse_announcement(
             game, caster_index, card,
             _announcement(
-                card, target=answer[0], caster=caster_index,
+                game, card, target=answer[0], caster=caster_index,
                 permanent_index=answer[1], permanent_ids=answer[2],
                 role_refs=answer[4],
             ),
@@ -1388,7 +1388,7 @@ def _best_target(
             if x_value is not None else None
         )
         announcement = _announcement(
-            card, target=seat, caster=caster_index, permanent_index=index,
+            game, card, target=seat, caster=caster_index, permanent_index=index,
             permanent_ids=ids, x_value=x_value if implied is None else implied,
         )
         rehearsal = _weighed_through_the_fight(
@@ -1429,7 +1429,7 @@ def _better_than_the_seat(
     if not candidates:
         return None
     at_seat = _announcement(
-        card, target=preferred_seat, caster=caster_index, x_value=x_value,
+        game, card, target=preferred_seat, caster=caster_index, x_value=x_value,
     )
     at_the_seat = _weighed_through_the_fight(
         game, caster_index, card, at_seat,
@@ -1457,7 +1457,7 @@ def _better_than_the_seat(
     )
     for seat, index, ids in candidates:
         announcement = _announcement(
-            card, target=seat, caster=caster_index, permanent_index=index,
+            game, card, target=seat, caster=caster_index, permanent_index=index,
             permanent_ids=ids, x_value=x_value,
         )
         rehearsal = _weighed_through_the_fight(
@@ -1680,7 +1680,7 @@ def _chosen_stack_target(
     # Topmost first, so a tie names the spell most recently cast.
     for index in sorted(candidates, reverse=True):
         announcement = {
-            **_announcement(card, target=target_seat, caster=caster_index),
+            **_announcement(game, card, target=target_seat, caster=caster_index),
             "target_stack_index": index,
         }
         rehearsal = _rehearse_announcement(game, caster_index, card, announcement)

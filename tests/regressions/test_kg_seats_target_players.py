@@ -271,7 +271,7 @@ def test_gaeas_blessing_with_no_card_and_its_player_gone_does_not_resolve(catalo
     """Every target illegal — the player, and no card named — and the spell
     is removed from the stack: no card is drawn."""
     game = _pile_table(catalog_by_name, "Gaea's Blessing")
-    game.queue_from_hand(0, "Gaea's Blessing", target_player_index=2, target_permanent_index=[])
+    game.queue_from_hand(0, "Gaea's Blessing", target_player_index=2, target_graveyard_indices=[])
     hand = len(game.players[0].hand)
 
     game.players[2].battlefield.append(Permanent(card=catalog_by_name["Ivory Mask"]))
@@ -301,7 +301,7 @@ def test_reap_counts_x_on_the_opponent_named(catalog_by_name):
     game = _reap_table(catalog_by_name)
 
     spec = game.cast_target_spec(0, catalog_by_name["Reap"])
-    result = game.cast_from_hand(0, "Reap", target_player_index=2, target_permanent_index=[0, 1, 2])
+    result = game.cast_from_hand(0, "Reap", target_player_index=2, target_graveyard_indices=[0, 1, 2])
     resolve_stack(game)
 
     assert spec["defined_x_by_seat"] == {1: 1, 2: 3}
@@ -316,8 +316,8 @@ def test_reap_naming_its_own_pile_or_nobody_counts_the_first_opponent(catalog_by
     announcement with the first one the description admits."""
     game = _reap_table(catalog_by_name)
 
-    too_many = game.cast_from_hand(0, "Reap", target_player_index=seat, target_permanent_index=[0, 1])
-    result = game.cast_from_hand(0, "Reap", target_player_index=seat, target_permanent_index=[0])
+    too_many = game.cast_from_hand(0, "Reap", target_player_index=seat, target_graveyard_indices=[0, 1])
+    result = game.cast_from_hand(0, "Reap", target_player_index=seat, target_graveyard_indices=[0])
     resolve_stack(game)
 
     assert not too_many.supported, "seat 1 has one black permanent"
@@ -328,7 +328,7 @@ def test_reap_naming_its_own_pile_or_nobody_counts_the_first_opponent(catalog_by
 def test_reap_cannot_name_a_shrouded_opponent(catalog_by_name):
     game = _reap_table(catalog_by_name, masked=True)
 
-    result = game.cast_from_hand(0, "Reap", target_player_index=2, target_permanent_index=[0])
+    result = game.cast_from_hand(0, "Reap", target_player_index=2, target_graveyard_indices=[0])
 
     assert not result.supported
     assert "target player" in result.details
@@ -444,7 +444,7 @@ def test_the_ai_names_the_opponent_reap_counts_most_on(catalog_by_name):
 
     assert action is not None and action.card_name == "Reap"
     assert action.target_player_index == 2
-    assert len(action.target_permanent_index) == 3
+    assert len(action.target_graveyard_indices) == 3
 
 
 def test_the_ai_names_the_opponent_superior_numbers_counts_least_on(catalog_by_name):

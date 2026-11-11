@@ -307,7 +307,7 @@ def test_kg5_layers_each_channel_granting_the_line_grants_the_keyword(set_pool):
     _place(ice["Dreams of the Dead"])
     assert game.players[0].graveyard[0].name == "Savannah Lions"
     assert game.activate_permanent_ability(
-        0, "Dreams of the Dead", target_permanent_index=0,  # the graveyard's slot
+        0, "Dreams of the Dead", target_graveyard_indices=[0],  # the graveyard's slot
     ).supported
     settle(game)
     returned = next(p for p in game.controlled_by(0) if p.card.name == "Savannah Lions")

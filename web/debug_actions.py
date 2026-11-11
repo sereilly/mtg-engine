@@ -46,9 +46,16 @@ _DEBUG_ANYTIME_ACTIONS = {
 
 
 def _debug_target_permanent(session: Session, req) -> tuple[int, Permanent]:
-    """Resolve the battlefield permanent a debug board action addresses, from
-    ``target_seat`` (defaulting to the acting seat) + ``target_permanent_index``.
+    """Resolve the battlefield permanent a debug board action addresses: by
+    ``target_permanent_id`` (the preamble has 404'd a stale one and written
+    its seat), or by ``target_seat`` (defaulting to the acting seat) +
+    ``target_permanent_index``, the old slot field.
     Returns ``(controller_seat, permanent)``."""
+    if req.target_permanent_id is not None:
+        found = session.game.find_permanent_by_id(req.target_permanent_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail="permanent not found on that battlefield")
+        return found
     controller_seat = req.target_seat if req.target_seat is not None else req.seat
     if not (0 <= controller_seat < len(session.game.players)):
         raise HTTPException(status_code=400, detail="target seat out of range for this session")

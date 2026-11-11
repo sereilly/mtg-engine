@@ -51,6 +51,7 @@ from engine.oracle import compile_card_oracle
 from engine.restricted_mana import CAST, PaymentPurpose
 from engine.targeting import usable_activated_abilities
 from tests.helpers import _mk_card, resolve_stack
+from tests.helpers import action_target  # noqa: E402
 
 _SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
@@ -391,7 +392,7 @@ def test_an_aura_paid_for_with_the_lotus_lands_on_the_creature_it_named():
     action = choose_cast_action(game, 0)
     assert action is not None and action.card_name == "Holy Strength"
     assert [game.permanent_at(0, s).card.name for s in action.land_tap_indices] == ["Black Lotus"]
-    host = game.permanent_at(action.target_player_index, action.target_permanent_index)
+    host = action_target(game, action)
     other = next(
         p for p in game.controlled_by(0) if p.is_creature and p is not host
     )

@@ -64,7 +64,7 @@ def test_a_ritual_still_reads_as_mana_made():
     with deliberating():
         rehearsal = _rehearse_announcement(
             game, 0, _CARDS["Dark Ritual"],
-            _announcement(_CARDS["Dark Ritual"], target=0, caster=0),
+            _announcement(game, _CARDS["Dark Ritual"], target=0, caster=0),
         )
     assert rehearsal is not None and rehearsal.accepted and rehearsal.made_mana
 

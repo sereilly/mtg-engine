@@ -443,7 +443,7 @@ class TestRegrowthReturnsAnyCard:
     def test_returns_chosen_noncreature_card(self, cards, card_name):
         p1 = PlayerState(name="P1", hand=[cards["Regrowth"]], graveyard=[cards["Grizzly Bears"], cards[card_name]])
         game = _game(p1, PlayerState(name="P2"))
-        result = game.cast_from_hand(0, "Regrowth", target_player_index=0, target_permanent_index=1)
+        result = game.cast_from_hand(0, "Regrowth", target_player_index=0, target_graveyard_indices=[1])
         assert result.supported, result.details
         assert any(c.name == card_name for c in p1.hand)
         assert not any(c.name == card_name for c in p1.graveyard)
@@ -451,14 +451,14 @@ class TestRegrowthReturnsAnyCard:
     def test_returns_chosen_creature_card(self, cards):
         p1 = PlayerState(name="P1", hand=[cards["Regrowth"]], graveyard=[cards["Lightning Bolt"], cards["Grizzly Bears"]])
         game = _game(p1, PlayerState(name="P2"))
-        result = game.cast_from_hand(0, "Regrowth", target_player_index=0, target_permanent_index=1)
+        result = game.cast_from_hand(0, "Regrowth", target_player_index=0, target_graveyard_indices=[1])
         assert result.supported, result.details
         assert any(c.name == "Grizzly Bears" for c in p1.hand)
 
     def test_raise_dead_still_rejects_noncreature(self, cards):
         p1 = PlayerState(name="P1", hand=[cards["Raise Dead"]], graveyard=[cards["Lightning Bolt"]])
         game = _game(p1, PlayerState(name="P2"))
-        result = game.cast_from_hand(0, "Raise Dead", target_player_index=0, target_permanent_index=0)
+        result = game.cast_from_hand(0, "Raise Dead", target_player_index=0, target_graveyard_indices=[0])
         assert not result.supported
         assert "no valid target" in result.details
 

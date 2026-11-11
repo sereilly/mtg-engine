@@ -420,7 +420,7 @@ def test_a_flashed_back_spell_holds_its_slots_through_leaving_the_pile(pool, own
     caster.graveyard[:] = [pool[name] for name in yard]
     game.interactive_seats = set()
     assert game.cast_from_hand(
-        0, "Recoup", target_player_index=0, target_permanent_index=own_slot,
+        0, "Recoup", target_player_index=0, target_graveyard_indices=[own_slot],
     ).supported
     resolve_stack(game)
 
@@ -431,7 +431,7 @@ def test_a_flashed_back_spell_holds_its_slots_through_leaving_the_pile(pool, own
     named = [target for target in mine if target["name"] in ("Grizzly Bears", "Forest")]
     assert game.queue_from_hand(
         0, "Decompose", from_zone="graveyard", target_player_index=0,
-        target_permanent_index=[target["index"] for target in named],
+        target_graveyard_indices=[target["index"] for target in named],
     ).supported
     assert _names(
         target.stamp.card for target in chosen_targets(game, game.stack[-1])
@@ -494,11 +494,11 @@ def test_an_ai_seat_names_an_opponents_cards_for_the_activation(pool):
     action = choose_activation_action(game, 0)
 
     assert action is not None and action.permanent_name == "Carrion Beetles"
-    assert (action.target_player_index, action.target_permanent_index) == (1, [0, 1, 2])
+    assert (action.target_player_index, action.target_graveyard_indices) == (1, [0, 1, 2])
     assert game.activate_permanent_ability(
         0, action.permanent_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
     ).supported
     resolve_stack(game)
     assert _names(game.players[1].exile) == ["Swamp", "Hill Giant", "Terror"]

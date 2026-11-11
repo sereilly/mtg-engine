@@ -22,6 +22,7 @@ from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
 
 from tests.helpers import _mk_card, _mk_creature_card, _nosick, resolve_stack
+from tests.helpers import action_target  # noqa: E402
 
 
 def _table(mine, theirs):
@@ -42,7 +43,7 @@ def _activate(game, action):
         0, action.permanent_name,
         target_player_index=action.target_player_index,
         permanent_index=action.permanent_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
         ability_index=action.ability_index,
     )
     assert result.supported, result.details
@@ -59,7 +60,7 @@ def test_riptide_mangler_copies_the_greatest_power_on_either_board(set_pool):
     )
     action = choose_activation_action(game, 0)
     assert action is not None and action.permanent_name == "Riptide Mangler"
-    target = game.permanent_at(action.target_player_index, action.target_permanent_index)
+    target = action_target(game, action)
     assert target is not None and target.card.name == "Wurm"
     _activate(game, action)
     mangler = next(p for p in game.controlled_by(0) if p.card.name == "Riptide Mangler")

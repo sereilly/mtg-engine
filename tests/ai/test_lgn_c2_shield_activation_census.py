@@ -91,7 +91,8 @@ def _census(*, flat: bool = False) -> dict:
                         permanent_name=name, permanent_index=kwargs.get("permanent_index"),
                         target_player_index=kwargs.get("target_player_index"),
                         land_tap_indices=(), score=0.0,
-                        target_permanent_index=kwargs.get("target_permanent_index"),
+                        target_permanent_ids=kwargs.get("target_permanent_ids"),
+                        target_graveyard_indices=kwargs.get("target_graveyard_indices"),
                         target_role_refs=kwargs.get("target_role_refs"),
                         ability_index=kwargs.get("ability_index"),
                     )

@@ -51,7 +51,7 @@ def test_a_graveyard_target_survives_another_card_leaving_the_pile():
         ],
     )
 
-    game.queue_from_hand(0, "Raise Dead", target_player_index=0, target_permanent_index=1)
+    game.queue_from_hand(0, "Raise Dead", target_player_index=0, target_graveyard_indices=[1])
     p1.graveyard.pop(0)          # something else leaves while the spell waits
     game._settle()
 
@@ -77,7 +77,7 @@ def test_several_graveyard_targets_survive_the_same_shift():
     )
 
     game.queue_from_hand(
-        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[1, 2]
+        0, "Sanguine Indulgence", target_player_index=0, target_graveyard_indices=[1, 2]
     )
     p1.graveyard.pop(0)
     game._settle()
@@ -96,7 +96,7 @@ def test_reconstruction_can_be_cast_on_the_artifact_it_offers():
     spec = game.cast_target_spec(0, _CATALOG["Reconstruction"])
     offered = [t.get("name") for t in (spec.get("valid_targets") or [])]
     result = game.cast_from_hand(
-        0, "Reconstruction", target_player_index=0, target_permanent_index=0
+        0, "Reconstruction", target_player_index=0, target_graveyard_indices=[0]
     )
     game._settle()
 
@@ -117,7 +117,7 @@ def test_a_protection_check_does_not_read_a_battlefield_slot_for_a_graveyard_tar
     )
 
     result = game.cast_from_hand(
-        0, "Raise Dead", target_player_index=0, target_permanent_index=0
+        0, "Raise Dead", target_player_index=0, target_graveyard_indices=[0]
     )
     game._settle()
 

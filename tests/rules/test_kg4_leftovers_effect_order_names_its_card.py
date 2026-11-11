@@ -324,7 +324,7 @@ def test_dreams_of_the_deads_marker_names_dreams_of_the_dead():
     game = _table(mine=["Dreams of the Dead"])
     game.players[0].graveyard.append(_C["Gravebane Zombie"])
     activated = game.activate_permanent_ability(
-        0, "Dreams of the Dead", target_player_index=0, target_permanent_index=0,
+        0, "Dreams of the Dead", target_player_index=0, target_graveyard_indices=[0],
     )
     assert activated.supported, activated.details
     resolve_stack(game)

@@ -1117,7 +1117,7 @@ def run(card, index, built, *, forced: bool) -> dict:
             else:
                 keywords = dict(
                     target_player_index=action.target_player_index,
-                    target_permanent_index=action.target_permanent_index,
+                    target_graveyard_indices=action.target_graveyard_indices,
                     target_permanent_ids=action.target_permanent_ids,
                     x_value=action.x_value,
                     divided_targets=action.divided_targets,

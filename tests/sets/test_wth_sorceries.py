@@ -577,7 +577,7 @@ def test_argivian_restoration_finds_an_artifact_creature(set_pool):
     )
     assert [entry["name"] for entry in offered] == ["Clay Statue", "Black Lotus"]
 
-    game.cast_from_hand(0, "Argivian Restoration", target_permanent_index=1)
+    game.cast_from_hand(0, "Argivian Restoration", target_graveyard_indices=[1])
     game.resolve_stack()
 
     assert [p.card.name for p in game.players[0].battlefield] == ["Clay Statue"]
@@ -680,7 +680,7 @@ def test_gaeas_blessing_shuffles_the_cards_its_target_chose(set_pool):
     )
     before = len(game.players[1].library)
     game.cast_from_hand(
-        0, "Gaea's Blessing", target_player_index=1, target_permanent_index=[0, 2],
+        0, "Gaea's Blessing", target_player_index=1, target_graveyard_indices=[0, 2],
     )
     game.resolve_stack()
     game.auto_resolve_pending_choices()
@@ -878,7 +878,7 @@ def test_w3g2_shattered_crypt_returns_x_cards_not_one(set_pool):
         set_pool, ["Grizzly Bears", "Hill Giant", "Black Lotus"],
     )
     assert game.cast_from_hand(
-        0, "Shattered Crypt", x_value=2, target_permanent_index=[0, 1],
+        0, "Shattered Crypt", x_value=2, target_graveyard_indices=[0, 1],
     ).supported
     while game.stack:
         game.resolve_top_of_stack()

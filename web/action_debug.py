@@ -215,7 +215,7 @@ def _action_debug_return_to_hand(session, req, seat_type):
     zone = "hand" if req.action == "debug_return_to_hand" else "exile"
     name = permanent.card.name
     _debug_move_permanent_off_battlefield(
-        session.game, controller_seat, req.target_permanent_index, zone
+        session.game, controller_seat, session.game.battlefield_index_of(permanent), zone
     )
     session.game.check_state_based_actions()
     moved = "returned to its owner's hand" if zone == "hand" else "exiled"

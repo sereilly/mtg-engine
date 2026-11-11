@@ -1885,7 +1885,7 @@ def test_animate_dead_creature_sacrificed_when_aura_leaves(all_cards):
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
 
-    game.cast_from_hand(0, "Animate Dead", target_player_index=1, target_permanent_index=0)
+    game.cast_from_hand(0, "Animate Dead", target_player_index=1, target_graveyard_indices=[0])
     game.resolve_stack()
     assert any(p.card.name == "Grizzly Bears" for p in p1.battlefield)
 
@@ -2129,7 +2129,7 @@ def test_animate_dead_applies_its_penalty_once(set_pool):
     p1.mana_pool["B"] = 1
 
     assert game.cast_from_hand(
-        0, "Animate Dead", target_player_index=0, target_permanent_index=0
+        0, "Animate Dead", target_player_index=0, target_graveyard_indices=[0]
     ).supported
     resolve_stack(game)
     game._settle()

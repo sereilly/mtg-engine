@@ -200,8 +200,8 @@ def _w2g5_named_seats(game, action) -> list:
             else game.controller_index_of(game.permanent_by_id(value))
             for value in action.target_permanent_ids
         ]
-    if isinstance(action.target_permanent_index, list):
-        return [action.target_player_index] * len(action.target_permanent_index)
+    if len(action.target_permanent_ids or ()) > 1:
+        return [game.controller_index_of(game.permanent_by_id(pid)) for pid in action.target_permanent_ids]
     return []
 
 
@@ -301,7 +301,7 @@ def _w2g5_cast(game, action):
     result = game.cast_from_hand(
         0, action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
         optional_cost_payments=action.optional_cost_payments,
     )

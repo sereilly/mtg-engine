@@ -58,17 +58,18 @@ def _entwine_offer(card: "CardDefinition"):
 def _mode_entry(candidate: "CastAction") -> "dict | None":
     """One ``mode_choices`` entry for *candidate* (a single-mode cast), or None
     when its targets do not fit a mode's announcement."""
-    slot = candidate.target_permanent_index
-    if slot is not None and not isinstance(slot, int):
+    if (
+        len(candidate.target_permanent_ids or ()) > 1
+        or len(candidate.target_graveyard_indices or ()) > 1
+    ):
         return None
     if candidate.divided_targets or candidate.target_role_refs:
-        return None
-    if candidate.target_permanent_ids and slot is None:
         return None
     return {
         "index": candidate.mode_index,
         "target_player_index": candidate.target_player_index,
-        "target_permanent_index": slot,
+        "target_permanent_ids": candidate.target_permanent_ids,
+        "target_graveyard_indices": candidate.target_graveyard_indices,
         "target_stack_index": candidate.target_stack_index,
     }
 
@@ -219,8 +220,8 @@ def _entwined(
         mode_index=None,
         mode_choices=entries,
         optional_cost_payments=taken,
-        target_permanent_index=None,
         target_permanent_ids=None,
+        target_graveyard_indices=None,
         target_stack_index=None,
         land_tap_indices=tap_indices,
         land_tap_colors=tap_colors,

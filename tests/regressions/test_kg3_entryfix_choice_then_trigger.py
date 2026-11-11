@@ -174,7 +174,7 @@ def _reanimation(game, card):
     game.players[0].graveyard = [card]
     game.players[0].hand = [_C["Zombify"]]
     return lambda: game.queue_from_hand(
-        0, "Zombify", target_player_index=0, target_permanent_index=0
+        0, "Zombify", target_player_index=0, target_graveyard_indices=[0]
     ), False
 
 

@@ -21121,7 +21121,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     updateActionHint(`Activating ${pending.cardName}...`);
     sendGraveyardAbility(pending.graveyardAbility, {
       ...(pending.graveyardFields || {}),
-      ...graveyardAbilityTargetFields(selectedTarget, selectedPermanentIndex),
+      ...graveyardAbilityTargetFields(selectedTarget, selectedPermanentIndex, pending.targetKind),
     });
     return;
   }
@@ -21180,6 +21180,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
         __sourceStage: true,
         chosenTargetSeat: selectedTarget,
         chosenTargetIndex: selectedPermanentIndex,
+        chosenTargetKind: pending.targetKind,
         ...pendingTargetFields(pending.card, sourceTargets),
       };
       renderActivationPrompt();
@@ -21217,6 +21218,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
         __costStage: true,
         chosenTargetSeat: selectedTarget,
         chosenTargetIndex: selectedPermanentIndex,
+        chosenTargetKind: pending.targetKind,
         ...pendingTargetFields(pending.card, costTargets),
       };
       renderActivationPrompt();
@@ -21244,10 +21246,9 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
             permanent_index: pending.sourcePermanentIndex,
             cost_permanent_index: selectedPermanentIndex,
             ...(pending.__costStage
-              ? {
-                  target_seat: pending.chosenTargetSeat,
-                  target_permanent_index: pending.chosenTargetIndex,
-                }
+              ? zoneTargetFields(
+                  pending.chosenTargetSeat, pending.chosenTargetIndex, pending.chosenTargetKind,
+                )
               : {}),
           },
           "cost_permanent_id", selectedTarget, selectedPermanentIndex,
@@ -21326,8 +21327,9 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
           action: "activate",
           permanent_name: pending.cardName,
           permanent_index: pending.sourcePermanentIndex,
-          target_seat: pending.chosenTargetSeat,
-          target_permanent_index: pending.chosenTargetIndex,
+          ...zoneTargetFields(
+            pending.chosenTargetSeat, pending.chosenTargetIndex, pending.chosenTargetKind,
+          ),
           source_seat: selectedTarget,
           source_permanent_index: selectedPermanentIndex,
         }
@@ -21336,8 +21338,7 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
           action: "activate",
           permanent_name: pending.cardName,
           permanent_index: pending.sourcePermanentIndex,
-          target_seat: selectedTarget,
-          target_permanent_index: selectedPermanentIndex,
+          ...zoneTargetFields(selectedTarget, selectedPermanentIndex, pending.targetKind),
         };
     if (Number.isInteger(pending.abilityIndex)) activateBody.ability_index = pending.abilityIndex;
     // A text change the ability announces (Balduvian Shaman): the target is
@@ -24024,8 +24025,9 @@ function selectStackSpellTarget(arrayIndex) {
             action: "activate",
             permanent_name: pending.cardName,
             permanent_index: pending.sourcePermanentIndex,
-            target_seat: pending.chosenTargetSeat,
-            target_permanent_index: pending.chosenTargetIndex,
+            ...zoneTargetFields(
+              pending.chosenTargetSeat, pending.chosenTargetIndex, pending.chosenTargetKind,
+            ),
             source_stack_index: arrayIndex,
           }
         : {
@@ -27251,15 +27253,11 @@ async function runPermanentMenuAction(itemAction) {
   }
 
   try {
-    await sendAction(withPermanentId(
-      {
-        seat,
-        action: entry.action,
-        target_seat: target.seat,
-        target_permanent_index: target.idx,
-      },
-      "target_permanent_id", target.seat, target.idx,
-    ));
+    await sendAction({
+      seat,
+      action: entry.action,
+      ...zoneTargetFields(target.seat, target.idx, "permanent"),
+    });
     updateActionHint(entry.hint(target.name));
   } catch (e) {
     SFX.onError();
@@ -29022,17 +29020,28 @@ function startGraveyardAbilityTargetPrompt(entry, fields = {}) {
   updateActionHint(`Choose a target for ${entry.name}'s ability.`);
 }
 
-// The target fields of a graveyard ability's body: the seat always (a
-// player target is the seat alone), the permanent by slot *and* stable id so a
-// board that moved between the click and the request is a refusal, not
-// whichever permanent slid into the slot (CR 400.7).
-function graveyardAbilityTargetFields(targetSeat, permanentIndex) {
+// The target fields of an activation's body (CR 601.2c through CR 602.2b),
+// each zone in its own field (`engine/target_keywords`): the seat always (a
+// player target is the seat alone); a card in a graveyard by its place in the
+// pile, `target_graveyard_indices`; a permanent by its stable id, so a board
+// that moved between the click and the request is a refusal, not whichever
+// permanent slid into the slot (CR 400.7). The old slot field only where the
+// state names no id there — the server still reads it this round.
+function zoneTargetFields(targetSeat, permanentIndex, targetKind) {
   const fields = { target_seat: targetSeat };
-  if (Number.isInteger(permanentIndex)) {
+  if (!Number.isInteger(permanentIndex)) return fields;
+  if (targetKind === "graveyard_creature") {
+    fields.target_graveyard_indices = [permanentIndex];
+  } else if (withPermanentId(fields, "target_permanent_id", targetSeat, permanentIndex)
+      .target_permanent_id === undefined) {
     fields.target_permanent_index = permanentIndex;
-    withPermanentId(fields, "target_permanent_id", targetSeat, permanentIndex);
   }
   return fields;
+}
+
+// The target fields of a graveyard ability's body (`zoneTargetFields`).
+function graveyardAbilityTargetFields(targetSeat, permanentIndex, targetKind) {
+  return zoneTargetFields(targetSeat, permanentIndex, targetKind);
 }
 
 function graveyardAbilityBody(entry, fields = {}) {

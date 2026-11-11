@@ -52,11 +52,11 @@ def test_ashen_powder_reanimates_out_of_an_opponents_graveyard_only(set_pool):
     offered = game._enumerate_targets(0, powder, spec, for_cast=True)
     assert [(t["seat"], t["name"]) for t in offered] == [(1, "Hill Giant")]
     refused = game.queue_from_hand(
-        0, "Ashen Powder", target_player_index=0, target_permanent_index=0,
+        0, "Ashen Powder", target_player_index=0, target_graveyard_indices=[0],
     )
     assert not refused.supported, refused.details
     assert game.queue_from_hand(
-        0, "Ashen Powder", target_player_index=1, target_permanent_index=0,
+        0, "Ashen Powder", target_player_index=1, target_graveyard_indices=[0],
     ).supported
     resolve_stack(game)
     assert [(p.card.name, game.controller_index_of(p)) for p in game.all_permanents()] == [

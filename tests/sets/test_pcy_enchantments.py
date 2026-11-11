@@ -415,7 +415,7 @@ def _w1g5_revel(game, activator, *, seat, index):
     return game.activate_permanent_ability(
         activator, "Endbringer's Revel", ability_index=0,
         source_controller_index=0, target_player_index=seat,
-        target_permanent_index=index,
+        target_graveyard_indices=[index],
     )
 
 

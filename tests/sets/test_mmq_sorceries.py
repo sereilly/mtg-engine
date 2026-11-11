@@ -196,11 +196,11 @@ def test_w2g2_revive_only_reaches_the_printed_colour(set_pool):
     )
     caster.hand.append(pool["Revive"])
 
-    refused = game.cast_from_hand(0, "Revive", target_permanent_index=0)
+    refused = game.cast_from_hand(0, "Revive", target_graveyard_indices=[0])
     assert not refused.supported
     assert [c.name for c in caster.hand] == ["Revive"]
 
-    taken = game.cast_from_hand(0, "Revive", target_permanent_index=1)
+    taken = game.cast_from_hand(0, "Revive", target_graveyard_indices=[1])
     resolve_stack(game)
 
     assert taken.supported, taken.details
@@ -232,7 +232,7 @@ def test_w2g2_midnight_ritual_exiles_announced_x_and_pays_per_card(set_pool):
     caster.hand.append(pool["Midnight Ritual"])
 
     result = game.cast_from_hand(
-        0, "Midnight Ritual", x_value=2, target_permanent_index=[0, 2],
+        0, "Midnight Ritual", x_value=2, target_graveyard_indices=[0, 2],
     )
     resolve_stack(game)
 

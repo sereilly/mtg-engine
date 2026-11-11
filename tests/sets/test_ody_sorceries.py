@@ -546,7 +546,7 @@ def test_w1g3_morgue_theft_returns_a_creature_card_from_under_or_over_itself(set
     assert offered == []
     assert not game.cast_from_hand(
         0, "Morgue Theft", from_zone="graveyard",
-        target_player_index=0, target_permanent_index=1,
+        target_player_index=0, target_graveyard_indices=[1],
     ).supported
 
 
@@ -687,7 +687,7 @@ def test_w1g3_recoup_gives_a_sorcery_card_flashback_for_its_mana_cost(set_pool):
 
     _w1g3_pay(game.players[0], "{1}{R}")
     assert game.cast_from_hand(
-        0, "Recoup", target_player_index=0, target_permanent_index=1,
+        0, "Recoup", target_player_index=0, target_graveyard_indices=[1],
     ).supported
     assert any("Wrath of God gains flashback {2}{W}{W}" in line for line in game.log)
     castable = {entry["name"]: entry for entry in _w1g3_playable_from_zones(game, 0)}
@@ -719,7 +719,7 @@ def test_w1g3_recoup_over_an_x_spell_charges_the_x_that_was_announced(set_pool):
     game.players[0].hand.append(ody["Recoup"])
     game.players[0].graveyard.append(disintegrate)
     _w1g3_pay(game.players[0], "{1}{R}")
-    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_permanent_index=0).supported
+    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_graveyard_indices=[0]).supported
     granted, = [e for e in _w1g3_playable_from_zones(game, 0) if e["name"] == "Disintegrate"]
     assert granted["cost_mana"] == "{X}{R}"
 
@@ -745,11 +745,11 @@ def test_w1g3_recoup_s_grant_ends_with_the_turn_and_needs_a_sorcery_to_name(set_
     game.enforce_mana_costs = False
     game.players[0].hand.append(recoup)
     game.players[0].graveyard.append(lea["Counterspell"])
-    refused = game.cast_from_hand(0, "Recoup", target_player_index=0, target_permanent_index=0)
+    refused = game.cast_from_hand(0, "Recoup", target_player_index=0, target_graveyard_indices=[0])
     assert not refused.supported and recoup in game.players[0].hand
 
     game.players[0].graveyard.append(wrath)
-    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_permanent_index=1).supported
+    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_graveyard_indices=[1]).supported
     assert "Wrath of God" in [e["name"] for e in _w1g3_playable_from_zones(game, 0)]
     _w1g3_expire_end_of_turn(game)
     assert [e["name"] for e in _w1g3_playable_from_zones(game, 0)] == ["Recoup"]
@@ -766,13 +766,13 @@ def test_w1g3_recoup_flashed_back_cannot_name_itself(set_pool):
     game.players[0].graveyard.append(recoup)
     assert game.cast_target_spec(0, recoup, from_zone="graveyard")["valid_targets"] == []
     assert not game.cast_from_hand(
-        0, "Recoup", from_zone="graveyard", target_player_index=0, target_permanent_index=0,
+        0, "Recoup", from_zone="graveyard", target_player_index=0, target_graveyard_indices=[0],
     ).supported
     # With a sorcery beside it, it names that one — by the slot it was in while
     # Recoup was still under it.
     game.players[0].graveyard.append(lea["Wrath of God"])
     assert game.cast_from_hand(
-        0, "Recoup", from_zone="graveyard", target_player_index=0, target_permanent_index=1,
+        0, "Recoup", from_zone="graveyard", target_player_index=0, target_graveyard_indices=[1],
     ).supported
     assert _w1g3_zones_holding(game, recoup) == ["P1.exile"]
     granted, = [e for e in _w1g3_playable_from_zones(game, 0)]
@@ -816,7 +816,7 @@ def test_w1g3_tombfire_takes_a_card_recoup_gave_flashback_this_turn(set_pool):
     game.enforce_mana_costs = False
     game.players[0].hand.extend([ody["Recoup"], ody["Tombfire"]])
     game.players[0].graveyard.extend([lea["Wrath of God"], lea["Armageddon"]])
-    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_permanent_index=0).supported
+    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_graveyard_indices=[0]).supported
     assert game.cast_from_hand(0, "Tombfire", target_player_index=0).supported
     # The Wrath (granted) and Recoup itself (printed); not the other sorcery.
     assert _w1g3_names(game.players[0].exile) == ["Recoup", "Wrath of God"]
@@ -1315,7 +1315,7 @@ def test_w1g6_pipers_melody_shuffles_in_exactly_the_cards_named(set_pool):
 
     # Both copies of one card: the same object in the pile twice.
     cast = game.queue_from_hand(
-        0, "Piper's Melody", target_player_index=0, target_permanent_index=[0, 3]
+        0, "Piper's Melody", target_player_index=0, target_graveyard_indices=[0, 3]
     )
     assert cast.supported, cast.details
     named = _w1g6_chosen_targets(game, game.stack[-1])
@@ -1357,7 +1357,7 @@ def test_w1g6_pipers_melody_refuses_a_card_its_picker_does_not_offer(
     game = _w1g6_melody(set_pool)
 
     refused = game.queue_from_hand(
-        0, "Piper's Melody", target_player_index=seat, target_permanent_index=slots
+        0, "Piper's Melody", target_player_index=seat, target_graveyard_indices=slots
     )
 
     assert not refused.supported
@@ -1368,7 +1368,7 @@ def test_w1g6_pipers_melody_refuses_a_card_its_picker_does_not_offer(
 def test_w1g6_pipers_melody_does_not_replace_a_target_that_left(set_pool):
     game = _w1g6_melody(set_pool)
     cast = game.queue_from_hand(
-        0, "Piper's Melody", target_player_index=0, target_permanent_index=[0, 2]
+        0, "Piper's Melody", target_player_index=0, target_graveyard_indices=[0, 2]
     )
     assert cast.supported
     game.players[0].graveyard.pop(2)   # the Hill Giant leaves in response
@@ -1402,13 +1402,13 @@ def test_w1g6_decompose_exiles_up_to_three_cards_out_of_one_graveyard(set_pool):
     assert sorted({target["seat"] for target in spec["valid_targets"]}) == [0, 1]
     # Four is more than three, and a card of the other pile is not in this one.
     assert not game.queue_from_hand(
-        0, "Decompose", target_player_index=1, target_permanent_index=[0, 1, 2, 3],
+        0, "Decompose", target_player_index=1, target_graveyard_indices=[0, 1, 2, 3],
     ).supported
     assert not game.queue_from_hand(
-        0, "Decompose", target_player_index=0, target_permanent_index=[0, 2, 3],
+        0, "Decompose", target_player_index=0, target_graveyard_indices=[0, 2, 3],
     ).supported
     assert game.queue_from_hand(
-        0, "Decompose", target_player_index=1, target_permanent_index=[0, 2, 3],
+        0, "Decompose", target_player_index=1, target_graveyard_indices=[0, 2, 3],
     ).supported
     _w1g6_resolve_stack(game)
 
@@ -1446,14 +1446,14 @@ def test_w1g6_zombify_returns_the_creature_card_it_was_aimed_at(set_pool):
 
     # Not a land card, and not somebody else's creature card.
     assert not game.queue_from_hand(
-        0, "Zombify", target_player_index=0, target_permanent_index=0
+        0, "Zombify", target_player_index=0, target_graveyard_indices=[0]
     ).supported
     assert not game.queue_from_hand(
-        0, "Zombify", target_player_index=1, target_permanent_index=0
+        0, "Zombify", target_player_index=1, target_graveyard_indices=[0]
     ).supported
 
     cast = game.queue_from_hand(
-        0, "Zombify", target_player_index=0, target_permanent_index=2
+        0, "Zombify", target_player_index=0, target_graveyard_indices=[2]
     )
     assert cast.supported, cast.details
     _w1g6_resolve_stack(game)
@@ -1468,7 +1468,7 @@ def test_w1g6_zombify_does_nothing_when_its_target_has_left(set_pool):
         hand=[ody["Zombify"]], yard=[lea["Craw Wurm"], lea["Hill Giant"]],
     )
     assert game.queue_from_hand(
-        0, "Zombify", target_player_index=0, target_permanent_index=0
+        0, "Zombify", target_player_index=0, target_graveyard_indices=[0]
     ).supported
     game.players[0].graveyard.pop(0)
     _w1g6_resolve_stack(game)

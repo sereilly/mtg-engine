@@ -20,6 +20,7 @@ from engine import Game, PlayerState
 from engine.ai_abilities import choose_activation_action
 from engine.models import Permanent
 from tests.helpers import resolve_stack
+from tests.helpers import action_slots  # noqa: E402
 
 
 def _board(catalog_by_name, mine, theirs=(), *, seat=0):
@@ -46,7 +47,7 @@ def _activate(game, seat, action):
         seat, action.permanent_name,
         target_player_index=action.target_player_index,
         permanent_index=action.permanent_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
         target_role_refs=action.target_role_refs,
     )
 
@@ -66,7 +67,7 @@ def test_scavenging_ooze_names_the_card_it_exiles(catalog_by_name):
     action = choose_activation_action(game, 0)
 
     assert action is not None and action.permanent_name == "Scavenging Ooze"
-    assert (action.target_player_index, action.target_permanent_index) == (1, 1)
+    assert (action.target_player_index, action_slots(game, action)) == (1, [1])
 
     ooze = list(game.controlled_by(0))[0]
     assert _activate(game, 0, action).supported
@@ -88,7 +89,7 @@ def test_scavenging_ooze_names_a_card_from_either_seat(catalog_by_name):
     action = choose_activation_action(game, 1)
 
     assert action is not None
-    assert (action.target_player_index, action.target_permanent_index) == (0, 0)
+    assert (action.target_player_index, action_slots(game, action)) == (0, [0])
 
 
 def test_scavenging_ooze_is_not_proposed_at_empty_graveyards(catalog_by_name):
@@ -106,8 +107,7 @@ def test_argothian_elder_names_both_lands(catalog_by_name):
     action = choose_activation_action(game, 0)
 
     assert action is not None and action.permanent_name == "Argothian Elder"
-    assert isinstance(action.target_permanent_index, list)
-    assert len(set(action.target_permanent_index)) == 2
+    assert len(set(action_slots(game, action))) == 2
 
     assert _activate(game, 0, action).supported
     resolve_stack(game)

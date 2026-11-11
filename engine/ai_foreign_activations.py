@@ -37,7 +37,8 @@ from .game import Game
 from .models import Permanent, PlayerState
 from .targeting import derive_activation_spec
 from .ai_payment import _plan_land_taps
-from .ai_actions import ActivationAction
+from .ai_actions import ActivationAction, target_keywords
+from .target_keywords import ability_target_zone
 from .ai_scoring import _permanent_value, _score_activation
 from .ai_declarations import legal_attackers
 from .ai_abilities import _choose_target_for_instruction
@@ -269,7 +270,10 @@ def _foreign_activation_candidate(
         target_player_index=target,
         land_tap_indices=land_taps,
         score=score,
-        target_permanent_index=target_permanent_index,
+        **target_keywords(
+            game, ability_target_zone(ability), player_index, target,
+            target_permanent_index,
+        ),
         land_tap_colors=tap_colors,
         source_controller_index=source_seat,
         ability_index=ability_index,

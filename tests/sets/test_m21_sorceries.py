@@ -16,6 +16,7 @@ from engine import Game
 from engine.grammar import compile_line
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from tests.helpers import action_slots  # noqa: E402
 
 
 def test_track_down_composes_a_scry_a_reveal_and_a_conditional_draw(set_pool):
@@ -456,7 +457,7 @@ def test_sanguine_indulgence_returns_both_cards_its_two_slots_named(set_pool):
     )
 
     result = game.cast_from_hand(
-        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 2],
+        0, "Sanguine Indulgence", target_player_index=0, target_graveyard_indices=[0, 2],
     )
 
     assert result.supported, result.details
@@ -474,7 +475,7 @@ def test_sanguine_indulgence_reads_its_slots_before_anything_leaves_the_zone(set
     )
 
     result = game.cast_from_hand(
-        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 1],
+        0, "Sanguine Indulgence", target_player_index=0, target_graveyard_indices=[0, 1],
     )
 
     assert result.supported, result.details
@@ -488,7 +489,7 @@ def test_sanguine_indulgence_may_name_only_one(set_pool):
     game, p1 = _indulgence_game(set_pool, ["Shock", "Alpine Watchdog"])
 
     result = game.cast_from_hand(
-        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[1],
+        0, "Sanguine Indulgence", target_player_index=0, target_graveyard_indices=[1],
     )
 
     assert result.supported, result.details
@@ -515,7 +516,7 @@ def test_sanguine_indulgence_refuses_a_slot_that_is_not_a_creature_card(set_pool
     game, p1 = _indulgence_game(set_pool, ["Shock", "Alpine Watchdog"])
 
     result = game.cast_from_hand(
-        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 1],
+        0, "Sanguine Indulgence", target_player_index=0, target_graveyard_indices=[0, 1],
     )
 
     assert not result.supported
@@ -536,7 +537,7 @@ def test_sanguine_indulgence_refuses_a_repeated_slot(set_pool):
     game, p1 = _indulgence_game(set_pool, ["Alpine Watchdog", "Garruk's Warsteed"])
 
     result = game.cast_from_hand(
-        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0, 0],
+        0, "Sanguine Indulgence", target_player_index=0, target_graveyard_indices=[0, 0],
     )
 
     assert not result.supported
@@ -548,7 +549,7 @@ def test_sanguine_indulgence_refuses_a_repeated_slot(set_pool):
     # what the refusal above leaves the caster free to make.
     game, p1 = _indulgence_game(set_pool, ["Alpine Watchdog", "Garruk's Warsteed"])
     one = game.cast_from_hand(
-        0, "Sanguine Indulgence", target_player_index=0, target_permanent_index=[0],
+        0, "Sanguine Indulgence", target_player_index=0, target_graveyard_indices=[0],
     )
     assert one.supported, one.details
     assert [c.name for c in p1.hand] == ["Alpine Watchdog"]
@@ -628,7 +629,7 @@ def test_the_ai_takes_the_maximum_out_of_its_own_graveyard(set_pool):
     assert action is not None and action.card_name == "Sanguine Indulgence"
     assert action.target_player_index == 0
     # The two creature cards, the dearer first (``ai_graveyard_returns``).
-    assert sorted(action.target_permanent_index) == [0, 2]
+    assert sorted(action_slots(game, action)) == [0, 2]
 
 
 def test_rise_again_still_reanimates_exactly_one(set_pool):
@@ -648,7 +649,7 @@ def test_rise_again_still_reanimates_exactly_one(set_pool):
     )
 
     result = game.cast_from_hand(
-        0, "Rise Again", target_player_index=0, target_permanent_index=1,
+        0, "Rise Again", target_player_index=0, target_graveyard_indices=[1],
     )
     assert result.supported, result.details
     assert [p.card.name for p in game.controlled_by(0)] == ["Garruk's Warsteed"]

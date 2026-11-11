@@ -22,6 +22,7 @@ from ...faces import holds_spell_named, spell_named
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...oracle import compile_card_oracle
 from ...refusals import refuse
+from ...target_keywords import announced_slot, cast_target_zone
 
 
 def _mode_announcements(
@@ -292,12 +293,22 @@ class CastAnnouncementMixin:
                 if isinstance(stack_index, int) and 0 <= stack_index < len(self.stack)
                 else None
             )
+            # The mode's targets in each zone's own keyword, as the cast's are
+            # (``engine/target_keywords``): its permanents by id, a graveyard
+            # card by its place in the pile.
+            seat, slot, refusal = announced_slot(
+                self, cast_target_zone(card, mode_index=index), name=card.name,
+                target_player_index=entry.get("target_player_index"),
+                target_permanent_index=entry.get("target_permanent_index"),
+                target_permanent_ids=entry.get("target_permanent_ids"),
+                target_graveyard_indices=entry.get("target_graveyard_indices"),
+            )
+            if refusal is not None:
+                return (), refusal
             chosen.append(ChosenMode(
                 index=index,
-                target_player_index=entry.get("target_player_index"),
-                target_permanent_index=as_target_slots(
-                    entry.get("target_permanent_index")
-                ),
+                target_player_index=seat,
+                target_permanent_index=as_target_slots(slot),
                 # A mode's targets by identity, where the caller resolved
                 # them: "Tap two target creatures" (Blinding Beam, entwined)
                 # may name creatures on two battlefields, which slots beside

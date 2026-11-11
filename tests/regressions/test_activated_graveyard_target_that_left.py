@@ -213,7 +213,7 @@ def test_adun_oakenshield_does_not_return_the_card_beside_its_target(_by_name):
     )
 
     queued = game.queue_permanent_ability(
-        0, "Adun Oakenshield", target_player_index=0, target_permanent_index=0,
+        0, "Adun Oakenshield", target_player_index=0, target_graveyard_indices=[0],
     )
     assert queued.supported
     game.players[0].exile.append(game.players[0].graveyard.pop(0))
@@ -234,7 +234,7 @@ def test_a_surviving_copy_keeps_the_target_legal(_by_name):
     game.players[0].graveyard.extend([bears, bears, _by_name["Hill Giant"]])
 
     queued = game.queue_permanent_ability(
-        0, "Adun Oakenshield", target_player_index=0, target_permanent_index=0,
+        0, "Adun Oakenshield", target_player_index=0, target_graveyard_indices=[0],
     )
     assert queued.supported
     game.players[0].exile.append(game.players[0].graveyard.pop(0))
@@ -265,7 +265,7 @@ def test_a_triggered_ability_is_not_answered_by_this_gate(_by_name):
     game, _adun = _table(_by_name, "Adun Oakenshield")
     game.players[0].graveyard.append(_by_name["Grizzly Bears"])
     assert game.queue_permanent_ability(
-        0, "Adun Oakenshield", target_player_index=0, target_permanent_index=0,
+        0, "Adun Oakenshield", target_player_index=0, target_graveyard_indices=[0],
     ).supported
     item = game.stack[-1]
     assert item.activated

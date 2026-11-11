@@ -286,7 +286,7 @@ def test_w1g3_catalyst_stone_reads_the_cost_recoup_grants(set_pool):
     game.players[0].hand.append(ody["Recoup"])
     game.players[0].graveyard.append(lea["Wrath of God"])
     _w1g3_pay(game.players[0], "{1}{R}")
-    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_permanent_index=0).supported
+    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_graveyard_indices=[0]).supported
     _w1g3_pay(game.players[0], "{W}")
     assert not game.cast_from_hand(0, "Wrath of God", from_zone="graveyard").supported
     _w1g3_pay(game.players[0], "{W}{W}")
@@ -598,7 +598,7 @@ def test_w1g6_steamclaw_exiles_a_card_with_either_ability(set_pool):
 
     tapped = game.activate_permanent_ability(
         0, "Steamclaw", ability_index=0, target_player_index=1,
-        target_permanent_index=1,
+        target_graveyard_indices=[1],
     )
     assert tapped.supported, tapped.details
     assert claw.tapped and _w1g6_names(game, 0) == ["Steamclaw"]
@@ -607,7 +607,7 @@ def test_w1g6_steamclaw_exiles_a_card_with_either_ability(set_pool):
     # The second ability needs no untap: it is paid with the Steamclaw itself.
     sacrificed = game.activate_permanent_ability(
         0, "Steamclaw", ability_index=1, target_player_index=0,
-        target_permanent_index=0,
+        target_graveyard_indices=[0],
     )
     assert sacrificed.supported, sacrificed.details
     assert _w1g6_names(game, 0) == []

@@ -187,7 +187,7 @@ def test_aphetto_dredging_names_the_type_its_casters_conspiracy_made_the_pile(po
 
     result = game.cast_from_hand(
         0, "Aphetto Dredging", chosen_creature_type="goblin",
-        target_player_index=0, target_permanent_index=[0, 1],
+        target_player_index=0, target_graveyard_indices=[0, 1],
     )
     assert result.supported, result.details
     resolve_stack(game)

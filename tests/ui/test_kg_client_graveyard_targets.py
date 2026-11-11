@@ -306,7 +306,7 @@ _CLICK_FUNCTIONS = [
     "startGraveyardAbilityTargetPrompt", "graveyardAbilityTargetFields",
     "graveyardAbilityBody", "sendGraveyardAbility", "resolvePendingCastTarget",
     "pendingTargetFields", "indexValidTargets", "targetSpecOf",
-    "withPermanentId", "permanentIdAt",
+    "withPermanentId", "permanentIdAt", "zoneTargetFields",
 ]
 
 
@@ -344,7 +344,8 @@ def test_the_button_picks_the_target_and_sends_it(set_pool):
     (body,) = out["sent"]
     assert body["action"] == "activate_graveyard"
     assert body["target_permanent_id"] == board["giant"].permanent_id
-    assert (body["target_seat"], body["target_permanent_index"]) == (1, giant_index)
+    # The permanent by its id beside its seat, never its slot (kg5 ids).
+    assert body["target_seat"] == 1 and "target_permanent_index" not in body
 
     # …and exactly that body, sent, is the activation the board then shows.
     posted = _act(sid, {**body, "auto_tap": True})

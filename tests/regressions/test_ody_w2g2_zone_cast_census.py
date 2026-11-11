@@ -298,7 +298,7 @@ def announced(game, action) -> tuple:
         for pid in ids if isinstance(pid, int)
     )
     return (
-        said["target_player_index"], repr(said["target_permanent_index"]), names,
+        said["target_player_index"], repr(said["target_graveyard_indices"]), names,
         said["x_value"], said["mode_index"], repr(said["mode_choices"]),
         repr(said["divided_targets"]), repr(said["optional_cost_payments"]),
         said["target_stack_index"],

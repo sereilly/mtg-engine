@@ -607,7 +607,7 @@ def test_w1g6_crypt_creeper_exiles_the_card_it_was_aimed_at(set_pool):
     ]
 
     used = game.activate_permanent_ability(
-        0, "Crypt Creeper", target_player_index=1, target_permanent_index=1
+        0, "Crypt Creeper", target_player_index=1, target_graveyard_indices=[1]
     )
 
     assert used.supported, used.details
@@ -628,7 +628,7 @@ def test_w1g6_crypt_creeper_is_not_sacrificed_for_nothing(set_pool):
     game = _w1g6_game(mine=[ody["Crypt Creeper"]], their_yard=[lea["Grizzly Bears"]])
     game.start_turn(0)
     refused = game.activate_permanent_ability(
-        0, "Crypt Creeper", target_player_index=1, target_permanent_index=4
+        0, "Crypt Creeper", target_player_index=1, target_graveyard_indices=[4]
     )
     assert not refused.supported and _w1g6_names(game, 0) == ["Crypt Creeper"]
 
@@ -641,7 +641,7 @@ def test_w1g6_crypt_creeper_does_nothing_once_its_target_has_left(set_pool):
     )
     game.start_turn(0)
     queued = game.queue_permanent_ability(
-        0, "Crypt Creeper", target_player_index=1, target_permanent_index=0
+        0, "Crypt Creeper", target_player_index=1, target_graveyard_indices=[0]
     )
     assert queued.details == "queued"
     game.players[1].graveyard.pop(0)
@@ -667,12 +667,12 @@ def test_w1g6_famished_ghoul_exiles_up_to_two_cards_from_one_graveyard(set_pool)
     spec = game.activation_target_spec(0, 0, ability_index=0)
     assert (spec["max_targets"], spec["single_graveyard"]) == (2, True)
     refused = game.queue_permanent_ability(
-        0, "Famished Ghoul", target_player_index=1, target_permanent_index=[0, 1, 2],
+        0, "Famished Ghoul", target_player_index=1, target_graveyard_indices=[0, 1, 2],
     )
     assert not refused.supported
     assert _w1g6_pile(game.players[0]) == ["Forest"], "nothing was paid"
     queued = game.queue_permanent_ability(
-        0, "Famished Ghoul", target_player_index=1, target_permanent_index=[0, 2],
+        0, "Famished Ghoul", target_player_index=1, target_graveyard_indices=[0, 2],
     )
     assert queued.details == "queued"
     assert _w1g6_pile(game.players[0]) == ["Forest", "Famished Ghoul"]

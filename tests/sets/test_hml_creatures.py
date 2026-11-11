@@ -385,7 +385,7 @@ def test_the_ai_points_daughter_of_autumn_at_its_own_creature(set_pool):
 
     assert action is not None and action.permanent_name == "Daughter of Autumn"
     assert action.target_player_index == 0, "it shields its own controller's board"
-    chosen = game.permanent_at(game.players[0], action.target_permanent_index)
+    chosen = action_target(game, action)
     assert chosen is mine and chosen is not theirs
 
 
@@ -1681,6 +1681,7 @@ from engine.named_counters import counters_on  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402
 from engine.targeting import derive_activation_spec  # noqa: E402
 from tests.helpers import resolve_stack
+from tests.helpers import action_target  # noqa: E402
 
 
 def _oyster_creature(name: str, power: int = 4, toughness: int = 4) -> CardDefinition:

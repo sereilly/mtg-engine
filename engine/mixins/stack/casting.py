@@ -53,6 +53,8 @@ from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
                                spell_cost_tax,
                                spell_life_tax, spell_symbol_tax)
 from ...self_cost_modifiers import self_per_target_tax
+from ...target_keywords import (ANTE, ANTE_INDEX, GRAVEYARD, announced_slot,
+                               cast_target_zone)
 from ...flashback import is_flashback
 from ...game_types import (as_graveyard_stamps, as_target_ids,
                            as_target_slots, chosen_damage_source,
@@ -91,6 +93,10 @@ class SpellCastingMixin:
         # seat. Where given it is the announcement, and the two fields above
         # are derived from it (`_role_announcement_stamps`).
         target_role_refs: list[dict] | None = None,
+        # A card in a graveyard by its place in the pile, a card in the ante by
+        # its place there: each zone's own keyword (``engine/target_keywords``).
+        target_graveyard_indices: list[int] | None = None,
+        target_ante_index: int | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         # "Add X mana in any combination of {B} and/or {R}" (Burnt Offering):
@@ -99,10 +105,11 @@ class SpellCastingMixin:
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
-        # each one's own targets: a list of dicts shaped like ``ChosenMode``'s
-        # fields (``index`` plus optional ``target_player_index`` /
-        # ``target_permanent_index`` / ``target_stack_index``). None or one entry
-        # behaves exactly as ``mode_index`` alone always has.
+        # each one's own targets: a list of dicts (``index`` plus optional
+        # ``target_player_index`` / ``target_permanent_ids`` /
+        # ``target_graveyard_indices`` / ``target_stack_index``, each zone its
+        # own keyword as the cast's are). None or one entry behaves exactly as
+        # ``mode_index`` alone always has.
         mode_choices: list[dict] | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
@@ -202,6 +209,8 @@ class SpellCastingMixin:
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
             target_role_refs=target_role_refs,
+            target_graveyard_indices=target_graveyard_indices,
+            target_ante_index=target_ante_index,
             x_value=x_value,
             new_color=new_color,
             mana_combination=mana_combination,
@@ -289,6 +298,10 @@ class SpellCastingMixin:
         # seat. Where given it is the announcement, and the two fields above
         # are derived from it (`_role_announcement_stamps`).
         target_role_refs: list[dict] | None = None,
+        # A card in a graveyard by its place in the pile, a card in the ante by
+        # its place there: each zone's own keyword (``engine/target_keywords``).
+        target_graveyard_indices: list[int] | None = None,
+        target_ante_index: int | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         # "Add X mana in any combination of {B} and/or {R}" (Burnt Offering):
@@ -297,10 +310,11 @@ class SpellCastingMixin:
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
-        # each one's own targets: a list of dicts shaped like ``ChosenMode``'s
-        # fields (``index`` plus optional ``target_player_index`` /
-        # ``target_permanent_index`` / ``target_stack_index``). None or one entry
-        # behaves exactly as ``mode_index`` alone always has.
+        # each one's own targets: a list of dicts (``index`` plus optional
+        # ``target_player_index`` / ``target_permanent_ids`` /
+        # ``target_graveyard_indices`` / ``target_stack_index``, each zone its
+        # own keyword as the cast's are). None or one entry behaves exactly as
+        # ``mode_index`` alone always has.
         mode_choices: list[dict] | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
@@ -462,6 +476,41 @@ class SpellCastingMixin:
         )
         if morph_cost is not None:
             card = face_down_card(held)
+        # CR 601.2c, said in each zone's own keyword (``engine/target_keywords``):
+        # a graveyard card by its place in the pile, an ante card by its place
+        # there, a permanent by id — turned **here**, before any gate reads a
+        # target field, into the slot those gates read beside the ids.
+        target_zone = cast_target_zone(card, mode_index=mode_index)
+        if target_role_refs and role_graveyard_stamps and target_zone == GRAVEYARD:
+            # …and a **lone graveyard role** ("Return target creature card from
+            # your graveyard", announced one role at a time) is that keyword:
+            # its stamp's place in its pile, judged by the gates like any
+            # other slot and stamped at the push from it, never left beside a
+            # default the bare-cast answer below would have written over it.
+            stamps = [stamp for stamp in role_graveyard_stamps if stamp is not None]
+            target_graveyard_indices = [
+                self.graveyard_index_of(stamp) for stamp in stamps
+            ]
+            if target_player_index is None:
+                target_player_index = stamps[0].seat
+            role_graveyard_stamps = None
+        target_player_index, target_permanent_index, keyword_refusal = announced_slot(
+            self, target_zone, name=card.name,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            # A roles announcement's ids are positional and read as ids by the
+            # roles walk; no slot is derived from them.
+            target_permanent_ids=None if target_role_refs else target_permanent_ids,
+            target_graveyard_indices=target_graveyard_indices,
+            target_ante_index=target_ante_index,
+        )
+        if keyword_refusal is not None:
+            return refuse(card.name, None, keyword_refusal)
+        # A card in the ante rides the announcement's choices, never the slot
+        # channel the push consumes into ids (``target_keywords.ANTE_INDEX``).
+        ante_index = None
+        if target_zone == ANTE:
+            ante_index, target_permanent_index = target_permanent_index, None
         # The split of an "any combination" spell, checked whole before
         # anything is paid (``engine/mana_combination.py``).
         combination_refusal = split_refusal(
@@ -613,7 +662,9 @@ class SpellCastingMixin:
             target_stack_index
             if target_stack_index is not None
             and 0 <= target_stack_index < len(self.stack) else None,
-            None, divided_targets,
+            # A roles announcement names what it names, a card in a graveyard
+            # included — the activation path has always asked it so.
+            target_role_refs, divided_targets,
         ):
             default, no_target_answers_x = default_cast_target(
                 self, caster_index, card,
@@ -1605,6 +1656,8 @@ class SpellCastingMixin:
             # Only where declined, so every other stack item is unchanged.
             if copy_declined:
                 spell_item.choices[COPY_DECLINED] = True
+            if ante_index is not None:
+                spell_item.choices[ANTE_INDEX] = ante_index
             self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
             if any(cost.choose_number is not None for cost in cast_costs):

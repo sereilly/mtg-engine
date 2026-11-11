@@ -79,7 +79,7 @@ def test_g4_volraths_stronghold_offers_only_your_own_creature_cards(set_pool):
     assert [t["name"] for t in spec["valid_targets"]] == ["Hurloon Minotaur"]
 
     result = game.activate_permanent_ability(
-        0, "Volrath's Stronghold", ability_index=1, target_permanent_index=[1],
+        0, "Volrath's Stronghold", ability_index=1, target_graveyard_indices=[1],
     )
     game.resolve_top_of_stack()
 

@@ -89,7 +89,7 @@ def _rehearsed(game, card, x_value=None):
     random.seed(1337)
     return _rehearse_announcement(
         game, ME, card,
-        _announcement(card, target=OPP, caster=ME, x_value=x_value),
+        _announcement(game, card, target=OPP, caster=ME, x_value=x_value),
     )
 
 

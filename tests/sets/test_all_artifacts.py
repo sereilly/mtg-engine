@@ -446,7 +446,7 @@ def test_w2g4_bauble_moves_the_cards_and_the_owner_draws_next_upkeep(set_pool):
 
     assert game.activate_permanent_ability(
         0, "Lodestone Bauble", target_player_index=1,
-        target_permanent_index=[2, 0],
+        target_graveyard_indices=[2, 0],
     ).supported
     game._settle()
 
@@ -1267,7 +1267,7 @@ def test_r3j8_lodestone_bauble_draws_for_the_graveyards_owner(set_pool, graveyar
 
     assert game.activate_permanent_ability(
         0, "Lodestone Bauble", target_player_index=graveyard_seat,
-        target_permanent_index=[0],
+        target_graveyard_indices=[0],
     ).supported
     _r3j8_resolve_stack(game)
     game._settle()

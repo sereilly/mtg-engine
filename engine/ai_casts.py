@@ -88,7 +88,9 @@ from .ai_actions import (
     _announced_steps,
     _cast_zone,
     _announces_any_offer,
+    target_keywords,
 )
+from .target_keywords import cast_target_zone
 from .ai_scoring import (
     _LIFE_X_ASKED,
     _arrives_to_stay,
@@ -604,8 +606,10 @@ def _one_cast_of_every_mode(
     """
     choices: list[dict] = []
     for candidate in built:
-        slot = candidate.target_permanent_index
-        if slot is not None and not isinstance(slot, int):
+        if (
+            len(candidate.target_permanent_ids or ()) > 1
+            or len(candidate.target_graveyard_indices or ()) > 1
+        ):
             return None
         if (
             candidate.divided_targets
@@ -619,7 +623,8 @@ def _one_cast_of_every_mode(
         choices.append({
             "index": candidate.mode_index,
             "target_player_index": candidate.target_player_index,
-            "target_permanent_index": slot,
+            "target_permanent_ids": candidate.target_permanent_ids,
+            "target_graveyard_indices": candidate.target_graveyard_indices,
             "target_stack_index": candidate.target_stack_index,
         })
     return CastAction(
@@ -1565,8 +1570,10 @@ def _announced_candidate(
         land_tap_indices=tap_indices,
         score=0.0,
         hand_index=hand_index,
-        target_permanent_index=target_permanent_index,
-        target_permanent_ids=target_permanent_ids,
+        **target_keywords(
+            game, cast_target_zone(card, mode_index=_announced_mode(card)),
+            player_index, target, target_permanent_index, target_permanent_ids,
+        ),
         from_zone=from_zone,
         zone_seat=_zone_seat(player_index, under),
         alternative_cost=alternative_cost,

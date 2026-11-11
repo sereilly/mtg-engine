@@ -133,7 +133,7 @@ def test_soul_strings_returns_both_cards_when_no_one_can_pay_x(set_pool):
     caster.graveyard.extend([lea["Grizzly Bears"], lea["Hill Giant"], lea["Island"]])
 
     assert game.cast_from_hand(
-        0, "Soul Strings", x_value=3, target_permanent_index=[0, 1]
+        0, "Soul Strings", x_value=3, target_graveyard_indices=[0, 1]
     ).supported
     game.auto_resolve_pending_choices()
 
@@ -153,7 +153,7 @@ def test_soul_strings_is_bought_off_for_x_by_the_opponent_not_its_caster(set_poo
     caster.graveyard.extend([lea["Grizzly Bears"], lea["Hill Giant"]])
 
     assert game.cast_from_hand(
-        0, "Soul Strings", x_value=2, target_permanent_index=[0, 1]
+        0, "Soul Strings", x_value=2, target_graveyard_indices=[0, 1]
     ).supported
     assert _w1g1_owed(game) == [0], "the active player is asked first"
     assert game.pending_choices[0].data["cost"] == {"generic": 2}, "X is 2"
@@ -175,7 +175,7 @@ def test_rhystic_payment_is_asked_in_turn_order_from_the_active_player(set_pool)
     caster.graveyard.extend([lea["Grizzly Bears"], lea["Hill Giant"]])
 
     assert game.cast_from_hand(
-        2, "Soul Strings", x_value=1, target_permanent_index=[0, 1]
+        2, "Soul Strings", x_value=1, target_graveyard_indices=[0, 1]
     ).supported
     asked = []
     for answer in (False, False, True):

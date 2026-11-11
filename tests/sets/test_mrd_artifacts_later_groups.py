@@ -372,7 +372,7 @@ def test_w1g8_skeleton_shard_returns_only_an_artifact_creature_card(set_pool):
     offered = [e.get("name") for e in game.activation_offer(0, shard, ability)["valid_targets"]]
     assert offered == ["Ornithopter"]
     refused = game.activate_permanent_ability(
-        0, "Skeleton Shard", target_permanent_index=0, target_player_index=0,
+        0, "Skeleton Shard", target_graveyard_indices=[0], target_player_index=0,
     )
     assert not refused.supported and not shard.tapped
     assert game.activate_permanent_ability(0, "Skeleton Shard").supported

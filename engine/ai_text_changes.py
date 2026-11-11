@@ -491,7 +491,7 @@ def choose_object_or_spell(
     def announced(seat, *, index=None, ids=None, stack=None, words=(None, None)):
         return {
             **_announcement(
-                card, target=seat, caster=caster, permanent_index=index,
+                game, card, target=seat, caster=caster, permanent_index=index,
                 permanent_ids=ids, x_value=x_value, stack_index=stack,
             ),
             "old_color": words[0], "new_color": words[1],

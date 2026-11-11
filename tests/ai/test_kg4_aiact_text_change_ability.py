@@ -134,7 +134,7 @@ def test_every_field_an_activation_action_carries_reaches_the_activation():
     every executor or is named as not an announcement."""
     action = ActivationAction(
         permanent_name="Probe", permanent_index=2, target_player_index=1,
-        land_tap_indices=(0,), score=1.0, target_permanent_index=3,
+        land_tap_indices=(0,), score=1.0, target_permanent_ids=[3], target_graveyard_indices=[4],
         target_role_refs=[{"permanent_id": 9}], land_tap_colors=("W",),
         source_controller_index=1, ability_index=2, cost_hand_index=0,
         chosen_keyword="flying", x_value=4, old_color="R", new_color="B",

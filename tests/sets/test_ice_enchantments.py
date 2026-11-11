@@ -1471,7 +1471,7 @@ def _dance_game(pool, corpse: str = "Balduvian Bears", swamps: int = 0):
     p1.mana_pool["B"] = 1
     p1.mana_pool["C"] = 1
     result = game.cast_from_hand(
-        0, "Dance of the Dead", target_player_index=0, target_permanent_index=0
+        0, "Dance of the Dead", target_player_index=0, target_graveyard_indices=[0]
     )
     resolve_stack(game)
     game._settle()

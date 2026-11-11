@@ -143,7 +143,10 @@ def test_no_reader_asks_a_holders_slot_field_for_its_shape():
     """The holder's field has one shape, so asking it which one is dead code
     at best — and at worst a branch that reads a one-slot list as no slot."""
     found, examined = _shape_checks_on_the_slot_field()
-    assert examined >= 25, f"the census read only {examined} files"
+    # The floor is the readers' count less the margin a refactor that drains
+    # some is owed: kg5's ``ids`` took the AI's and the wire's reads off the
+    # field (31 files before, 24 after), each one a reader gone, not missed.
+    assert examined >= 20, f"the census read only {examined} files"
     assert not found, "shape checks on a holder's slot field: " + ", ".join(found)
 
 

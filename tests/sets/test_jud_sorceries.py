@@ -119,7 +119,7 @@ def test_w1g3_rats_feast_names_x_cards_of_one_pile_and_does_not_replace_a_lost_o
     assert {t["seat"] for t in spec["valid_targets"]} == {0, 1}
 
     assert game.queue_from_hand(
-        0, "Rats' Feast", x_value=2, target_player_index=1, target_permanent_index=[1, 3],
+        0, "Rats' Feast", x_value=2, target_player_index=1, target_graveyard_indices=[1, 3],
     ).supported
     named = _w1g3_chosen_targets(game, game.stack[-1])
     assert [(t.stamp.seat, t.stamp.card.name) for t in named] == [
@@ -137,10 +137,10 @@ def test_w1g3_rats_feast_names_x_cards_of_one_pile_and_does_not_replace_a_lost_o
 def test_w1g3_rats_feast_names_exactly_x_and_x_zero_names_none(set_pool):
     game = _w1g3_feast_game(set_pool)
     assert not game.queue_from_hand(
-        0, "Rats' Feast", x_value=2, target_player_index=1, target_permanent_index=[1],
+        0, "Rats' Feast", x_value=2, target_player_index=1, target_graveyard_indices=[1],
     ).supported
     assert not game.queue_from_hand(
-        0, "Rats' Feast", x_value=1, target_player_index=1, target_permanent_index=[1, 2],
+        0, "Rats' Feast", x_value=1, target_player_index=1, target_graveyard_indices=[1, 2],
     ).supported
     assert game.stack == []
     assert game.queue_from_hand(0, "Rats' Feast", x_value=0).supported
@@ -719,7 +719,7 @@ def test_w1g7_stitch_together_returns_to_hand_or_to_the_battlefield(
     assert offered == {"Hill Giant", "Grizzly Bears"}
     assert game.cast_from_hand(
         0, "Stitch Together", target_player_index=0,
-        target_permanent_index=bears_slot,
+        target_graveyard_indices=[bears_slot],
     ).supported
     _w1g7_resolve_stack(game)
 
@@ -743,7 +743,7 @@ def test_w1g7_stitch_together_with_its_target_gone_does_nothing(
     caster.hand.append(game._w1g7_card("Stitch Together"))
     assert game.queue_from_hand(
         0, "Stitch Together", target_player_index=0,
-        target_permanent_index=len(caster.graveyard) - 1,
+        target_graveyard_indices=[len(caster.graveyard) - 1],
     ).supported
     caster.exile.append(caster.graveyard.pop())     # the Bears, in response
     _w1g7_resolve_stack(game)

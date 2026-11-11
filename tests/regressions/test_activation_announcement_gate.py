@@ -551,7 +551,7 @@ def test_a_target_in_a_conditional_sentence_is_announced_too(_by_name):
 
     game.players[1].graveyard.append(_by_name["Grizzly Bears"])
     accepted = game.activate_permanent_ability(
-        0, "Eater of the Dead", target_player_index=1, target_permanent_index=0,
+        0, "Eater of the Dead", target_player_index=1, target_graveyard_indices=[0],
     )
     resolve_stack(game)
 

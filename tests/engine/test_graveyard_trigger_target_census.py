@@ -788,7 +788,7 @@ def test_a_slot_the_trigger_could_not_choose_is_set_aside_at_the_push(_pool, _tr
     bolt = _YARDS[0].index("Lightning Bolt")
 
     assert game.queue_from_hand(
-        0, "Gravedigger", target_player_index=0, target_permanent_index=bolt,
+        0, "Gravedigger", target_player_index=0, target_graveyard_indices=[bolt],
     ).supported
     game.resolve_top_of_stack()
 

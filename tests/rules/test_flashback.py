@@ -1191,7 +1191,7 @@ def test_702_34a_a_granted_flashback_costs_the_card_s_mana_cost_and_ends_at_clea
     slot = next(i for i, c in enumerate(game.players[0].graveyard) if c is mind_rot)
     _pay(game.players[0], "{1}{R}")
     assert game.cast_from_hand(
-        0, "Recoup", target_player_index=0, target_permanent_index=slot,
+        0, "Recoup", target_player_index=0, target_graveyard_indices=[slot],
     ).supported
     assert has_flashback(mind_rot, game=game, owner_seat=0)
     assert not has_flashback(mind_rot, game=game, owner_seat=1), "seat 1's copy was granted nothing"
@@ -1210,7 +1210,7 @@ def test_702_34a_a_granted_flashback_costs_the_card_s_mana_cost_and_ends_at_clea
     # Unused, the grant ends with the turn (CR 514.2).
     game = _board(recoup, zone="hand")
     game.enforce_mana_costs = False
-    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_permanent_index=slot).supported
+    assert game.cast_from_hand(0, "Recoup", target_player_index=0, target_graveyard_indices=[slot]).supported
     expire_end_of_turn(game)
     assert permission_for(game, 0, mind_rot, "graveyard") is None
     assert not has_flashback(mind_rot, game=game, owner_seat=0)
@@ -1325,6 +1325,6 @@ def test_601_2c_a_graveyard_slot_is_the_one_the_caster_was_looking_at(pile, name
     assert pile[slot] == named
     assert game.cast_from_hand(
         0, "Morgue Theft", from_zone="graveyard",
-        target_player_index=0, target_permanent_index=slot,
+        target_player_index=0, target_graveyard_indices=[slot],
     ).supported
     assert [c.name for c in game.players[0].hand] == [named]

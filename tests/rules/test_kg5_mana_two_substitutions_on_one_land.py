@@ -186,7 +186,7 @@ def test_the_ai_casts_a_spell_of_either_symbol_off_that_forest(spell, symbol):
     result = game.cast_from_hand(
         0, action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
     )
     assert result.supported, result.details

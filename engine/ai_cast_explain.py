@@ -381,16 +381,17 @@ def _objects_named(game, action) -> "list[str]":
     ids = [pid for pid in (action.target_permanent_ids or ()) if isinstance(pid, int)]
     if ids:
         return [_permanent_name(game, pid) for pid in ids]
-    slot = action.target_permanent_index
-    slots = slot if isinstance(slot, list) else ([slot] if isinstance(slot, int) else [])
-    names = []
-    for index in slots:
-        permanent = game.permanent_at(action.target_player_index, index)
-        names.append(
-            f"{permanent.card.name} (seat {action.target_player_index})"
-            if permanent is not None else f"slot {index} of seat {action.target_player_index}"
-        )
-    return names
+    return [
+        _graveyard_card_name(game, action.target_player_index, index)
+        for index in (getattr(action, "target_graveyard_indices", None) or ())
+    ]
+
+
+def _graveyard_card_name(game, seat, index) -> str:
+    pile = game.players[seat].graveyard if isinstance(seat, int) else []
+    if isinstance(index, int) and 0 <= index < len(pile):
+        return f"{pile[index].name} (seat {seat}'s graveyard)"
+    return f"graveyard slot {index} of seat {seat}"
 
 
 def _permanent_name(game, permanent_id: int) -> str:
@@ -402,11 +403,15 @@ def _permanent_name(game, permanent_id: int) -> str:
 
 def _mode_choice(game, choice: dict) -> str:
     text = f"{choice.get('index')}"
-    seat = choice.get("target_player_index")
-    slot = choice.get("target_permanent_index")
-    if slot is not None and seat is not None:
-        permanent = game.permanent_at(seat, slot)
-        text += f"->{permanent.card.name if permanent is not None else f'slot {slot}'}"
+    ids = [pid for pid in (choice.get("target_permanent_ids") or ()) if isinstance(pid, int)]
+    graveyard = choice.get("target_graveyard_indices") or ()
+    if ids:
+        text += "->" + ", ".join(_permanent_name(game, pid) for pid in ids)
+    elif graveyard:
+        text += "->" + ", ".join(
+            _graveyard_card_name(game, choice.get("target_player_index"), index)
+            for index in graveyard
+        )
     elif choice.get("target_stack_index") is not None:
         text += f"->stack #{choice['target_stack_index']}"
     return text

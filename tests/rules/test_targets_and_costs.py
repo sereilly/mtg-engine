@@ -1137,7 +1137,7 @@ def test_601_2c_a_graveyard_target_must_sit_in_a_pile_the_ability_reads(set_pool
 
     result = game.activate_permanent_ability(
         0, "Adun Oakenshield", permanent_index=0,
-        target_player_index=1, target_permanent_index=0,
+        target_player_index=1, target_graveyard_indices=[0],
     )
 
     assert result.supported is False
@@ -1307,7 +1307,7 @@ def test_608_2b_a_graveyard_targets_vanished_card_is_not_the_card_beneath_it(
         graveyard=[cards["Grizzly Bears"], cards["Serra Angel"]],
     )
     game = _two_player_game(p1, PlayerState(name="P2"))
-    game.queue_from_hand(0, "Resurrection", target_permanent_index=1)
+    game.queue_from_hand(0, "Resurrection", target_graveyard_indices=[1])
 
     p1.graveyard.pop(1)  # the Angel is exiled in response
 
@@ -1331,7 +1331,7 @@ def test_608_2b_a_graveyard_target_that_merely_slid_is_still_reanimated(
         graveyard=[cards["Grizzly Bears"], cards["Serra Angel"]],
     )
     game = _two_player_game(p1, PlayerState(name="P2"))
-    game.queue_from_hand(0, "Resurrection", target_permanent_index=1)
+    game.queue_from_hand(0, "Resurrection", target_graveyard_indices=[1])
 
     p1.graveyard.pop(0)  # the Bears leave; the Angel slides down a slot
 
@@ -1355,7 +1355,7 @@ def test_608_2b_a_surviving_copy_of_the_chosen_card_is_not_a_fizzle(
         graveyard=[bears, bears],
     )
     game = _two_player_game(p1, PlayerState(name="P2"))
-    game.queue_from_hand(0, "Resurrection", target_permanent_index=1)
+    game.queue_from_hand(0, "Resurrection", target_graveyard_indices=[1])
 
     p1.graveyard.pop(1)  # one copy leaves; one indistinguishable copy remains
 
@@ -1379,7 +1379,7 @@ def test_608_2b_only_the_vanished_slot_of_a_several_target_return_is_unaffected(
         graveyard=[cards["Grizzly Bears"], cards["Serra Angel"], cards["Hill Giant"]],
     )
     game = _two_player_game(p1, PlayerState(name="P2"))
-    game.queue_from_hand(0, "Sanguine Indulgence", target_permanent_index=[0, 1])
+    game.queue_from_hand(0, "Sanguine Indulgence", target_graveyard_indices=[0, 1])
 
     p1.graveyard.pop(1)  # the Angel is exiled; the Hill Giant slides into slot 1
 
@@ -1436,7 +1436,7 @@ def test_601_2c_a_legal_graveyard_announcement_still_returns_the_named_card(
 
         result = game.cast_from_hand(
             0, "Fungal Rebirth",
-            target_player_index=seat, target_permanent_index=1,
+            target_player_index=seat, target_graveyard_indices=[1],
         )
 
         assert result.supported is True, result.details
@@ -1459,7 +1459,7 @@ def test_601_2c_a_legal_sequence_wrapped_announcement_still_resolves_its_other_s
     game = _two_player_game(p1, PlayerState(name="P2"))
 
     result = game.cast_from_hand(
-        0, "Experimental Overload", target_permanent_index=1,
+        0, "Experimental Overload", target_graveyard_indices=[1],
     )
 
     assert result.supported is True, result.details

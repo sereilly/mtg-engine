@@ -603,7 +603,7 @@ def test_mtenda_griffin_returns_a_griffin_card_and_bounces_itself(set_pool):
     )
 
     result = game.activate_permanent_ability(
-        0, "Mtenda Griffin", permanent_index=0, target_permanent_index=1
+        0, "Mtenda Griffin", permanent_index=0, target_graveyard_indices=[1]
     )
     assert result.supported, result.details
     game.resolve_stack()
@@ -627,7 +627,7 @@ def test_mtenda_griffin_refuses_a_card_that_is_not_a_griffin(set_pool, slot):
     )
 
     result = game.activate_permanent_ability(
-        0, "Mtenda Griffin", permanent_index=0, target_permanent_index=slot
+        0, "Mtenda Griffin", permanent_index=0, target_graveyard_indices=[slot]
     )
 
     assert not result.supported

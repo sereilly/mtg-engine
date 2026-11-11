@@ -20,6 +20,7 @@ from engine.ai_abilities import choose_activation_action
 from engine.ai_target_sides import named_counter_marks_for_harm
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
+from tests.helpers import action_target  # noqa: E402
 
 
 def _table(set_pool):
@@ -68,7 +69,7 @@ def test_an_ai_seat_lights_an_opponents_creature(set_pool):
 
     assert action is not None and action.permanent_name == "Bomb Squad"
     assert action.target_player_index == 1
-    assert game.players[1].battlefield[action.target_permanent_index] is theirs
+    assert action_target(game, action) is theirs
 
 
 def test_an_ai_seat_with_only_its_own_creatures_keeps_the_fuse_dry(set_pool):
