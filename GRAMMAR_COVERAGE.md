@@ -56,9 +56,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
+| DST *(measured)* | 165 | 285 | 69.5% | 63.2% | 43.2% | 103 |
 | **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
+
+*(measured)* — DST are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
 ## Backlog — failure reasons
 
@@ -66,15 +69,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 867 | 449 | expected a subject |  |
-| 188 | 95 | unrecognized effect verb |  |
-| 135 | 69 | unconsumed text |  |
-| 71 | 52 | granted ability in quotes | phase 3 (quoted abilities) |
-| 41 | 8 | expected what this creature can't block, or a duration |  |
+| 928 | 485 | expected a subject |  |
+| 197 | 101 | unrecognized effect verb |  |
+| 142 | 75 | unconsumed text |  |
+| 74 | 55 | granted ability in quotes | phase 3 (quoted abilities) |
+| 42 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 24 | 20 | expected 'unless defending player controls' |  |
-| 22 | 16 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 7 | 1 | no lowering for RawEffect |  |
+| 23 | 17 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
+| 8 | 2 | no lowering for RawEffect |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -82,15 +85,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 2 | expected 'top' |  |
+| 4 | 4 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 3 | 1 | 'that land' names a land no earlier step of this effect chose |  |
 | 3 | 1 | expected 'of' |  |
+| 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
-| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 1 | 1 | expected what to gain control of |  |
-| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
+| 2 | 2 | expected 'a' |  |
+| 2 | 2 | expected a keyword ability |  |
 
 ## Cards executing through the grammar
 
@@ -228,6 +231,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Pay 4 life: Destroy this enchantment. It can't be regenerated. Any player may activate this ability.`
 - **Aether Tide**
   - `Return X target creatures to their owners' hands.`
+- **Aether Vial**
+  - `At the beginning of your upkeep, you may put a charge counter on this artifact.`
 - **Afflict**
   - `Target creature gets -1/-1 until end of turn.`
   - `Draw a card.`
@@ -239,6 +244,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature. It can't be regenerated. Its controller creates a 1/1 white Spirit creature token with flying.`
 - **Aftershock**
   - `Destroy target artifact, creature, or land. Aftershock deals 3 damage to you.`
+- **Ageless Entity**
+  - `Whenever you gain life, put that many +1/+1 counters on this creature.`
 - **Ageless Sentinels**
   - `When this creature blocks, it becomes a Bird Giant, and it loses defender. (It's no longer a Wall. This effect lasts indefinitely.)`
 - **Agent of Shauku**
@@ -434,6 +441,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Angel of Mercy**
   - `When this creature enters, you gain 3 life.`
   - `When this creature enters, you gain 3 life.`
+- **Angel's Feather**
+  - `Whenever a player casts a white spell, you may gain 1 life.`
 - **Angel's Trumpet**
   - `All creatures have vigilance.`
   - `At the beginning of each player's end step, tap all untapped creatures that player controls that didn't attack this turn. This artifact deals damage to the player equal to the number of creatures tapped this way.`
@@ -550,8 +559,21 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Arcane Denial**
   - `Counter target spell. Its controller may draw up to two cards at the beginning of the next turn's upkeep.`
   - `You draw a card at the beginning of the next turn's upkeep.`
+- **Arcane Spyglass**
+  - `{2}, {T}, Sacrifice a land: Draw a card and put a charge counter on this artifact.`
+  - `Remove three charge counters from this artifact: Draw a card.`
 - **Arcanis the Omnipotent**
   - `{T}: Draw three cards.`
+- **Arcbound Crusher**
+  - `Whenever another artifact enters, put a +1/+1 counter on this creature.`
+- **Arcbound Overseer**
+  - `At the beginning of your upkeep, put a +1/+1 counter on each creature you control with modular.`
+- **Arcbound Ravager**
+  - `Sacrifice an artifact: Put a +1/+1 counter on this creature.`
+- **Arcbound Reclaimer**
+  - `Remove a +1/+1 counter from this creature: Put target artifact card from your graveyard on top of your library.`
+- **Arcbound Slith**
+  - `Whenever this creature deals combat damage to a player, put a +1/+1 counter on it.`
 - **Archaeological Dig**
   - `{T}: Add {C}.`
   - `{T}, Sacrifice this land: Add one mana of any color.`
@@ -727,6 +749,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this enchantment leaves the battlefield, remove all gold counters from all creatures.`
 - **Auriok Bladewarden**
   - `{T}: Target creature gets +X/+X until end of turn, where X is this creature's power.`
+- **Auriok Siege Sled**
+  - `{1}: Target artifact creature can't block this creature this turn.`
 - **Auriok Steelshaper**
   - `As long as this creature is equipped, each creature you control that's a Soldier or a Knight gets +1/+1.`
 - **Auriok Transfixer**
@@ -909,6 +933,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Barbed Foliage**
   - `Whenever a creature attacks you, it loses flanking until end of turn.`
   - `Whenever a creature without flying attacks you, this enchantment deals 1 damage to it.`
+- **Barbed Lightning**
+  - `• Barbed Lightning deals 3 damage to target creature.`
+  - `• Barbed Lightning deals 3 damage to target player or planeswalker.`
 - **Barbed Sextant**
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
   - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
@@ -1192,6 +1219,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Blinking Spirit**
   - `{0}: Return this creature to its owner's hand.`
   - `{0}: Return this creature to its owner's hand.`
+- **Blinkmoth Nexus**
+  - `{T}: Add {C}.`
+  - `{1}: This land becomes a 1/1 Blinkmoth artifact creature with flying until end of turn. It's still a land.`
+  - `{1}, {T}: Target Blinkmoth creature gets +1/+1 until end of turn.`
 - **Blinkmoth Urn**
   - `At the beginning of each player's first main phase, if this artifact is untapped, that player adds {C} for each artifact they control.`
 - **Blinkmoth Well**
@@ -1941,6 +1972,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals combat damage to a player, that player discards a card.`
 - **Chime of Night**
   - `When this Aura is put into a graveyard from the battlefield, destroy target nonblack creature.`
+- **Chimeric Egg**
+  - `Whenever an opponent casts a nonartifact spell, put a charge counter on this artifact.`
+  - `Remove three charge counters from this artifact: This artifact becomes a 6/6 Construct artifact creature with trample until end of turn.`
 - **Chimeric Idol**
   - `{0}: Tap all lands you control. This artifact becomes a 3/3 Turtle artifact creature until end of turn.`
 - **Chimeric Sphere**
@@ -1950,6 +1984,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}: This artifact becomes an X/X Construct artifact creature until end of turn.`
 - **Chimney Imp**
   - `When this creature dies, target opponent puts a card from their hand on top of their library.`
+- **Chittering Rats**
+  - `When this creature enters, target opponent puts a card from their hand on top of their library.`
 - **Chlorophant**
   - `At the beginning of your upkeep, you may put a +1/+1 counter on this creature.`
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature has "At the beginning of your upkeep, you may put another +1/+1 counter on this creature."`
@@ -1977,6 +2013,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add one mana of any of the exiled card's colors.`
 - **Chrome Replicator**
   - `When this creature enters, if you control two or more nonland, nontoken permanents with the same name as one another, create a 4/4 colorless Construct artifact creature token.`
+- **Chromescale Drake**
+  - `When this creature enters, reveal the top three cards of your library. Put all artifact cards revealed this way into your hand and the rest into your graveyard.`
 - **Chromeshell Crab**
   - `When this creature is turned face up, you may exchange control of target creature you control and target creature an opponent controls.`
 - **Chromium**
@@ -2367,6 +2405,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Coral Reef**
   - `Sacrifice an Island: Put two polyp counters on this enchantment.`
   - `{U}, Tap an untapped blue creature you control, Remove a polyp counter from this enchantment: Put a +0/+1 counter on target creature.`
+- **Coretapper**
+  - `{T}: Put a charge counter on target artifact.`
+  - `Sacrifice this creature: Put two charge counters on target artifact.`
 - **Corpse Dance**
   - `Return the top creature card of your graveyard to the battlefield. That creature gains haste until end of turn. Exile it at the beginning of the next end step.`
 - **Corpse Harvester**
@@ -2702,6 +2743,18 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+1 until end of turn.`
 - **Darkness**
   - `Prevent all combat damage that would be dealt this turn.`
+- **Darksteel Brute**
+  - `{3}: This artifact becomes a 2/2 Beast artifact creature until end of turn.`
+- **Darksteel Citadel**
+  - `{T}: Add {C}.`
+- **Darksteel Forge**
+  - `Artifacts you control have indestructible. (Effects that say "destroy" don't destroy them. Artifact creatures with indestructible can't be destroyed by damage.)`
+- **Darksteel Ingot**
+  - `{T}: Add one mana of any color.`
+- **Darksteel Pendant**
+  - `{1}, {T}: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
+- **Darksteel Reactor**
+  - `At the beginning of your upkeep, you may put a charge counter on this artifact.`
 - **Darkwater Catacombs**
   - `{1}, {T}: Add {U}{B}.`
 - **Darkwater Egg**
@@ -2936,6 +2989,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Demolish**
   - `Destroy target artifact or land.`
   - `Destroy target artifact or land.`
+- **Demon's Horn**
+  - `Whenever a player casts a black spell, you may gain 1 life.`
 - **Demonic Attorney**
   - `Each player antes the top card of their library.`
   - `Each player antes the top card of their library.`
@@ -3278,6 +3333,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
 - **Dragon Wings**
   - `When a creature with mana value 6 or greater enters, you may return this card from your graveyard to the battlefield attached to that creature.`
+- **Dragon's Claw**
+  - `Whenever a player casts a red spell, you may gain 1 life.`
 - **Dragonstorm**
   - `Search your library for a Dragon permanent card, put it onto the battlefield, then shuffle.`
 - **Drain Life**
@@ -3357,6 +3414,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever Dromar deals combat damage to a player, you may pay {2}{U}. If you do, choose a color, then return all creatures of that color to their owners' hands.`
 - **Dromosaur**
   - `Whenever this creature blocks or becomes blocked, it gets +2/-2 until end of turn.`
+- **Drooling Ogre**
+  - `Whenever a player casts an artifact spell, that player gains control of this creature. (This effect lasts indefinitely.)`
 - **Drop of Honey**
   - `At the beginning of your upkeep, destroy the creature with the least power. It can't be regenerated. If two or more creatures are tied for least power, you choose one of them.`
   - `When there are no creatures on the battlefield, sacrifice this enchantment.`
@@ -3559,6 +3618,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}: An opponent chooses target creature they control. Create a token that's a copy of that creature. That token gains haste until end of turn. Exile the token at the beginning of the next end step. Activate only as a sorcery.`
 - **Echo Tracer**
   - `When this creature is turned face up, return target creature to its owner's hand.`
+- **Echoing Calm**
+  - `Destroy target enchantment and all other enchantments with the same name as that enchantment.`
+- **Echoing Ruin**
+  - `Destroy target artifact and all other artifacts with the same name as that artifact.`
 - **El-Hajjâj**
   - `Whenever this creature deals damage, you gain that much life.`
   - `Whenever this creature deals damage, you gain that much life.`
@@ -3854,6 +3917,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Essence Bottle**
   - `{3}, {T}: Put an elixir counter on this artifact.`
   - `{T}, Remove all elixir counters from this artifact: You gain 2 life for each elixir counter removed this way.`
+- **Essence Drain**
+  - `Essence Drain deals 3 damage to any target and you gain 3 life.`
 - **Essence Filter**
   - `Destroy all enchantments or all nonwhite enchantments.`
 - **Essence Flare**
@@ -4020,6 +4085,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice a creature: Regenerate target creature.`
 - **Fanatical Fever**
   - `Target creature gets +3/+0 and gains trample until end of turn.`
+- **Fangren Firstborn**
+  - `Whenever this creature attacks, put a +1/+1 counter on each attacking creature.`
 - **Fanning the Flames**
   - `Fanning the Flames deals X damage to any target.`
 - **Far Wanderings**
@@ -4189,6 +4256,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fire and Brimstone**
   - `Fire and Brimstone deals 4 damage to target player who attacked this turn and 4 damage to you.`
 - **Fireball**
+  - `Fireball deals X damage divided evenly, rounded down, among any number of targets.`
   - `Fireball deals X damage divided evenly, rounded down, among any number of targets.`
   - `Fireball deals X damage divided evenly, rounded down, among any number of targets.`
   - `Fireball deals X damage divided evenly, rounded down, among any number of targets.`
@@ -4604,6 +4672,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your end step, if you control a creature with power 4 or greater, exile the top card of your library. You may play that card until you exile another card with this enchantment.`
 - **Furnace Brood**
   - `{R}: Target creature can't be regenerated this turn.`
+- **Furnace Dragon**
+  - `When this creature enters, if you cast it from your hand, exile all artifacts.`
 - **Furnace Spirit**
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Fylamarid**
@@ -4741,6 +4811,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Gerrard's Wisdom**
   - `You gain 2 life for each card in your hand.`
   - `You gain 2 life for each card in your hand.`
+- **Geth's Grimoire**
+  - `Whenever an opponent discards a card, you may draw a card.`
 - **Ghastly Demise**
   - `Destroy target nonblack creature if its toughness is less than or equal to the number of cards in your graveyard.`
 - **Ghastly Remains**
@@ -4881,6 +4953,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose target Wall creature. Whenever that creature is dealt damage by an attacking creature this turn, you gain that much life.`
 - **Glyph of Reincarnation**
   - `Destroy all creatures that were blocked by target Wall this turn. They can't be regenerated. For each creature that died this way, put a creature card from the graveyard of the player who controlled that creature the last time it became blocked by that Wall onto the battlefield under its owner's control.`
+- **Goblin Archaeologist**
+  - `{R}, {T}: Flip a coin. If you win the flip, destroy target artifact and untap this creature. If you lose the flip, sacrifice this creature.`
 - **Goblin Arsonist**
   - `When this creature dies, you may have it deal 1 damage to any target.`
 - **Goblin Artisans**
@@ -5160,6 +5234,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, untap up to seven lands.`
 - **Greater Good**
   - `Sacrifice a creature: Draw cards equal to the sacrificed creature's power, then discard three cards.`
+- **Greater Harvester**
+  - `At the beginning of your upkeep, sacrifice a permanent.`
+  - `Whenever this creature deals combat damage to a player, that player sacrifices two permanents of their choice.`
 - **Greater Realm of Preservation**
   - `{1}{W}: The next time a black or red source of your choice would deal damage to you this turn, prevent that damage.`
   - `{1}{W}: The next time a black or red source of your choice would deal damage to you this turn, prevent that damage.`
@@ -5200,6 +5277,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}: Return this card from your graveyard to your hand. Activate only during your upkeep.`
 - **Grim Tutor**
   - `Search your library for a card, put that card into your hand, then shuffle. You lose 3 life.`
+- **Grimclaw Bats**
+  - `{B}, Pay 1 life: This creature gets +1/+1 until end of turn.`
 - **Grindstone**
   - `{3}, {T}: Target player mills two cards. If two cards that share a color were milled this way, repeat this process.`
 - **Grinning Demon**
@@ -5644,6 +5723,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Destroy target artifact and target enchantment.`
 - **Humble**
   - `Until end of turn, target creature loses all abilities and has base power and toughness 0/1.`
+- **Hunger of the Nim**
+  - `Target creature gets +1/+0 until end of turn for each artifact you control.`
 - **Hungry Mist**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
@@ -5886,6 +5967,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Inferno deals 6 damage to each creature and each player.`
 - **Infest**
   - `All creatures get -2/-2 until end of turn.`
+- **Infested Roothold**
+  - `Whenever an opponent casts an artifact spell, you may create a 1/1 green Insect creature token.`
 - **Infiltrate**
   - `Target creature can't be blocked this turn.`
 - **Infinite Authority**
@@ -5898,6 +5981,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All creatures get +1/+0 for each time counter on this artifact.`
   - `{3}: Remove a time counter from this artifact. Any player may activate this ability but only during any upkeep step.`
 - **Inflame**
+  - `Inflame deals 2 damage to each creature dealt damage this turn.`
   - `Inflame deals 2 damage to each creature dealt damage this turn.`
 - **Information Dealer**
   - `{T}: Look at the top X cards of your library, where X is the number of Wizards on the battlefield, then put them back in any order.`
@@ -6287,6 +6371,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap an untapped snow land you control: This creature gets +1/+1 until end of turn.`
 - **Karplusan Yeti**
   - `{T}: This creature deals damage equal to its power to target creature. That creature deals damage equal to its power to this creature.`
+- **Karstoderm**
+  - `Whenever an artifact enters, remove a +1/+1 counter from this creature.`
 - **Kavu Chameleon**
   - `{G}: This creature becomes the color of your choice until end of turn.`
 - **Kavu Climber**
@@ -6470,12 +6556,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
   - `{1}, {T}: Add {R}.`
   - `{2}, {T}: Add {B} or {G}.`
+- **Kraken's Eye**
+  - `Whenever a player casts a blue spell, you may gain 1 life.`
 - **Krakilin**
   - `{1}{G}: Regenerate this creature.`
 - **Krark-Clan Grunt**
   - `Sacrifice an artifact: This creature gets +1/+0 and gains first strike until end of turn.`
 - **Krark-Clan Shaman**
   - `Sacrifice an artifact: This creature deals 1 damage to each creature without flying.`
+- **Krark-Clan Stoker**
+  - `{T}, Sacrifice an artifact: Add {R}{R}.`
 - **Kris Mage**
   - `{R}, {T}, Discard a card: This creature deals 1 damage to any target.`
 - **Krosan Archer**
@@ -6615,6 +6705,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard any number of cards. Target player reveals their hand, then you choose a nonland card from it for each card discarded this way. That player discards those cards.`
 - **Last Stand**
   - `Target opponent loses 2 life for each Swamp you control. Last Stand deals damage to target creature equal to the number of Mountains you control. Create a 1/1 green Saproling creature token for each Forest you control. You gain 2 life for each Plains you control. Draw a card for each Island you control, then discard that many cards.`
+- **Last Word**
+  - `Counter target spell.`
 - **Last-Ditch Effort**
   - `Sacrifice any number of creatures. Last-Ditch Effort deals that much damage to any target.`
 - **Lat-Nam's Legacy**
@@ -6694,6 +6786,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target creature with power 4 or greater.`
 - **Leonin Abunas**
   - `Artifacts you control have hexproof. (They can't be the targets of spells or abilities your opponents control.)`
+- **Leonin Battlemage**
+  - `{T}: Target creature gets +1/+1 until end of turn.`
+  - `Whenever you cast a spell, you may untap this creature.`
 - **Leonin Bladetrap**
   - `{2}, Sacrifice this artifact: It deals 2 damage to each attacking creature without flying.`
 - **Leonin Elder**
@@ -7015,6 +7110,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals damage to a creature, destroy that creature at end of combat.`
 - **Loxodon Mender**
   - `{W}, {T}: Regenerate target artifact.`
+- **Loxodon Mystic**
+  - `{W}, {T}: Tap target creature.`
 - **Loxodon Peacekeeper**
   - `At the beginning of your upkeep, the player with the lowest life total gains control of this creature. If two or more players are tied for lowest life total, you choose one of them, and that player gains control of this creature.`
 - **Loxodon Punisher**
@@ -7042,6 +7139,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When an opponent has 10 or less life, if this permanent is an enchantment, it becomes a 3/2 Jackal creature.`
 - **Lurking Skirge**
   - `When a creature is put into an opponent's graveyard from the battlefield, if this permanent is an enchantment, it becomes a 3/2 Phyrexian Imp creature with flying.`
+- **Machinate**
+  - `Look at the top X cards of your library, where X is the number of artifacts you control. Put one of those cards into your hand and the rest on the bottom of your library in any order.`
 - **Mad Dog**
   - `At the beginning of your end step, if this creature didn't attack or come under your control this turn, sacrifice it.`
 - **Maddening Imp**
@@ -7078,6 +7177,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, Sacrifice a land: This enchantment deals 1 damage to each creature without flying.`
 - **Magmasaur**
   - `At the beginning of your upkeep, you may remove a +1/+1 counter from this creature. If you don't, sacrifice this creature and it deals damage equal to the number of +1/+1 counters on it to each creature without flying and each player.`
+- **Magnetic Flux**
+  - `Artifact creatures you control gain flying until end of turn.`
 - **Magnetic Mountain**
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way. If the player does, untap those creatures.`
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way. If the player does, untap those creatures.`
@@ -7331,6 +7432,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy each artifact with mana value X or less.`
 - **Melting**
   - `All lands are no longer snow.`
+- **Memnarch**
+  - `{1}{U}{U}: Target permanent becomes an artifact in addition to its other types. (This effect lasts indefinitely.)`
+  - `{3}{U}: Gain control of target artifact. (This effect lasts indefinitely.)`
 - **Memory Jar**
   - `{T}, Sacrifice this artifact: Each player exiles all cards from their hand face down and draws seven cards. At the beginning of the next end step, each player discards their hand and returns to their hand each card they exiled this way.`
 - **Memory Lapse**
@@ -7346,6 +7450,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mental Note**
   - `Mill two cards.`
   - `Draw a card.`
+- **Mephitic Ooze**
+  - `This creature gets +1/+0 for each artifact you control.`
 - **Mercadia's Downfall**
   - `Each attacking creature gets +1/+0 until end of turn for each nonbasic land defending player controls.`
 - **Mercadian Atlas**
@@ -7396,6 +7502,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a permanent becomes untapped, that permanent's controller mills a card.`
 - **Mesmeric Trance**
   - `{U}, Discard a card: Draw a card.`
+- **Metal Fatigue**
+  - `Tap all artifacts.`
 - **Metalworker**
   - `{T}: Reveal any number of artifact cards in your hand. Add {C}{C} for each card revealed this way.`
 - **Metamorphic Wurm**
@@ -7552,6 +7660,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature becomes the target of a spell or ability, return this creature to its owner's hand.`
 - **Mirri's Guile**
   - `At the beginning of your upkeep, you may look at the top three cards of your library, then put them back in any order.`
+- **Mirrodin's Core**
+  - `{T}: Add {C}.`
+  - `{T}: Put a charge counter on this land.`
+  - `{T}, Remove a charge counter from this land: Add one mana of any color.`
 - **Mirror Golem**
   - `Imprint — When this creature enters, you may exile target card from a graveyard.`
   - `This creature has protection from each of the exiled card's card types. (Artifact, battle, creature, enchantment, instant, kindred, land, planeswalker, and sorcery are card types.)`
@@ -7837,8 +7949,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature gets +1/+1 for each Equipment attached to it.`
 - **Myr Incubator**
   - `{6}, {T}, Sacrifice this artifact: Search your library for any number of artifact cards, exile them, then create that many 1/1 colorless Myr artifact creature tokens. Then shuffle.`
+- **Myr Landshaper**
+  - `{T}: Target land becomes an artifact in addition to its other types until end of turn.`
+- **Myr Matrix**
+  - `Myr creatures get +1/+1.`
+  - `{5}: Create a 1/1 colorless Myr artifact creature token.`
 - **Myr Mindservant**
   - `{2}, {T}: Shuffle your library.`
+- **Myr Moonvessel**
+  - `When this creature dies, add {C}.`
 - **Myr Prototype**
   - `At the beginning of your upkeep, put a +1/+1 counter on this creature.`
 - **Myr Retriever**
@@ -8015,6 +8134,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only during an opponent's turn, before attackers are declared.`
 - **Neurok Familiar**
   - `When this creature enters, reveal the top card of your library. If it's an artifact card, put it into your hand. Otherwise, put it into your graveyard.`
+- **Neurok Prodigy**
+  - `Discard an artifact card: Return this creature to its owner's hand.`
+- **Neurok Transmuter**
+  - `{U}: Target creature becomes an artifact in addition to its other types until end of turn.`
 - **Nevinyrral's Disk**
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
@@ -8052,6 +8175,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}{R}, {T}: This creature deals 2 damage to target creature.`
 - **Nightshade Seer**
   - `{2}{B}, {T}: Reveal any number of black cards in your hand. Target creature gets -X/-X until end of turn, where X is the number of cards revealed this way.`
+- **Nim Abomination**
+  - `At the beginning of your end step, if this creature is untapped, you lose 3 life.`
 - **Nim Devourer**
   - `This creature gets +1/+0 for each artifact you control.`
   - `{B}{B}: Return this card from your graveyard to the battlefield, then sacrifice a creature. Activate only during your upkeep.`
@@ -8122,6 +8247,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this creature: Destroy target face-down creature.`
 - **Notorious Assassin**
   - `{2}{B}, {T}, Discard a card: Destroy target nonblack creature. It can't be regenerated.`
+- **Nourish**
+  - `You gain 6 life.`
 - **Nova Cleric**
   - `{2}{W}, {T}, Sacrifice this creature: Destroy all enchantments.`
 - **Nova Pentacle**
@@ -8389,6 +8516,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ovinomancer**
   - `When this creature enters, sacrifice it unless you return three basic lands you control to their owner's hand.`
   - `{T}, Return this creature to its owner's hand: Destroy target creature. It can't be regenerated. That creature's controller creates a 0/1 green Sheep creature token.`
+- **Oxidize**
+  - `Destroy target artifact. It can't be regenerated.`
 - **Pack Hunt**
   - `Search your library for up to three cards with the same name as target creature, reveal them, put them into your hand, then shuffle.`
 - **Pack Leader**
@@ -8425,6 +8554,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Panic Attack**
   - `Up to three target creatures can't block this turn.`
   - `Up to three target creatures can't block this turn.`
+- **Panoptic Mirror**
+  - `Imprint — {X}, {T}: You may exile an instant or sorcery card with mana value X from your hand.`
 - **Paradigm Shift**
   - `Exile all cards from your library. Then shuffle your graveyard into your library.`
 - **Parallax Dementia**
@@ -8993,6 +9124,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent all damage that sources of the color of your choice would deal this turn.`
 - **Prismite**
   - `{2}: Add one mana of any color.`
+- **Pristine Angel**
+  - `Whenever you cast a spell, you may untap this creature.`
 - **Private Research**
   - `At the beginning of your upkeep, you may put a page counter on this Aura.`
   - `When enchanted creature dies, draw a card for each page counter on this Aura.`
@@ -9050,6 +9183,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player chooses one or more targets, each player reveals the top card of their library. The player who reveals the card with the greatest mana value may change the target or targets. If two or more cards are tied for greatest, the target or targets remain unchanged. Changing targets this way doesn't trigger abilities of permanents named Psychic Battle.`
 - **Psychic Membrane**
   - `Whenever this creature blocks, you may draw a card.`
+- **Psychic Overload**
+  - `When this Aura enters, tap enchanted permanent.`
 - **Psychic Purge**
   - `Psychic Purge deals 1 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, that player loses 5 life.`
@@ -9074,10 +9209,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a spell or ability causes a player to shuffle their library, this artifact deals 2 damage to that player.`
 - **Psychotic Haze**
   - `Psychotic Haze deals 1 damage to each creature and each player.`
+- **Pteron Ghost**
+  - `Sacrifice this creature: Regenerate target artifact.`
 - **Puffer Extract**
   - `{X}, {T}: Target creature you control gets +X/+X until end of turn. Destroy it at the beginning of the next end step.`
 - **Pulsating Illusion**
   - `Discard a card: This creature gets +4/+4 until end of turn. Activate only once each turn.`
+- **Pulse of the Grid**
+  - `Draw two cards, then discard a card. Then if an opponent has more cards in hand than you, return Pulse of the Grid to its owner's hand.`
+- **Pulse of the Tangle**
+  - `Create a 3/3 green Beast creature token. Then if an opponent controls more creatures than you, return Pulse of the Tangle to its owner's hand.`
 - **Pulsemage Advocate**
   - `{T}: Return three target cards from an opponent's graveyard to their hand. Return target creature card from your graveyard to the battlefield.`
 - **Pulverize**
@@ -9185,6 +9326,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Target attacking creature without flying gets -1/-2 until end of turn.`
 - **Quicksilver Amulet**
   - `{4}, {T}: You may put a creature card from your hand onto the battlefield.`
+- **Quicksilver Behemoth**
+  - `When this creature attacks or blocks, return it to its owner's hand at end of combat. (Return it only if it's on the battlefield.)`
 - **Quicksilver Dragon**
   - `{U}: If target spell has only one target and that target is this creature, change that spell's target to another creature.`
 - **Quicksilver Elemental**
@@ -9422,6 +9565,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put target creature card from a graveyard onto the battlefield under your control. You lose life equal to that card's mana value.`
 - **Reap**
   - `Return up to X target cards from your graveyard to your hand, where X is the number of black permanents target opponent controls as you cast this spell.`
+- **Reap and Sow**
+  - `• Destroy target land.`
+  - `• Search your library for a land card, put that card onto the battlefield, then shuffle.`
 - **Reaping the Graves**
   - `Return target creature card from your graveyard to your hand.`
 - **Reaping the Rewards**
@@ -9437,6 +9583,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Change the target of target spell that targets only a player. The new target must be a player.`
 - **Rebuild**
   - `Return all artifacts to their owners' hands.`
+- **Rebuking Ceremony**
+  - `Put two target artifacts on top of their owners' libraries.`
 - **Recall**
   - `Discard X cards, then return a card from your graveyard to your hand for each card discarded this way. Exile Recall.`
   - `Discard X cards, then return a card from your graveyard to your hand for each card discarded this way. Exile Recall.`
@@ -9635,6 +9783,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target permanent you control to its owner's hand.`
 - **Reset**
   - `Untap all lands you control.`
+- **Reshape**
+  - `Search your library for an artifact card with mana value X or less, put it onto the battlefield, then shuffle.`
 - **Resilient Wanderer**
   - `Discard a card: This creature gains protection from the color of your choice until end of turn.`
 - **Resistance Fighter**
@@ -9664,6 +9814,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell unless its controller pays {X}, where X is its mana value.`
 - **Retraced Image**
   - `Reveal a card in your hand, then put that card onto the battlefield if it has the same name as a permanent.`
+- **Retract**
+  - `Return all artifacts you control to their owner's hand.`
 - **Retribution**
   - `Choose two target creatures controlled by the same opponent. That player chooses and sacrifices one of those creatures. Put a -1/-1 counter on the other.`
 - **Retribution of the Meek**
@@ -9837,6 +9989,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {R}, {G}, or {W}.`
 - **Rith, the Awakener**
   - `Whenever Rith deals combat damage to a player, you may pay {2}{G}. If you do, choose a color, then create a 1/1 green Saproling creature token for each permanent of that color.`
+- **Ritual of Restoration**
+  - `Return target artifact card from your graveyard to your hand.`
 - **Ritual of Steel**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
 - **Ritual of the Machine**
@@ -9860,6 +10014,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Untap all creatures you control.`
 - **Roar of the Wurm**
   - `Create a 6/6 green Wurm creature token.`
+- **Roaring Slagwurm**
+  - `Whenever this creature attacks, tap all artifacts.`
 - **Robber Fly**
   - `Whenever this creature becomes blocked, defending player discards all the cards in their hand, then draws that many cards.`
 - **Roc Hatchling**
@@ -10197,6 +10353,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if there are no Zombies on the battlefield, this enchantment deals 1 damage to you.`
 - **Savaen Elves**
   - `{G}{G}, {T}: Destroy target Aura attached to a land.`
+- **Savage Beating**
+  - `• Creatures you control gain double strike until end of turn.`
+  - `• Untap all creatures you control. After this phase, there is an additional combat phase.`
 - **Savage Firecat**
   - `Whenever you tap a land for mana, remove a +1/+1 counter from this creature.`
 - **Savage Gorilla**
@@ -10311,6 +10470,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an artifact or enchantment is put into your graveyard from the battlefield, you gain 1 life.`
 - **Screaming Seahawk**
   - `When this creature enters, you may search your library for a card named Screaming Seahawk, reveal it, put it into your hand, then shuffle.`
+- **Screams from Within**
+  - `When enchanted creature dies, return this card from your graveyard to the battlefield.`
 - **Screams of the Damned**
   - `{1}{B}, Exile a card from your graveyard: This enchantment deals 1 damage to each creature and each player.`
 - **Screeching Buzzard**
@@ -10413,6 +10574,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {W}.`
 - **Second Chance**
   - `At the beginning of your upkeep, if you have 5 or less life, sacrifice this enchantment and take an extra turn after this one.`
+- **Second Sight**
+  - `• Look at the top five cards of target opponent's library, then put them back in any order.`
+  - `• Look at the top five cards of your library, then put them back in any order.`
 - **Second Sunrise**
   - `Each player returns to the battlefield all artifact, creature, enchantment, and land cards in their graveyard that were put there from the battlefield this turn.`
 - **Second Thoughts**
@@ -10544,6 +10708,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove an arrowhead counter from this artifact: Put a -1/-1 counter on target creature.`
 - **Serrated Biskelion**
   - `{T}: Put a -1/-1 counter on this creature and a -1/-1 counter on target creature.`
+- **Serum Powder**
+  - `{T}: Add {C}.`
 - **Serum Tank**
   - `Whenever this artifact or another artifact enters, put a charge counter on this artifact.`
   - `{3}, {T}, Remove a charge counter from this artifact: Draw a card.`
@@ -10749,6 +10915,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets -5/-0 until end of turn.`
 - **Shrouded Serpent**
   - `Whenever this creature attacks, defending player may pay {4}. If that player doesn't, this creature can't be blocked this turn.`
+- **Shunt**
+  - `Change the target of target spell with a single target.`
 - **Shyft**
   - `At the beginning of your upkeep, you may have this creature become the color or colors of your choice. (This effect lasts indefinitely.)`
 - **Sibilant Spirit**
@@ -10900,6 +11068,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Skull of Ramos**
   - `{T}: Add {B}.`
   - `Sacrifice this artifact: Add {B}.`
+- **Skullclamp**
+  - `Whenever equipped creature dies, draw two cards.`
 - **Skullscorch**
   - `Target player discards two cards at random unless that player has Skullscorch deal 4 damage to them.`
 - **Skulltap**
@@ -11018,6 +11188,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: Gain control of target Sliver. (This effect lasts indefinitely.)`
 - **Sliver Queen**
   - `{2}: Create a 1/1 colorless Sliver creature token.`
+- **Slobad, Goblin Tinkerer**
+  - `Sacrifice an artifact: Target artifact gains indestructible until end of turn.`
 - **Slow Motion**
   - `At the beginning of the upkeep of enchanted creature's controller, that player sacrifices that creature unless they pay {2}.`
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
@@ -11229,6 +11401,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Soulgorger Orgg**
   - `When this creature enters, you lose all but 1 life.`
   - `When this creature leaves the battlefield, you gain life equal to the life you lost when it entered.`
+- **Soulscour**
+  - `Destroy all nonartifact permanents.`
 - **Soulshriek**
   - `Target creature you control gets +X/+0 until end of turn, where X is the number of creature cards in your graveyard. Sacrifice that creature at the beginning of the next end step.`
 - **Southern Paladin**
@@ -11252,11 +11426,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature becomes blocked, it gets +1/+1 until end of turn for each creature blocking it.`
 - **Spatial Binding**
   - `Pay 1 life: Until your next upkeep, target permanent can't phase out.`
+- **Spawning Pit**
+  - `Sacrifice a creature: Put a charge counter on this artifact.`
+  - `{1}, Remove two charge counters from this artifact: Create a 2/2 colorless Spawn artifact creature token.`
 - **Spawning Pool**
   - `{T}: Add {B}.`
   - `{1}{B}: This land becomes a 1/1 black Skeleton creature with "{B}: Regenerate this creature" until end of turn. It's still a land. (If it regenerates, the next time it would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
 - **Speaker of the Heavens**
   - `{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.`
+- **Specter's Shroud**
+  - `Whenever equipped creature deals combat damage to a player, that player discards a card.`
 - **Specter's Wail**
   - `Target player discards a card at random.`
 - **Spectral Bears**
@@ -11276,6 +11455,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
+- **Spellbinder**
+  - `Whenever equipped creature deals combat damage to a player, you may copy the exiled card. If you do, you may cast the copy without paying its mana cost.`
 - **Spellgorger Barbarian**
   - `When this creature enters, discard a card at random.`
   - `When this creature leaves the battlefield, draw a card.`
@@ -11329,6 +11510,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When enchanted creature becomes the target of a spell or ability, destroy that creature. It can't be regenerated.`
 - **Spinal Villain**
   - `{T}: Destroy target blue creature.`
+- **Spincrusher**
+  - `Whenever this creature blocks, put a +1/+1 counter on it.`
+  - `Remove a +1/+1 counter from this creature: This creature can't be blocked this turn.`
 - **Spindrift Drake**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
 - **Spined Fluke**
@@ -11494,6 +11678,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stand // Deliver**
   - `Prevent the next 2 damage that would be dealt to target creature this turn.`
   - `Return target permanent to its owner's hand.`
+- **Stand Together**
+  - `Put two +1/+1 counters on target creature and two +1/+1 counters on another target creature.`
 - **Stand or Fall**
   - `At the beginning of combat on your turn, for each defending player, separate all creatures that player controls into two piles and that player chooses one. Only creatures in the chosen piles can block this turn.`
 - **Standardize**
@@ -11540,6 +11726,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice this artifact: Exile target card from a graveyard.`
 - **Steel Leaf Paladin**
   - `When this creature enters, return a green or white creature you control to its owner's hand.`
+- **Steelshaper Apprentice**
+  - `{W}, {T}, Return this creature to its owner's hand: Search your library for an Equipment card, reveal that card, put it into your hand, then shuffle.`
 - **Steely Resolve**
   - `Creatures of the chosen type have shroud. (They can't be the targets of spells or abilities.)`
 - **Stench of Decay**
@@ -11562,6 +11750,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stinging Licid**
   - `{1}{U}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {U} to end this effect.`
   - `Whenever enchanted creature becomes tapped, this creature deals 2 damage to that creature's controller.`
+- **Stir the Pride**
+  - `• Creatures you control get +2/+2 until end of turn.`
+  - `• Until end of turn, creatures you control gain "Whenever this creature deals damage, you gain that much life."`
 - **Stitch Together**
   - `Return target creature card from your graveyard to your hand.`
 - **Stoic Champion**
@@ -11855,8 +12046,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sword Dancer**
   - `{W}{W}: Target attacking creature gets -1/-0 until end of turn.`
   - `{W}{W}: Target attacking creature gets -1/-0 until end of turn.`
+- **Sword of Fire and Ice**
+  - `Whenever equipped creature deals combat damage to a player, this Equipment deals 2 damage to any target and you draw a card.`
 - **Sword of Kaldra**
   - `Whenever equipped creature deals damage to a creature, exile that creature. (Exile it only if it's still on the battlefield.)`
+- **Sword of Light and Shadow**
+  - `Whenever equipped creature deals combat damage to a player, you gain 3 life and you may return up to one target creature card from your graveyard to your hand.`
 - **Sword of the Ages**
   - `{T}, Sacrifice this artifact and any number of creatures you control: This artifact deals X damage to any target, where X is the total power of the creatures sacrificed this way, then exile this artifact and those creature cards.`
 - **Sword of the Chosen**
@@ -11900,6 +12095,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a Sliver deals combat damage to a player, its controller may draw a card.`
 - **Syncopate**
   - `Counter target spell unless its controller pays {X}. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.`
+- **Synod Artificer**
+  - `{X}, {T}: Tap X target noncreature artifacts.`
+  - `{X}, {T}: Untap X target noncreature artifacts.`
 - **Synod Sanctum**
   - `{2}, {T}: Exile target permanent you control.`
   - `{2}, Sacrifice this artifact: Return all cards exiled with this artifact to the battlefield under your control.`
@@ -11960,6 +12158,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {G} or {W}. This artifact deals 1 damage to you.`
 - **Talon Sliver**
   - `All Sliver creatures have first strike.`
+- **Talon of Pain**
+  - `{X}, {T}, Remove X charge counters from this artifact: It deals X damage to any target.`
 - **Talruum Champion**
   - `Whenever this creature blocks or becomes blocked by a creature, that creature loses first strike until end of turn.`
 - **Tangle**
@@ -12043,6 +12243,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}: Regenerate this creature.`
 - **Tel-Jilad Stylus**
   - `{T}: Put target permanent you own on the bottom of your library.`
+- **Tel-Jilad Wolf**
+  - `Whenever this creature becomes blocked by an artifact creature, this creature gets +3/+3 until end of turn.`
 - **Telekinesis**
   - `Tap target creature. Prevent all combat damage that would be dealt by that creature this turn. It doesn't untap during its controller's next two untap steps.`
 - **Telekinetic Bonds**
@@ -12144,6 +12346,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever another creature you control enters, this creature deals damage equal to that creature's power to any target.`
 - **Test of Endurance**
   - `At the beginning of your upkeep, if you have 50 or more life, you win the game.`
+- **Test of Faith**
+  - `Prevent the next 3 damage that would be dealt to target creature this turn. For each 1 damage prevented this way, put a +1/+1 counter on that creature.`
 - **Testament of Faith**
   - `{X}: This enchantment becomes an X/X Wall creature with defender in addition to its other types until end of turn.`
 - **Tethered Griffin**
@@ -12369,6 +12573,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thunderscape Master**
   - `{B}{B}, {T}: Target player loses 2 life and you gain 2 life.`
   - `{G}{G}, {T}: Creatures you control get +2/+2 until end of turn.`
+- **Thunderstaff**
+  - `{2}, {T}: Attacking creatures get +1/+0 until end of turn.`
 - **Thwart**
   - `Counter target spell.`
 - **Ticking Gnomes**
@@ -12925,6 +13131,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return all permanents to their owners' hands.`
 - **Uphill Battle**
   - `Creatures played by your opponents enter tapped.`
+- **Ur-Golem's Eye**
+  - `{T}: Add {C}{C}.`
 - **Urborg**
   - `{T}: Add {B}.`
   - `{T}: Target creature loses first strike or swampwalk until end of turn.`
@@ -13038,6 +13246,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {G} or {W}. This land doesn't untap during your next untap step.`
 - **Vedalken Archmage**
   - `Whenever you cast an artifact spell, draw a card.`
+- **Vedalken Engineer**
+  - `{T}: Add two mana of any one color. Spend this mana only to cast artifact spells or activate abilities of artifacts.`
 - **Veil of Birds**
   - `When an opponent casts a spell, if this permanent is an enchantment, it becomes a 1/1 Bird creature with flying.`
 - **Veiled Apparition**
@@ -13123,6 +13333,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature dies, each player may search their library for up to two basic land cards, put them onto the battlefield, then shuffle.`
 - **Veteran's Voice**
   - `Tap enchanted creature: Target creature other than the creature tapped this way gets +2/+1 until end of turn. Activate only if enchanted creature is untapped.`
+- **Vex**
+  - `Counter target spell. That spell's controller may draw a card.`
 - **Vexing Arcanix**
   - `{3}, {T}: Target player chooses a card name, then reveals the top card of their library. If that card has the chosen name, that player puts it into their hand. Otherwise, they put it into their graveyard and this artifact deals 2 damage to them.`
   - `{3}, {T}: Target player chooses a card name, then reveals the top card of their library. If that card has the chosen name, that player puts it into their hand. Otherwise, they put it into their graveyard and this artifact deals 2 damage to them.`
@@ -13188,10 +13400,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: This creature loses trample until end of turn. Any player may activate this ability.`
 - **Violent Eruption**
   - `Violent Eruption deals 4 damage divided as you choose among any number of targets.`
+- **Viridian Acolyte**
+  - `{1}, {T}: Add one mana of any color.`
 - **Viridian Joiner**
   - `{T}: Add an amount of {G} equal to this creature's power.`
 - **Viridian Shaman**
   - `When this creature enters, destroy target artifact.`
+- **Viridian Zealot**
+  - `{1}{G}, Sacrifice this creature: Destroy target artifact or enchantment.`
 - **Visara the Dreadful**
   - `{T}: Destroy target creature. It can't be regenerated.`
 - **Viscerid Armor**
@@ -13293,6 +13509,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Volrath's Stronghold**
   - `{T}: Add {C}.`
   - `{1}{B}, {T}: Put target creature card from your graveyard on top of your library.`
+- **Voltaic Construct**
+  - `{2}: Untap target artifact creature.`
 - **Voltaic Key**
   - `{1}, {T}: Untap target artifact.`
 - **Voodoo Doll**
@@ -13303,6 +13521,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals combat damage to a creature, destroy that creature.`
 - **Vulshok Battlemaster**
   - `When this creature enters, attach all Equipment on the battlefield to it. (Control of the Equipment doesn't change.)`
+- **Vulshok War Boar**
+  - `When this creature enters, sacrifice it unless you sacrifice an artifact.`
 - **Wail of the Nim**
   - `• Regenerate each creature you control.`
   - `• Wail of the Nim deals 1 damage to each creature and each player.`
@@ -13412,6 +13632,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Look at the top card of target player's library. If it's a nonland card, you may pay 2 life. If you do, put it into that player's graveyard.`
 - **Wand of Ith**
   - `{3}, {T}: Target player reveals a card at random from their hand. If it's a land card, that player discards it unless they pay 1 life. If it isn't a land card, the player discards it unless they pay life equal to its mana value. Activate only during your turn.`
+- **Wand of the Elements**
+  - `{T}, Sacrifice an Island: Create a 2/2 blue Elemental creature token with flying.`
+  - `{T}, Sacrifice a Mountain: Create a 3/3 red Elemental creature token.`
 - **Wanderguard Sentry**
   - `When this creature enters, look at target opponent's hand.`
 - **Wandering Mage**
@@ -13712,6 +13935,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}, Sacrifice this land: Tap two target lands.`
 - **Wipe Clean**
   - `Exile target enchantment.`
+- **Wirefly Hive**
+  - `{3}, {T}: Flip a coin. If you win the flip, create a 2/2 colorless Insect artifact creature token with flying named Wirefly. If you lose the flip, destroy all permanents named Wirefly.`
 - **Wirewood Channeler**
   - `{T}: Add X mana of any one color, where X is the number of Elves on the battlefield.`
 - **Wirewood Elf**
@@ -13864,6 +14089,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player discards two cards unless they discard an artifact card.`
 - **Wretched Anurid**
   - `Whenever another creature enters, you lose 1 life.`
+- **Wurm's Tooth**
+  - `Whenever a player casts a green spell, you may gain 1 life.`
 - **Wurmskin Forger**
   - `When this creature enters, distribute three +1/+1 counters among one, two, or three target creatures.`
 - **Wyluli Wolf**
