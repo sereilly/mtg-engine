@@ -233,6 +233,12 @@ CHOICE_KEYS = (
     # written by the two inline mana-ability sites and read by
     # ``handlers/mana.add_mana_from_text``.
     "mana_type",
+    # The card in the ante a spell named, by its place there ("You own target
+    # card in the ante", Darkpact) — ``target_keywords.ANTE_INDEX``, written
+    # by the cast from its ``target_ante_index`` and read by
+    # ``handlers/ownership.exchange_ante_with_top_library``. Not the slot
+    # channel: that is a battlefield's, re-read off the ids at resolution.
+    "ante_index",
 )
 
 

@@ -2449,7 +2449,7 @@ def test_w2g4_mournful_zombie_gives_its_life_to_the_seat_that_paid_for_it(
     action = choose_activation_action(game, 0)
 
     assert action is not None and action.permanent_name == "Mournful Zombie"
-    assert action.target_player_index == 0 and action.target_permanent_index is None
+    assert action.target_player_index == 0 and action.target_permanent_ids is None
     assert game.activate_permanent_ability(
         0, "Mournful Zombie", target_player_index=action.target_player_index,
     ).supported

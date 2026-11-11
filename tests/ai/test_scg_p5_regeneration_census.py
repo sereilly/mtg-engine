@@ -45,6 +45,7 @@ from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 from engine.ai_weighed_cast import _effect_steps
 from tests.helpers import _nosick, declare_attack, resolve_stack
+from tests.helpers import action_target  # noqa: E402
 
 _REGENERATION = frozenset({
     "grant_regeneration_to_self",
@@ -117,10 +118,10 @@ def _aimed_at(game, action, protected) -> bool:
     source = game.permanent_at(0, action.permanent_index)
     if source is None:
         return False
-    target = action.target_permanent_index
+    target = action_target(game, action)
     if target is None:
         return source is protected or source.metadata.get("attached_to") is protected
-    return game.permanent_at(action.target_player_index, target) is protected
+    return target is protected
 
 
 def _dies_without_it(game, protected) -> bool:

@@ -22,6 +22,8 @@ from web.app import app, store
 from web.game_flow import _ai_step
 
 from tests.helpers import resolve_stack
+from tests.helpers import action_slots  # noqa: E402
+from tests.helpers import action_target  # noqa: E402
 
 client = TestClient(app)
 
@@ -66,8 +68,8 @@ def test_the_web_ai_pays_with_a_lotus_and_the_aura_lands_where_it_was_aimed():
     # What the policy will name, asked the way `_ai_step` is about to ask it:
     # a host by its slot **behind** the Lotus that pays.
     action = choose_cast_action(game, 1)
-    assert action.card_name == "Holy Strength" and action.target_permanent_index > 0
-    host = game.permanent_at(1, action.target_permanent_index)
+    assert action.card_name == "Holy Strength" and action_slots(game, action)[0] > 0
+    host = action_target(game, action)
     other = next(p for p in game.controlled_by(1) if p.is_creature and p is not host)
     before = (host.effective_power, other.effective_power)
 

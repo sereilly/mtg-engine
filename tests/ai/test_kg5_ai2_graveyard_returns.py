@@ -152,8 +152,8 @@ def test_every_one_card_return_spell_names_the_card_worth_most_back():
         action = choose_cast_action(game, 0)
         if action is None or action.card_name != spell.name:
             continue
-        assert (action.target_player_index, action.target_permanent_index) == (
-            best["seat"], best["index"],
+        assert (action.target_player_index, action.target_graveyard_indices) == (
+            best["seat"], [best["index"]],
         ), (spell.name, action)
         before = [card.name for card in game.players[0].graveyard]
         cast_chosen_instant(game, 0, action)

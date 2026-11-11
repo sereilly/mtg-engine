@@ -65,7 +65,7 @@ def test_a_cant_attack_or_block_spell_is_aimed_at_the_opponents_creature():
     result = game.cast_from_hand(
         0, action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
     )
     assert result.supported, result.details
@@ -112,7 +112,7 @@ def test_a_destroy_inside_a_sequence_is_aimed_at_the_opponent():
     game.cast_from_hand(
         0, action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
     )
     resolve_stack(game)
@@ -222,7 +222,7 @@ def test_topple_is_not_cast_when_the_greatest_creature_is_the_casters(set_pool):
     assert action is not None and action.card_name == "Topple"
     game.cast_from_hand(
         0, "Topple", target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
     )
     resolve_stack(game)
@@ -249,7 +249,7 @@ def test_sivvis_valor_names_the_creature_it_spares(set_pool):
     assert game.permanent_by_id(action.target_permanent_ids[0]).card is mine
     game.cast_from_hand(
         0, action.card_name, target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
     )
     resolve_stack(game)
@@ -318,7 +318,7 @@ def test_an_activated_restriction_never_falls_back_to_the_activators_own_creatur
     game = _duel(mine=[stunner, _mk_creature_card("Own Bear", 2, 2)], theirs=[theirs])
     action = choose_activation_action(game, 0)
     assert action is not None and action.target_player_index == 1
-    assert game.permanent_at(1, action.target_permanent_index).card is theirs
+    assert action_target(game, action).card is theirs
 
 
 def test_a_denial_its_own_words_aim_at_the_activator_is_not_activated():
@@ -427,6 +427,7 @@ from engine.mixins.stack import aura_enchant_noun as _w3g4_enchant_noun
 from engine.named_counters import add_counters as _w3g4_add_counters
 from engine.targeting import derive_activation_spec as _w3g4_activation_spec
 from engine.targeting import usable_activated_abilities as _w3g4_usable
+from tests.helpers import action_target  # noqa: E402
 
 
 def _w3g4_board(mine=(), theirs=(), hand=()):
@@ -626,7 +627,7 @@ def test_no_wrapped_own_ability_in_the_pool_is_aimed_at_the_wrong_seat(catalog, 
             )
             game.enforce_mana_costs = False
             action = choose_activation_action(game, 0)
-            if action is None or action.permanent_name != name or action.target_permanent_index is None:
+            if action is None or action.permanent_name != name or not action.target_permanent_ids:
                 continue
             proposed += 1
             if action.target_player_index != (0 if side == "you" else 1):

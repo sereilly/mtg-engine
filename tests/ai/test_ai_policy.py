@@ -6,6 +6,7 @@ from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_acti
 from engine.ai_prompts import choose_search_library_index
 from engine.game import Game
 from engine.models import Permanent, PlayerState
+from tests.helpers import action_slots  # noqa: E402
 
 
 def _get(all_cards, name: str):
@@ -77,14 +78,14 @@ def test_ai_chooses_creature_target_when_casting_fear(all_cards):
     assert action is not None
     assert action.card_name == "Fear"
     assert action.target_player_index == 0
-    assert action.target_permanent_index == 1, "AI must target its creature, not the Swamp"
+    assert action_slots(game, action) == [1], "AI must target its creature, not the Swamp"
 
     # The chosen action must actually be castable by the engine
     result = game.cast_from_hand(
         0,
         action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
     )
     assert result.supported
     fear_perm = next(perm for perm in p1.battlefield if perm.card.name == "Fear")
@@ -119,7 +120,7 @@ def test_ai_puts_harmful_aura_on_opponent_creature(all_cards):
     assert action is not None
     assert action.card_name == "Paralyze"
     assert action.target_player_index == 1
-    assert action.target_permanent_index == 0
+    assert action_slots(game, action) == [0]
 
 
 def test_healing_salve_not_cast_at_full_life(all_cards):
@@ -286,11 +287,11 @@ def test_object_targeted_activation_names_a_legal_creature(set_pool):
     assert action is not None
     assert action.permanent_name == "Silent Dart"
     assert action.target_player_index == 1
-    assert action.target_permanent_index == 0
+    assert action_slots(game, action) == [0]
     # And executing it destroys the creature, never touching the face.
     result = game.activate_permanent_ability(
         0, "Silent Dart", target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
     )
     assert result.supported
     assert p2.life == 20

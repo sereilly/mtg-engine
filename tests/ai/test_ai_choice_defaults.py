@@ -34,6 +34,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.targeting import derive_activation_spec, derive_cast_spec
 from tests.helpers import _mk_card, declare_attack, resolve_stack
+from tests.helpers import action_target  # noqa: E402
 
 _W2G6_LANDS = ["Plains", "Island", "Swamp", "Mountain", "Forest"] * 3
 
@@ -63,10 +64,10 @@ def _w2g6_named(game: Game, action) -> tuple[int, str] | None:
     if action.target_permanent_ids:
         found = game.find_permanent_by_id(action.target_permanent_ids[0])
         return None if found is None else (found[0], found[1].card.name)
-    index = action.target_permanent_index
-    if isinstance(index, int):
-        permanent = game.permanent_at(action.target_player_index, index)
-        return None if permanent is None else (action.target_player_index, permanent.card.name)
+    graveyard = action.target_graveyard_indices or []
+    if len(graveyard) == 1:
+        card = game.players[action.target_player_index].graveyard[graveyard[0]]
+        return (action.target_player_index, card.name)
     return None
 
 
@@ -75,7 +76,7 @@ def _w2g6_cast(game: Game, action):
     result = game.cast_from_hand(
         0, action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
         x_value=action.x_value,
         optional_cost_payments=action.optional_cost_payments,
@@ -183,9 +184,8 @@ def _w2g6_shields_aimed(_w2g6_pool) -> int:
         if action is None or action.permanent_name != card.name:
             continue
         examined += 1
-        index = action.target_permanent_index
-        assert isinstance(index, int), card.name
-        named = game.permanent_at(action.target_player_index, index)
+        named = action_target(game, action)
+        assert named is not None, card.name
         assert (action.target_player_index, named.card.name) == (1, "Shivan Dragon"), card.name
     return examined
 

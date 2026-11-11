@@ -1169,7 +1169,7 @@ def test_w1g1_the_ai_casts_the_plain_spell_when_it_cannot_spare_the_kick(
     tap_planned_lands(game, 0, action)
     result = game.cast_from_hand(
         0, name, target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
     )
     assert result.supported, result.details

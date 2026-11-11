@@ -185,8 +185,8 @@ def test_wishmonger_protects_the_activators_creature_not_the_owners(pool):
     action = choose_foreign_activation_action(game, 0)
 
     assert action is not None and action.permanent_name == "Wishmonger"
-    assert (action.target_player_index, action.target_permanent_index) == (
-        0, game.battlefield_index_of(placed[0][-1]),
+    assert (action.target_player_index, action.target_permanent_ids) == (
+        0, [placed[0][-1].permanent_id],
     )
 
 

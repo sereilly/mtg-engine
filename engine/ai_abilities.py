@@ -87,7 +87,8 @@ from .ai_rehearsal import deliberating
 from .ai_standing import permanent_worth
 from .subject_filters import subject_matches
 from .ai_weighed_cast import _effect_steps
-from .ai_actions import ActivationAction
+from .ai_actions import ActivationAction, target_keywords
+from .target_keywords import ability_target_zone
 from .ai_text_changes import ability_text_change_mode, ranked_word_choices
 from .ai_scoring import _score_activation
 from .ai_targets import (
@@ -911,7 +912,10 @@ def _activation_candidate(
         target_player_index=target,
         land_tap_indices=land_taps,
         score=score,
-        target_permanent_index=target_permanent_index,
+        **target_keywords(
+            game, ability_target_zone(ability), player_index, target,
+            target_permanent_index,
+        ),
         target_role_refs=target_role_refs,
         land_tap_colors=tap_colors,
         cost_hand_index=madness_discard,

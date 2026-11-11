@@ -41,6 +41,7 @@ from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 from tests.helpers import _nosick
+from tests.helpers import action_slots  # noqa: E402
 
 
 def _pool() -> dict:
@@ -302,9 +303,9 @@ def _untap_census(pool) -> dict:
                     permanent.tapped = True
             game._sync_control()
             action = ai_abilities.choose_activation_action(game, 0)
-            if action is None or action.permanent_index != 0 or action.target_permanent_index is None:
+            if action is None or action.permanent_index != 0 or not action.target_permanent_ids:
                 continue
-            slots = action.target_permanent_index
+            slots = action_slots(game, action)
             for slot in slots if isinstance(slots, list) else [slots]:
                 target = game.permanent_at(action.target_player_index, slot)
                 if target is None or not target.tapped or target is game.players[0].battlefield[0]:

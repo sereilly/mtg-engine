@@ -22,7 +22,7 @@ from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ._targets import resolve_target_permanent
 from .registry import effect_handler
-from ..game_types import single_slot
+from ..target_keywords import ANTE_INDEX
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -81,8 +81,10 @@ def exchange_ante_with_top_library(game: Game, instruction: OracleInstruction, c
     if not caster.library:
         game.log.append(f"{card.name} resolved with no library card to exchange")
         return True, "resolved"
-    chosen = single_slot(context.target_permanent_index)
-    if chosen is None:
+    # The card the cast named by its place in the ante (``target_ante_index``,
+    # carried on the announcement's choices); the first, unnamed.
+    chosen = (context.choices or {}).get(ANTE_INDEX)
+    if not isinstance(chosen, int):
         chosen = 0
     if not (0 <= chosen < len(caster.ante)):
         chosen = 0

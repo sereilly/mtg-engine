@@ -1363,7 +1363,7 @@ def test_w1g2_the_ai_returns_two_opposing_creatures_not_its_own(set_pool):
     assert action.target_player_index == 1
     named = sorted(
         game.permanent_at(game.players[1], slot).card.name
-        for slot in action.target_permanent_index
+        for slot in action_slots(game, action)
     )
     assert named == ["Hill Giant", "Serra Angel"]
 
@@ -2256,6 +2256,7 @@ from engine import Game as _W1G3Game
 from engine import PlayerState as _W1G3PlayerState
 from engine.models import Permanent as _W1G3Permanent
 from tests.helpers import resolve_stack as _w1g3_resolve_stack
+from tests.helpers import action_slots  # noqa: E402
 
 
 def _w1g3_creature_table(set_pool, mine=(), theirs=(), *, hands=(), seats=2):

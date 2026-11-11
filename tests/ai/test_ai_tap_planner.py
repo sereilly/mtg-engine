@@ -43,7 +43,7 @@ def _execute(game, action):
         )
     return game.cast_from_hand(
         0, action.card_name, target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
     )
 
@@ -162,7 +162,7 @@ def _w3g4_cast(game, action):
     _w3g4_tap_planned_lands(game, 0, action)
     return game.cast_from_hand(
         0, action.card_name, target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids, x_value=action.x_value,
     )
 

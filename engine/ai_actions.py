@@ -47,16 +47,16 @@ class CastAction:
     land_tap_indices: tuple[int, ...]
     score: float
     hand_index: int
-    # One chosen permanent, or several for a spell that names "up to N target"
-    # objects. The same shape ``queue_from_hand`` and the stack already speak, so
-    # the executors in web/game_flow.py forward it unchanged.
-    target_permanent_index: int | list[int] | None = None
-    # The same choices as stable ids, when the slots do not all sit on one
-    # battlefield. ``target_permanent_index`` is positional on
-    # ``target_player_index``, so a two-board pick (Rookie Mistake's "target
-    # creature … another target creature") cannot be expressed by it — the gap
-    # round 40 closed on the wire, arriving here through the AI.
-    target_permanent_ids: list[int] | None = None
+    # The chosen permanents, by id (CR 400.7) — one, or several for a spell
+    # that names "up to N target" objects, on one battlefield or two (Rookie
+    # Mistake's "target creature … another target creature"). The keyword
+    # ``queue_from_hand`` takes, so the executors forward it unchanged
+    # (``engine/target_keywords``: each zone its own keyword).
+    target_permanent_ids: list[int | None] | None = None
+    # …and a chosen **card in a graveyard**, by its place in the pile the spell
+    # reads (``target_player_index``'s, or the caster's) — Raise Dead's card,
+    # Coffin Purge's. A card in a graveyard has no id.
+    target_graveyard_indices: list[int] | None = None
     # Which zone ``hand_index`` indexes into, in the vocabulary the cast path
     # already speaks (`_cast_onto_stack`'s `from_zone`). "command" is a
     # commander cast (CR 903.8); "graveyard" / "exile" / "library" a cast an
@@ -179,11 +179,13 @@ class ActivationAction:
     target_player_index: int
     land_tap_indices: tuple[int, ...]
     score: float
-    # The chosen permanent on `target_player_index`'s battlefield, for an
-    # ability that targets one (an equip's creature). None for the abilities
-    # whose handlers pick for themselves, which is every other one this policy
-    # activates today.
-    target_permanent_index: int | None = None
+    # The chosen permanents, by id, for an ability that targets one or several
+    # (an equip's creature); None for an ability naming none, whose bare
+    # announcement the engine answers (``engine/bare_announcements``).
+    target_permanent_ids: list[int | None] | None = None
+    # …and a chosen card in a graveyard, by its place in the pile
+    # (`CastAction.target_graveyard_indices`).
+    target_graveyard_indices: list[int] | None = None
     # One chosen object per **role**, for an ability naming several targets of
     # different kinds (Goblin Welder's artifact and artifact card). The field
     # beside this one cannot carry them: they may sit on two battlefields, or —
@@ -322,8 +324,8 @@ def cast_announcement(action: CastAction) -> dict:
     """
     return {
         "target_player_index": action.target_player_index,
-        "target_permanent_index": action.target_permanent_index,
         "target_permanent_ids": action.target_permanent_ids,
+        "target_graveyard_indices": action.target_graveyard_indices,
         "x_value": action.x_value,
         "from_zone": action.from_zone,
         # CR 118.9. Dropped, the cast falls back to a mana cost the policy has
@@ -376,7 +378,8 @@ def activation_announcement(action: ActivationAction) -> dict:
     return {
         "target_player_index": action.target_player_index,
         "permanent_index": action.permanent_index,
-        "target_permanent_index": action.target_permanent_index,
+        "target_permanent_ids": action.target_permanent_ids,
+        "target_graveyard_indices": action.target_graveyard_indices,
         "target_role_refs": action.target_role_refs,
         "cost_hand_index": action.cost_hand_index,
         "chosen_keyword": action.chosen_keyword,
@@ -402,6 +405,47 @@ def activation_announcement(action: ActivationAction) -> dict:
 ACTIVATION_FIELDS_NOT_ANNOUNCED = frozenset({
     "permanent_name", "land_tap_indices", "land_tap_colors", "score",
 })
+
+
+def target_keywords(
+    game: Game, zone: str, announcer: int, seat, slot, ids=None,
+) -> dict:
+    """A chooser's target — *slot* (one, or a list) on *seat*'s battlefield or
+    in its pile, and the *ids* it already holds — as the zone keywords an
+    action carries (``engine/target_keywords``): ``target_permanent_ids`` for a
+    permanent, ``target_graveyard_indices`` for a card in a graveyard.
+
+    **The one place a chooser's slot becomes an announcement.** The choosers
+    read the picker's entries, which address a permanent by seat and slot; the
+    action names it by id, taken here while the slot and the board agree, so
+    nothing the payment does before the announcement can repoint it. Ids a
+    chooser already holds (a two-board pick) are kept as they are. A slot named
+    beside no seat counts into the board the engine always read it on
+    (``bare_announcements.seat_of_unseated_slot``).
+    """
+    from .bare_announcements import seat_of_unseated_slot
+    from .game_types import target_slots
+    from .target_keywords import ANTE, GRAVEYARD
+
+    if zone == GRAVEYARD:
+        return {"target_graveyard_indices": None if slot is None else target_slots(slot)}
+    if zone == ANTE:
+        # No chooser names a card in the ante (Darkpact's spec offers none),
+        # and an action carries no slot for one: the handler's answer stands.
+        return {}
+    if ids and any(isinstance(pid, int) for pid in ids):
+        return {"target_permanent_ids": list(ids)}
+    if slot is None:
+        return {"target_permanent_ids": None}
+    board = seat
+    if board is None:
+        default = 1 - announcer if len(game.players) == 2 else announcer
+        board = seat_of_unseated_slot(game, announcer, slot, default)
+        board = default if board is None else board
+    named = [game.permanent_at(board, index) for index in target_slots(slot)]
+    return {"target_permanent_ids": [
+        None if permanent is None else permanent.permanent_id for permanent in named
+    ]}
 
 
 def _zone_seat(player_index: int, under: "PermittedCast | None") -> "int | None":

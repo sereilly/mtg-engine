@@ -260,36 +260,22 @@ def _bind_action_slots(game: Game, seat: int, action) -> dict:
     """Every battlefield slot *action* names, as the permanent that is in it
     now — the half of `tap_planned_lands`' re-binding taken before a payment.
 
-    One reader for the three places an action keeps a slot: a cast's or an
-    activation's ``target_permanent_index`` (one slot or several, counted into
-    ``target_player_index``'s battlefield), a divided announcement's
-    ``(seat, slot[, share])`` entries, a several-mode cast's per-mode slot —
-    and an activation's own ``permanent_index``, counted into
-    ``source_controller_index``'s battlefield when it names one. A field the
-    action does not have is simply not bound, so the three action shapes need
-    no arm each.
+    One reader for the two places an action still keeps a slot: a divided
+    announcement's ``(seat, slot[, share])`` entries and an activation's own
+    ``permanent_index``, counted into ``source_controller_index``'s battlefield
+    when it names one. A field the action does not have is simply not bound,
+    so the action shapes need no arm each. **Its targets are not slots**: a
+    permanent rides its id, which no payment renumbers, and a graveyard card
+    its place in a pile no land tap reorders (``engine/target_keywords``) —
+    read as a battlefield slot here, a graveyard target beyond the target
+    seat's board came back None and the cast was defaulted.
     """
     bound: dict = {}
-    target_seat = getattr(action, "target_player_index", None)
-    slots = getattr(action, "target_permanent_index", None)
-    if isinstance(slots, int):
-        bound["target"] = game.permanent_at(target_seat, slots)
-    elif slots:
-        bound["targets"] = [game.permanent_at(target_seat, slot) for slot in slots]
     divided = getattr(action, "divided_targets", None)
     if divided:
         bound["divided"] = [
             game.permanent_at(entry[0], entry[1]) if entry[1] is not None else None
             for entry in divided
-        ]
-    modes = getattr(action, "mode_choices", None)
-    if modes:
-        bound["modes"] = [
-            game.permanent_at(
-                choice.get("target_player_index"), choice.get("target_permanent_index")
-            )
-            if choice.get("target_permanent_index") is not None else None
-            for choice in modes
         ]
     if getattr(action, "permanent_index", None) is not None:
         source_seat = getattr(action, "source_controller_index", None)
@@ -310,26 +296,11 @@ def _rebound_action(game: Game, action, bound: dict):
     else moved rather than a path this policy takes.
     """
     changes: dict = {}
-    if "target" in bound:
-        changes["target_permanent_index"] = game.battlefield_index_of(bound["target"])
-    if "targets" in bound:
-        changes["target_permanent_index"] = [
-            slot for slot in (
-                game.battlefield_index_of(permanent) for permanent in bound["targets"]
-            )
-            if slot is not None
-        ]
     if "divided" in bound:
         changes["divided_targets"] = [
             entry if permanent is None
             else (entry[0], game.battlefield_index_of(permanent), *entry[2:])
             for entry, permanent in zip(action.divided_targets, bound["divided"])
-        ]
-    if "modes" in bound:
-        changes["mode_choices"] = [
-            choice if permanent is None
-            else {**choice, "target_permanent_index": game.battlefield_index_of(permanent)}
-            for choice, permanent in zip(action.mode_choices, bound["modes"])
         ]
     if "source" in bound:
         slot = game.battlefield_index_of(bound["source"])

@@ -502,7 +502,7 @@ def test_every_announcement_a_cast_action_carries_reaches_the_cast():
     first bullet."""
     action = CastAction(
         card_name="Probe", target_player_index=1, x_value=3, land_tap_indices=(),
-        score=1.0, hand_index=0, target_permanent_index=2, target_permanent_ids=[7],
+        score=1.0, hand_index=0, target_permanent_ids=[7], target_graveyard_indices=[2],
         from_zone="command", alternative_cost=True, divided_targets=[(1, None, 3)],
         optional_cost_payments={"{1}{R}": 2}, mode_index=2,
         mode_choices=[{"index": 1}], target_stack_index=3,

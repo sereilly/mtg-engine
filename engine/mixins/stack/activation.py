@@ -46,6 +46,7 @@ from ...game_types import (as_graveyard_stamps, as_target_ids,
 from ...handlers._chosen import CHOSEN_ABILITY
 from ...oracle import OracleInstruction
 from ...refusals import noting, refuse, take_back_refused_attempt
+from ...target_keywords import ability_target_zone, announced_slot
 
 
 class AbilityActivationMixin:
@@ -84,6 +85,10 @@ class AbilityActivationMixin:
         # because "which list does slot 1 come from?" is a question a wire
         # cannot be left to answer.
         target_role_refs: "list[dict] | None" = None,
+        # A card in a graveyard by its place in the pile, a card in the ante by
+        # its place there: each zone's own keyword (``engine/target_keywords``).
+        target_graveyard_indices: "list[int] | None" = None,
+        target_ante_index: int | None = None,
         # "Prevent the next X damage that would be dealt this turn **to any
         # number of targets, divided as you choose**." (Serra's Hymn.) CR
         # 601.2d's announcement, reached through CR 602.2b like every other
@@ -161,6 +166,8 @@ class AbilityActivationMixin:
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
             target_role_refs=target_role_refs,
+            target_graveyard_indices=target_graveyard_indices,
+            target_ante_index=target_ante_index,
             divided_targets=divided_targets,
             target_stack_index=target_stack_index,
             ability_index=ability_index,
@@ -317,6 +324,10 @@ class AbilityActivationMixin:
         # because "which list does slot 1 come from?" is a question a wire
         # cannot be left to answer.
         target_role_refs: "list[dict] | None" = None,
+        # A card in a graveyard by its place in the pile, a card in the ante by
+        # its place there: each zone's own keyword (``engine/target_keywords``).
+        target_graveyard_indices: "list[int] | None" = None,
+        target_ante_index: int | None = None,
         # "Prevent the next X damage that would be dealt this turn **to any
         # number of targets, divided as you choose**." (Serra's Hymn.) CR
         # 601.2d's announcement, reached through CR 602.2b like every other
@@ -390,6 +401,29 @@ class AbilityActivationMixin:
             return source
         controller, permanent, program = source
 
+        # CR 602.2a: which of its abilities — one that functions here (CR 113.6).
+        which = self._chosen_activated_ability(
+            ability_index=ability_index, permanent=permanent, program=program,
+        )
+        if isinstance(which, SimulationResult):
+            return which
+        ability = which
+
+        # CR 601.2c through 602.2b, said in each zone's own keyword
+        # (``engine/target_keywords``) and turned **here**, before anything
+        # below reads a target field, into the slot the gates read beside the
+        # ids — the seat counted into first of all.
+        target_player_index, target_permanent_index, keyword_refusal = announced_slot(
+            self, ability_target_zone(ability), name=permanent.card.name,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=None if target_role_refs else target_permanent_ids,
+            target_graveyard_indices=target_graveyard_indices,
+            target_ante_index=target_ante_index,
+        )
+        if keyword_refusal is not None:
+            return refuse(permanent.card.name, "unsupported", keyword_refusal)
+
         target_idx = target_player_index if target_player_index is not None else (1 - controller_index)
         target_player = self.players[target_idx]
 
@@ -460,14 +494,6 @@ class AbilityActivationMixin:
             permanent_index=source_permanent_index,
             stack_index=source_stack_index,
         )
-
-        # CR 602.2a: which of its abilities — one that functions here (CR 113.6).
-        which = self._chosen_activated_ability(
-            ability_index=ability_index, permanent=permanent, program=program,
-        )
-        if isinstance(which, SimulationResult):
-            return which
-        ability = which
 
         # "{3}, {T} **or** {U}, {T}" (the Mirrodin Shards): CR 601.2b's
         # announcement of which printed cost will be paid, made before targets

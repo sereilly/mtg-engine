@@ -21,6 +21,7 @@ from engine import Game, PlayerState
 from engine.ai_abilities import choose_activation_action
 from engine.models import Permanent
 from tests.helpers import _nosick, resolve_stack
+from tests.helpers import action_target  # noqa: E402
 
 
 def _board(set_pool, *names):
@@ -50,9 +51,7 @@ def test_the_ai_sends_a_courier_bonus_to_another_creature_of_its_type(set_pool):
     game, (courier, seeker) = _board(set_pool, "Pearlspear Courier", "Glory Seeker")
     action = choose_activation_action(game, 0)
     assert action is not None and action.permanent_name == "Pearlspear Courier"
-    target = game.players[action.target_player_index].battlefield[
-        action.target_permanent_index
-    ]
+    target = action_target(game, action)
     assert target is seeker
 
     result = game.activate_permanent_ability(

@@ -444,7 +444,7 @@ def test_the_ai_names_the_opponent_reap_counts_most_on(catalog_by_name):
 
     assert action is not None and action.card_name == "Reap"
     assert action.target_player_index == 2
-    assert len(action.target_permanent_index) == 3
+    assert len(action.target_graveyard_indices) == 3
 
 
 def test_the_ai_names_the_opponent_superior_numbers_counts_least_on(catalog_by_name):

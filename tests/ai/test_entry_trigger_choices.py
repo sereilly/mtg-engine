@@ -128,8 +128,8 @@ def test_a_several_target_return_names_the_opponents_creatures(pool):
     action = _cast_candidate(game, 0, pool["Undo"], 0)
     assert action is not None and action.target_player_index == 1
     named = sorted(
-        game.permanent_at(game.players[1], slot).card.name
-        for slot in action.target_permanent_index
+        game.permanent_by_id(pid).card.name
+        for pid in action.target_permanent_ids
     )
     assert named == ["Craw Wurm", "Serra Angel"]
 

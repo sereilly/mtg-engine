@@ -136,7 +136,7 @@ def play(held, spell, seat: int, *, yards=None):
         seat, activation.permanent_name,
         target_player_index=activation.target_player_index,
         permanent_index=activation.permanent_index,
-        target_permanent_index=activation.target_permanent_index,
+        target_permanent_ids=activation.target_permanent_ids, target_graveyard_indices=activation.target_graveyard_indices,
         target_role_refs=activation.target_role_refs,
     )
     settle(game)
@@ -484,7 +484,7 @@ def test_a_single_target_names_the_flashback_card(set_pool):
         game = rig(ody["Coffin Purge"], seat, yards=yards)
         action = choose_cast_action(game, seat)
         assert action.card_name == "Coffin Purge"
-        assert (action.target_player_index, action.target_permanent_index) == (1 - seat, 1)
+        assert (action.target_player_index, action.target_graveyard_indices) == (1 - seat, [1])
         game = play(ody["Coffin Purge"], ody["Coffin Purge"], seat, yards=yards)
         opponent = game.players[1 - seat]
         assert [card.name for card in opponent.exile] == ["Firebolt"]
@@ -500,7 +500,7 @@ def test_with_no_card_in_another_pile_the_announcement_is_what_it_was(set_pool):
 
     action = choose_cast_action(game, 0)
 
-    assert action is None or action.target_permanent_index is None
+    assert action is None or action.target_graveyard_indices is None
 
 
 def test_an_exile_of_a_graveyard_target_is_recognised_through_wrappers(set_pool):

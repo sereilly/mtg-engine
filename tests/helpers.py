@@ -400,6 +400,31 @@ def stable_part(label: str, parts: int) -> int:
     return stable_digest(label) % parts
 
 
+def action_slots(game, action) -> list:
+    """Where an AI action's targets stand **now**, in the action's order: each
+    permanent id's slot on its controller's battlefield (None for one that has
+    left), or each named graveyard card's place in its pile.
+
+    An action names a permanent by id and a graveyard card by its place
+    (``engine/target_keywords``); a test that asserts *which* object it named
+    by where that object sits reads it here, always as a list.
+    """
+    graveyard = list(getattr(action, "target_graveyard_indices", None) or ())
+    if graveyard:
+        return graveyard
+    slots = []
+    for permanent_id in getattr(action, "target_permanent_ids", None) or ():
+        permanent = game.permanent_by_id(permanent_id) if isinstance(permanent_id, int) else None
+        slots.append(None if permanent is None else game.battlefield_index_of(permanent))
+    return slots
+
+
+def action_target(game, action):
+    """The one permanent an AI action names by id, or None."""
+    ids = [pid for pid in (getattr(action, "target_permanent_ids", None) or ()) if isinstance(pid, int)]
+    return game.permanent_by_id(ids[0]) if len(ids) == 1 else None
+
+
 def _get(all_cards, name: str):
     return next(card for card in all_cards if card.name == name)
 

@@ -30,6 +30,7 @@ from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec
 from tests.helpers import _nosick, resolve_stack
+from tests.helpers import action_slots  # noqa: E402
 
 ME, OPP = 0, 1
 
@@ -80,7 +81,7 @@ def test_aether_burst_returns_an_opponents_creature_not_the_casters(pool):
     action = choose_cast_action(game, ME)
 
     assert action.card_name == "Aether Burst"
-    assert (action.target_player_index, action.target_permanent_index) == (OPP, [0])
+    assert (action.target_player_index, action_slots(game, action)) == (OPP, [0])
     assert _cast(game, action).supported
     assert _creatures(game, ME) == ["Grizzly Bears"]
     assert _creatures(game, OPP) == ["Craw Wurm"]
@@ -97,7 +98,7 @@ def test_the_count_is_the_boards_and_every_slot_lands_on_that_side(pool):
 
     action = choose_cast_action(game, ME)
 
-    assert (action.target_player_index, action.target_permanent_index) == (OPP, [0, 1])
+    assert (action.target_player_index, action_slots(game, action)) == (OPP, [0, 1])
     assert _cast(game, action).supported
     assert _creatures(game, ME) == ["Grizzly Bears"] and _creatures(game, OPP) == []
 
@@ -135,7 +136,7 @@ def test_reap_still_names_cards_in_its_casters_own_graveyard(pool):
         game, ME, {ME: [0, 1, 2]},
         compile_card_oracle(pool["Reap"]).instructions,
     )[ME]
-    assert sorted(action.target_permanent_index) == sorted(ranked[:2])
+    assert sorted(action_slots(game, action)) == sorted(ranked[:2])
     named = sorted(game.players[ME].graveyard[slot].name for slot in ranked[:2])
     assert _cast(game, action).supported
     assert sorted(card.name for card in game.players[ME].hand) == named

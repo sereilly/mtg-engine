@@ -24,6 +24,7 @@ from engine.target_requirements import (must_choose_line, one_slot,
                                         requirements_binding)
 
 from tests.helpers import _mk_card, _nosick, resolve_stack
+from tests.helpers import action_target  # noqa: E402
 
 
 _SENTENCE = (
@@ -231,7 +232,7 @@ def test_an_ai_seat_aims_its_burn_at_the_flagbearer_and_holds_its_pump():
     own, _mine, _theirs = _duel([_BEARS, _bannerman()], [_bannerman()], hand0=[_GROWTH])
     aimed = choose_cast_action(own, 0)
     assert aimed is not None
-    named = own.permanent_at(aimed.target_player_index, aimed.target_permanent_index)
+    named = action_target(own, aimed)
     assert aimed.target_player_index == 0 and named.has_type("flagbearer")
 
 
@@ -251,13 +252,13 @@ def test_an_ai_seat_aims_an_any_target_ability_at_the_flagbearer():
     with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
         action = choose_activation_action(game, 0)
     assert action is not None
-    assert (action.target_player_index, action.target_permanent_index) == (
-        1, game.battlefield_index_of(bearer),
+    assert (action.target_player_index, action.target_permanent_ids) == (
+        1, [bearer.permanent_id],
     )
     assert game.queue_permanent_ability(
         0, action.permanent_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
     ).supported
     resolve_stack(game)
     assert bearer.damage_marked == 1 and game.players[1].life == 20

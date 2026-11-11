@@ -34,6 +34,7 @@ from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
 
 from tests.helpers import _game, _mk_card, _mk_creature_card, _nosick, client
+from tests.helpers import action_target  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -646,12 +647,12 @@ def test_the_ai_equips_its_biggest_creature_and_then_leaves_the_sword_alone(set_
     action = choose_activation_action(game, 0)
     assert action is not None and action.permanent_name == "Short Sword"
     assert action.target_player_index == 0
-    assert p1.battlefield[action.target_permanent_index] is giant
+    assert action_target(game, action) is giant
 
     result = game.activate_permanent_ability(
         0, action.permanent_name, permanent_index=action.permanent_index,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
     )
     assert result.supported and equipped_creature(sword) is giant
     assert choose_activation_action(game, 0) is None

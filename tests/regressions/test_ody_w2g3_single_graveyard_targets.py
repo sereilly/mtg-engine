@@ -494,11 +494,11 @@ def test_an_ai_seat_names_an_opponents_cards_for_the_activation(pool):
     action = choose_activation_action(game, 0)
 
     assert action is not None and action.permanent_name == "Carrion Beetles"
-    assert (action.target_player_index, action.target_permanent_index) == (1, [0, 1, 2])
+    assert (action.target_player_index, action.target_graveyard_indices) == (1, [0, 1, 2])
     assert game.activate_permanent_ability(
         0, action.permanent_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids, target_graveyard_indices=action.target_graveyard_indices,
     ).supported
     resolve_stack(game)
     assert _names(game.players[1].exile) == ["Swamp", "Hill Giant", "Terror"]

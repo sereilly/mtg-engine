@@ -89,7 +89,9 @@ from .ai_actions import (
     _cast_zone,
     _cast_spec,
     _announces_any_offer,
+    target_keywords,
 )
+from .target_keywords import cast_target_zone
 
 # ``ai_targets`` imports this module, so its role chooser is reached late
 # (``engine/late_modules.py``) rather than by an import that would be a cycle.
@@ -170,6 +172,7 @@ def _held_as(player, card: CardDefinition) -> "CardDefinition | None":
 
 
 def _announcement(
+    game,
     card: CardDefinition,
     *,
     target: int,
@@ -203,8 +206,10 @@ def _announcement(
         land_tap_indices=(),
         score=0.0,
         hand_index=0,
-        target_permanent_index=permanent_index,
-        target_permanent_ids=permanent_ids,
+        **target_keywords(
+            game, cast_target_zone(card, mode_index=_announced_mode(card)),
+            caster, target, permanent_index, permanent_ids,
+        ),
         target_stack_index=stack_index,
         target_role_refs=role_refs,
         optional_cost_payments=(
@@ -917,7 +922,7 @@ def _score_spell_target(
         # trigger says otherwise, which the caller has already read.
         return 1.0 if target_index == caster_index else 0.0
     announcement = _announcement(
-        card, target=target_index, caster=caster_index, x_value=x_value,
+        game, card, target=target_index, caster=caster_index, x_value=x_value,
     )
     # **A roles spell is announced with its roles.** "Target player gains
     # control of target permanent you control" (Donate), "…target creature
@@ -939,7 +944,7 @@ def _score_spell_target(
     if roles:
         seat, indices, ids, stack_index, refs = roles
         announcement = _announcement(
-            card, target=seat, caster=caster_index, permanent_index=indices,
+            game, card, target=seat, caster=caster_index, permanent_index=indices,
             permanent_ids=ids, x_value=x_value, stack_index=stack_index,
             role_refs=refs,
         )

@@ -33,6 +33,7 @@ from ...oracle import compile_card_oracle
 from ...stack_targets import names_a_target
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 from .activation_charges import _named_discard_positions
+from ...target_keywords import ability_target_zone, announced_slot
 from ...target_requirements import narrow_offer
 from ...refusals import noting, refuse, take_back_refused_attempt
 
@@ -440,6 +441,9 @@ class CardActivationMixin:
         target_player_index: int | None = None,
         target_permanent_index: int | None = None,
         target_permanent_ids: "list[int | None] | None" = None,
+        # …and a card in a graveyard by its place in the pile, each zone its
+        # own keyword (``engine/target_keywords``).
+        target_graveyard_indices: "list[int] | None" = None,
         # "{1}{B}, **Discard a card**: Return this card from your graveyard to
         # your hand." (Undead Gladiator.) Which cards in hand pay a discard
         # cost, by hand position — the battlefield door's spelling
@@ -528,6 +532,17 @@ class CardActivationMixin:
         # object target it cannot fill is refused with nothing spent, rather
         # than activated to no effect — and on this card "nothing spent" also
         # means the card is not exiled out of the graveyard for free.
+        # The target in its zone's keyword, turned into the slot the gates
+        # read beside the ids, as the permanent door does.
+        target_player_index, target_permanent_index, keyword_refusal = announced_slot(
+            self, ability_target_zone(ability), name=card.name,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
+            target_graveyard_indices=target_graveyard_indices,
+        )
+        if keyword_refusal is not None:
+            return refuse(card.name, "unsupported", keyword_refusal)
         target_refusal = self.activation_target_refusal(
             controller_index, card, ability,
             target_player_index=target_player_index,

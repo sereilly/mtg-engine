@@ -107,7 +107,7 @@ def test_the_proposed_commander_cast_resolves_onto_the_battlefield(set_pool):
         0,
         action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
         x_value=action.x_value,
         from_zone=action.from_zone,

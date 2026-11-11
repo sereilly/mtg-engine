@@ -36,6 +36,7 @@ from engine.grammar import compile_line
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from tests.helpers import _nosick
+from tests.helpers import action_slots  # noqa: E402
 
 
 # --- The keyword round: flash, menace, hexproof(+from), prowess, ------------
@@ -163,7 +164,7 @@ def test_the_ai_names_as_many_targets_as_the_card_allows(set_pool):
     action = choose_cast_action(game, 0)
 
     assert action is not None and action.card_name == "Basri's Acolyte"
-    assert action.target_permanent_index == [0, 1], "two of the three, the maximum"
+    assert action_slots(game, action) == [0, 1], "two of the three, the maximum"
     assert action.target_player_index == 0
 
 

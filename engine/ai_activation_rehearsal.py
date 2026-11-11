@@ -17,7 +17,7 @@ proposal, this one measures it.
 
 from __future__ import annotations
 
-from .ai_actions import ActivationAction, activation_announcement
+from .ai_actions import ActivationAction, activation_announcement, target_keywords
 from .ai_payment import _plan_land_taps, tap_planned_lands
 from .ai_rehearsal import Rehearsal, rehearse
 from .ai_scoring import _leaves_nothing, _worth_proposing
@@ -25,7 +25,8 @@ from .ai_standing import LOST
 from .ai_text_changes import WORTH_FLOOR, ability_text_change_worth
 from .ai_valuation import source_becomes_an_aura
 from .game import Game
-from .game_types import single_slot
+from .game_types import single_chosen_id
+from .target_keywords import BATTLEFIELD
 
 
 def _rehearse_activation(
@@ -76,7 +77,8 @@ def _rehearse_activation(
         key=(
             "activation", seat, action.permanent_name, action.permanent_index,
             action.ability_index, action.target_player_index,
-            repr(action.target_permanent_index), repr(action.target_role_refs),
+            repr(action.target_permanent_ids), repr(action.target_graveyard_indices),
+            repr(action.target_role_refs),
             action.land_tap_indices, action.land_tap_colors,
         ) + (
             ("keyword", action.chosen_keyword) if action.chosen_keyword else ()
@@ -182,9 +184,8 @@ def _with_the_words_aimed(
     index = action.ability_index or 0
     if not 0 <= index < len(usable):
         return rehearsal
-    named = game.permanent_at(action.target_player_index, action.target_permanent_index)
     now, lasting = ability_text_change_worth(
-        game, seat, usable[index].instruction, game.permanent_id_of(named),
+        game, seat, usable[index].instruction, single_chosen_id(action.target_permanent_ids),
         action.old_color, action.new_color,
     )
     if not (now or lasting):
@@ -209,7 +210,10 @@ def _text_change_activation(
     for choice in choices:
         aimed = replace(
             candidate, target_player_index=choice.seat,
-            target_permanent_index=choice.permanent_index,
+            **target_keywords(
+                game, BATTLEFIELD, seat, choice.seat, choice.permanent_index,
+                choice.permanent_ids,
+            ),
             old_color=choice.old_color, new_color=choice.new_color,
         )
         worth = _land_ability_worth(game, seat, aimed)
@@ -479,10 +483,8 @@ def _sacrifice_priced_activation(
 
     from .ai_sacrifice_victims import activation_sacrifice_choices, eats_a_land_it_needs
 
-    slot = single_slot(candidate.target_permanent_index)
-    aimed = (
-        game.permanent_at(candidate.target_player_index, slot) if slot is not None else None
-    )
+    named = single_chosen_id(candidate.target_permanent_ids)
+    aimed = game.permanent_by_id(named) if named is not None else None
     choices = activation_sacrifice_choices(game, seat, permanent, ability, spare=aimed)
     if not choices:
         return None

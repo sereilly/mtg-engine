@@ -154,8 +154,8 @@ def test_pemmins_aura_goes_on_an_opponents_x1_and_its_ability_kills_it():
     action = choose_cast_action(game, 0)
     assert action is not None and action.card_name == "Pemmin's Aura"
     elves = next(p for p in game.controlled_by(game.players[1]) if p.card.name == "Llanowar Elves")
-    assert (action.target_player_index, action.target_permanent_index) == (
-        1, game.battlefield_index_of(elves),
+    assert (action.target_player_index, action.target_permanent_ids) == (
+        1, [elves.permanent_id],
     )
     action = tap_planned_lands(game, 0, action)
     assert game.queue_from_hand(0, "Pemmin's Aura", **cast_announcement(action)).supported

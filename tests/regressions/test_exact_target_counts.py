@@ -40,6 +40,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import cast_target_slot
 from tests.helpers import _mk_card
+from tests.helpers import action_slots  # noqa: E402
 
 
 def _w2g2_count_pool() -> dict:
@@ -198,13 +199,13 @@ def test_w2g2_the_ai_sizes_x_to_the_targets_it_names():
     # Six lands could pay for X=6; two opposing creatures are what there is to
     # tap, so X is two — and it is the opponent's board, not the caster's own.
     assert action.target_player_index == 1, action
-    assert action.target_permanent_index == [0, 1], action
+    assert action_slots(game, action) == [0, 1], action
     assert action.x_value == 2, action
     tap_planned_lands(game, 0, action)
     result = game.cast_from_hand(
         0, action.card_name,
         target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
+        target_graveyard_indices=action.target_graveyard_indices,
         target_permanent_ids=action.target_permanent_ids,
         x_value=action.x_value,
     )
