@@ -696,7 +696,7 @@ class TestAnimateDead:
         game = _game(p1, p2)
 
         result = game.cast_from_hand(
-            0, "Animate Dead", target_player_index=0, target_permanent_index=1
+            0, "Animate Dead", target_player_index=0, target_graveyard_indices=[1]
         )
 
         assert result.supported

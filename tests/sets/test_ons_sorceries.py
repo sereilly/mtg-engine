@@ -1344,7 +1344,7 @@ def test_w2g1_aphetto_dredging_returns_the_named_cards_of_that_type(set_pool):
 
     result = game.cast_from_hand(
         0, "Aphetto Dredging", chosen_creature_type="elf",
-        target_player_index=0, target_permanent_index=[1, 4],
+        target_player_index=0, target_graveyard_indices=[1, 4],
     )
     assert result.supported, result.details
     _w2g1_resolve_stack(game)
@@ -1364,7 +1364,7 @@ def test_w2g1_aphetto_dredging_refuses_a_card_of_another_type(set_pool):
 
     refused = game.cast_from_hand(
         0, "Aphetto Dredging", chosen_creature_type="elf",
-        target_player_index=0, target_permanent_index=[1, 0],
+        target_player_index=0, target_graveyard_indices=[1, 0],
     )
     assert not refused.supported
     assert refused.details == "no valid target for Aphetto Dredging"
@@ -1373,7 +1373,7 @@ def test_w2g1_aphetto_dredging_refuses_a_card_of_another_type(set_pool):
 
     not_a_type = game.cast_from_hand(
         0, "Aphetto Dredging", chosen_creature_type="swamp",
-        target_player_index=0, target_permanent_index=[1],
+        target_player_index=0, target_graveyard_indices=[1],
     )
     assert not not_a_type.supported
     assert "is not a creature type" in not_a_type.details
@@ -1388,7 +1388,7 @@ def test_w2g1_aphetto_dredging_a_card_gone_in_response_is_skipped(set_pool):
 
     assert game.queue_from_hand(
         0, "Aphetto Dredging", chosen_creature_type="elf",
-        target_player_index=0, target_permanent_index=[1, 4],
+        target_player_index=0, target_graveyard_indices=[1, 4],
     ).supported
     assert [item.card.name for item in game.stack] == ["Aphetto Dredging"]
     (elf_a,) = [card for card in alice.graveyard if card.name == "Elf A"]

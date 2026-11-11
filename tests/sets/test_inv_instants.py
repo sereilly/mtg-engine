@@ -1528,7 +1528,7 @@ def _w1g8_dance_table(set_pool, *, in_hand=("Serra Angel",)):
 def _w1g8_dance_cast(game, graveyard_slot: int):
     """Cast Cauldron Dance at *graveyard_slot* and settle everything it asks."""
     result = game.cast_from_hand(
-        0, "Cauldron Dance", target_permanent_index=graveyard_slot,
+        0, "Cauldron Dance", target_graveyard_indices=[graveyard_slot],
     )
     _w1g8_resolve_stack(game)
     game.auto_resolve_pending_choices()
@@ -1546,7 +1546,7 @@ def test_cauldron_dance_is_cast_only_during_combat(set_pool):
     game._set_phase_and_step("precombat_main", "precombat_main")
 
     assert not game.cast_from_hand(
-        0, "Cauldron Dance", target_permanent_index=0,
+        0, "Cauldron Dance", target_graveyard_indices=[0],
     ).supported
     assert dance in game.players[0].hand
     assert [card.name for card in game.players[0].graveyard] == [

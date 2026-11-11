@@ -804,7 +804,7 @@ def test_w1g3_chainer_reanimates_a_black_nightmare_under_your_control(set_pool):
     game, _chainer = _w1g3_chainer(set_pool)
     life = game.players[0].life
     result = game.activate_permanent_ability(
-        0, "Chainer, Dementia Master", target_player_index=1, target_permanent_index=0,
+        0, "Chainer, Dementia Master", target_player_index=1, target_graveyard_indices=[0],
     )
     assert result.supported, game.log[-3:]
     _w1g3_drain(game)
@@ -825,7 +825,7 @@ def test_w1g3_chainer_reanimates_a_black_nightmare_under_your_control(set_pool):
 def test_w1g3_chainer_leaving_exiles_every_nightmare(set_pool):
     game, chainer = _w1g3_chainer(set_pool)
     game.activate_permanent_ability(
-        0, "Chainer, Dementia Master", target_player_index=1, target_permanent_index=0,
+        0, "Chainer, Dementia Master", target_player_index=1, target_graveyard_indices=[0],
     )
     _w1g3_drain(game)
     _w1g3_put(game, set_pool, 1, "Gravegouger")  # a printed Nightmare

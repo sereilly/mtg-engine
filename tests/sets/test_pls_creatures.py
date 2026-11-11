@@ -2508,10 +2508,10 @@ def test_w1g3_lord_of_the_undead_returns_a_zombie_card_and_only_a_zombie(set_poo
     Lord untapped; the Maggot Carrier is, and comes back."""
     game, player, lord = _w1g3_lord_table(set_pool, ["Grizzly Bears", "Maggot Carrier"])
 
-    refused = game.queue_permanent_ability(0, "Lord of the Undead", target_permanent_index=0)
+    refused = game.queue_permanent_ability(0, "Lord of the Undead", target_graveyard_indices=[0])
     assert not refused.supported and not lord.tapped and not game.stack
 
-    result = game.queue_permanent_ability(0, "Lord of the Undead", target_permanent_index=1)
+    result = game.queue_permanent_ability(0, "Lord of the Undead", target_graveyard_indices=[1])
     _w1g3_resolve_stack(game)
 
     assert result.supported and lord.tapped, result.details
@@ -2544,7 +2544,7 @@ def test_w1g3_lord_of_the_undead_returns_no_bystander_when_its_zombie_has_gone(s
     gone, and what is left in the pile is not a Zombie — so nothing comes back.
     It used to return the Grizzly Bears."""
     game, player, _lord = _w1g3_lord_table(set_pool, ["Grizzly Bears", "Maggot Carrier"])
-    game.queue_permanent_ability(0, "Lord of the Undead", target_permanent_index=1)
+    game.queue_permanent_ability(0, "Lord of the Undead", target_graveyard_indices=[1])
 
     player.graveyard.pop(1)
     _w1g3_resolve_stack(game)

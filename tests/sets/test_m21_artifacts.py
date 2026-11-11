@@ -83,7 +83,7 @@ def test_epitaph_golem_bottoms_a_chosen_graveyard_card(set_pool):
     game = Game(players=[p1, PlayerState(name="P2")])
     result = game.activate_permanent_ability(
         0, "Epitaph Golem", ability_index=0,
-        target_player_index=0, target_permanent_index=1,
+        target_player_index=0, target_graveyard_indices=[1],
     )
     assert result.supported, result.details
     assert [c.name for c in p1.graveyard] == ["Shock"]

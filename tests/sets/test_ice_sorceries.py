@@ -1756,7 +1756,7 @@ def test_hymn_of_rebirth_reanimates_out_of_an_opponents_graveyard(set_pool):
     ]
 
     result = game.cast_from_hand(
-        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+        0, "Hymn of Rebirth", target_player_index=1, target_graveyard_indices=[0]
     )
     game._settle()
 
@@ -1787,7 +1787,7 @@ def test_hymn_of_rebirth_offers_both_graveyards_and_takes_the_one_named(set_pool
     ]
 
     result = game.cast_from_hand(
-        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+        0, "Hymn of Rebirth", target_player_index=1, target_graveyard_indices=[0]
     )
     game._settle()
 
@@ -1809,7 +1809,7 @@ def test_hymn_of_rebirth_leaves_the_card_its_owners(set_pool):
     """
     game, p1, p2 = _hymn_board(set_pool, their_graveyard=["Serra Angel"])
     game.cast_from_hand(
-        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+        0, "Hymn of Rebirth", target_player_index=1, target_graveyard_indices=[0]
     )
     game._settle()
     revived = next(p for p in game.controlled_by(p1) if p.card.name == "Serra Angel")
@@ -1835,7 +1835,7 @@ def test_hymn_of_rebirth_still_only_takes_a_creature_card(set_pool):
     ] == []
 
     result = game.cast_from_hand(
-        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+        0, "Hymn of Rebirth", target_player_index=1, target_graveyard_indices=[0]
     )
 
     assert not result.supported

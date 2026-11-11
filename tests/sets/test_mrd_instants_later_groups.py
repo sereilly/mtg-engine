@@ -606,7 +606,7 @@ def test_w2g7_second_sunrise_tells_two_copies_of_one_card_apart(set_pool):
     assert [c.name for c in pile] == ["Grizzly Bears", "Lightning Bolt", "Grizzly Bears"]
     assert pile[0] is not pile[2]
     assert game.queue_from_hand(
-        0, "Raise Dead", target_permanent_index=2, target_player_index=0,
+        0, "Raise Dead", target_graveyard_indices=[2], target_player_index=0,
     ).supported
     _w2g7_resolve_stack(game)
     assert game.queue_from_hand(0, "Second Sunrise").supported

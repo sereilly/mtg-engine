@@ -125,7 +125,7 @@ def test_the_chosen_cards_go_on_top_in_the_order_they_were_named(set_pool):
 
     result = game.cast_from_hand(
         0, "Drafna's Restoration",
-        target_player_index=1, target_permanent_index=[2, 0],
+        target_player_index=1, target_graveyard_indices=[2, 0],
     )
 
     assert result.supported, result.details
@@ -143,7 +143,7 @@ def test_a_nonartifact_slot_is_an_illegal_announcement(set_pool):
 
     result = game.cast_from_hand(
         0, "Drafna's Restoration",
-        target_player_index=1, target_permanent_index=[1, 0],
+        target_player_index=1, target_graveyard_indices=[1, 0],
     )
 
     assert not result.supported
@@ -160,7 +160,7 @@ def test_a_slot_whose_card_left_in_response_is_dropped_rather_than_moved(set_poo
     game, pool, p1, p2 = _drafna(set_pool)
     game.queue_from_hand(
         0, "Drafna's Restoration",
-        target_player_index=1, target_permanent_index=[2, 0],
+        target_player_index=1, target_graveyard_indices=[2, 0],
     )
 
     p2.graveyard.pop(2)  # the Su-Chi is exiled in response
@@ -179,7 +179,7 @@ def test_it_reads_the_targets_graveyard_not_the_casters(set_pool):
 
     game.cast_from_hand(
         0, "Drafna's Restoration",
-        target_player_index=1, target_permanent_index=[0],
+        target_player_index=1, target_graveyard_indices=[0],
     )
 
     # The spell itself lands in the caster's graveyard on resolution; the Su-Chi

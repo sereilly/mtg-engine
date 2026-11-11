@@ -858,7 +858,7 @@ def test_w2g2_victimize_returns_both_announced_cards_tapped(set_pool):
     assert spec["own_graveyard_only"] and spec["max_targets"] == 2
     assert spec["exact_targets"], "'two target' is a number, not a ceiling"
 
-    game.cast_from_hand(0, "Victimize", target_permanent_index=[0, 1])
+    game.cast_from_hand(0, "Victimize", target_graveyard_indices=[0, 1])
     resolve_stack(game)
 
     back = sorted(p.card.name for p in game.controlled_by(0))
@@ -878,7 +878,7 @@ def test_w2g2_victimize_returns_nothing_with_no_creature_to_sacrifice(set_pool):
     game, alice, _ = _g2s_cast(set_pool, "Victimize")
     alice.graveyard = [pool["Serra Zealot"], pool["Shivan Hellkite"]]
 
-    game.cast_from_hand(0, "Victimize", target_permanent_index=[0, 1])
+    game.cast_from_hand(0, "Victimize", target_graveyard_indices=[0, 1])
     resolve_stack(game)
 
     assert not list(game.controlled_by(0))

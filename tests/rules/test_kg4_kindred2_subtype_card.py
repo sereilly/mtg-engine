@@ -237,10 +237,10 @@ def test_lord_of_the_undead_offers_and_returns_a_kindred_zombie_card():
         "Scathe Zombies", "Test Zombie Trick",
     ], spec
 
-    refused = game.queue_permanent_ability(0, "Lord of the Undead", target_permanent_index=0)
+    refused = game.queue_permanent_ability(0, "Lord of the Undead", target_graveyard_indices=[0])
     assert not refused.supported and not lord.tapped
     assert game.queue_permanent_ability(
-        0, "Lord of the Undead", target_permanent_index=1,
+        0, "Lord of the Undead", target_graveyard_indices=[1],
     ).supported
     resolve_stack(game)
     assert _names(game.players[0].hand) == ["Test Zombie Trick"], game.log[-4:]
@@ -294,11 +294,11 @@ def test_unholy_grotto_puts_a_kindred_zombie_card_on_top():
     game = _duel(mine=[_POOL["Unholy Grotto"]],
                  graveyard=[_POOL["Grizzly Bears"], ZOMBIE_TRICK])
     refused = game.queue_permanent_ability(
-        0, "Unholy Grotto", ability_index=1, target_permanent_index=0,
+        0, "Unholy Grotto", ability_index=1, target_graveyard_indices=[0],
     )
     assert not refused.supported
     assert game.queue_permanent_ability(
-        0, "Unholy Grotto", ability_index=1, target_permanent_index=1,
+        0, "Unholy Grotto", ability_index=1, target_graveyard_indices=[1],
     ).supported
     resolve_stack(game)
     assert game.players[0].library[0] is ZOMBIE_TRICK, game.log[-4:]
@@ -312,7 +312,7 @@ def test_lin_sivvi_bottoms_a_kindred_rebel_card():
     game = _duel(mine=[_POOL["Lin Sivvi, Defiant Hero"]],
                  graveyard=[_POOL["Grizzly Bears"], REBEL_TRICK])
     assert game.queue_permanent_ability(
-        0, "Lin Sivvi, Defiant Hero", ability_index=1, target_permanent_index=1,
+        0, "Lin Sivvi, Defiant Hero", ability_index=1, target_graveyard_indices=[1],
     ).supported
     resolve_stack(game)
     assert game.players[0].library[-1] is REBEL_TRICK, game.log[-4:]

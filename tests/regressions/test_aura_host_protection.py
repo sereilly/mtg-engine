@@ -112,7 +112,7 @@ def test_hakim_leaves_an_aura_he_is_protected_from_in_the_graveyard(by_name):
 
     result = game.activate_permanent_ability(
         0, "Hakim, Loreweaver", permanent_index=game.battlefield_index_of(hakim),
-        ability_index=0, target_permanent_index=0,
+        ability_index=0, target_graveyard_indices=[0],
     )
     assert result.supported, result.details
     resolve_stack(game)

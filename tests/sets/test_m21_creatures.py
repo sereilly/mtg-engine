@@ -2224,7 +2224,7 @@ def _ooze_board(set_pool, graveyard_card, *, opponent=True):
 def _activate(game, holder_seat):
     return game.activate_permanent_ability(
         0, "Scavenging Ooze", permanent_index=0,
-        target_player_index=holder_seat, target_permanent_index=0,
+        target_player_index=holder_seat, target_graveyard_indices=[0],
     )
 
 

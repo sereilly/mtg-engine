@@ -51,7 +51,7 @@ def test_401_4_the_owner_arranges_the_cards_put_on_top(set_pool):
     me.graveyard = [_creature("First"), _creature("Second"), _creature("Third")]
 
     assert game.queue_from_hand(
-        0, "Reinforcements", target_player_index=0, target_permanent_index=[0, 1, 2],
+        0, "Reinforcements", target_player_index=0, target_graveyard_indices=[0, 1, 2],
     ).supported
     resolve_stack(game)
 
@@ -87,7 +87,7 @@ def test_401_4_it_is_the_library_s_owner_who_is_asked_not_the_one_who_named_them
     ]
 
     assert game.activate_permanent_ability(
-        0, "Lodestone Bauble", target_player_index=1, target_permanent_index=[0, 1],
+        0, "Lodestone Bauble", target_player_index=1, target_graveyard_indices=[0, 1],
     ).supported
 
     (order,) = game.pending_choices_of("reorder_library")
@@ -106,7 +106,7 @@ def test_401_4_a_seat_nobody_asks_keeps_the_order_they_were_named_in(set_pool):
     me.graveyard = [_creature("First"), _creature("Second"), _creature("Third")]
 
     assert game.queue_from_hand(
-        0, "Reinforcements", target_player_index=0, target_permanent_index=[2, 0],
+        0, "Reinforcements", target_player_index=0, target_graveyard_indices=[2, 0],
     ).supported
     resolve_stack(game)
 

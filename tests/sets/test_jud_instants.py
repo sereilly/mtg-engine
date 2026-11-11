@@ -397,7 +397,7 @@ def test_w1g3_funeral_pyre_gives_the_spirit_to_the_exiled_cards_owner(set_pool):
     assert offered == {(0, "Swamp"), (1, "Grizzly Bears"), (1, "Terror")}
 
     assert game.queue_from_hand(
-        0, "Funeral Pyre", target_player_index=1, target_permanent_index=1,
+        0, "Funeral Pyre", target_player_index=1, target_graveyard_indices=[1],
     ).supported
     _w1g3_resolve(game)
 
@@ -414,7 +414,7 @@ def test_w1g3_funeral_pyre_gives_the_spirit_to_the_exiled_cards_owner(set_pool):
 def test_w1g3_funeral_pyre_on_its_casters_own_card_gives_the_caster_the_spirit(set_pool):
     game = _w1g3_pyre_game(set_pool, mine=("Swamp",), theirs=("Grizzly Bears",))
     assert game.queue_from_hand(
-        0, "Funeral Pyre", target_player_index=0, target_permanent_index=0,
+        0, "Funeral Pyre", target_player_index=0, target_graveyard_indices=[0],
     ).supported
     _w1g3_resolve(game)
 
@@ -428,7 +428,7 @@ def test_w1g3_funeral_pyre_whose_card_left_in_response_makes_no_spirit(set_pool)
     is no exiled card, and no owner to hand a token to."""
     game = _w1g3_pyre_game(set_pool, theirs=("Grizzly Bears", "Terror"))
     assert game.queue_from_hand(
-        0, "Funeral Pyre", target_player_index=1, target_permanent_index=0,
+        0, "Funeral Pyre", target_player_index=1, target_graveyard_indices=[0],
     ).supported
     victim = game.players[1]
     victim.exile.append(victim.graveyard.pop(0))          # the Bears, in response

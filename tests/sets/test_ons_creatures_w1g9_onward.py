@@ -1445,7 +1445,7 @@ def test_w2g6_gravespawn_sovereign_reanimates_from_either_graveyard(set_pool, ca
         (0, "Hill Giant"), (1, "Serra Angel"),
     ]
     assert game.activate_permanent_ability(
-        0, "Gravespawn Sovereign", target_player_index=1, target_permanent_index=0,
+        0, "Gravespawn Sovereign", target_player_index=1, target_graveyard_indices=[0],
     ).supported
     assert all(perm.tapped for perm in tribe)
     _w2g6_resolve_stack(game)
@@ -1461,13 +1461,13 @@ def test_w2g6_gravespawn_sovereign_refuses_a_noncreature_card_and_four_zombies(
     way."""
     game, tribe = _w2g6_sovereign_table(set_pool, catalog_by_name)
     assert not game.activate_permanent_ability(
-        0, "Gravespawn Sovereign", target_player_index=1, target_permanent_index=2,
+        0, "Gravespawn Sovereign", target_player_index=1, target_graveyard_indices=[2],
     ).supported
     assert not any(perm.tapped for perm in tribe)
 
     game, tribe = _w2g6_sovereign_table(set_pool, catalog_by_name, zombies=3)
     assert not game.activate_permanent_ability(
-        0, "Gravespawn Sovereign", target_player_index=1, target_permanent_index=0,
+        0, "Gravespawn Sovereign", target_player_index=1, target_graveyard_indices=[0],
     ).supported
     assert not any(perm.tapped for perm in tribe)
     assert game.stack == []

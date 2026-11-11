@@ -113,7 +113,7 @@ def _victimize(game: Game, first: bool):
     game.players[0].graveyard = [_CARDS[n] for n in _ordered(first, "Grizzly Bears")]
     game.players[0].hand = [_CARDS["Victimize"]]
     before = _life(game)
-    assert game.cast_from_hand(0, "Victimize", target_permanent_index=[0, 1]).supported
+    assert game.cast_from_hand(0, "Victimize", target_graveyard_indices=[0, 1]).supported
     settle(game)
     gained = [now - then for now, then in zip(_life(game), before)]
     return gained[0], 1, gained[1], 2

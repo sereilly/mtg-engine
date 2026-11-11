@@ -368,10 +368,10 @@ def test_the_seal_arriving_in_response_fizzles_what_was_already_aimed(by_name):
     _nosick(adun)
 
     assert game.queue_from_hand(
-        0, "Raise Dead", target_player_index=0, target_permanent_index=1,
+        0, "Raise Dead", target_player_index=0, target_graveyard_indices=[1],
     ).supported
     assert game.queue_permanent_ability(
-        0, "Adun Oakenshield", target_player_index=0, target_permanent_index=0,
+        0, "Adun Oakenshield", target_player_index=0, target_graveyard_indices=[0],
     ).supported
     game._put_permanent_onto_battlefield(1, Permanent(card=by_name["Ground Seal"]), None)
     resolve_stack(game)

@@ -1499,7 +1499,7 @@ def test_w1g4_urborg_uprising_returns_two_creature_cards_and_draws(set_pool):
     ]
 
     cast = game.cast_from_hand(
-        0, "Urborg Uprising", target_player_index=0, target_permanent_index=[0, 3],
+        0, "Urborg Uprising", target_player_index=0, target_graveyard_indices=[0, 3],
     )
     assert cast.supported, cast.details
     _w1g4s_resolve_stack(game)
@@ -1517,7 +1517,7 @@ def test_w1g4_urborg_uprising_refuses_what_its_target_phrase_does_not_name(set_p
     for seat, indices in ((0, [1]), (0, [0, 0]), (0, [0, 2, 3]), (1, [0])):
         refused = game.cast_from_hand(
             0, "Urborg Uprising", target_player_index=seat,
-            target_permanent_index=indices,
+            target_graveyard_indices=indices,
         )
         assert not refused.supported, (seat, indices)
     assert _w1g4s_names(game.players[0].hand) == ["Urborg Uprising"]
@@ -1545,7 +1545,7 @@ def test_w1g4_urborg_uprising_follows_its_targets_and_fizzles_without_them(set_p
     removed from the stack and draws nothing."""
     game, _, _ = _w1g4s_uprising(set_pool)
     assert game.queue_from_hand(
-        0, "Urborg Uprising", target_player_index=0, target_permanent_index=[0, 3],
+        0, "Urborg Uprising", target_player_index=0, target_graveyard_indices=[0, 3],
     ).supported
     game.players[0].exile.append(game.players[0].graveyard.pop(0))
     _w1g4s_resolve_stack(game)
@@ -1554,7 +1554,7 @@ def test_w1g4_urborg_uprising_follows_its_targets_and_fizzles_without_them(set_p
 
     game, _, _ = _w1g4s_uprising(set_pool)
     assert game.queue_from_hand(
-        0, "Urborg Uprising", target_player_index=0, target_permanent_index=[2],
+        0, "Urborg Uprising", target_player_index=0, target_graveyard_indices=[2],
     ).supported
     game.players[0].exile.append(game.players[0].graveyard.pop(2))
     _w1g4s_resolve_stack(game)
@@ -1703,7 +1703,7 @@ def test_death_returns_a_creature_card_and_charges_its_mana_value_in_life(set_po
     assert game.players[0].hand == [card]
 
     assert game.cast_from_hand(
-        0, "Death", target_player_index=0, target_permanent_index=1
+        0, "Death", target_player_index=0, target_graveyard_indices=[1]
     ).supported
     wurm = next(iter(game.controlled_by(0)))
     assert wurm.card.name == "Craw Wurm"

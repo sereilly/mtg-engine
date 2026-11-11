@@ -133,7 +133,7 @@ def test_a_graveyard_spell_carries_its_card_as_a_stamp_and_returns_it(cards):
     leaves in response, and the Giant — now in slot 0 — is what comes back."""
     game = _table(cards, ["Raise Dead"], ["Grizzly Bears", "Hill Giant"])
     assert game.queue_from_hand(
-        0, "Raise Dead", target_player_index=0, target_permanent_index=1,
+        0, "Raise Dead", target_player_index=0, target_graveyard_indices=[1],
     ).supported
     item = game.stack[-1]
     assert item.target_permanent_index is None
@@ -148,7 +148,7 @@ def test_an_aura_reanimates_the_card_it_stamped(cards):
     it names is read off the stamp as the Aura's entry runs, not off a slot."""
     game = _table(cards, ["Animate Dead"], ["Grizzly Bears", "Hill Giant"])
     assert game.queue_from_hand(
-        0, "Animate Dead", target_player_index=0, target_permanent_index=1,
+        0, "Animate Dead", target_player_index=0, target_graveyard_indices=[1],
     ).supported
     item = game.stack[-1]
     assert item.target_permanent_index is None
@@ -167,7 +167,7 @@ def test_an_entry_trigger_returns_the_card_it_stamped(cards):
     game = _table(cards, ["Gravedigger"], ["Grizzly Bears", "Hill Giant"])
     game.interactive_seats = {0}
     assert game.queue_from_hand(
-        0, "Gravedigger", target_player_index=0, target_permanent_index=1,
+        0, "Gravedigger", target_player_index=0, target_graveyard_indices=[1],
     ).supported
     game.resolve_top_of_stack()
     trigger = next(

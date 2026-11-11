@@ -139,7 +139,7 @@ def test_cabal_surgeon_returns_the_creature_it_targeted(set_pool):
     permanent.metadata["summoning_sickness_turn"] = -99
 
     game.activate_permanent_ability(
-        0, "Cabal Surgeon", target_player_index=0, target_permanent_index=3,
+        0, "Cabal Surgeon", target_player_index=0, target_graveyard_indices=[3],
         cost_graveyard_indices=[0, 1],
     )
     resolve_stack(game)
@@ -167,7 +167,7 @@ def test_a_cost_that_eats_the_target_leaves_the_ability_nothing_to_return(set_po
     permanent.metadata["summoning_sickness_turn"] = -99
 
     game.activate_permanent_ability(
-        0, "Cabal Surgeon", target_player_index=0, target_permanent_index=0,
+        0, "Cabal Surgeon", target_player_index=0, target_graveyard_indices=[0],
         cost_graveyard_indices=[0, 1],
     )
     resolve_stack(game)
@@ -194,7 +194,7 @@ def test_the_default_payment_spares_the_target(set_pool):
     permanent.metadata["summoning_sickness_turn"] = -99
 
     game.activate_permanent_ability(
-        0, "Cabal Surgeon", target_player_index=0, target_permanent_index=0,
+        0, "Cabal Surgeon", target_player_index=0, target_graveyard_indices=[0],
     )
     resolve_stack(game)
 

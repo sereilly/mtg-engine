@@ -235,7 +235,7 @@ def test_w1g3_the_mark_is_on_the_announcement_and_not_on_the_resolution():
     offered = game.cast_target_spec(0, regrowth, from_zone="graveyard")["valid_targets"]
     assert [(t["seat"], t["index"]) for t in offered] == [(0, 1)]
     assert game.cast_from_hand(
-        0, "Regrowth", from_zone="graveyard", target_player_index=0, target_permanent_index=1,
+        0, "Regrowth", from_zone="graveyard", target_player_index=0, target_graveyard_indices=[1],
     ).supported
     # The copy it named came back to hand; the one that was cast is in the
     # graveyard again (an ordinary permission, not a flashback).

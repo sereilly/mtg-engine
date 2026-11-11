@@ -128,7 +128,7 @@ def test_rapid_decay_exiles_cards_of_any_type_from_one_pile(set_pool, _g2i_lea):
     offered = game.cast_target_spec(0, set_pool("UDS")["Rapid Decay"])["valid_targets"]
     assert [(t["seat"], t["index"]) for t in offered] == [(1, 0), (1, 1), (1, 2), (1, 3)]
     assert game.queue_from_hand(
-        0, "Rapid Decay", target_player_index=1, target_permanent_index=[0, 1, 2],
+        0, "Rapid Decay", target_player_index=1, target_graveyard_indices=[0, 1, 2],
     ).details == "queued"
     resolve_stack(game)
     victim = game.players[1]
@@ -152,7 +152,7 @@ def test_rapid_decay_still_reads_a_graveyard_with_no_creature_in_it(set_pool, _g
         ),
     )
     assert game.queue_from_hand(
-        0, "Rapid Decay", target_player_index=1, target_permanent_index=[0, 1],
+        0, "Rapid Decay", target_player_index=1, target_graveyard_indices=[0, 1],
     ).details == "queued"
     resolve_stack(game)
     assert sorted(c.name for c in game.players[1].exile) == ["Island", "Mountain"]

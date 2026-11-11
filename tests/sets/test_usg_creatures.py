@@ -425,7 +425,7 @@ def test_w1g5_carrion_beetles_exiles_three_cards_from_one_graveyard(set_pool):
     assert spec["single_graveyard"] and spec["max_targets"] == 3
     assert len(spec["valid_targets"]) == 4
     assert game.activate_permanent_ability(
-        0, "Carrion Beetles", target_player_index=1, target_permanent_index=[0, 1, 3],
+        0, "Carrion Beetles", target_player_index=1, target_graveyard_indices=[0, 1, 3],
     ).supported
     resolve_stack(game)
 

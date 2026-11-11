@@ -420,7 +420,7 @@ def test_a_flashed_back_spell_holds_its_slots_through_leaving_the_pile(pool, own
     caster.graveyard[:] = [pool[name] for name in yard]
     game.interactive_seats = set()
     assert game.cast_from_hand(
-        0, "Recoup", target_player_index=0, target_permanent_index=own_slot,
+        0, "Recoup", target_player_index=0, target_graveyard_indices=[own_slot],
     ).supported
     resolve_stack(game)
 
@@ -431,7 +431,7 @@ def test_a_flashed_back_spell_holds_its_slots_through_leaving_the_pile(pool, own
     named = [target for target in mine if target["name"] in ("Grizzly Bears", "Forest")]
     assert game.queue_from_hand(
         0, "Decompose", from_zone="graveyard", target_player_index=0,
-        target_permanent_index=[target["index"] for target in named],
+        target_graveyard_indices=[target["index"] for target in named],
     ).supported
     assert _names(
         target.stamp.card for target in chosen_targets(game, game.stack[-1])

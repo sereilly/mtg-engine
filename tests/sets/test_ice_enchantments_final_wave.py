@@ -68,7 +68,7 @@ def _dreams_board(set_pool, *graveyard_names):
 def _reanimate(game, graveyard_index=0):
     game.players[0].mana_pool = {"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 1}
     game.activate_permanent_ability(
-        0, "Dreams of the Dead", target_permanent_index=graveyard_index
+        0, "Dreams of the Dead", target_graveyard_indices=[graveyard_index]
     )
     resolve_stack(game)
     game._settle()

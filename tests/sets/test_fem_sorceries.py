@@ -108,7 +108,7 @@ def test_soul_exchange_returns_a_creature_and_pays_with_one(set_pool):
         [homarid], [pool["Soul Exchange"]], graveyard=[lea["Grizzly Bears"]]
     )
 
-    result = game.cast_from_hand(0, "Soul Exchange", target_permanent_index=0)
+    result = game.cast_from_hand(0, "Soul Exchange", target_graveyard_indices=[0])
     game._settle()
 
     assert result.supported, result.details
@@ -151,7 +151,7 @@ def test_soul_exchange_counters_the_returned_creature_only_for_a_thrull(set_pool
             [payment], [pool["Soul Exchange"]], graveyard=[lea["Grizzly Bears"]]
         )
         assert game.cast_from_hand(
-            0, "Soul Exchange", target_permanent_index=0
+            0, "Soul Exchange", target_graveyard_indices=[0]
         ).supported
         game._settle()
         bears = next(

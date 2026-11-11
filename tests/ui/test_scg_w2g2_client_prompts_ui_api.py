@@ -159,7 +159,7 @@ def test_a_storm_copy_aimed_at_a_graveyard_card_is_asked_by_number():
         graveyard=["Grizzly Bears", "Craw Wurm", "Hill Giant"],
     )
     _cast_rituals(session_id, game, 2)
-    assert game.queue_from_hand(0, "Reaping the Graves", target_permanent_index=0).supported
+    assert game.queue_from_hand(0, "Reaping the Graves", target_graveyard_indices=[0]).supported
     _resolve_top(session_id)
     prompt = _state(session_id, 0)["retarget_choice"]
     assert prompt["prompt"].startswith(

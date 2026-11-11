@@ -349,7 +349,7 @@ def test_w1g1_reaping_the_graves_copies_each_return_another_card(set_pool, befor
         graveyard=pile, interactive=[0],
     )
     _w1g1_cast_fillers(game, 0, before)
-    assert game.queue_from_hand(0, "Reaping the Graves", target_permanent_index=0).supported
+    assert game.queue_from_hand(0, "Reaping the Graves", target_graveyard_indices=[0]).supported
     assert game.resolve_top_of_stack()
     for _ in range(before):
         owed = game.pending_choice_of("retarget_choice")
@@ -384,7 +384,7 @@ def test_w1g1_reaping_the_graves_copies_are_aimed_for_a_default_seat(set_pool):
         graveyard=["Grizzly Bears", "Craw Wurm"],
     )
     _w1g1_cast_fillers(game, 0, 1)
-    assert game.queue_from_hand(0, "Reaping the Graves", target_permanent_index=0).supported
+    assert game.queue_from_hand(0, "Reaping the Graves", target_graveyard_indices=[0]).supported
     _w1g1_resolve_stack(game)
     assert sorted(card.name for card in game.players[0].hand) == ["Craw Wurm", "Grizzly Bears"]
     assert not any("every target is illegal" in line for line in game.log)
@@ -399,7 +399,7 @@ def test_w1g1_a_copys_graveyard_offer_taken_by_default_keeps_the_target(set_pool
         graveyard=["Grizzly Bears", "Craw Wurm"], interactive=[0],
     )
     _w1g1_cast_fillers(game, 0, 1)
-    assert game.queue_from_hand(0, "Reaping the Graves", target_permanent_index=0).supported
+    assert game.queue_from_hand(0, "Reaping the Graves", target_graveyard_indices=[0]).supported
     assert game.resolve_top_of_stack()
     owed = game.pending_choice_of("retarget_choice")
     assert owed is not None

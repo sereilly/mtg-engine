@@ -76,7 +76,7 @@ def test_a_cast_naming_one_card_is_asked_again_for_two(set_pool):
     game = _table(set_pool, ["Wrath of God", "Fireball", "Stone Rain"], [], interactive={0})
 
     assert game.queue_from_hand(
-        0, "Spellweaver Helix", target_player_index=0, target_permanent_index=0,
+        0, "Spellweaver Helix", target_player_index=0, target_graveyard_indices=[0],
     ).supported
     game.resolve_top_of_stack()
 
@@ -94,7 +94,7 @@ def test_a_cast_naming_one_card_at_an_unasked_seat_takes_two(set_pool):
     game = _table(set_pool, ["Wrath of God", "Fireball"], [])
 
     assert game.queue_from_hand(
-        0, "Spellweaver Helix", target_player_index=0, target_permanent_index=0,
+        0, "Spellweaver Helix", target_player_index=0, target_graveyard_indices=[0],
     ).supported
     settle(game)
 
@@ -106,7 +106,7 @@ def test_a_cast_naming_two_cards_stands(set_pool):
     game = _table(set_pool, ["Wrath of God", "Fireball", "Stone Rain"], [], interactive={0})
 
     assert game.queue_from_hand(
-        0, "Spellweaver Helix", target_player_index=0, target_permanent_index=[0, 2],
+        0, "Spellweaver Helix", target_player_index=0, target_graveyard_indices=[0, 2],
     ).supported
     game.resolve_top_of_stack()
     assert not game.pending_choices_of("trigger_target")

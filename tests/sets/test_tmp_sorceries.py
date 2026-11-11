@@ -222,7 +222,7 @@ def test_w2g5_reanimate_costs_its_target_s_mana_value_in_life(set_pool):
     game.enforce_mana_costs = False
 
     result = game.cast_from_hand(
-        0, "Reanimate", target_player_index=0, target_permanent_index=0,
+        0, "Reanimate", target_player_index=0, target_graveyard_indices=[0],
     )
     game.resolve_stack()
 
@@ -244,7 +244,7 @@ def test_w2g5_reanimate_reads_a_graveyard_that_is_not_the_casters(set_pool):
     game.enforce_mana_costs = False
 
     game.cast_from_hand(
-        0, "Reanimate", target_player_index=1, target_permanent_index=0,
+        0, "Reanimate", target_player_index=1, target_graveyard_indices=[0],
     )
     game.resolve_stack()
 

@@ -78,7 +78,7 @@ def _bolt_then_raise_the_newest(game, bears):
     newest = max(i for i, card in enumerate(pile) if card.name == "Grizzly Bears")
     assert pile[newest] is not pile[0], "the copy that died is its own object"
     assert game.queue_from_hand(
-        0, "Raise Dead", target_permanent_index=newest, target_player_index=0,
+        0, "Raise Dead", target_graveyard_indices=[newest], target_player_index=0,
     ).supported
     resolve_stack(game)
     assert _names(game.players[0].graveyard) == [
@@ -135,7 +135,7 @@ def test_recoup_gives_flashback_to_the_copy_it_targets(pool):
     pile = game.players[0].graveyard
     assert pile[0] is not pile[1]
     assert game.queue_from_hand(
-        0, "Recoup", target_permanent_index=1, target_player_index=0,
+        0, "Recoup", target_graveyard_indices=[1], target_player_index=0,
     ).supported
     resolve_stack(game)
     granted = [p.spell for p in permitted_casts(game, 0) if p.spell.name == "Stone Rain"]

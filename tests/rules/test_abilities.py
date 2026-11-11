@@ -848,7 +848,7 @@ def test_607_linked_abilities_act_on_the_object_they_affected(all_cards):
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Animate Dead", target_player_index=0, target_permanent_index=0)
+    result = game.cast_from_hand(0, "Animate Dead", target_player_index=0, target_graveyard_indices=[0])
 
     assert result.supported
     battlefield_names = [perm.card.name for perm in p1.battlefield]
@@ -1493,7 +1493,7 @@ def test_205_2b_an_artifact_creature_card_answers_a_phrase_naming_either_type(
     game = Game(players=[p1, PlayerState(name="P2", library=[lea["Island"]] * 5)])
     game.enforce_mana_costs = False
     game.start_turn(0)
-    game.cast_from_hand(0, "Argivian Restoration", target_permanent_index=0)
+    game.cast_from_hand(0, "Argivian Restoration", target_graveyard_indices=[0])
     game.resolve_stack()
 
     assert [p.card.name for p in p1.battlefield] == ["Clay Statue"], game.log

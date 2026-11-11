@@ -167,7 +167,7 @@ class TestResurrectionGraveyardOwnership:
         game = _game(p1, p2)
 
         result = game.cast_from_hand(
-            0, "Resurrection", target_player_index=1, target_permanent_index=0
+            0, "Resurrection", target_player_index=1, target_graveyard_indices=[0]
         )
 
         assert not result.supported
@@ -181,7 +181,7 @@ class TestResurrectionGraveyardOwnership:
         game = _game(p1, p2)
 
         result = game.cast_from_hand(
-            0, "Resurrection", target_player_index=0, target_permanent_index=0
+            0, "Resurrection", target_player_index=0, target_graveyard_indices=[0]
         )
         game.resolve_stack()
 

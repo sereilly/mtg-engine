@@ -383,7 +383,7 @@ def test_grave_robbers_exiles_an_artifact_card_and_gains_two_life(set_pool):
 
     result = game.activate_permanent_ability(
         0, "Grave Robbers", permanent_index=0,
-        target_player_index=0, target_permanent_index=0,
+        target_player_index=0, target_graveyard_indices=[0],
     )
 
     assert result.supported, result.details
@@ -418,7 +418,7 @@ def test_eater_of_the_dead_untaps_itself_by_eating_a_corpse(set_pool):
 
     result = game.activate_permanent_ability(
         0, "Eater of the Dead", permanent_index=0,
-        target_player_index=0, target_permanent_index=0,
+        target_player_index=0, target_graveyard_indices=[0],
     )
 
     assert result.supported, result.details

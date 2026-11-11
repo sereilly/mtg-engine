@@ -872,7 +872,7 @@ def _w1g3_exorcist_game(set_pool, theirs, *, mine=("Grizzly Bears",)):
 
 def _w1g3_exorcise(game, slot, seat=1):
     result = game.activate_permanent_ability(
-        0, "Selfless Exorcist", target_player_index=seat, target_permanent_index=slot,
+        0, "Selfless Exorcist", target_player_index=seat, target_graveyard_indices=[slot],
     )
     assert result.supported, result.details
     _w1g3_resolve(game)
@@ -886,7 +886,7 @@ def test_w1g3_selfless_exorcist_offers_creature_cards_in_every_graveyard(set_poo
     }
     # A land card is not a creature card, and the announcement says so.
     assert not game.activate_permanent_ability(
-        0, "Selfless Exorcist", target_player_index=1, target_permanent_index=0,
+        0, "Selfless Exorcist", target_player_index=1, target_graveyard_indices=[0],
     ).supported
 
 
@@ -925,7 +925,7 @@ def test_w1g3_selfless_exorcist_whose_card_left_in_response_does_nothing(set_poo
     is exiled and no damage is dealt."""
     game, exorcist = _w1g3_exorcist_game(set_pool, ("Swamp", "Hill Giant", "Craw Wurm"))
     result = game.queue_permanent_ability(
-        0, "Selfless Exorcist", target_player_index=1, target_permanent_index=2,
+        0, "Selfless Exorcist", target_player_index=1, target_graveyard_indices=[2],
     )
     assert result.supported, result.details
     victim = game.players[1]
@@ -2465,7 +2465,7 @@ def test_w1g9_cephalid_inkshrouder_discards_for_shroud_and_unblockable(set_pool)
 
 def _w1g9_mythmaker(game, *, seat=1, slot=0, drain=True):
     result = game.activate_permanent_ability(
-        0, "Nomad Mythmaker", target_player_index=seat, target_permanent_index=slot,
+        0, "Nomad Mythmaker", target_player_index=seat, target_graveyard_indices=[slot],
     )
     assert result.supported, result.details
     if drain:

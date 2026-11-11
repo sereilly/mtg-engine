@@ -478,12 +478,12 @@ def test_petrified_field_returns_a_land_card_from_its_own_graveyard(set_pool):
     assert [entry["name"] for entry in spec["valid_targets"]] == ["Forest", "Island"]
 
     at_a_creature_card = game.queue_permanent_ability(
-        0, "Petrified Field", ability_index=1, target_permanent_index=0,
+        0, "Petrified Field", ability_index=1, target_graveyard_indices=[0],
     )
     assert not at_a_creature_card.supported and game.is_on_battlefield(field)
 
     assert game.activate_permanent_ability(
-        0, "Petrified Field", ability_index=1, target_permanent_index=2,
+        0, "Petrified Field", ability_index=1, target_graveyard_indices=[2],
     ).supported
     assert [card.name for card in game.players[0].hand] == ["Island"]
     assert [card.name for card in game.players[0].graveyard] == [

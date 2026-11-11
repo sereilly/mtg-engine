@@ -179,7 +179,7 @@ def test_soul_exchange_exiles_the_creature_named_by_id(catalog_by_name):
 
     result = game.queue_from_hand(
         0, "Soul Exchange", cost_permanent_ids=[giant.permanent_id],
-        target_player_index=0, target_permanent_index=0,
+        target_player_index=0, target_graveyard_indices=[0],
     )
 
     assert result.supported, result.details

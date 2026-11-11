@@ -1936,7 +1936,7 @@ def test_w1g7_warped_devotion_ignores_a_card_that_was_never_a_permanent(set_pool
     )
     table.players[0].graveyard.append(lea["Grizzly Bears"])
 
-    assert table.cast_from_hand(0, "Raise Dead", target_permanent_index=0).supported
+    assert table.cast_from_hand(0, "Raise Dead", target_graveyard_indices=[0]).supported
     _w1g7_settle(table)
     table._draw_with_replacements(table.players[1], 1)
     table.check_state_based_actions()

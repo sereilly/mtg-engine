@@ -56,7 +56,7 @@ def test_return_to_nature_exiles_a_card_from_a_graveyard(set_pool):
 
     result = game.cast_from_hand(
         0, "Return to Nature", target_player_index=1,
-        target_permanent_index=0, mode_index=2,
+        target_graveyard_indices=[0], mode_index=2,
     )
 
     assert result.supported, result.details

@@ -123,7 +123,7 @@ def test_w1g5_unearth_reanimates_a_cheap_creature(set_pool):
     game = _g5_game(caster, PlayerState(name="P2"))
 
     result = game.cast_from_hand(
-        0, "Unearth", target_player_index=0, target_permanent_index=0,
+        0, "Unearth", target_player_index=0, target_graveyard_indices=[0],
     )
     resolve_stack(game)
 
@@ -144,7 +144,7 @@ def test_w1g5_unearth_refuses_a_creature_over_the_printed_bound(set_pool):
     game = _g5_game(caster, PlayerState(name="P2"))
 
     result = game.cast_from_hand(
-        0, "Unearth", target_player_index=0, target_permanent_index=0,
+        0, "Unearth", target_player_index=0, target_graveyard_indices=[0],
     )
 
     assert result.supported is False

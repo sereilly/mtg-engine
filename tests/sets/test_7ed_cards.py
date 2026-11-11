@@ -488,8 +488,8 @@ def test_breath_of_life_offers_only_creature_cards_in_its_casters_graveyard(set_
         (0, 0, "Grizzly Bears"), (0, 2, "Hill Giant"),
     ]
 
-    stolen = game.cast_from_hand(0, "Breath of Life", target_player_index=1, target_permanent_index=0)
-    not_a_creature = game.cast_from_hand(0, "Breath of Life", target_player_index=0, target_permanent_index=1)
+    stolen = game.cast_from_hand(0, "Breath of Life", target_player_index=1, target_graveyard_indices=[0])
+    not_a_creature = game.cast_from_hand(0, "Breath of Life", target_player_index=0, target_graveyard_indices=[1])
     assert not stolen.supported and not not_a_creature.supported
     assert me.mana_pool["W"] == 9 and _names(me.hand) == ["Breath of Life"]
     assert _names(opp.graveyard) == ["Serra Angel"]
@@ -503,7 +503,7 @@ def test_breath_of_life_returns_the_card_it_named(set_pool):
     me = game.players[0]
 
     assert game.cast_from_hand(
-        0, "Breath of Life", target_player_index=0, target_permanent_index=2
+        0, "Breath of Life", target_player_index=0, target_graveyard_indices=[2]
     ).supported
     resolve_stack(game)
 
@@ -521,7 +521,7 @@ def test_breath_of_life_does_nothing_if_its_card_is_gone_by_resolution(set_pool)
     me = game.players[0]
 
     assert game.queue_from_hand(
-        0, "Breath of Life", target_player_index=0, target_permanent_index=1
+        0, "Breath of Life", target_player_index=0, target_graveyard_indices=[1]
     ).supported
     me.exile.append(me.graveyard.pop(1))
     resolve_stack(game)
@@ -677,7 +677,7 @@ def test_dakmor_lancer_returned_by_breath_of_life_asks_for_its_target(set_pool):
     giant = _put(game, 1, pool["Hill Giant"])
 
     assert game.cast_from_hand(
-        0, "Breath of Life", target_player_index=0, target_permanent_index=0
+        0, "Breath of Life", target_player_index=0, target_graveyard_indices=[0]
     ).supported
     _resolve_until_asked(game)
 

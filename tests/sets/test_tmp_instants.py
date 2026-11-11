@@ -1102,7 +1102,7 @@ def test_reap_refuses_an_announcement_naming_more_cards_than_x(set_pool):
     cost is paid (CR 601.2e), so the card is still in hand.
     """
     game = _w4g2_game(set_pool, black=2, graveyard=_W4G2_GRAVEYARD)
-    result = game.cast_from_hand(0, "Reap", target_permanent_index=[0, 1, 2])
+    result = game.cast_from_hand(0, "Reap", target_graveyard_indices=[0, 1, 2])
     assert not result.supported
     assert result.details == "Reap has 2 targets, not 3"
     assert [c.name for c in game.players[0].hand] == ["Reap"]
@@ -1111,7 +1111,7 @@ def test_reap_refuses_an_announcement_naming_more_cards_than_x(set_pool):
 
 def test_reap_returns_exactly_the_cards_the_caster_named(set_pool):
     game = _w4g2_game(set_pool, black=2, graveyard=_W4G2_GRAVEYARD)
-    assert game.cast_from_hand(0, "Reap", target_permanent_index=[0, 2]).supported
+    assert game.cast_from_hand(0, "Reap", target_graveyard_indices=[0, 2]).supported
     assert [c.name for c in game.players[0].hand] == ["Black Lotus", "Shivan Dragon"]
     assert [c.name for c in game.players[0].graveyard] == [
         "Healing Salve", "Ancestral Recall", "Reap",
@@ -1128,14 +1128,14 @@ def test_reap_with_no_black_permanents_is_cast_for_nothing(set_pool):
     """
     game = _w4g2_game(set_pool, black=0, graveyard=_W4G2_GRAVEYARD)
     assert game.announced_cast_x(0, set_pool("TMP")["Reap"]) == 0
-    assert game.cast_from_hand(0, "Reap", target_permanent_index=[]).supported
+    assert game.cast_from_hand(0, "Reap", target_graveyard_indices=[]).supported
     assert game.players[0].hand == []
     assert [c.name for c in game.players[0].graveyard] == [
         *_W4G2_GRAVEYARD, "Reap",
     ]
 
     again = _w4g2_game(set_pool, black=0, graveyard=_W4G2_GRAVEYARD)
-    refused = again.cast_from_hand(0, "Reap", target_permanent_index=[0])
+    refused = again.cast_from_hand(0, "Reap", target_graveyard_indices=[0])
     assert not refused.supported
     assert refused.details == "Reap has 0 targets, not 1"
 
@@ -1149,7 +1149,7 @@ def test_reap_freezes_its_x_at_the_announcement(set_pool):
     re-counted would return one card of the three the caster legally named.
     """
     game = _w4g2_game(set_pool, black=3, graveyard=_W4G2_GRAVEYARD)
-    assert game.queue_from_hand(0, "Reap", target_permanent_index=[0, 1, 2]).supported
+    assert game.queue_from_hand(0, "Reap", target_graveyard_indices=[0, 1, 2]).supported
     assert game.stack[-1].x_value == 3, "CR 601.2b announced it onto the stack"
 
     for permanent in list(game.controlled_by(1)):

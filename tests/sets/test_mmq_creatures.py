@@ -1101,13 +1101,13 @@ def test_w2g2_groundskeeper_returns_only_a_basic_land(set_pool):
     caster.graveyard.extend([_W2G2_LEA["Forest"], _W2G2_LEA["Grizzly Bears"]])
 
     refused = game.activate_permanent_ability(
-        0, "Groundskeeper", target_permanent_index=1,
+        0, "Groundskeeper", target_graveyard_indices=[1],
     )
     assert not refused.supported
     assert [c.name for c in caster.graveyard] == ["Forest", "Grizzly Bears"]
 
     taken = game.activate_permanent_ability(
-        0, "Groundskeeper", target_permanent_index=0,
+        0, "Groundskeeper", target_graveyard_indices=[0],
     )
     resolve_stack(game)
 

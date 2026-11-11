@@ -107,7 +107,7 @@ def test_a_graveyard_targeting_copy_is_a_retarget_choice_over_the_wire():
     _cast_rituals(session_id, game, 1)
     # Announced on the engine (slot 0 of the graveyard: the Bears), and the
     # stack driven over the wire from here.
-    assert game.queue_from_hand(0, "Reaping the Graves", target_permanent_index=0).supported
+    assert game.queue_from_hand(0, "Reaping the Graves", target_graveyard_indices=[0]).supported
     _resolve_top(session_id)
     prompt = _state(session_id, 0)["retarget_choice"]
     assert prompt is not None

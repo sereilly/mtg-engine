@@ -85,7 +85,7 @@ def _exorcise(card, monkeypatch):
     exorcist.metadata["summoning_sickness_turn"] = -99
     resolve_stack(game)
     result = game.activate_permanent_ability(
-        0, "Selfless Exorcist", target_player_index=1, target_permanent_index=0,
+        0, "Selfless Exorcist", target_player_index=1, target_graveyard_indices=[0],
     )
     assert result.supported, result.details
     resolve_stack(game)

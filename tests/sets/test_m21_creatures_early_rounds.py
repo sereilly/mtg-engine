@@ -556,7 +556,7 @@ def test_shipwreck_dowser_returns_an_instant_but_not_a_creature(set_pool):
     )
     game = Game(players=[p1, PlayerState(name="P2")])
     result = game.cast_from_hand(
-        0, "Shipwreck Dowser", target_player_index=0, target_permanent_index=1,
+        0, "Shipwreck Dowser", target_player_index=0, target_graveyard_indices=[1],
     )
     assert result.supported, result.details
     assert any(c.name == "Shock" for c in p1.hand)

@@ -432,7 +432,7 @@ def test_w1g5_ground_seal_draws_and_stops_every_way_of_targeting_a_graveyard_car
         assert not refused.supported, (name, refused.details)
         assert game._w1g5_card(name) in game.players[seat].hand
     refused = game.activate_permanent_ability(
-        0, "Adun Oakenshield", target_player_index=0, target_permanent_index=0,
+        0, "Adun Oakenshield", target_player_index=0, target_graveyard_indices=[0],
     )
     assert not refused.supported and not adun.tapped, refused.details
 
@@ -452,7 +452,7 @@ def test_w1g5_ground_seal_draws_and_stops_every_way_of_targeting_a_graveyard_car
     seal = next(p for p in game.all_permanents() if p.card.name == "Ground Seal")
     game.remove_from_battlefield(seal)
     returned = game.cast_from_hand(
-        0, "Raise Dead", target_player_index=0, target_permanent_index=0,
+        0, "Raise Dead", target_player_index=0, target_graveyard_indices=[0],
     )
     _w1g5_resolve_stack(game)
     assert returned.supported and bears in game.players[0].hand
@@ -1100,7 +1100,7 @@ def test_w1g6_holistic_wisdom_returns_a_card_that_shares_a_type(
     )
 
     used = game.activate_permanent_ability(
-        0, "Holistic Wisdom", target_player_index=0, target_permanent_index=1,
+        0, "Holistic Wisdom", target_player_index=0, target_graveyard_indices=[1],
         cost_hand_index=0,
     )
 
@@ -1118,7 +1118,7 @@ def test_w1g6_holistic_wisdom_refusals_pay_nothing(set_pool):
     # An empty hand cannot pay.
     game = _w1g6_wisdom(set_pool, hand=[], yard=[lea["Craw Wurm"]])
     refused = game.activate_permanent_ability(
-        0, "Holistic Wisdom", target_player_index=0, target_permanent_index=0
+        0, "Holistic Wisdom", target_player_index=0, target_graveyard_indices=[0]
     )
     assert not refused.supported and _w1g6_pile(game.players[0]) == ["Craw Wurm"]
 
@@ -1135,7 +1135,7 @@ def test_w1g6_holistic_wisdom_refusals_pay_nothing(set_pool):
     )
     game.start_turn(0)
     refused = game.activate_permanent_ability(
-        0, "Holistic Wisdom", target_player_index=1, target_permanent_index=0,
+        0, "Holistic Wisdom", target_player_index=1, target_graveyard_indices=[0],
         cost_hand_index=0,
     )
     assert not refused.supported
@@ -1149,7 +1149,7 @@ def test_w1g6_holistic_wisdom_does_nothing_once_its_target_has_left(set_pool):
         yard=[lea["Craw Wurm"], lea["Hill Giant"]],
     )
     queued = game.queue_permanent_ability(
-        0, "Holistic Wisdom", target_player_index=0, target_permanent_index=0,
+        0, "Holistic Wisdom", target_player_index=0, target_graveyard_indices=[0],
         cost_hand_index=0,
     )
     assert queued.details == "queued"
@@ -1442,7 +1442,7 @@ def test_w1g6_malevolent_awakening_trades_a_creature_for_a_creature_card(set_poo
     giant = _w1g6_named(game, 0, "Hill Giant")
 
     used = game.activate_permanent_ability(
-        0, "Malevolent Awakening", target_player_index=0, target_permanent_index=0,
+        0, "Malevolent Awakening", target_player_index=0, target_graveyard_indices=[0],
         cost_permanent_ids=[giant.permanent_id],
     )
     assert used.supported, used.details
@@ -1455,7 +1455,7 @@ def test_w1g6_malevolent_awakening_trades_a_creature_for_a_creature_card(set_poo
     for seat, slot in ((0, 0), (1, 0)):
         refused = game.activate_permanent_ability(
             0, "Malevolent Awakening", target_player_index=seat,
-            target_permanent_index=slot,
+            target_graveyard_indices=[slot],
         )
         assert not refused.supported
     assert _w1g6_names(game, 0) == ["Grizzly Bears", "Malevolent Awakening"]

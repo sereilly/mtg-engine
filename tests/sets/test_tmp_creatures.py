@@ -1508,7 +1508,7 @@ def _w3g2_queen(set_pool, victims=("Hill Giant",)):
 
 def _w3g2_reanimate(game):
     result = game.activate_permanent_ability(
-        0, "Coffin Queen", target_player_index=1, target_permanent_index=0,
+        0, "Coffin Queen", target_player_index=1, target_graveyard_indices=[0],
     )
     assert result.supported, game.log
     while game.stack:

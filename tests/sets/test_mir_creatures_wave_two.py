@@ -207,7 +207,7 @@ def test_hakim_returns_an_aura_from_the_graveyard_onto_himself(set_pool):
     game.current_step = "upkeep"
     result = game.activate_permanent_ability(
         0, "Hakim, Loreweaver", permanent_index=0,
-        ability_index=0, target_permanent_index=0,
+        ability_index=0, target_graveyard_indices=[0],
     )
     assert result.supported, result.details
     game.resolve_stack()
@@ -233,7 +233,7 @@ def test_hakim_leaves_an_aura_he_cannot_legally_enchant_in_the_graveyard(set_poo
     game.current_step = "upkeep"
     result = game.activate_permanent_ability(
         0, "Hakim, Loreweaver", permanent_index=0,
-        ability_index=0, target_permanent_index=0,
+        ability_index=0, target_graveyard_indices=[0],
     )
     assert result.supported, result.details
     game.resolve_stack()
@@ -292,7 +292,7 @@ def test_hakim_may_not_reanimate_while_he_is_enchanted(set_pool):
     assert activation_denial(game, 0, hakim, line) == "it is enchanted"
     result = game.activate_permanent_ability(
         0, "Hakim, Loreweaver", permanent_index=0,
-        ability_index=0, target_permanent_index=0,
+        ability_index=0, target_graveyard_indices=[0],
     )
     assert not result.supported, result.details
     assert [c.name for c in game.players[0].graveyard] == ["Soar"], game.log

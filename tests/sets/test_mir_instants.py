@@ -1726,15 +1726,15 @@ def test_ebony_charm_names_its_graveyard_and_its_cards_as_it_is_cast(set_pool):
     # Four is more than three, and the pile has to be said.
     assert not game.queue_from_hand(
         0, "Ebony Charm", mode_index=1,
-        target_player_index=1, target_permanent_index=[0, 1, 2, 3],
+        target_player_index=1, target_graveyard_indices=[0, 1, 2, 3],
     ).supported
     assert not game.queue_from_hand(
-        0, "Ebony Charm", mode_index=1, target_permanent_index=[0, 1, 2],
+        0, "Ebony Charm", mode_index=1, target_graveyard_indices=[0, 1, 2],
     ).supported
 
     assert game.queue_from_hand(
         0, "Ebony Charm", mode_index=1,
-        target_player_index=1, target_permanent_index=[0, 1, 2],
+        target_player_index=1, target_graveyard_indices=[0, 1, 2],
     ).supported
     game.resolve_stack()
 
@@ -1761,7 +1761,7 @@ def test_ebony_charm_leaves_a_card_exiled_in_response_unreplaced(set_pool):
     )
     assert game.queue_from_hand(
         0, "Ebony Charm", mode_index=1,
-        target_player_index=1, target_permanent_index=[0, 1],
+        target_player_index=1, target_graveyard_indices=[0, 1],
     ).supported
     victim = game.players[1]
     victim.exile.append(victim.graveyard.pop(0))          # the response

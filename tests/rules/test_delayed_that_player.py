@@ -80,7 +80,7 @@ def test_603_7c_the_graveyards_owner_draws_at_the_next_turns_upkeep(set_pool, ow
 
     assert game.activate_permanent_ability(
         0, "Lodestone Bauble", target_player_index=owner,
-        target_permanent_index=[0],
+        target_graveyard_indices=[0],
     ).supported
     game._settle()
     assert [card.name for card in pile.library][:1] == ["Mountain"]

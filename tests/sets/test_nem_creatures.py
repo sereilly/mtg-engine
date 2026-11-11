@@ -476,7 +476,7 @@ def test_w1g5_lin_sivvi_bottoms_only_a_rebel_card(set_pool):
     me.mana_pool["C"] = 3
     refused = game.activate_permanent_ability(
         0, "Lin Sivvi, Defiant Hero", ability_index=1,
-        target_player_index=0, target_permanent_index=0,
+        target_player_index=0, target_graveyard_indices=[0],
     )
     assert not refused.supported
     assert me.mana_pool["C"] == 3, "a refused announcement pays nothing"
@@ -484,7 +484,7 @@ def test_w1g5_lin_sivvi_bottoms_only_a_rebel_card(set_pool):
 
     taken = game.activate_permanent_ability(
         0, "Lin Sivvi, Defiant Hero", ability_index=1,
-        target_player_index=0, target_permanent_index=1,
+        target_player_index=0, target_graveyard_indices=[1],
     )
     assert taken.supported, taken.details
     game._settle()
