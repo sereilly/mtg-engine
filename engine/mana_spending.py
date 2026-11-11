@@ -68,6 +68,11 @@ class ManaSpending:
     fungible_colors: tuple[str, ...] = ()
     as_colors: tuple[str, ...] = ()
     others_colorless_only: bool = False
+    #: "**Players** may spend mana as though it were mana of any color."
+    #: (Mycosynth Lattice.) The permission is every seat's, not its source's
+    #: controller's: :func:`permissions_for_seat` reads it off every
+    #: battlefield. False for every "you may" sentence.
+    every_player: bool = False
 
     def covers(self, symbol: str) -> bool:
         """Whether a unit of *symbol* mana may be spent as another colour."""
@@ -96,8 +101,12 @@ class ManaSpending:
 #: The narrowing is read separately and folded in, because it is a sentence
 #: about the mana these rows did **not** name.
 _PERMISSIONS: tuple[re.Pattern[str], ...] = (
-    # Chromatic Orrery. Neither end narrowed.
-    re.compile(r"^you may spend mana as though it were mana of any color$"),
+    # Chromatic Orrery. Neither end narrowed. "**Players** may …" (Mycosynth
+    # Lattice) is the same permission granted to every seat, so the subject
+    # is payload (``every_player``) rather than a row of its own.
+    re.compile(
+        r"^(?P<who>you|players) may spend mana as though it were mana of any color$"
+    ),
     # Celestial Dawn. The source is narrowed and the destination is not.
     re.compile(
         r"^you may spend (?P<from>white|blue|black|red|green) mana as though "
@@ -149,6 +158,7 @@ def mana_spending_for(line: str) -> ManaSpending | None:
             permission = ManaSpending(
                 fungible_colors=(source,) if source else (),
                 as_colors=(target,) if target else (),
+                every_player=groups.get("who") == "players",
             )
             break
         else:
@@ -161,6 +171,7 @@ def mana_spending_for(line: str) -> ManaSpending | None:
         fungible_colors=permission.fungible_colors,
         as_colors=permission.as_colors,
         others_colorless_only=restricted,
+        every_player=permission.every_player,
     )
 
 
@@ -267,6 +278,18 @@ def permissions_for_seat(game, seat: int) -> tuple[ManaSpending, ...]:
         # grants the permission, and one whose text has been changed no longer
         # grants what it no longer says.
         found.extend(_text_permissions(getattr(perm.effective_card, "oracle_text", "") or ""))
+    # "**Players** may spend mana as though …" (Mycosynth Lattice): a
+    # permission every seat has, read off the other seats' battlefields too.
+    for perm in game.all_permanents():
+        if game.controller_index_of(perm) == seat:
+            continue
+        found.extend(
+            permission
+            for permission in _text_permissions(
+                getattr(perm.effective_card, "oracle_text", "") or ""
+            )
+            if permission.every_player
+        )
     return tuple(found)
 
 

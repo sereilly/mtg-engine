@@ -394,6 +394,55 @@ def _lower_change_supertype(node: ast.ChangeSupertype) -> tuple[OracleInstructio
     raise LoweringError("a supertype change needs a single named permanent", node=node)
 
 
+def _lower_lose_type(node: ast.LoseType) -> tuple[OracleInstruction, ...]:
+    """Neurok Transmuter's "…and isn't an artifact".
+
+    The removing half of :func:`_lower_gain_type`, on the same channel
+    (``type_changes.lose_types``) and with the same two requirements: a
+    duration the gained-type sweeps end (they end both lists), and a single
+    named permanent.
+
+    CR 205.1a's third clause is stated here as payload: "if an object's card
+    type is removed, the subtypes correlated with that card type will remain
+    if they are also the subtypes of a card type the object currently has;
+    otherwise, they are also removed". Only a card type whose subtypes no
+    other card type shares is admitted, so "otherwise" is always the answer
+    and the list is the whole of it — an artifact's (CR 205.3g), an
+    enchantment's (CR 205.3h), a land's (CR 205.3i). A creature's types are
+    shared with kindred (CR 205.3m), which the record could not decide, so
+    that sentence refuses rather than taking a Kindred card's types with it.
+    """
+    from ..vocabulary import ARTIFACT_TYPES, ENCHANTMENT_TYPES, LAND_TYPES
+
+    correlated = {
+        "artifact": ARTIFACT_TYPES, "enchantment": ENCHANTMENT_TYPES,
+        "land": LAND_TYPES,
+    }
+    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
+        raise LoweringError(
+            f"no handler holds a lost type for {node.duration.kind}", node=node
+        )
+    subtypes: set[str] = set()
+    for card_type in node.card_types:
+        if card_type not in correlated:
+            raise LoweringError(
+                f"losing {card_type!r} would take subtypes another card type "
+                "may share (CR 205.1a)",
+                node=node,
+            )
+        subtypes |= correlated[card_type]
+    payload: dict[str, object] = {
+        "card_types": list(node.card_types),
+        "subtypes": sorted(subtypes),
+        "duration": node.duration.kind or "permanent",
+    }
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("target", "that"):
+        if node.subject.quantifier == "target":
+            _describe_targets(payload, node.subject)
+        return (OracleInstruction("lose_type", "", payload),)
+    raise LoweringError("a lost type needs a single named permanent", node=node)
+
+
 #: Durations a *basic land type* change has a sweep for. CR 305.7 replaces the
 #: land's subtypes for as long as the effect lasts, so a window nothing ever
 #: ends would be a land permanently something else — the direction a dropped

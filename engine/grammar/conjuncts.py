@@ -29,7 +29,7 @@ from .stream import TokenStream
 from .effects import (_parse_attacks_this_turn_if_able, _parse_becomes,
                       _parse_cant_be, _parse_damage,
                       _parse_doesnt_untap_next_step, _parse_gains,
-                      _parse_gets, _parse_loses)
+                      _parse_gets, _parse_loses, _parse_not_card_type)
 
 
 def _with_damage_conjunct(
@@ -241,6 +241,35 @@ def _with_keyword_loss_conjunct(
         # A life loss or a loss of the game read off a permanent's noun phrase
         # is not this sentence; rewinding leaves the clause to whatever else
         # can read it rather than joining a statement about the wrong subject.
+        stream.reset(mark)
+        return statement
+    return ast.Conjunction((_share_trailing_duration(statement, joined), joined))
+
+
+def _with_type_loss_conjunct(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``… and isn't <card type>`` trailing a ``becomes`` clause whose subject
+    is a permanent.
+
+    "{U}: Until end of turn, target artifact creature becomes blue **and isn't
+    an artifact**." (Neurok Transmuter.) The keyword-loss joiner's shape one
+    layer down: a colour change (layer 5) and a card type taken away (layer
+    4), one noun phrase printed once. The production is non-consuming on
+    refusal, so the "and" is put back with it and any other "and is …" keeps
+    the reading it had. A window printed behind the last clause is the whole
+    sentence's (:func:`_share_trailing_duration`).
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return statement
+    joined = _parse_not_card_type(stream, source)
+    if joined is None:
         stream.reset(mark)
         return statement
     return ast.Conjunction((_share_trailing_duration(statement, joined), joined))

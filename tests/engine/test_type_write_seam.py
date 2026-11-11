@@ -75,7 +75,8 @@ _WRITER_USES = {
             "creature-type set)",
         ),
         "lose_types": (
-            2, "become_aura_with_enchant's replaced types, change_supertype's losing half",
+            3, "become_aura_with_enchant's replaced types, change_supertype's losing half, "
+            "lose_type (Neurok Transmuter's \"isn't an artifact\")",
         ),
     },
     "engine/handlers/reanimation.py": {

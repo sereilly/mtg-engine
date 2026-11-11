@@ -1280,9 +1280,18 @@ class EffectsMixin:
             # as it happens because the sources are gone by the time the spell
             # resolves — CR 603.10's last-known-information problem, avoided by
             # not needing to look back.
-            source_perm = getattr(source, "card", source)
-            type_line = getattr(source_perm, "type_line", "") or ""
-            if "artifact" in str(type_line).lower():
+            #
+            # A permanent source is asked what it *is* (CR 613 layer 4): a
+            # creature Memnarch or Mycosynth Lattice has made an artifact is
+            # an artifact source, and one Neurok Transmuter has stripped is
+            # not. Only a spell — no permanent, no layers — reads its card.
+            if hasattr(source, "has_type"):
+                is_artifact = bool(source.has_type("artifact"))
+            else:
+                source_perm = getattr(source, "card", source)
+                type_line = getattr(source_perm, "type_line", "") or ""
+                is_artifact = "artifact" in str(type_line).lower()
+            if is_artifact:
                 target.artifact_damage_taken_this_turn += damage
 
         # **Two per-card branches used to stand here and are gone**, and what

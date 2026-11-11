@@ -37,7 +37,8 @@ from .lexer import SELF, WORD
 from .conjuncts import (_with_attack_conjunct, _with_cant_be_conjunct,
                         _with_damage_conjunct, _with_gained_type_conjunct,
                         _with_grant_conjunct, _with_keyword_loss_conjunct,
-                        _with_predicate_list, _with_untap_conjunct)
+                        _with_predicate_list, _with_type_loss_conjunct,
+                        _with_untap_conjunct)
 from .imperatives import parse_imperative
 from .nouns import parse_object_filter
 from .player_verbs import parse_player_subject_verb
@@ -534,7 +535,13 @@ def parse_subject_verb(
                 stream,
                 _with_keyword_loss_conjunct(
                     stream,
-                    _parse_becomes(stream, source_spec),
+                    # "…becomes blue **and isn't an artifact**." (Neurok
+                    # Transmuter.) A card type taken away, joined to the
+                    # colour the same noun phrase becomes.
+                    _with_type_loss_conjunct(
+                        stream, _parse_becomes(stream, source_spec),
+                        source_target,
+                    ),
                     source_target,
                 ),
                 source_target,

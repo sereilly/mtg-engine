@@ -20,7 +20,7 @@ module owns *what the text means*.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import lru_cache
 
 from . import fast_paths
@@ -135,6 +135,21 @@ class GlobalStatic:
     # counter is not a characteristic, so no layer moves it and the board-wide
     # layer-4 pass has no dependency to find through it (CR 613.8a).
     with_counter: str = ""
+    # "All permanents **are artifacts in addition to their other types**."
+    # (Mycosynth Lattice.) CR 205.1b's addition of a *card* type, layer 4 --
+    # ``adds_creature_type`` one rung over, as the words rather than a flag,
+    # because the type is printed and is not always "creature". A tuple for
+    # ``colors``' reason.
+    adds_card_types: tuple[str, ...] = ()
+    # "All cards that aren't on the battlefield, spells, and permanents are
+    # colorless." (Mycosynth Lattice.) ``sets_colors`` reaching **every** zone
+    # and every player's objects: the permanents through the layers like any
+    # board-wide colour, and every spell and every card off the battlefield --
+    # land cards too, and whoever owns them -- through
+    # ``object_colors.card_colors``. Celestial Dawn's
+    # ``extends_to_spells_and_cards`` is the narrower sentence (its seat's
+    # spells and nonland cards) and stays its own flag.
+    colors_every_zone: bool = False
 
 
 _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
@@ -404,6 +419,44 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         ),
     ),
     (
+        # Mycosynth Lattice: "All permanents are artifacts in addition to
+        # their other types." CR 205.1b's addition of a card type (layer 4,
+        # CR 613.1d) over a scope, with nothing else said: every type the
+        # permanent had is kept, and the added word is payload. The two nouns
+        # are the scope words ``_global_static_applies`` tests and the added
+        # word one that carries no P/T with it -- "are creatures" would be a
+        # 0/0 nobody printed a size for. Its source is in its own scope (no
+        # "other"), so the Lattice is an artifact like everything else.
+        #
+        # A type-scoped static that changes types is placed by the layer-4
+        # pass (``engine/type_statics.py``): March of the Machines' scope is
+        # "noncreature artifact", so it depends on this one (CR 613.8a) and
+        # waits behind it whichever is older -- every land becomes a 0/0
+        # artifact creature, which is the pair's famous ruling.
+        re.compile(
+            r"^all (?P<added_scope>permanents|creatures|enchantments) are "
+            r"(?P<added_card_type>artifacts) in addition to their other types$"
+        ),
+        GlobalStatic(name="board_wide_card_type", applies_to=""),
+    ),
+    (
+        # Mycosynth Lattice: "All cards that aren't on the battlefield,
+        # spells, and permanents are colorless." Thran Lens' sentence (the
+        # permanents, layer 5) with every other zone named beside it, so the
+        # word is payload in the same group and the reach is the flag: CR
+        # 613.1e is a characteristic of an *object*, and a card in a library
+        # or a spell on the stack is one (CR 109.1). Every controller's and
+        # every owner's -- the sentence names no seat.
+        re.compile(
+            r"^all cards that aren't on the battlefield, spells, and "
+            r"permanents are (?P<every_zone_sets>white|blue|black|red|green|colorless)$"
+        ),
+        GlobalStatic(
+            name="every_zone_color", applies_to="permanent",
+            colors_every_zone=True,
+        ),
+    ),
+    (
         re.compile(
             r"^each noncreature artifact loses all abilities and becomes an "
             r"artifact creature with power and toughness each equal to its "
@@ -503,6 +556,17 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     (``mixins/board_statics._refresh_global_statics``). Under
     ``engine/fast_paths.py``'s checking mode every kept match is scanned
     again and compared.
+
+    **Two lines over one scope are one static** (Mycosynth Lattice: "All
+    permanents are artifacts in addition to their other types." and "All
+    cards that aren't on the battlefield, spells, and permanents are
+    colorless."). Every static ability of one object has that object's
+    timestamp (CR 613.7a), so two lines whose scope is the same set and whose
+    effects are in different fields are exactly one static applying in two
+    layers -- Dralnu's Crusade's arrangement, printed as two sentences
+    (:func:`_fold`). Lines that do not fold (another scope, a field both
+    set) leave the first one's static, which is what this answered before a
+    card printed two.
     """
     found = _template_match(oracle_text)
     if fast_paths.CHECKING:
@@ -511,9 +575,51 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
             "global_static_for", fresh == found,
             lambda: f"{oracle_text!r}: kept {found}, read {fresh}",
         )
-    if found is None:
+    if not found:
         return None
-    index, items = found
+    static = _static_from_match(*found[0])
+    for index, items in found[1:]:
+        folded = _fold(static, _static_from_match(index, items))
+        if folded is None:
+            break
+        static = folded
+    return static
+
+
+#: The fields that say *which objects* a static reaches. Two statics fold
+#: only when they agree on every one (:func:`_fold`).
+_SCOPE_FIELDS = (
+    "applies_to", "colors", "subtypes", "with_counter", "other_than_source",
+)
+
+
+def _fold(first: GlobalStatic, other: GlobalStatic) -> GlobalStatic | None:
+    """*first* and *other* as one static, or None when they cannot be one:
+    another scope, or a field both set to different values."""
+    if any(
+        getattr(first, name) != getattr(other, name) for name in _SCOPE_FIELDS
+    ):
+        return None
+    merged: dict = {}
+    for spec in fields(GlobalStatic):
+        if spec.name == "name" or spec.name in _SCOPE_FIELDS:
+            continue
+        mine, theirs = getattr(first, spec.name), getattr(other, spec.name)
+        if theirs == spec.default or mine == theirs:
+            merged[spec.name] = mine
+        elif mine == spec.default:
+            merged[spec.name] = theirs
+        else:
+            return None
+    return GlobalStatic(
+        name=f"{first.name}+{other.name}",
+        **{name: getattr(first, name) for name in _SCOPE_FIELDS},
+        **merged,
+    )
+
+
+def _static_from_match(index: int, items: tuple) -> GlobalStatic:
+    """The static one template match describes (:func:`_template_match`)."""
     static = _TEMPLATES[index][1]
     groups = dict(items)
     if groups.get("lingers"):
@@ -537,6 +643,25 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
             subtypes=(tribe,),
             adds_subtypes=(added,),
             sets_colors=(groups["sets"],),
+        )
+    if groups.get("added_card_type"):
+        # Mycosynth Lattice. Both words singularised: the scope is the type
+        # word ``_global_static_applies`` tests, the added one the card type
+        # layer 4 adds.
+        return GlobalStatic(
+            name=static.name,
+            applies_to=groups["added_scope"].rstrip("s"),
+            adds_card_types=(groups["added_card_type"].rstrip("s"),),
+        )
+    if groups.get("every_zone_sets"):
+        # Mycosynth Lattice's second line: CR 105.2c's colourless is the
+        # empty set, as on the Thran Lens row below.
+        word = groups["every_zone_sets"]
+        return GlobalStatic(
+            name=static.name,
+            applies_to=static.applies_to,
+            sets_colors=() if word == "colorless" else (word,),
+            colors_every_zone=True,
         )
     if groups.get("counter_kind"):
         # Aurification. The words checked by the scan already
@@ -643,27 +768,35 @@ def _counter_scope_words(groups: dict) -> tuple[str, str] | None:
 
 
 @lru_cache(maxsize=None)
-def _template_match(oracle_text: str) -> tuple[int, tuple] | None:
-    """Where in :data:`_TEMPLATES` *oracle_text* first matches, and that
-    match's named groups — or None. The scan :func:`global_static_for` has
-    always made, line by line and template by template, passing over the
-    one match it always passed over: a Crusade naming a word that is no
-    creature type."""
-    for raw_line in oracle_text.splitlines():
-        line = _line(raw_line)
-        for index, (pattern, _static) in enumerate(_TEMPLATES):
-            match = pattern.match(line)
-            if match is None:
-                continue
-            groups = match.groupdict()
-            if (
-                not groups.get("lingers") and groups.get("tribe")
-                and _tribe_words(groups) is None
-            ):
-                continue
-            if groups.get("counter_kind") and _counter_scope_words(groups) is None:
-                continue
-            return index, tuple(sorted(groups.items()))
+def _template_match(oracle_text: str) -> tuple[tuple[int, tuple], ...]:
+    """Where in :data:`_TEMPLATES` each line of *oracle_text* first matches,
+    and that match's named groups, in printed order — empty when none does.
+    The scan :func:`global_static_for` has always made, line by line and
+    template by template, passing over the one match it always passed over:
+    a Crusade naming a word that is no creature type. Every matching line,
+    not the first alone, so two lines over one scope can fold."""
+    return tuple(
+        found for raw_line in oracle_text.splitlines()
+        if (found := _line_match(raw_line)) is not None
+    )
+
+
+def _line_match(raw_line: str) -> tuple[int, tuple] | None:
+    """The first template one printed line matches, or None."""
+    line = _line(raw_line)
+    for index, (pattern, _static) in enumerate(_TEMPLATES):
+        match = pattern.match(line)
+        if match is None:
+            continue
+        groups = match.groupdict()
+        if (
+            not groups.get("lingers") and groups.get("tribe")
+            and _tribe_words(groups) is None
+        ):
+            continue
+        if groups.get("counter_kind") and _counter_scope_words(groups) is None:
+            continue
+        return index, tuple(sorted(groups.items()))
     return None
 
 
@@ -682,7 +815,8 @@ def changes_types(static: GlobalStatic) -> bool:
     cannot disagree about which statics those are.
     """
     return bool(
-        static.adds_creature_type or static.sets_creature_type or static.adds_subtypes
+        static.adds_creature_type or static.sets_creature_type
+        or static.adds_subtypes or static.adds_card_types
     )
 
 

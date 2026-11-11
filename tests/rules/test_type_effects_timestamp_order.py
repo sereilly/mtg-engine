@@ -1534,7 +1534,7 @@ def test_j6_no_card_that_enters_beside_another_players_carries_an_ordered_static
     """Why the order above is right and, today, unobservable through a static.
     Every card the pool's cross-player mass entries move is a creature card or
     a basic land card, and no creature or land card is the source of a layer-4
-    or layer-5 static — they are enchantments and two artifacts. (The one
+    or layer-5 static — they are enchantments and three artifacts. (The one
     creature here, Transmogrifying Licid, grants its type as an Aura and only
     once it has made itself one.) A Magus of the Moon in the pool is what
     changes that, and it fails here first.
@@ -1547,7 +1547,9 @@ def test_j6_no_card_that_enters_beside_another_players_carries_an_ordered_static
     pool_size, found = _j6_ordered_static_sources()
     assert found.get("creature") == {"Transmogrifying Licid", "Ambush Commander"}
     assert "land" not in found
-    assert found["artifact"] == {"Kormus Bell", "Thran Lens"}
+    # Mycosynth Lattice (Darksteel, measured) is the third: an artifact, so
+    # no cross-player entry this census covers moves it.
+    assert found["artifact"] == {"Kormus Bell", "Mycosynth Lattice", "Thran Lens"}
     assert len(found["enchantment"]) >= 22, sorted(found["enchantment"])
     assert pool_size >= 4700, pool_size
 

@@ -484,6 +484,46 @@ def _parse_no_longer_supertype(
     return ast.ChangeSupertype(subject, word, False, _parse_duration(stream))
 
 
+def _parse_not_card_type(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.LoseType | None":
+    """``<subject> isn't an artifact`` / ``<subject> is no longer an
+    artifact`` — a card type taken away (CR 205.1, layer 4). "Until end of
+    turn, target artifact creature becomes blue **and isn't an artifact**."
+    (Neurok Transmuter.)
+
+    :func:`_parse_no_longer_supertype`'s sentence one rung up CR 205's
+    hierarchy, beside it for that reason, and non-consuming on refusal for the
+    same one: "is" and "isn't" open sentences this has no business claiming.
+    The word after the article must be a card type (CR 205.2a); anything else
+    — a subtype, a colour — is a different sentence and keeps its own refusal.
+    A quantified subject is declined for that function's reason: "All
+    creatures aren't artifacts" would be a static, not a one-shot.
+    """
+    mark = stream.mark()
+    if not (
+        stream.accept_word("isn't")
+        or stream.accept_phrase("is", "no", "longer")
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("a", "an"):
+        stream.reset(mark)
+        return None
+    word = stream.peek_word()
+    if word is None or word not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("target", "that", "it", "this")
+    ):
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.LoseType(subject, (word,), _parse_duration(stream))
+
+
 def _parse_land_type_while_counter(
     stream: TokenStream, subject: ast.Recipient
 ) -> "ast.LandTypeWhileCounter | None":

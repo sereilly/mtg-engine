@@ -707,6 +707,26 @@ class ChangeSupertype:
 
 
 @dataclass(frozen=True)
+class LoseType:
+    """``<subject> isn't an artifact.`` (Neurok Transmuter: "Until end of
+    turn, target artifact creature becomes blue **and isn't an artifact**.")
+
+    The removing mirror of :class:`GainType` — CR 205.1's card type taken
+    away in CR 613 layer 4 — and its own node rather than a polarity on that
+    one, because a gain carries a P/T rider and a replacement flag a removal
+    can never print. CR 205.1a's third clause rides with it: the subtypes
+    correlated with the lost card type go too (an Equipment that stops being
+    an artifact stops being an Equipment, the card's own ruling), which the
+    lowering states as payload.
+
+    ``duration`` with no kind means permanently, as on :class:`GainType`.
+    """
+    subject: Recipient
+    card_types: tuple[str, ...]
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class SwitchPT:
     """``Switch <subject>'s power and toughness [duration].`` (Transmutation.)
 
