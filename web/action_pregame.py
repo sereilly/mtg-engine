@@ -13,6 +13,7 @@ from .pregame import (
     _pregame_confirm_bottom_simultaneous,
     _pregame_declare_mulligan,
     _pregame_enter_mulligan,
+    _pregame_hand_exchange,
     _pregame_keep_player,
     _round_undecided,
 )
@@ -75,6 +76,30 @@ def _action_mulligan_take(session, req, seat_type):
         )
     _pregame_declare_mulligan(session, req.seat)
     _settle_pregame(session)
+
+@action_handler("mulligan_exchange", pregame=True)
+def _action_mulligan_exchange(session, req, seat_type):
+    """CR 103.5b: "Any time you could mulligan and this card is in your hand,
+    you may exile all the cards from your hand, then draw that many cards."
+    (Serum Powder.) Taken in the seat's declaration, which it then still owes
+    — the offer is made again over the new hand. ``hand_indices`` is the
+    bottom the seat's mulligans still owe, put there first (the offer's
+    ``hand_exchange.bottom_owed``)."""
+    _require_declaring_seat(session, req, seat_type)
+    bottom = list(req.hand_indices or [])
+    owed = session.game.mulligan_bottom_owed(req.seat)
+    if len(set(bottom)) != owed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"name exactly {owed} card(s) to put on the bottom first",
+        )
+    if not _pregame_hand_exchange(session, req.seat, bottom):
+        raise HTTPException(
+            status_code=400,
+            detail="no card in your hand lets you exchange it now",
+        )
+    _settle_pregame(session)
+
 
 @action_handler("mulligan_keep", pregame=True)
 def _action_mulligan_keep(session, req, seat_type):

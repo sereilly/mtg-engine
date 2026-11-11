@@ -79,6 +79,7 @@ from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
 from ..landwalk import landwalk_per_type_spec
 from ..life_prohibitions import life_gain_ban_line
+from ..mulligan_exchanges import MULLIGAN_EXCHANGE_CLAIM, mulligan_exchange_line
 from ..game_result_bans import game_result_ban_line
 from ..unspent_mana import unspent_mana_kept_line
 from ..prevention import prevention_claims_line
@@ -178,6 +179,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # reader that enforces it and the claim cannot outlive the enforcement.
     if uncounterable_line(normalized):
         return UNCOUNTERABLE_CLAIM
+
+    # engine/mulligan_exchanges.py -- "Any time you could mulligan and this
+    # card is in your hand, you may exile all the cards from your hand, then
+    # draw that many cards." (Serum Powder.) CR 103.5b's action, offered in a
+    # mulligan declaration (``Game.pregame_hand_exchange``) off the card in
+    # the hand; claimed through the reader that offers it.
+    if mulligan_exchange_line(normalized):
+        return MULLIGAN_EXCHANGE_CLAIM
 
     # engine/counter_conditions.py -- the board half of the same immunity:
     # "Creature spells can't be countered." (Gaea's Herald.) A permanent's

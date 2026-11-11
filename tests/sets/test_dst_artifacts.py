@@ -548,6 +548,106 @@ def test_w1g3_death_mask_duplicant_walks_and_is_protected_in_combat(set_pool):
         ok, _why = game.declare_blockers(1, {0: [0]})
         assert ok is not imprinted, "protection from black: Black Knight cannot block"
 
+
+def _w1g3_powder_table(set_pool, hand, *, library_extra=()):
+    """A dealt two-seat table (no turn begun) with Alice's hand set to
+    *hand* out of her library."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    pool = {**lea, **dst}
+    library = [lea["Forest"]] * 17 + [lea["Grizzly Bears"]] * 19 + [dst["Serum Powder"]] * 2
+    library += [pool[name] for name in library_extra]
+    alice = _W1G3PlayerState(name="Alice", library=library)
+    bob = _W1G3PlayerState(name="Bob", library=[lea["Forest"]] * 20)
+    game = _W1G3Game(players=[alice, bob])
+    for name in hand:
+        drawn = next(c for c in alice.library if c.name == name)
+        alice.library.remove(drawn)
+        alice.hand.append(drawn)
+    return game, alice, bob
+
+
+def test_w1g3_serum_powder_exchanges_a_hand_and_taps_for_colourless(set_pool):
+    """"Any time you could mulligan and this card is in your hand, you may
+    exile all the cards from your hand, then draw that many cards." Seven
+    exiled (the Powder with them, face up for the rest of the game: the
+    2017-11-17 ruling), seven drawn. On the battlefield it is a mana rock."""
+    game, alice, bob = _w1g3_powder_table(
+        set_pool, ["Serum Powder"] + ["Grizzly Bears"] * 6,
+    )
+    library_before = len(alice.library)
+    assert game.pregame_hand_exchange(0)
+    assert len(alice.hand) == 7 and len(alice.exile) == 7
+    assert [c.name for c in alice.exile].count("Serum Powder") == 1
+    assert len(alice.library) == library_before - 7
+    assert "and drew 7 (Serum Powder)" in game.log[-1]
+    powder_drawn = any(c.name == "Serum Powder" for c in alice.hand)
+    assert game.pregame_hand_exchange(0) is powder_drawn, (
+        "only a Powder still in the hand exchanges again"
+    )
+
+    game, alice, bob = _w1g3_table()
+    powder = _w1g3_put(game, 0, set_pool("DST")["Serum Powder"])
+    assert game.activate_permanent_ability(
+        0, "Serum Powder", permanent_index=game.battlefield_index_of(powder),
+        ability_index=0,
+    ).supported
+    assert alice.mana_pool.get("C") == 1
+
+
+def test_w1g3_serum_powder_after_a_mulligan_bottoms_what_is_owed_first(set_pool):
+    """CR 103.5 puts a mulligan's cards on the bottom as it is taken, so the
+    hand exchanged after one is the hand without them: the bottom is named
+    first (one card for one mulligan), the remaining six are exiled, six
+    drawn, and the keep owes nothing more. The exchange refuses a bottom of
+    the wrong size, and one that would take the only Powder out of the hand."""
+    game, alice, bob = _w1g3_powder_table(set_pool, [])
+    game.deal_opening_hands(0)
+    assert game.pregame_mulligan_draw(0)
+    alice.library.extend(alice.hand)
+    alice.hand.clear()
+    for name in ["Serum Powder"] + ["Grizzly Bears"] * 6:
+        drawn = next(c for c in alice.library if c.name == name)
+        alice.library.remove(drawn)
+        alice.hand.append(drawn)
+    assert game.mulligan_bottom_owed(0) == 1
+    assert not game.pregame_hand_exchange(0, [])
+    assert not game.pregame_hand_exchange(0, [0]), "the Powder itself"
+    assert len(alice.exile) == 0 and len(alice.hand) == 7, "nothing moved"
+    assert game.pregame_hand_exchange(0, [3])
+    assert len(alice.hand) == 6 and len(alice.exile) == 6
+    assert alice.library[-1].name == "Grizzly Bears", "the bottomed card"
+    assert game.mulligan_bottom_owed(0) == 0
+    game.keep_opening_hand(0, [])
+    assert len(alice.hand) == 6
+    assert alice.mulligan_bottom_paid == 0, "spent at the keep"
+
+
+def test_w1g3_serum_powder_the_ai_exchanges_a_hand_it_would_mulligan(set_pool):
+    """The AI's opening-hand rounds (``ai_mulligan.take_opening_mulligans``):
+    a no-land seven holding a Powder is exchanged rather than mulliganed —
+    the exchange costs no card — and the seat then declares over the new
+    hand. A hand it would keep is kept with the Powder in it."""
+    from engine.ai_mulligan import take_opening_mulligans
+
+    game, alice, bob = _w1g3_powder_table(
+        set_pool, ["Serum Powder"] + ["Grizzly Bears"] * 6,
+    )
+    bob.hand.extend(bob.library[:7])
+    del bob.library[:7]
+    take_opening_mulligans(game, 0)
+    exchanges = [line for line in game.log if "(Serum Powder)" in line and "exiled" in line]
+    assert len(exchanges) >= 1
+    assert len(alice.exile) >= 7
+    assert alice.exile[0].name == "Serum Powder"
+
+    game, alice, bob = _w1g3_powder_table(
+        set_pool, ["Serum Powder", "Forest", "Forest", "Forest"] + ["Grizzly Bears"] * 3,
+    )
+    bob.hand.extend(bob.library[:7])
+    del bob.library[:7]
+    take_opening_mulligans(game, 0)
+    assert alice.exile == [] and "Serum Powder" in [c.name for c in alice.hand]
+
 # ==== end W1G3 ======================================================
 
 
