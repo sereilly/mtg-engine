@@ -33,6 +33,11 @@ controls, driven on the spell-at-a-spell stack.
 Backwards on the base (8e42acee + the leftovers' earlier commits): every
 "with a single target" card refuses the Counterspell and Willbender the
 Daring Apprentice ability; the controls pass.
+
+**The population is both manifest roles** (``_pool``), so a measured set's
+retargeter is in the census before its promotion and a plain run and a
+``MTG_PROMOTE`` rehearsal ask the same table: Darksteel's Shunt joined that
+way (DST W1G3), Deflection's sentence and so Deflection's row.
 """
 from __future__ import annotations
 
@@ -41,7 +46,7 @@ import random
 import pytest
 
 from engine import Game, PlayerState
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, manifest_set_paths
 from engine.face_down import face_down_card
 from engine.faces import compilation_units
 from engine.models import Permanent
@@ -49,7 +54,15 @@ from engine.oracle import compile_card_oracle
 from engine.special_actions import take_permanent_special_action
 from tests.helpers import resolve_stack
 
-_C = {card.name: card for card in load_catalog()}
+def _pool() -> list:
+    """Both manifest roles, first printing of a name kept."""
+    cards: dict[str, object] = {}
+    for card in load_cards(manifest_set_paths(include_measured=True)):
+        cards.setdefault(card.name, card)
+    return list(cards.values())
+
+
+_C = {card.name: card for card in _pool()}
 
 
 def _kinds(program) -> set:
@@ -84,6 +97,8 @@ _RETARGETERS = {
     # "Change the target of target spell with a single target."
     "Deflection": {"how": "cast", "spell_at_spell": True, "spell_at_player": True, "ability_at_spell": False},
     "Misdirection": {"how": "cast", "spell_at_spell": True, "spell_at_player": True, "ability_at_spell": False},
+    # Darksteel (measured until its promotion): the same sentence.
+    "Shunt": {"how": "cast", "spell_at_spell": True, "spell_at_player": True, "ability_at_spell": False},
     # "…unless that spell's controller pays {2}."
     "Divert": {"how": "cast", "spell_at_spell": True, "spell_at_player": True, "ability_at_spell": False},
     # "…target spell or ability with a single target."
@@ -106,7 +121,7 @@ def test_the_census_covers_every_two_step_retarget_in_the_pool():
     """The table is the pool's, not a sample: every card whose program carries
     the two-step change is in it, and there are at least eight."""
     printed = sorted({
-        unit.name for unit in compilation_units(load_catalog())
+        unit.name for unit in compilation_units(_pool())
         if "choose_new_spell_target" in _kinds(compile_card_oracle(unit))
     })
     assert len(printed) >= 8, printed
@@ -278,7 +293,7 @@ def _retarget(game: Game, name: str, obj):
 
 
 @pytest.mark.cr("115.7a")
-@pytest.mark.parametrize("name", ["Deflection", "Misdirection", "Willbender"])
+@pytest.mark.parametrize("name", ["Deflection", "Misdirection", "Shunt", "Willbender"])
 def test_a_counterspell_is_offered_the_other_spells_and_moved_onto_the_one_chosen(name):
     """The entry's board, with a third spell so the change is a question: the
     Counterspell aimed at the Shock is offered the Lightning Bolt and the Giant
