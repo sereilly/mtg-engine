@@ -373,7 +373,9 @@ def test_the_server_side_is_derived_and_reads_what_it_should():
     assert frozenset({"hand_index", "permanent_id", "permanent_index"}) in requirements["special_action"]
     # …and the id fills the dispatcher makes before any handler runs.
     assert {"permanent_index", "permanent_name"} <= id_fills()["permanent_id"]
-    assert "target_permanent_index" in id_fills()["target_permanent_id"]
+    # A target's id fills its seat and nothing else: the engine is handed the
+    # id itself, never the slot it stands in (kg5 ids, `engine/target_keywords`).
+    assert id_fills()["target_permanent_id"] == {"target_seat"}
     # The schema half: the action route takes the request model, and the
     # models it nests are found by their annotations.
     assert route_for("/api/sessions/{}/action", "POST")[2] is GameActionRequest

@@ -219,3 +219,44 @@ def announced_slot(
         if derived is not None:
             seat, slot = derived
     return seat, slot, None
+
+
+def slot_keywords(game: "Game", zone: str, announcer: int, seat, slot, ids=None) -> dict:
+    """A target given as a picker gives it — *slot* (one, or a list) on
+    *seat*'s battlefield or in its pile, and any *ids* already held — as the
+    zone keywords an entry point takes: ``target_graveyard_indices`` for a card
+    in a graveyard, ``target_ante_index`` for one in the ante, and
+    ``target_permanent_ids`` for a permanent — the ids held, else the id of
+    what stands in each slot **now** (None for a slot that holds nothing,
+    which the caller refuses or announces as named nothing).
+
+    The one translation from a slot to an announcement, for the two callers
+    that still hold slots: the AI's choosers, which read the picker's entries
+    (``ai_actions.target_keywords``), and the wire's old slot fields, accepted
+    for one more round (``web/action_helpers.wire_target_keywords``). A slot
+    named beside no seat counts into the board the gates always read it on
+    (``bare_announcements.seat_of_unseated_slot``).
+    """
+    from .bare_announcements import seat_of_unseated_slot
+    from .game_types import target_slots
+
+    if zone == GRAVEYARD:
+        return {"target_graveyard_indices": None if slot is None else target_slots(slot)}
+    if zone == ANTE:
+        return {"target_ante_index": None if slot is None else target_slots(slot)[0]}
+    if ids and any(isinstance(pid, int) and not isinstance(pid, bool) for pid in ids):
+        return {"target_permanent_ids": list(ids)}
+    if slot is None:
+        return {"target_permanent_ids": None}
+    slots = target_slots(slot)
+    if not slots:
+        return {"target_permanent_ids": []}
+    board = seat
+    if board is None:
+        default = 1 - announcer if len(game.players) == 2 else announcer
+        board = seat_of_unseated_slot(game, announcer, slots[0], default)
+        board = default if board is None else board
+    named = [game.permanent_at(board, index) for index in slots]
+    return {"target_permanent_ids": [
+        None if permanent is None else permanent.permanent_id for permanent in named
+    ]}

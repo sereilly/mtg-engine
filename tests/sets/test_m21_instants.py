@@ -956,8 +956,9 @@ def test_the_ai_shrinks_the_opponents_creature_not_its_own(set_pool):
 
 def test_the_several_target_policy_is_unchanged_where_every_slot_agrees(set_pool):
     """The AI change must be invisible to every card that existed before it.
-    Basri's Acolyte's two slots are both "you control", so the single-seat path
-    still answers and the ids stay absent."""
+    Basri's Acolyte's two slots are both "you control": the action names two
+    of the caster's own Pegasi, by id (an action names a permanent no other
+    way since kg5's ``ids``)."""
     from engine.ai_policy import choose_cast_action
 
     pool = set_pool("M21")
@@ -972,7 +973,8 @@ def test_the_several_target_policy_is_unchanged_where_every_slot_agrees(set_pool
     action = choose_cast_action(game, 0)
 
     assert action is not None
-    assert action.target_permanent_ids is None
+    named = [game.permanent_by_id(pid) for pid in action.target_permanent_ids]
+    assert len(named) == 2 and all(p in p1.battlefield for p in named)
 
 
 # --- Round 71: the keyword grant reads the noun phrase it was given ---------

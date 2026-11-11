@@ -456,6 +456,12 @@ class GameActionRequest(BaseModel):
     prompt_subject_ordinal: int | None = Field(default=None, ge=0)
     target_permanent_id: int | None = Field(default=None, ge=1)
     target_permanent_ids: list[int] | None = Field(default=None)
+    # A target that is **a card in a graveyard**, by its place in the pile of
+    # ``target_seat`` (the spell's own pile where it reads one) — the zone's
+    # own keyword (``engine/target_keywords``): a card in a graveyard has no
+    # id. Raise Dead's card, Grave Robbers' artifact card, "up to three target
+    # cards from a single graveyard".
+    target_graveyard_indices: list[int] | None = Field(default=None, max_length=16)
     # One entry per **role** of a several-role announcement, in role order, for
     # an ability whose slots do not all sit on a battlefield (Goblin Welder).
     # Authoritative over ``target_permanent_ids`` when present; absent for

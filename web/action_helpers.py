@@ -15,6 +15,62 @@ from engine.faces import spell_named
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.ai_target_sides import cast_helps_the_player_it_names
+from engine.target_keywords import (BATTLEFIELD, ability_target_zone,
+                                    cast_target_zone, slot_keywords)
+from engine.targeting import derive_activation_spec
+
+_GONE = "that permanent is no longer on the battlefield"
+
+
+def wire_target_keywords(
+    game, zone: str, announcer: int, seat, *, ids=None, slot=None,
+    graveyard_indices=None,
+) -> dict:
+    """A request's target as the engine's zone keywords
+    (``engine/target_keywords``): ``target_graveyard_indices`` as the client
+    sent it, the permanent ids as they came (the preamble has 404'd a stale
+    one), and otherwise **the old slot fields** — ``target_permanent_index``,
+    ``target_permanent_indices``, a cast's ``permanent_index`` — accepted for
+    one more round and read in the zone the card names its target in
+    (*zone*): a graveyard card by its place, a permanent by the id of what
+    stands in that slot now. A battlefield slot that holds nothing is the 404
+    a stale id is, never an announcement of nothing.
+
+    The one place the wire's target reaches the engine: no slot is handed on.
+    """
+    if graveyard_indices is not None:
+        return {"target_graveyard_indices": list(graveyard_indices)}
+    if ids is not None:
+        return {"target_permanent_ids": list(ids)}
+    if slot is None:
+        return {}
+    keywords = slot_keywords(game, zone, announcer, seat, slot)
+    if any(pid is None for pid in keywords.get("target_permanent_ids") or ()):
+        raise HTTPException(status_code=404, detail=_GONE)
+    return keywords
+
+
+def request_target_ids(req) -> "list[int] | None":
+    """The permanents a request names as its targets by id: the list, or
+    the one, or None."""
+    if req.target_permanent_ids is not None:
+        return list(req.target_permanent_ids)
+    if req.target_permanent_id is not None:
+        return [req.target_permanent_id]
+    return None
+
+
+def activation_zone(game, permanent, ability_index) -> str:
+    """The zone the activation of *permanent*'s ability names its target
+    in — the ability ``ability_index`` names among its usable ones, or (none
+    named) the first that chooses anything: the ability whose spec the
+    client's picker read (``Game.activation_target_spec``)."""
+    usable = game.usable_abilities_of(permanent, card=permanent.effective_card)
+    if ability_index is not None:
+        chosen = usable[ability_index] if 0 <= ability_index < len(usable) else None
+    else:
+        chosen = next((a for a in usable if derive_activation_spec(a) is not None), None)
+    return BATTLEFIELD if chosen is None else ability_target_zone(chosen)
 
 
 def _default_target(game, caster_index: int, card_name: str, req) -> int:
@@ -36,19 +92,7 @@ def _default_target(game, caster_index: int, card_name: str, req) -> int:
     this cannot find keeps the opposing default, which is what the engine's
     own ``_spell_default_seat`` answers.
     """
-    zone = getattr(req, "from_zone", None) or "hand"
-    player = game.players[caster_index]
-    pile = getattr(player, zone, None)
-    if zone == "library":
-        pile = (pile or [])[:1]
-    card = next(
-        (
-            spell for spell in (
-                spell_named(held, card_name) for held in (pile or ())
-            ) if spell is not None
-        ),
-        None,
-    )
+    card = _spell_requested(game, caster_index, card_name, req)
     if card is not None and cast_helps_the_player_it_names(
         card, compile_card_oracle(card),
         mode_index=getattr(req, "mode_index", None),
@@ -56,66 +100,47 @@ def _default_target(game, caster_index: int, card_name: str, req) -> int:
         return caster_index
     return game._spell_default_seat(caster_index)
 
-def _mode_target_ids(mode) -> "list[int] | None":
-    """A mode's several targets by identity (``ModeChoice.permanent_ids``),
-    or None. The slots :func:`_mode_target_index` resolves are positions on
-    each permanent's own battlefield; these are what say which battlefield."""
+def _spell_requested(game, caster_index: int, card_name: str, req):
+    """The spell the request casts, found where it says it is cast from
+    (the named half of a split card), or None."""
+    zone = getattr(req, "from_zone", None) or "hand"
+    player = game.players[caster_index]
+    pile = getattr(player, zone, None)
+    if zone == "library":
+        pile = (pile or [])[:1]
+    return next(
+        (
+            spell for spell in (
+                spell_named(held, card_name) for held in (pile or ())
+            ) if spell is not None
+        ),
+        None,
+    )
+
+
+def _mode_target_keywords(game, card, caster_index: int, mode) -> dict:
+    """One chosen mode's targets as the engine's zone keywords: its ids (each
+    checked, a stale one the 404 the cast's own is), or its slot in the zone
+    that mode names its target in (:func:`wire_target_keywords`)."""
     several = getattr(mode, "permanent_ids", None)
-    return list(several) if several else None
+    if several and (mode.permanent_id is not None or mode.permanent_index is not None):
+        raise HTTPException(
+            status_code=422,
+            detail="a mode names its permanents once: permanent_ids alone",
+        )
+    ids = list(several) if several else (
+        [mode.permanent_id] if mode.permanent_id is not None else None
+    )
+    for permanent_id in ids or ():
+        if game.find_permanent_by_id(permanent_id) is None:
+            raise HTTPException(status_code=404, detail=_GONE)
+    zone = (
+        cast_target_zone(card, mode_index=mode.index) if card is not None else BATTLEFIELD
+    )
+    return wire_target_keywords(
+        game, zone, caster_index, mode.target_seat, ids=ids, slot=mode.permanent_index,
+    )
 
-
-def _mode_target_index(game, mode):
-    """The battlefield slot one chosen mode named, preferring its stable id.
-
-    A mode is chosen as the spell is cast and the spell then waits on the stack,
-    so the slot it names can renumber underneath it (CR 400.7). The client sends
-    the id when it resolved one; an id that no longer names a permanent yields
-    None rather than the index beside it, because the index is a *position* and
-    the permanent that position now holds is a different object.
-    """
-    several = getattr(mode, "permanent_ids", None)
-    if several:
-        # A mode naming several permanents ("Tap two target creatures"): each
-        # id resolved to its slot on the mode's one board, refused whole when
-        # any is gone or sits on another — a mode's slots are positions on
-        # ``target_seat``'s battlefield, and a slot read on the wrong board is
-        # a different permanent.
-        if mode.permanent_id is not None or mode.permanent_index is not None:
-            raise HTTPException(
-                status_code=422,
-                detail="a mode names its permanents once: permanent_ids alone",
-            )
-        slots = []
-        for permanent_id in several:
-            found = game.find_permanent_by_id(permanent_id)
-            if found is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="that permanent is no longer on the battlefield",
-                )
-            _seat_found, permanent = found
-            # Each id's own slot on its own board: a mode's several targets
-            # may sit on two battlefields ("Tap two target creatures"), and
-            # the identities ride beside them (``target_permanent_ids`` on the
-            # mode, :func:`_mode_target_ids`), which is what the engine reads
-            # a cross-board announcement by — as the cast's own ids are.
-            slots.append(game.battlefield_index_of(permanent))
-        return slots
-    if mode.permanent_id is not None:
-        found = game.find_permanent_by_id(mode.permanent_id)
-        if found is None:
-            # A 404, exactly as the preamble makes for the spell's own target:
-            # returning None here would leave the mode with the *index* beside
-            # it, which by now addresses whichever permanent slid into the
-            # vacated slot. Refusing the whole cast is the honest answer, and
-            # it is the one the rest of this protocol already gives.
-            raise HTTPException(
-                status_code=404,
-                detail="that permanent is no longer on the battlefield",
-            )
-        _seat, permanent = found
-        return game.battlefield_index_of(permanent)
-    return mode.permanent_index
 
 def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     """Queue a spell from ``seat``'s hand using every targeting field on the
@@ -134,6 +159,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         return len(game.stack) - 1 - top_first
 
     engine_stack_index = _engine_stack_index(req.target_stack_index)
+    cast_card = _spell_requested(game, seat, card_name, req)
     # "Choose one or more —": each mode's own targets (CR 601.2c), forwarded as
     # the plain dicts the engine's ``_resolve_chosen_modes`` reads. The seat and
     # index keep the engine's names here rather than the wire's, so the
@@ -144,23 +170,34 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
             {
                 "index": mode.index,
                 "target_player_index": mode.target_seat,
-                # The id is resolved to a slot here, at the boundary, exactly as
-                # the spell's own target is: a stale id is a refusal further in,
-                # never a fall back to whatever now sits at the index.
-                "target_permanent_index": _mode_target_index(game, mode),
-                "target_permanent_ids": _mode_target_ids(mode),
+                # Each mode's targets in the engine's zone keywords, checked
+                # here at the boundary as the spell's own are: a stale id is a
+                # 404, never a fall back to whatever now sits at an index.
+                **_mode_target_keywords(game, cast_card, seat, mode),
                 "target_stack_index": _engine_stack_index(mode.target_stack_index),
             }
             for mode in req.mode_choices
         ]
-    # Fireball-style multi-target spells send a list; it wins over permanent_index.
-    # ``target_permanent_index`` is accepted as the same thing: it is what
-    # ``target_permanent_id`` normalizes to, and a cast's target has no reason to
-    # be spelled differently from every other action's target.
-    permanent_target = (
-        req.target_permanent_indices
-        if req.target_permanent_indices is not None
-        else (req.permanent_index if req.permanent_index is not None else req.target_permanent_index)
+    # The cast's target in the engine's zone keywords (`wire_target_keywords`):
+    # its ids — the list, the one, or a cast's ``permanent_id`` (which names
+    # its target) — else the old slot fields, read in the zone the spell names
+    # its target in. A several-target list wins over the one slot.
+    target_ids = request_target_ids(req)
+    if target_ids is None and req.permanent_id is not None:
+        target_ids = [req.permanent_id]
+    target_fields = wire_target_keywords(
+        game,
+        cast_target_zone(cast_card, mode_index=req.mode_index)
+        if cast_card is not None else BATTLEFIELD,
+        seat,
+        req.target_seat,
+        ids=target_ids,
+        slot=(
+            req.target_permanent_indices
+            if req.target_permanent_indices is not None
+            else (req.permanent_index if req.permanent_index is not None else req.target_permanent_index)
+        ),
+        graveyard_indices=req.target_graveyard_indices,
     )
     # **An empty roles announcement is "no target", not a bare cast.** "Any
     # number of target opponents" (Wheel and Deal) and "any number of target
@@ -248,16 +285,11 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         seat,
         card_name,
         target_player_index=target,
-        target_permanent_index=permanent_target,
-        # The same targets by stable identity. The preamble above resolves these
-        # off the wire and deliberately *keeps* them, because a pair of targets
-        # may sit on two battlefields and `target_permanent_index` is positional
-        # on one `target_seat` — and then this function dropped them, so every
-        # cross-board cast over HTTP lost its second slot and resolved as an
-        # index on the first slot's board. Rookie Mistake has been half-castable
-        # in the browser since round 65 for exactly this reason; the engine and
-        # the activation path (below) had it right the whole time.
-        target_permanent_ids=req.target_permanent_ids,
+        # The targets by stable identity (or a graveyard card by its place):
+        # a pair of targets may sit on two battlefields, which no slot on one
+        # `target_seat` can say — Rookie Mistake was half-castable in the
+        # browser while this forwarded a slot beside its ids.
+        **target_fields,
         # …or the same announcement one role at a time (see above). Where
         # present it is the announcement, and the engine derives the id list
         # and the seat(s) from it.

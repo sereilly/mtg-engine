@@ -26,6 +26,8 @@ from engine.face_down import cast_timing_card
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
 from engine.mana_payment import is_mana_ability, taps_for_payment
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
+from engine.oracle import compile_card_oracle
+from engine.target_keywords import BATTLEFIELD, ability_target_zone
 
 from .action_registry import ACTION_HANDLERS, HUMAN_ONLY, action_handler
 from .prompts import blocking_prompt
@@ -51,6 +53,9 @@ from .action_helpers import (
     _find_card_in_hand,
     _find_controlled_permanent,
     _queue_spell_from_request,
+    activation_zone,
+    request_target_ids,
+    wire_target_keywords,
 )
 
 # Imported for their registration side effects: each module's import fills
@@ -69,7 +74,10 @@ from . import (  # noqa: F401
 
 def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
     """Turn every ``*_permanent_id`` on the request into the index the rest of
-    this module already speaks.
+    this module already speaks — **except a target's**, which the engine is
+    handed as the id itself (``engine/target_keywords``): a target id is
+    checked here (a 404 when it no longer resolves) and the seat it stands on
+    written beside it, and nothing else.
 
     **One place, at the top of the dispatch.** The alternative — teaching each
     branch to accept either spelling — is thirty places that have to agree about
@@ -113,8 +121,7 @@ def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
         found = game.find_permanent_by_id(req.target_permanent_id)
         if found is None:
             raise HTTPException(status_code=404, detail=gone)
-        seat, permanent = found
-        update["target_permanent_index"] = game.battlefield_index_of(permanent)
+        seat, _permanent = found
         update["target_seat"] = seat
 
     if req.cost_permanent_id is not None:
@@ -127,27 +134,16 @@ def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
         update["cost_permanent_index"] = game.battlefield_index_of(permanent)
 
     if req.target_permanent_ids is not None:
-        indices: list[int] = []
         seats = set()
         for permanent_id in req.target_permanent_ids:
             found = game.find_permanent_by_id(permanent_id)
             if found is None:
                 raise HTTPException(status_code=404, detail=gone)
-            seat, permanent = found
-            indices.append(game.battlefield_index_of(permanent))
-            seats.add(seat)
-        update["target_permanent_indices"] = indices
-        # Kept, not just converted. A pair of targets may sit on *two*
-        # battlefields ("target creature you control … another target
-        # creature", Garruk, Savage Herald's -2), and the engine re-derives
-        # identities from one `target_seat` unless the caller supplies them —
-        # so the ids resolved here are what the second slot's identity comes
-        # from.
-        update["target_permanent_ids"] = list(req.target_permanent_ids)
+            seats.add(found[0])
+        # The ids travel as they came — a pair of targets may sit on *two*
+        # battlefields (Garruk, Savage Herald's -2), which no slot list on one
+        # `target_seat` can say. A single-seat list names its seat as well.
         if len(seats) == 1:
-            # A single-seat list is what ``target_permanent_indices`` means;
-            # a spread across seats has to arrive as ``divided_targets``, which
-            # carries a seat per entry, or through the ids above.
             update["target_seat"] = seats.pop()
 
     if req.source_permanent_id is not None:
@@ -753,6 +749,19 @@ def _action_activate(session, req, seat_type):
             named_cost = session.game.permanent_by_id(req.cost_permanent_id)
             if named_cost is None or not session.game.controls(req.seat, named_cost):
                 cost_permanent_index = None
+        target_fields = wire_target_keywords(
+            session.game,
+            activation_zone(session.game, permanent, req.ability_index),
+            req.seat, target,
+            ids=request_target_ids(req),
+            slot=(
+                req.target_permanent_indices
+                if req.target_permanent_indices is not None
+                else req.target_permanent_index
+            ),
+            graveyard_indices=req.target_graveyard_indices,
+        )
+
         def announce(game):
             return game.queue_permanent_ability(
                 req.seat,
@@ -767,12 +776,10 @@ def _action_activate(session, req, seat_type):
                 # (Balduvian Shaman); the cast side already forwards the same
                 # field, and the request schema has carried it all along.
                 old_color=req.old_color,
-                target_permanent_index=(
-                    req.target_permanent_indices
-                    if req.target_permanent_indices is not None
-                    else req.target_permanent_index
-                ),
-                target_permanent_ids=req.target_permanent_ids,
+                # The target in the engine's zone keywords — ids as they came,
+                # a graveyard card by its place, the old slot fields read in
+                # the zone the ability names its target in.
+                **target_fields,
                 # …and the same announcement where its slots are not all
                 # permanents (Goblin Welder's artifact plus a card in a graveyard).
                 # Forwarded as plain dicts, which is the shape the engine's own
@@ -944,6 +951,16 @@ def _action_activate_graveyard(session, req, seat_type):
             detail="a graveyard ability names one target, a permanent or a player",
         )
     card_name = pile[index].name
+    abilities = compile_card_oracle(pile[index]).activated_abilities
+    named_ability = req.ability_index if req.ability_index is not None else 0
+    target_fields = wire_target_keywords(
+        session.game,
+        ability_target_zone(abilities[named_ability])
+        if 0 <= named_ability < len(abilities) else BATTLEFIELD,
+        req.seat, req.target_seat,
+        ids=request_target_ids(req), slot=req.target_permanent_index,
+        graveyard_indices=req.target_graveyard_indices,
+    )
 
     def announce(game):
         return game.activate_from_graveyard(
@@ -958,8 +975,7 @@ def _action_activate_graveyard(session, req, seat_type):
             cost_hand_index=req.cost_hand_index,
             cost_other_hand_indices=req.cost_other_hand_indices,
             target_player_index=req.target_seat,
-            target_permanent_index=req.target_permanent_index,
-            target_permanent_ids=req.target_permanent_ids,
+            **target_fields,
         )
 
     if req.auto_tap:

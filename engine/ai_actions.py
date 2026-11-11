@@ -412,40 +412,22 @@ def target_keywords(
 ) -> dict:
     """A chooser's target — *slot* (one, or a list) on *seat*'s battlefield or
     in its pile, and the *ids* it already holds — as the zone keywords an
-    action carries (``engine/target_keywords``): ``target_permanent_ids`` for a
-    permanent, ``target_graveyard_indices`` for a card in a graveyard.
+    action carries: ``target_permanent_ids`` for a permanent,
+    ``target_graveyard_indices`` for a card in a graveyard.
 
-    **The one place a chooser's slot becomes an announcement.** The choosers
-    read the picker's entries, which address a permanent by seat and slot; the
-    action names it by id, taken here while the slot and the board agree, so
-    nothing the payment does before the announcement can repoint it. Ids a
-    chooser already holds (a two-board pick) are kept as they are. A slot named
-    beside no seat counts into the board the engine always read it on
-    (``bare_announcements.seat_of_unseated_slot``).
+    **The one place a chooser's slot becomes an announcement**, through the
+    engine's one translation (``target_keywords.slot_keywords``): the choosers
+    read the picker's entries, which address a permanent by seat and slot, and
+    the action names it by id, taken here while the slot and the board agree,
+    so nothing the payment does before the announcement can repoint it. No
+    chooser names a card in the ante (Darkpact's spec offers none), and an
+    action carries no field for one: the handler's answer stands.
     """
-    from .bare_announcements import seat_of_unseated_slot
-    from .game_types import target_slots
-    from .target_keywords import ANTE, GRAVEYARD
+    from .target_keywords import slot_keywords
 
-    if zone == GRAVEYARD:
-        return {"target_graveyard_indices": None if slot is None else target_slots(slot)}
-    if zone == ANTE:
-        # No chooser names a card in the ante (Darkpact's spec offers none),
-        # and an action carries no slot for one: the handler's answer stands.
-        return {}
-    if ids and any(isinstance(pid, int) for pid in ids):
-        return {"target_permanent_ids": list(ids)}
-    if slot is None:
-        return {"target_permanent_ids": None}
-    board = seat
-    if board is None:
-        default = 1 - announcer if len(game.players) == 2 else announcer
-        board = seat_of_unseated_slot(game, announcer, slot, default)
-        board = default if board is None else board
-    named = [game.permanent_at(board, index) for index in target_slots(slot)]
-    return {"target_permanent_ids": [
-        None if permanent is None else permanent.permanent_id for permanent in named
-    ]}
+    keywords = slot_keywords(game, zone, announcer, seat, slot, ids)
+    keywords.pop("target_ante_index", None)
+    return keywords
 
 
 def _zone_seat(player_index: int, under: "PermittedCast | None") -> "int | None":
