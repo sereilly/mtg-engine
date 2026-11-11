@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**5 unclaimed sentence(s) across 5 supported card(s).**
+**3 unclaimed sentence(s) across 3 supported card(s).**
 
 - **Aether Vial**
   - `{t}: you may put a creature card with mana value equal to the number of charge counters on this artifact from your hand onto the battlefield`
@@ -33,10 +33,6 @@ anything anyone did, and every ingest would arrive red.
   - `at the beginning of your upkeep, you may copy a card exiled with this artifact. if you do, you may cast the copy without paying its mana cost`
 - **Serum Powder**
   - `any time you could mulligan and this card is in your hand, you may exile all the cards from your hand, then draw that many cards`
-- **Talon of Pain**
-  - `whenever a source you control other than this artifact deals damage to an opponent, put a charge counter on this artifact`
-- **Thunderstaff**
-  - `as long as this artifact is untapped, if a creature would deal combat damage to you, prevent 1 of that damage`
 
 ## Acknowledged simplifications
 

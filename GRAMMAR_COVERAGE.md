@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| DST *(measured)* | 165 | 285 | 71.9% | 68.8% | 48.8% | 118 |
+| DST *(measured)* | 165 | 285 | 74.4% | 71.9% | 51.2% | 122 |
 | **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -69,8 +69,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 923 | 480 | expected a subject |  |
-| 197 | 101 | unrecognized effect verb |  |
+| 918 | 475 | expected a subject |  |
+| 196 | 100 | unrecognized effect verb |  |
 | 141 | 74 | unconsumed text |  |
 | 74 | 55 | granted ability in quotes | phase 3 (quoted abilities) |
 | 42 | 8 | expected what this creature can't block, or a duration |  |
@@ -93,7 +93,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 2 | expected 'a' |  |
-| 2 | 2 | expected a keyword ability |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -4345,6 +4345,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Flame Wave**
   - `Flame Wave deals 4 damage to target player or planeswalker and each creature that player or that planeswalker's controller controls.`
+- **Flamebreak**
+  - `Flamebreak deals 3 damage to each creature without flying and each player. Creatures dealt damage this way can't be regenerated this turn.`
 - **Flameshot**
   - `Flameshot deals 3 damage divided as you choose among one, two, or three target creatures.`
 - **Flamestick Courier**
@@ -5381,6 +5383,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, change Halfdane's base power and toughness to the power and toughness of target creature other than Halfdane until the end of your next upkeep.`
 - **Hall of Gemstone**
   - `At the beginning of each player's upkeep, that player chooses a color. Until end of turn, lands tapped for mana produce mana of the chosen color instead of any other color.`
+- **Hallow**
+  - `Prevent all damage target spell would deal this turn. You gain life equal to the damage prevented this way.`
 - **Hallowed Ground**
   - `{W}{W}: Return target nonsnow land you control to its owner's hand.`
 - **Hallowed Healer**
@@ -7475,6 +7479,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Mephitic Ooze**
   - `This creature gets +1/+0 for each artifact you control.`
+  - `Whenever this creature deals combat damage to a creature, destroy that creature. The creature can't be regenerated.`
 - **Mercadia's Downfall**
   - `Each attacking creature gets +1/+0 until end of turn for each nonbasic land defending player controls.`
 - **Mercadian Atlas**
@@ -10942,6 +10947,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Shrink**
   - `Target creature gets -5/-0 until end of turn.`
   - `Target creature gets -5/-0 until end of turn.`
+- **Shriveling Rot**
+  - `• Until end of turn, whenever a creature is dealt damage, destroy it.`
+  - `• Until end of turn, whenever a creature dies, that creature's controller loses life equal to its toughness.`
 - **Shrouded Serpent**
   - `Whenever this creature attacks, defending player may pay {4}. If that player doesn't, this creature can't be blocked this turn.`
 - **Shunt**
@@ -12188,6 +12196,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Talon Sliver**
   - `All Sliver creatures have first strike.`
 - **Talon of Pain**
+  - `Whenever a source you control other than this artifact deals damage to an opponent, put a charge counter on this artifact.`
   - `{X}, {T}, Remove X charge counters from this artifact: It deals X damage to any target.`
 - **Talruum Champion**
   - `Whenever this creature blocks or becomes blocked by a creature, that creature loses first strike until end of turn.`
@@ -13009,6 +13018,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Turf Wound**
   - `Target player can't play lands this turn.`
   - `Draw a card.`
+- **Turn the Tables**
+  - `All combat damage that would be dealt to you this turn is dealt to target attacking creature instead.`
 - **Turn to Dust**
   - `Destroy target Equipment. Add {G}.`
 - **Turn to Slag**

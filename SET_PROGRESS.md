@@ -51,7 +51,7 @@ Do not edit by hand — re-run the script instead.
 | 37 | Scourge | SCG | 2003-05-26 | 143 | 142 | Complete (143/143 supported) |
 | 38 | Eighth Edition | 8ED | 2003-07-28 | 342 | 0 | Complete (342/342 supported) |
 | 39 | Mirrodin | MRD | 2003-10-02 | 291 | 269 | Complete (291/291 supported) |
-| 40 | Darksteel | DST | 2004-02-06 | 165 | 162 | Measured (138/165 supported, not shipped) |
+| 40 | Darksteel | DST | 2004-02-06 | 165 | 162 | Measured (143/165 supported, not shipped) |
 | 41 | Fifth Dawn | 5DN | 2004-06-04 | 165 | 162 | Not Implemented |
 | 42 | Champions of Kamigawa | CHK | 2004-10-01 | 291 | 283 | Not Implemented |
 | 43 | Betrayers of Kamigawa | BOK | 2005-02-04 | 165 | 159 | Not Implemented |
