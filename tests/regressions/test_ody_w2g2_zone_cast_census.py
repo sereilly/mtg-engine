@@ -292,14 +292,27 @@ def announced(game, action) -> tuple:
     for: the seat, the objects **by name** (a permanent's id is its own
     game's), the mode, X, the division and the optional costs."""
     said = cast_announcement(action)
-    ids = said.get("target_permanent_ids") or []
-    names = tuple(
-        getattr(getattr(game.permanent_by_id(pid), "card", None), "name", None)
-        for pid in ids if isinstance(pid, int)
-    )
+
+    def by_name(ids):
+        return tuple(
+            getattr(getattr(game.permanent_by_id(pid), "card", None), "name", None)
+            for pid in (ids or ()) if isinstance(pid, int)
+        )
+
+    names = by_name(said.get("target_permanent_ids"))
+    # A chosen mode names its permanent by id too (kg5 ``ids``: Sublime
+    # Epiphany's "return target nonland permanent"), so each entry is read
+    # by name as the cast's own targets are.
+    modes = None if said["mode_choices"] is None else [
+        sorted(
+            (key, by_name(value) if key == "target_permanent_ids" else repr(value))
+            for key, value in entry.items()
+        )
+        for entry in said["mode_choices"]
+    ]
     return (
         said["target_player_index"], repr(said["target_graveyard_indices"]), names,
-        said["x_value"], said["mode_index"], repr(said["mode_choices"]),
+        said["x_value"], said["mode_index"], repr(modes),
         repr(said["divided_targets"]), repr(said["optional_cost_payments"]),
         said["target_stack_index"],
     )

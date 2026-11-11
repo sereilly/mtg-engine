@@ -117,6 +117,31 @@ def test_a_permanent_named_by_id_alone_is_found_on_its_own_board(pool):
     assert p0.life == 23
 
 
+@pytest.mark.cr("601.2c")
+def test_one_id_is_one_target_for_a_spell_that_prints_two(pool):
+    """Captain's Maneuver prints two targets ("target creature … another
+    target creature"), so one is an illegal announcement (CR 601.2c, 601.2e).
+    By one slot it was refused; by one id it was cast: the divided-target
+    gate counted the id and the slot the entry point derives from that same
+    id, two targets for one. Found by the round's full gate
+    (``test_cast_announcements_w2g7``'s id-against-slot sweep)."""
+    game, p0, _p1 = _game(pool, hand=["Captain's Maneuver"], mine=["Hill Giant"])
+    giant = p0.battlefield[0]
+
+    by_id = game.queue_from_hand(
+        0, "Captain's Maneuver", x_value=1, target_permanent_ids=[giant.permanent_id],
+    )
+
+    game, _p0, _p1 = _game(pool, hand=["Captain's Maneuver"], mine=["Hill Giant"])
+    by_slot = game.queue_from_hand(
+        0, "Captain's Maneuver", x_value=1, target_player_index=0, target_permanent_index=0,
+    )
+    assert not by_slot.supported
+    assert not by_id.supported, by_id.details
+    assert by_id.details == by_slot.details
+    assert "exactly 2 targets (1 named" in by_id.details
+
+
 def test_an_activation_names_a_graveyard_card_by_its_place(pool):
     """Grave Robbers: "{B}, {T}: Exile target artifact card from a graveyard.
     You gain 2 life." The activation door takes the same keyword."""

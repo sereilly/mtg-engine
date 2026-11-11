@@ -359,10 +359,14 @@ def _named_divided_targets(
     disagree about what a legal target is.
     """
     named = len([pid for pid in (target_permanent_ids or []) if isinstance(pid, int)])
-    if isinstance(target_permanent_index, list):
-        named += len([i for i in target_permanent_index if isinstance(i, int)])
-    elif isinstance(target_permanent_index, int):
-        named += 1
+    # A slot beside the ids is where those same ids stand — the entry point
+    # derives it from them (``target_keywords.announced_slot``) — not another
+    # target, so it counts only where no id names one: counted as well, one
+    # Captain's Maneuver aimed by id named "2 of exactly 2" and was cast.
+    if not named and isinstance(target_permanent_index, list):
+        named = len([i for i in target_permanent_index if isinstance(i, int)])
+    elif not named and isinstance(target_permanent_index, int):
+        named = 1
     if named or target_player_index is None:
         return named
     spec = derive_cast_spec(

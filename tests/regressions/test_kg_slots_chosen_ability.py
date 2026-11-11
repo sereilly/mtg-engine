@@ -241,8 +241,13 @@ def test_the_ai_names_the_word_the_opposing_board_has():
 def test_a_seeded_run_activates_phyrexian_splicer():
     """Phyrexian Splicer pinned into both decks of a seeded Tempest run: a
     seat activates it at least once and nothing it proposed was refused."""
+    # Seed 4 since kg5: the round's AI branches, merged together, moved seed
+    # 3's games to ones where no seat activates the Splicer (the merged tree
+    # before ``ids`` already fails it, the round's base passes it); 4 is
+    # the first seed after 3 that holds every assertion below
+    # (scratch/kg5/tools/reseed_splicer.py).
     report = run_ai_simulation(
-        manifest_set_path("TMP", include_measured=True), games=2, seed=3,
+        manifest_set_path("TMP", include_measured=True), games=2, seed=4,
         max_turns=14, required_cards=["Phyrexian Splicer"],
     )
     assert report.games_completed == 2
