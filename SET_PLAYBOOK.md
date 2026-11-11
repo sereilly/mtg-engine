@@ -975,7 +975,13 @@ green, the trackers agreeing the set ships.
    full pass, found four censuses no group had run, each driving a table
    that did not yet answer a branch's new question (an entry prompt, a
    trample assignment, a flashback left behind as a want, the defender's
-   window after the blocks). Promotion
+   window after the blocks). kg5's found four more: two seeded rows the AI
+   branches moved only together, and two of the last group's own — a double
+   count its new id keyword made in the divided-target gate, found by a
+   full-marked sweep, and a census file it had edited and run in the quick
+   pass alone. `tests_for_diff.py --run` keeps the quick pass, so a brief
+   says to run each test file the group edits by name, which runs it whole.
+   Promotion
    widens every `load_catalog()` guard and shows the set
    to `parse_coverage` for the first time, so findings surface here by
    construction; rehearsing early hands them to somebody still in the code.

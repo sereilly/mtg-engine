@@ -1985,4 +1985,19 @@ checks, the client's cast bodies, and 1,236 test calls kept on the old
 keyword as an adapter (the 220 graveyard calls converted); no compiled
 program and no seeded game moved.
 
-<!-- kg5 integrator: the full gate -->
+*The full gate*, the round's first whole full pass, ran on the merged tree
+with `ids` and the docs in it. It was red in four tests no group had run, and
+the four were placed by running them on the base (all pass), on the tree
+before `ids` (two fail) and on the tip:
+- Two seeded rows (Phyrexian Splicer's Tempest run; the ICE row of the CR
+  508.8 skipped-steps census) had been moved by the AI branches together.
+  Each was reseeded to the first seed after its old one that holds every
+  assertion of its test.
+- Two were `ids`':
+  - the divided-target gate counted a spell's ids and the slot derived from
+    them, so one Captain's Maneuver aimed by id was cast with one of its two
+    targets (CR 601.2c), now held in the quick pass too;
+  - the zone-cast census compared two games' ids inside a chosen mode.
+
+The fix moved no seeded game against the tree before `ids`. The full pass ran
+again on the fixed tree before `main` moved.
