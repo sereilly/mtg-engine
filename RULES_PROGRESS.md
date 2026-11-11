@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**442 / 653 tracked rules covered (67%)** — 3712 tests, 0 unannotated.
+**442 / 653 tracked rules covered (67%)** — 3716 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -163,7 +163,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
 - [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(7 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
-- [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(15 tests, subrules a)*
+- [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(17 tests, subrules a)*
 - [x] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod... *(12 tests)*
 - [ ] **106.8** If an effect would add mana represented by a hybrid mana symbol to a player’s mana pool, that pla...
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...
@@ -383,7 +383,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 205. Type Line
 
-- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(19 tests, subrules ab)*
+- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(20 tests, subrules ab)*
 - [x] **205.2** Card Types *(14 tests, subrules ab)*
 - [x] **205.3** Subtypes *(50 tests, subrules bim)*
 - [x] **205.4** Supertypes *(11 tests, subrules abcd)*
@@ -781,7 +781,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(176 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(178 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(22 tests, subrules abc)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
@@ -815,7 +815,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 615. Prevention Effects
 
-- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(22 tests, subrules a)*
+- [x] **615.1** Some continuous effects are prevention effects. Like replacement effects (see rule 614), preventi... *(24 tests, subrules a)*
 - [ ] **615.2** Many prevention effects apply to damage from a source. See rule 609.7.
 - [x] **615.3** There are no special restrictions on casting a spell or activating an ability that generates a pr... *(6 tests)*
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
@@ -867,7 +867,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.14** Fight *(8 tests, subrules abd)*
 - [x] **701.17** Mill *(7 tests, subrules a)*
 - [x] **701.18** Play *(6 tests, subrules ab)*
-- [x] **701.19** Regenerate *(35 tests, subrules abc)*
+- [x] **701.19** Regenerate *(38 tests, subrules abc)*
 - [x] **701.20** Reveal *(15 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(33 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
