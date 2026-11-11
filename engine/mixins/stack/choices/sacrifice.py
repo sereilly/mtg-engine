@@ -620,16 +620,20 @@ class SacrificeChoicesMixin:
         controller's destroy sweep, so regeneration and indestructible apply."""
         reason = choice.data.get("reason", "Effect")
         died: list = []
-        for perm in chosen:
-            seat = self.controller_index_of(perm)
-            if seat is None or not self.is_on_battlefield(perm):
-                continue
-            # The chooser's seat is the effect's controller ("choose" has no
-            # other subject), the seat a destruction announces (CR 109.5).
-            died.extend(self._destroy_swept_permanents(
-                self.players[seat], lambda candidate, picked=perm: candidate is picked,
-                cause=choice.player_index,
-            ))
+        # The caller's event already (re-entrant): stated here as well, so the
+        # loop is one departure whoever calls it (CR 603.10a).
+        with self.leaving_together():
+            for perm in chosen:
+                seat = self.controller_index_of(perm)
+                if seat is None or not self.is_on_battlefield(perm):
+                    continue
+                # The chooser's seat is the effect's controller ("choose" has
+                # no other subject), the seat a destruction announces (CR 109.5).
+                died.extend(self._destroy_swept_permanents(
+                    self.players[seat],
+                    lambda candidate, picked=perm: candidate is picked,
+                    cause=choice.player_index,
+                ))
         self.log.append(
             f"{reason} destroyed "
             + (", ".join(perm.card.name for perm in died) or "nothing")
