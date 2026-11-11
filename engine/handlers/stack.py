@@ -288,7 +288,7 @@ def cast_copy_of_exiled_card(game: Game, instruction: OracleInstruction, context
     exile ("the copy can't be made"). Several is CR 607.3: one offer per card
     (CR 707.12a).
     """
-    from ..copy_casts import arm_copy_cast
+    from ..copy_casts import arm_copy_cast, new_one_of, one_of_taken
     from ..linked_exile import cards_still_exiled_with
 
     seat = next(
@@ -301,8 +301,15 @@ def cast_copy_of_exiled_card(game: Game, instruction: OracleInstruction, context
     if seat is None or not exiled:
         game.log.append(f"{context.card.name}: no card is exiled with it to copy")
         return True, "resolved"
+    # "…you may copy **a card exiled with this artifact**" (Panoptic Mirror):
+    # one of them, the controller's choice (CR 607.3), offered card by card
+    # under one record — a seat nobody asks answers each as it is armed, so
+    # the offers stop at the first copy cast.
+    one_of = new_one_of() if instruction.payload.get("chosen") else None
     for card, _owner in exiled:
-        arm_copy_cast(game, seat, card, context.card.name)
+        if one_of_taken(one_of):
+            break
+        arm_copy_cast(game, seat, card, context.card.name, one_of=one_of)
     return True, "resolved"
 
 

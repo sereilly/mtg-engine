@@ -91,14 +91,50 @@ def cease_to_exist(game, seat: int, copy) -> None:
     game.take_card_from_exile(seat, copy)
 
 
-def arm_copy_cast(game, seat: int, card, source_name: str) -> None:
-    """Offer *seat* a cast of a copy of *card*."""
-    game.arm_pending_choice(
-        "copy_cast", seat,
-        card_name=card.name,
-        source_name=source_name,
-        _card=card,
-    )
+def arm_copy_cast(game, seat: int, card, source_name: str, *, one_of=None) -> None:
+    """Offer *seat* a cast of a copy of *card*.
+
+    *one_of* is the record an offer shares with its siblings when the
+    sentence copies **one** of the exiled cards ("a card exiled with this
+    artifact", Panoptic Mirror; CR 607.3's "a" card, chosen by the
+    controller): the offers are made card by card, and the first one taken
+    is the choice — it marks the record (:func:`one_of_taken`) and its
+    siblings still owed are withdrawn. Declining one passes to the next, so
+    every card is a choice and so is none."""
+    data = {"card_name": card.name, "source_name": source_name, "_card": card}
+    if one_of is not None:
+        data[ONE_OF] = one_of
+    game.arm_pending_choice("copy_cast", seat, **data)
+
+
+#: The pending choice's key for the record its sibling offers share.
+ONE_OF = "_one_of"
+
+
+def new_one_of() -> dict:
+    """A fresh record for one "copy a card exiled with this" choice."""
+    return {"taken": False}
+
+
+def one_of_taken(one_of) -> bool:
+    """Whether a copy has been cast under *one_of* already."""
+    return bool(isinstance(one_of, dict) and one_of.get("taken"))
+
+
+def _take_one_of(game, choice) -> None:
+    """The offer *choice* was taken: mark its record and withdraw every
+    sibling offer still owed (they were the other cards it could have been)."""
+    one_of = choice.data.get(ONE_OF)
+    if not isinstance(one_of, dict):
+        return
+    one_of["taken"] = True
+    for sibling in list(game.pending_choices):
+        if (
+            sibling is not choice
+            and sibling.kind == COPY_CAST_PROMPT
+            and sibling.data.get(ONE_OF) is one_of
+        ):
+            game.discard_pending_choice(sibling)
 
 
 def _in_exile(game, card) -> int | None:
@@ -143,6 +179,7 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
         outcome.append(result)
     if not getattr(result, "supported", False):
         return False
+    _take_one_of(game, choice)
     game.discard_pending_choice(choice)
     return True
 
@@ -206,6 +243,7 @@ def default_copy_cast_offer(game, choice) -> None:
     if card is not None and _in_exile(game, card) is not None:
         result = _cast_a_copy(game, seat, card, source_name, choose=choose)
         if getattr(result, "supported", False):
+            _take_one_of(game, choice)
             game.discard_pending_choice(choice)
             return
     game.log.append(
@@ -219,11 +257,14 @@ __all__ = [
     "COPY_CAST_KIND",
     "COPY_CAST_OFFER",
     "COPY_CAST_PROMPT",
+    "ONE_OF",
     "arm_copy_cast",
     "cease_to_exist",
     "default_copy_cast_offer",
     "make_copy_in_exile",
+    "new_one_of",
     "offer_permission",
+    "one_of_taken",
     "resolve_copy_cast_offer",
     "retire_offer",
 ]

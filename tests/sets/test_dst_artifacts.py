@@ -284,6 +284,156 @@ def test_w1g3_aether_vial_upkeep_counter_and_a_seat_nobody_asks(set_pool):
     _w1g3_settle(game)
     assert [p.card.name for p in game.controlled_by(0)] == ["Aether Vial", "Llanowar Elves"]
 
+
+def _w1g3_mirror_imprint(game, mirror, name, x):
+    """Activate Panoptic Mirror's imprint for an interactive seat 0 with X =
+    *x* and exile *name*; returns the names the pick offered."""
+    alice = game.players[0]
+    mirror.tapped = False
+    assert game.activate_permanent_ability(
+        0, "Panoptic Mirror", permanent_index=game.battlefield_index_of(mirror),
+        ability_index=0, x_value=x,
+    ).supported
+    offer = _w1g3_settle(game, defaults=False)
+    assert offer is not None and offer.kind == "optional_pay"
+    assert game.confirm_optional_pay(0, accept=True)
+    pick = _w1g3_settle(game, defaults=False)
+    assert pick is not None and pick.kind == "exile_from_hand_choice"
+    offered = [alice.hand[i].name for i in game.live_exile_from_hand_choices(pick)]
+    slot = next(i for i, c in enumerate(alice.hand) if c.name == name)
+    assert game.confirm_exile_from_hand_choice(0, slot)
+    _w1g3_settle(game)
+    return offered
+
+
+def _w1g3_mirror_with(set_pool, imprints, *, hand_extra=()):
+    """Panoptic Mirror on Alice's side with each of *imprints* (name, X)
+    exiled by its own activation; Alice interactive."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    names = [name for name, _x in imprints] + list(hand_extra)
+    game, alice, bob = _w1g3_table(
+        [lea[name] for name in names], interactive=True,
+        library=[lea["Island"]] * 6, bob_library=[lea["Island"]] * 6,
+    )
+    mirror = _w1g3_put(game, 0, dst["Panoptic Mirror"])
+    for name, x in imprints:
+        _w1g3_mirror_imprint(game, mirror, name, x)
+    return game, alice, bob, mirror
+
+
+def test_w1g3_panoptic_mirror_imprints_an_instant_or_sorcery_of_mana_value_x(set_pool):
+    """"Imprint — {X}, {T}: You may exile an instant or sorcery card with mana
+    value X from your hand." X = 1 offers the one-mana instants and not Stone
+    Rain (3) or a creature; X is a number by the time the offer is asked (it
+    used to reach the card matcher as the symbol and raise)."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g3_table(
+        [lea["Lightning Bolt"], lea["Ancestral Recall"], lea["Stone Rain"],
+         lea["Llanowar Elves"]],
+        interactive=True,
+    )
+    mirror = _w1g3_put(game, 0, dst["Panoptic Mirror"])
+    offered = _w1g3_mirror_imprint(game, mirror, "Lightning Bolt", 1)
+    assert sorted(offered) == ["Ancestral Recall", "Lightning Bolt"]
+    offered = _w1g3_mirror_imprint(game, mirror, "Stone Rain", 3)
+    assert offered == ["Stone Rain"]
+    assert sorted(c.name for c in alice.exile) == ["Lightning Bolt", "Stone Rain"]
+    assert mirror.tapped
+
+
+def test_w1g3_panoptic_mirror_copies_one_exiled_card_of_its_controllers_choice(set_pool):
+    """"At the beginning of your upkeep, you may copy a card exiled with this
+    artifact. If you do, you may cast the copy without paying its mana cost."
+    CR 607.3's "a" card: with two imprinted, the offers come card by card and
+    the first taken is the choice — Bolt declined, Ancestral Recall's copy
+    cast for Alice; nothing else is copied (the ruling: it triggers once, not
+    once per card). Taking the first offer withdraws the second."""
+    game, alice, bob, mirror = _w1g3_mirror_with(
+        set_pool, [("Lightning Bolt", 1), ("Ancestral Recall", 1)],
+    )
+    hand_before = len(alice.hand)
+    game.start_turn(0)
+    first = _w1g3_settle(game, defaults=False)
+    assert first is not None and first.kind == "copy_cast"
+    assert first.data["card_name"] == "Lightning Bolt"
+    assert game.confirm_copy_cast(0, False)
+    second = _w1g3_settle(game, defaults=False)
+    assert second is not None and second.data["card_name"] == "Ancestral Recall"
+    assert game.confirm_copy_cast(0, True, target_player_index=0)
+    _w1g3_settle(game)
+    assert len(alice.hand) == hand_before + 3 and bob.life == 20
+    assert sorted(c.name for c in alice.exile) == ["Ancestral Recall", "Lightning Bolt"]
+
+    game, alice, bob, mirror = _w1g3_mirror_with(
+        set_pool, [("Lightning Bolt", 1), ("Ancestral Recall", 1)],
+    )
+    hand_before = len(alice.hand)
+    game.start_turn(0)
+    first = _w1g3_settle(game, defaults=False)
+    assert first is not None and first.data["card_name"] == "Lightning Bolt"
+    assert game.confirm_copy_cast(0, True, target_player_index=1)
+    assert not [c for c in game.pending_choices if c.kind == "copy_cast"], (
+        "the other card's offer is withdrawn: one copy"
+    )
+    _w1g3_settle(game)
+    assert bob.life == 17 and len(alice.hand) == hand_before
+
+
+def test_w1g3_panoptic_mirror_seat_nobody_asks_and_an_empty_mirror(set_pool):
+    """A seat nobody asks copies one card (its rehearsed chooser, Bolt at
+    Bob) and stops; a Mirror with nothing imprinted does nothing."""
+    game, alice, bob, mirror = _w1g3_mirror_with(
+        set_pool, [("Lightning Bolt", 1), ("Ancestral Recall", 1)],
+    )
+    game.interactive_seats = set()
+    hand_before = len(alice.hand)
+    game.start_turn(0)
+    _w1g3_settle(game)
+    copies = [line for line in game.log if "cast a copy of" in line]
+    assert len(copies) == 1, copies
+    assert bob.life == 17 or len(alice.hand) == hand_before + 3
+
+    dst = set_pool("DST")
+    game, alice, bob = _w1g3_table(library=[set_pool("LEA")["Island"]] * 3)
+    _w1g3_put(game, 0, dst["Panoptic Mirror"])
+    game.start_turn(0)
+    _w1g3_settle(game)
+    assert "Panoptic Mirror: no card is exiled with it to copy" in game.log
+
+
+def test_w1g3_panoptic_mirror_imprint_in_response_to_its_upkeep_trigger(set_pool):
+    """The 2004-12-01 ruling: "You may imprint a card on Panoptic Mirror in
+    response to the upkeep-triggered ability. If you do, that card is
+    available to copy when the triggered ability resolves." The trigger is on
+    the stack with the Mirror empty; the imprint resolves above it; the
+    trigger then offers the Bolt."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g3_table(
+        [lea["Lightning Bolt"]], interactive=True,
+        library=[lea["Island"]] * 3, bob_library=[lea["Island"]] * 3,
+    )
+    mirror = _w1g3_put(game, 0, dst["Panoptic Mirror"])
+    game.begin_turn_bookkeeping(0)
+    game.resolve_untap_step(0)
+    game.resolve_upkeep(0, defer_priority=True)
+    assert [item.card.name for item in game.stack] == ["Panoptic Mirror"]
+    assert game.queue_permanent_ability(
+        0, "Panoptic Mirror", permanent_index=game.battlefield_index_of(mirror),
+        ability_index=0, x_value=1,
+    ).supported
+    assert len(game.stack) == 2
+    offer = _w1g3_settle(game, defaults=False)
+    assert offer is not None and offer.kind == "optional_pay"
+    assert game.confirm_optional_pay(0, accept=True)
+    pick = _w1g3_settle(game, defaults=False)
+    assert game.confirm_exile_from_hand_choice(0, 0)
+    copy = _w1g3_settle(game, defaults=False)
+    assert copy is not None and copy.kind == "copy_cast"
+    assert copy.data["card_name"] == "Lightning Bolt"
+    assert game.confirm_copy_cast(0, True, target_player_index=1)
+    _w1g3_settle(game)
+    assert bob.life == 17
+
 # ==== end W1G3 ======================================================
 
 

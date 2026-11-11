@@ -38,7 +38,8 @@ from ..oracle_types import (MANA_PAID_BY_SEAT, REVEALED_TOP_CARDS_BY_SEAT,
                             OracleInstruction, SECRET_NUMBERS_BY_SEAT,
                             EVENT_SPELL_MANA_COST,
                             OTHER_THAN_EVENT_SUBJECT_PLAYER,
-                            STACK_TARGET_CONTROLLER)
+                            STACK_TARGET_CONTROLLER, carries_x_bound,
+                            substitute_x_bounds, without_x_bounds)
 from ..mana_payment import mana_cost_label
 from ._targets import attached_host, triggering_spell
 from .registry import effect_handler
@@ -224,9 +225,27 @@ def _action_is_takeable(
     own board. It is optional so no existing caller changes; a kind that needs
     it and does not get it answers True, which is the direction that keeps an
     offer the card makes.
+
+    **X is a number here.** The offered action is asked before it is
+    dispatched, so the single dispatch point's substitution
+    (``oracle_types.substitute_x_bounds``) has not reached its payload yet:
+    "{X}, {T}: You may exile an instant or sorcery card **with mana value X**
+    from your hand" (Panoptic Mirror) reached the card matcher with the bound
+    still the symbol and raised. Substituted here with the resolution's X;
+    with no resolution in hand the bound is dropped instead
+    (``without_x_bounds``), the direction that keeps the offer.
     """
     from ._filters import _card_matches_filter
 
+    if carries_x_bound(instruction.payload):
+        instruction = dataclasses.replace(
+            instruction,
+            payload=(
+                substitute_x_bounds(instruction.payload, context.x_value)
+                if context is not None
+                else without_x_bounds(instruction.payload)
+            ),
+        )
     if instruction.kind == "sacrifice_matching_permanent":
         exclude = source if instruction.payload.get("exclude_self") else None
         if instruction.payload.get("exclude_attached_host"):

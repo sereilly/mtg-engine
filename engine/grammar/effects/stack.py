@@ -33,16 +33,20 @@ the first of them as a subject, and had never named the second.
 from .. import ast
 from ..activation_instructions import _parse_activation_restriction
 from ..errors import GrammarError
-from ..lexer import DASH, WORD
+from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
                        _parse_mana_payment, _parse_per_each_objects,
                        _parse_zone, accept_bidding_procedure)
-from ..readers import accept_spell_type_union
+from ..readers import _SELF_NOUNS, accept_spell_type_union
 from ..records import _parse_for_each_this_way
 from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import COLOR_WORDS, NUMBER_WORDS
+
+#: The nouns a permanent names itself by (a spell or a card keeps no linked
+#: exile for a later ability to read).
+_PERMANENT_SELF_NOUNS = tuple(sorted(_SELF_NOUNS - {"spell", "card"}))
 
 
 def _parse_unless_pays(stream: TokenStream) -> "tuple[ast.ManaCost | None, int]":
@@ -775,8 +779,22 @@ def _parse_cast_copy_of_exiled_card(
     # cards its imprint exiled — the one the trigger's cast does not share a
     # name with; the lowering refuses it outside a cast trigger.
     other = False
+    # "…you may copy **a card exiled with this artifact**" (Panoptic Mirror).
+    # CR 607.3: an action on "a" card of a linked exile is performed on the
+    # one its controller chooses — one copy, of a card of their choice, where
+    # "the exiled card" copies each. The permanent names itself by any of its
+    # nouns or by its name.
+    chosen = False
     if stream.accept_phrase("you", "may", "copy", "the", "other"):
         other = True
+    elif stream.accept_phrase("you", "may", "copy", "a", "card", "exiled", "with"):
+        if not (
+            stream.accept_kind(SELF) is not None
+            or (stream.accept_word("this") and stream.accept_word(*_PERMANENT_SELF_NOUNS))
+        ):
+            stream.reset(mark)
+            return None
+        chosen = True
     elif not stream.accept_phrase("you", "may", "copy", "the", "exiled", "card"):
         stream.reset(mark)
         return None
@@ -791,7 +809,7 @@ def _parse_cast_copy_of_exiled_card(
     ):
         stream.reset(mark)
         return None
-    return ast.CastCopyOfExiledCard(other=other)
+    return ast.CastCopyOfExiledCard(other=other, chosen=chosen)
 
 
 def _parse_bid_life_contest(stream: TokenStream) -> ast.Statement | None:

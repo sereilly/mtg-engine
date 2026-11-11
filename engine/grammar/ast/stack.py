@@ -460,9 +460,14 @@ class CastCopyOfExiledCard:
     ``other`` is Spellweaver Helix's "you may copy **the other**": the exiled
     card that is not the one sharing a name with the cast that triggered the
     ability — so only a cast trigger can mean it.
+
+    ``chosen`` is Panoptic Mirror's "you may copy **a card exiled with this
+    artifact**": CR 607.3's "a" card, so the controller copies one of the
+    exiled cards of their choice rather than each of them.
     """
 
     other: bool = False
+    chosen: bool = False
 
 
 @dataclass(frozen=True)
