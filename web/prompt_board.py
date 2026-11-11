@@ -1033,10 +1033,23 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
         (None, None),
     )
     name = choice.data.get("card_name", "the exiled card")
+    # "…you may copy **a** card exiled with this artifact" (Panoptic Mirror):
+    # with two imprinted, the offers are queued card by card and the first
+    # taken is the one copy (``copy_casts.arm_copy_cast``'s ``one_of``). A
+    # person picks the second card by declining the first, so the offer names
+    # the cards still to come — without it nothing says a decline is not the
+    # end of the choice.
+    one_of = choice.data.get("_one_of")
+    then_offers = [
+        other.data.get("card_name", "")
+        for other in choices[1:]
+        if one_of is not None and other.data.get("_one_of") is one_of
+    ]
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "source_name": choice.data.get("source_name", ""),
+        **({"then_offers": then_offers} if then_offers else {}),
         "exile_seat": where[0],
         "exile_index": where[1],
         "prompt": (

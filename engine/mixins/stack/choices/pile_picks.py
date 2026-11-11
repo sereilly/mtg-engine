@@ -1311,7 +1311,11 @@ GRAVEYARD_EXILE_PICK_SPEC = ChoiceSpec(
     default=lambda game, choice: game._default_graveyard_exile_pick(choice),
     action="graveyard_exile_confirm",
     prompt_key="graveyard_exile_pick",
-    blocked_detail="choose the cards to exile from that graveyard before other actions",
+    # Said of every destination the pick has — an exile, Gurzigost's library
+    # bottom, Scrounge's choice that moves nothing — because the status line
+    # tells every viewer this sentence (``web/prompts.prompt_owed_by``) and
+    # said "exile" while Scrounge's opponent was only choosing.
+    blocked_detail="choose cards from that graveyard before other actions",
     blocks_every_seat=True,
     # "…**If you do**, you gain 1 life for each card exiled this way" is a
     # later step of the same resolution and reads what this answer records, so

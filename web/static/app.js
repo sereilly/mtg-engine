@@ -7587,10 +7587,15 @@ function applyPayAnyAmountPrompt(info) {
   // the life gained.
   const hasCeiling = Number.isInteger(info.ceiling);
   const ceiling = hasCeiling ? Number(info.ceiling) : null;
+  // The board's share is the pool and the untapped lands; any other mana
+  // source (Sol Ring, a mana creature) is the seat's to tap while the prompt
+  // is open (CR 605.3a), which adds to the pool and re-renders this.
+  const boardWords =
+    `Your pool and untapped lands cover up to ${info.maximum} — tap another mana source first to pay more.`;
   const limitWords = hasCeiling
     ? `${paysX ? "X" : "The amount"} can be at most ${ceiling} (${cardName || "the card"}'s limit).` +
-      (Number(info.maximum) < ceiling ? ` Your pool and untapped lands cover up to ${info.maximum}.` : "")
-    : `Your pool and untapped lands cover up to ${info.maximum}.`;
+      (Number(info.maximum) < ceiling ? ` ${boardWords}` : "")
+    : boardWords;
   setSymbolsHtml(
     body,
     (paysX
@@ -8491,6 +8496,13 @@ function applyCopyCastPrompt(info) {
     `<div>${escapeHtml(source)} offers a copy of ${escapeHtml(cardName)}, in ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}.</div>`,
     "<div>The copy is made in exile and cast now, while the ability resolves — no mana cost. "
       + "Its targets and modes are chosen next; a copy you don't cast is never made.</div>",
+    // Panoptic Mirror with several imprinted cards copies one of them: the
+    // offers come card by card (`then_offers`), so declining this one is how
+    // a later card is chosen, and casting this one withdraws the rest.
+    (Array.isArray(info.then_offers) && info.then_offers.length)
+      ? `<div>${escapeHtml(source)} copies one card: decline this and you are offered ` +
+        `${escapeHtml(info.then_offers.join(", then "))} next; cast this copy and no other is offered.</div>`
+      : "",
     `<div class="prompt-choice-row">` +
       `<button type="button" class="prompt-choice-btn" id="copyCastBtn">Cast a copy of ${escapeHtml(cardName)}</button>` +
       `<button type="button" class="prompt-choice-btn" id="copyCastDeclineBtn">Don't cast it</button>` +
@@ -10880,9 +10892,11 @@ function applyExileFromHandPrompt(info) {
   // down", Gustha's Scepter) may not, and the engine refuses a decline there -
   // so a Decline button drawn for it would offer an answer that bounces.
   const declinable = info.optional !== false;
+  // What becomes of the exiled card is the card's to say — this told Panoptic
+  // Mirror's and Spellbinder's imprints "you may cast it for as long as it
+  // remains exiled", which neither card grants.
   body.textContent = declinable
-    ? "You may exile one of these cards. You may cast it for as long as it " +
-      "remains exiled."
+    ? `You may exile one of these cards from your hand with ${info.card_name || "this effect"} — or decline and exile nothing.`
     : "Exile one of these cards.";
   const buttons = info.choices
     .map(
