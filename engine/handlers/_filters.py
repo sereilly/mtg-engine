@@ -181,6 +181,13 @@ def _card_matches_filter(
         "not_chosen_creature_type"
     ):
         return False
+    # "…with mana value equal to the number of charge counters on this
+    # artifact" (Aether Vial): a count on the source, resolved into
+    # ``mana_value`` by a reader holding it (``handlers/hand
+    # .resolve_source_counted_mana_value``). Refused unresolved, for the
+    # reason above.
+    if filt.get("mana_value_equals_source_counters"):
+        return False
     # "…cards **of that color**" with nothing behind the pronoun: the colour is
     # in a resolution's scratchpad and a reader holding one resolves it into
     # ``color_filter`` first. Refused for the reason above.

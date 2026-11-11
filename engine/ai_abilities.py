@@ -1208,13 +1208,17 @@ def _hand_entry_has_a_card(
     from .handlers._chosen import (SHARES_CREATURE_TYPE_WITH,
                                    _resolve_chosen_subtype,
                                    resolve_shared_creature_type)
-    from .handlers.hand import put_from_hand_candidates
+    from .handlers.hand import (put_from_hand_candidates,
+                                resolve_source_counted_mana_value)
 
     player = game.players[player_index]
     for payload in hand_entry_steps(instruction):
         described = _resolve_chosen_subtype(
             dict(payload.get("card_filter") or {}), source
         )
+        # "…with mana value equal to the number of charge counters on this
+        # artifact" (Aether Vial), through the handler's own resolver.
+        described = resolve_source_counted_mana_value(described, source)
         if described.get(SHARES_CREATURE_TYPE_WITH) and cost is not None and getattr(
             cost, "tap_count", 0
         ):

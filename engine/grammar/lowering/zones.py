@@ -30,7 +30,8 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
-from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
+from ...subject_filters import (SOURCE_COUNTED_MANA_VALUE,
+                                SOURCE_RESOLVED_CARD_KEYS, card_only_filter)
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import PERMANENT_CARD_TYPES
@@ -629,7 +630,9 @@ def _lower_put_onto_battlefield(
             # narrowing dropped here is a card the seat may pick that the
             # sentence never offered.
             if _restrictions_beyond(
-                filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"}
+                filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {
+                    "is_card", "zone", "zone_owner", SOURCE_COUNTED_MANA_VALUE,
+                }
             ):
                 raise LoweringError(
                     "the from-hand pick cannot test that card phrase", node=node
@@ -643,8 +646,16 @@ def _lower_put_onto_battlefield(
             # card-only gate and the handler turns it into an ordinary subtype
             # off that source before any matcher is asked. Named here, because
             # each name is a claim that the resolver really does that.
+            #
+            # "…a creature card **with mana value equal to the number of charge
+            # counters on this artifact**" (Aether Vial) is the same footing: a
+            # count on the ability's source, turned into an exact ``mana_value``
+            # bound by the handler (``handlers/hand.resolve_source_counted_mana_value``)
+            # before the candidates are read.
             described = card_only_filter(
-                payload, carried_separately=SOURCE_RESOLVED_CARD_KEYS
+                payload,
+                carried_separately=SOURCE_RESOLVED_CARD_KEYS
+                | {SOURCE_COUNTED_MANA_VALUE},
             )
             if described is None or dropped_narrowings(filt, payload):
                 raise LoweringError(

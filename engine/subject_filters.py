@@ -770,6 +770,16 @@ def observer_source_filter(payload: dict) -> dict | None:
 #: that may pass these as *carried_separately* below.
 SOURCE_RESOLVED_CARD_KEYS = frozenset({"chosen_creature_type", "chosen_land_type"})
 
+#: "…a creature card **with mana value equal to the number of charge counters
+#: on this artifact**" (Aether Vial). A count on the ability's source, which no
+#: card in a zone can answer: the from-hand pick's handler turns it into an
+#: exact ``mana_value`` bound off the source (its last known counters once it
+#: has left, the 2017-11-17 ruling) before any matcher is asked
+#: (``handlers/hand.resolve_source_counted_mana_value``), and
+#: ``_card_matches_filter`` refuses a card asked it unresolved. Its own name
+#: rather than a member of the set above, whose resolver is a different one.
+SOURCE_COUNTED_MANA_VALUE = "mana_value_equals_source_counters"
+
 
 def card_only_filter(
     payload: dict, *, carried_separately: frozenset[str] = frozenset()

@@ -192,6 +192,98 @@ def test_w1g3_spellbinder_does_nothing_when_unattached_or_blocked(set_pool):
     assert bob.life == 20 and game.pending_choices == []
     assert [c.name for c in alice.exile] == ["Lightning Bolt"]
 
+
+def _w1g3_vial_with(set_pool, charge, hand, *, interactive=False):
+    from engine.named_counters import add_counters
+
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g3_table([lea[name] for name in hand], interactive=interactive)
+    vial = _w1g3_put(game, 0, dst["Aether Vial"])
+    if charge:
+        add_counters(vial, "charge", charge)
+    return game, alice, vial
+
+
+def test_w1g3_aether_vial_puts_the_creature_its_counters_name(set_pool):
+    """"{T}: You may put a creature card with mana value equal to the number
+    of charge counters on this artifact from your hand onto the battlefield."
+    Two counters: the pick offers Grizzly Bears alone — not Hill Giant (4),
+    Llanowar Elves (1) or the land — and the Bears enter without being cast
+    (no spell on the stack)."""
+    game, alice, vial = _w1g3_vial_with(
+        set_pool, 2, ["Grizzly Bears", "Hill Giant", "Llanowar Elves", "Forest"],
+        interactive=True,
+    )
+    assert game.activate_permanent_ability(
+        0, "Aether Vial", permanent_index=game.battlefield_index_of(vial),
+        ability_index=0,
+    ).supported
+    offer = _w1g3_settle(game, defaults=False)
+    assert offer is not None and offer.kind == "optional_pay", "the printed may"
+    assert game.confirm_optional_pay(0, accept=True)
+    pick = _w1g3_settle(game, defaults=False)
+    assert pick is not None and pick.kind == "put_from_hand_choice"
+    offered = [alice.hand[i].name for i in game.live_put_from_hand_choices(pick)]
+    assert offered == ["Grizzly Bears"]
+    hill = next(i for i, c in enumerate(alice.hand) if c.name == "Hill Giant")
+    assert not game.confirm_put_from_hand_choice(0, hill), "a 4 is refused"
+    bears = next(i for i, c in enumerate(alice.hand) if c.name == "Grizzly Bears")
+    assert game.confirm_put_from_hand_choice(0, bears)
+    _w1g3_settle(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Aether Vial", "Grizzly Bears"]
+    assert vial.tapped
+    assert not any("cast Grizzly Bears" in line for line in game.log)
+
+
+def test_w1g3_aether_vial_counts_its_counters_as_it_resolves(set_pool):
+    """The count is read at resolution, and from the Vial as it last existed
+    once it has left (the 2017-11-17 ruling): one counter and the Vial
+    destroyed in response still puts the one-drop in. With no counter the
+    activation finds nothing (a land is no creature card, and nothing in the
+    hand has mana value 0)."""
+    game, alice, vial = _w1g3_vial_with(
+        set_pool, 1, ["Grizzly Bears", "Llanowar Elves"],
+    )
+    assert game.queue_permanent_ability(
+        0, "Aether Vial", permanent_index=game.battlefield_index_of(vial),
+        ability_index=0,
+    ).supported
+    game.remove_from_battlefield(vial)
+    _w1g3_settle(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Llanowar Elves"]
+
+    game, alice, vial = _w1g3_vial_with(set_pool, 0, ["Grizzly Bears", "Forest"])
+    assert game.activate_permanent_ability(
+        0, "Aether Vial", permanent_index=game.battlefield_index_of(vial),
+        ability_index=0,
+    ).supported
+    _w1g3_settle(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Aether Vial"]
+    assert "has no card Aether Vial could put onto the battlefield" in " ".join(game.log)
+
+
+def test_w1g3_aether_vial_upkeep_counter_and_a_seat_nobody_asks(set_pool):
+    """"At the beginning of your upkeep, you may put a charge counter on this
+    artifact." The upkeep puts the first counter on; a seat nobody asks then
+    puts its one-drop in with the activation's default answers."""
+    from engine.named_counters import counters_on
+
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g3_table(
+        [lea["Llanowar Elves"]], library=[lea["Forest"]] * 3,
+        bob_library=[lea["Forest"]] * 3,
+    )
+    vial = _w1g3_put(game, 0, dst["Aether Vial"])
+    game.start_turn(0)
+    _w1g3_settle(game)
+    assert counters_on(vial, "charge") == 1
+    assert game.activate_permanent_ability(
+        0, "Aether Vial", permanent_index=game.battlefield_index_of(vial),
+        ability_index=0,
+    ).supported
+    _w1g3_settle(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Aether Vial", "Llanowar Elves"]
+
 # ==== end W1G3 ======================================================
 
 
