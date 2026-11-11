@@ -763,7 +763,12 @@ class AlternativeCastCostsMixin:
         more, less, _by = keyword_cost_modifiers(
             self, caster_index, cost.keyword if cost is not None else None
         )
-        return reduce_cost(
+        from ...cost_floors import floored_spell_cost
+
+        # CR 601.2f's last step (Trinisphere): a waiver's {0} and a flashback
+        # cost are floored like the mana cost they replace, as the payment
+        # floors them.
+        return floored_spell_cost(self, reduce_cost(
             self._parse_mana_cost(
                 (cost.mana if cost is not None else None) or "",
                 x_value=max(0, int(x_value or 0)),
@@ -772,7 +777,7 @@ class AlternativeCastCostsMixin:
                 extra_pips=pips,
             ),
             reduction.plus_generic(less),
-        )
+        ))
 
     def _mana_still_owed_refusal(
         self, card: CardDefinition, how: str, extra_generic: int,

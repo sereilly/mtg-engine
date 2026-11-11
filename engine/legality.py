@@ -1063,6 +1063,12 @@ class LegalityMixin:
             for restriction in attached_combat_restrictions(perm)
         ):
             return True
+        # "Each creature you control can't be blocked as long as defending
+        # player controls an artifact land." (Tanglewalker.) The board-scan
+        # channel, through the gate's own reader and with the seat this
+        # creature was declared against, for the Beebles reason below.
+        if self.matching_unblockable(perm, defender=perm.defending_player_index):
+            return True
         seat = self.controller_index_of(perm)
         return any(
             # "This creature can't be blocked **as long as defending player

@@ -256,6 +256,39 @@ class BlockLegalityMixin:
                     caps.append(int(instr.payload.get("count", 1)))
         return min(caps) if caps else None
 
+    def matching_unblockable(
+        self, attacker: Permanent, *, defender: int | None
+    ) -> bool:
+        """Whether a permanent's board-wide "each <noun> can't be blocked"
+        (Tanglewalker) reaches *attacker* while its condition holds.
+
+        Asked by the blockers gate (with the blocker's controller as
+        *defender*) and by ``legality.is_unblockable`` (with the seat the
+        attacker was declared against), so the step and the UI's fade read one
+        answer. Each printing permanent is its own restriction (CR 509.1b);
+        "you" in both its noun phrase and its condition is that permanent's
+        controller (CR 109.5). A *defender* nobody can name answers the
+        condition False — the direction that offers a block rather than
+        forbidding one.
+        """
+        for source_seat, source_perm in self.permanents_with_controller():
+            for instr in compile_card_oracle(
+                source_perm.effective_card
+            ).instructions:
+                if instr.kind != "matching_cant_be_blocked":
+                    continue
+                if not subject_matches(
+                    self, attacker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    continue
+                if restriction_condition_holds(
+                    self, instr.payload.get("condition"),
+                    observer=source_seat, defender=defender, source=source_perm,
+                ):
+                    return True
+        return False
+
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
         if attacker.metadata.get("cant_be_blocked_until_eot"):
             return False
@@ -431,6 +464,16 @@ class BlockLegalityMixin:
                 source=attacker,
             ):
                 return False
+        # "Each creature you control can't be blocked as long as defending
+        # player controls an artifact land." (Tanglewalker.) The restriction
+        # above printed on a permanent about a described set, so it is found
+        # by a board scan — Shifting Sliver's below. "You" in the noun phrase
+        # and the condition is the printing permanent's controller (CR 109.5),
+        # and "defending player" the blocker's controller, as above.
+        if self.matching_unblockable(
+            attacker, defender=self.controller_index_of(blocker)
+        ):
+            return False
         if any(
             # "Enchanted creature can't be blocked." (Cloak of Mists.) The
             # attached channel of the same restriction, asked beside the

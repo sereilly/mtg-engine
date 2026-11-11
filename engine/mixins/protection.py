@@ -49,21 +49,6 @@ def exiled_card_types(game, permanent: Permanent) -> frozenset[str]:
 
 
 class ProtectionMixin:
-    @staticmethod
-    def _protection_quality_of(word: str) -> tuple[str, str] | None:
-        """The canonical quality one word of a protection clause names, or None.
-
-        ``engine/keywords.py``'s reader, reached through this name because five
-        call sites in this file already ask it. It moved there when Righteous
-        War's board-wide grant needed the *same* vocabulary at the gate: a word
-        the shield reader cannot answer has to refuse the anthem rather than
-        admit it and protect nobody, and a second copy of the four families is
-        how those two answers come to differ.
-        """
-        from ..keywords import protection_quality
-
-        return protection_quality(word)
-
     def _protection_qualities(
         self, permanent: Permanent, *, ignoring_aura: Permanent | None = None,
     ) -> set[tuple[str, str]]:
@@ -327,10 +312,12 @@ class ProtectionMixin:
                             instr.payload.get("condition") or {},
                         ):
                             continue
+                        # Through ``_named``, as every printed member is: "…has
+                        # protection from artifacts and **from each color**"
+                        # (Pristine Angel) carries a CR 702.16h member, and
+                        # the one-quality reader answered it with nothing.
                         for word in words:
-                            quality = self._protection_quality_of(word)
-                            if quality is not None:
-                                _add(quality, granter.timestamp)
+                            _named(word, granter.timestamp)
             finally:
                 in_progress.discard(permanent.permanent_id)
         # The metadata channel, for protection granted with a lifetime of its own
