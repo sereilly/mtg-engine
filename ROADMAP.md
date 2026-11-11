@@ -1068,11 +1068,6 @@ one card prints this") reads as a work item long after it stopped being true.
     spends only the pool. Parts: tap the forced player's lands for the spell's
     effective cost first (`mana_payment.plan_payment`); a test with
     enforcement on (the existing UI test turns it off).
-  * *The AI casts everything in its own main phase.* No cast pass during combat
-    or in response: 0 casts of Spinal Embrace in 18 pinned games, no
-    counterspell ever cast in a simulated game, ~21 shipped lines with a
-    combat-only cast window, and every shield or Fog mistimed even when
-    correctly aimed.
   * *CR 615.12 is half-implemented* for the three lock cards (Whippoorwill,
     Lava Burst, Urza's Rage): a "next time" shield should be used up while
     preventing nothing; the contenders are dropped and the shield stays armed.
