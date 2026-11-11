@@ -179,6 +179,15 @@
     "Youthful Knight"
   ],
   [
+    "Belbe's Percher",
+    "Cloud Djinn",
+    "Cloud Elemental",
+    "Cloud Spirit",
+    "Hoverguard Observer",
+    "Rishadan Airship",
+    "Stronghold Zeppelin"
+  ],
+  [
     "Benalish Hero",
     "Benalish Infantry",
     "Icatian Phalanx",
@@ -197,6 +206,15 @@
     "Wall of Wood"
   ],
   [
+    "Craven Giant",
+    "Goblin Raider",
+    "Hulking Cyclops",
+    "Hulking Ogre",
+    "Ogre Taskmaster",
+    "Scavenging Scarab",
+    "Spineless Thug"
+  ],
+  [
     "Alpha Myr",
     "Metallic Sliver",
     "Obsianus Golem",
@@ -213,20 +231,20 @@
     "Zephyr Falcon"
   ],
   [
-    "Belbe's Percher",
-    "Cloud Djinn",
-    "Cloud Elemental",
-    "Cloud Spirit",
-    "Rishadan Airship",
-    "Stronghold Zeppelin"
-  ],
-  [
     "Benthic Behemoth",
     "Bull Hippo",
     "Devouring Deep",
     "Pale Bears",
     "Rootwater Commando",
     "Segovian Leviathan"
+  ],
+  [
+    "Bonesplitter",
+    "Leonin Scimitar",
+    "Short Sword",
+    "Slagwurm Armor",
+    "Vulshok Battlegear",
+    "Vulshok Morningstar"
   ],
   [
     "Burn Bright",
@@ -259,14 +277,6 @@
     "Orim, Samite Healer",
     "Samite Healer",
     "Sanctum Custodian"
-  ],
-  [
-    "Craven Giant",
-    "Goblin Raider",
-    "Hulking Cyclops",
-    "Hulking Ogre",
-    "Ogre Taskmaster",
-    "Spineless Thug"
   ],
   [
     "Divine Transformation",
@@ -314,6 +324,13 @@
     "Thunder Spirit"
   ],
   [
+    "Angel's Feather",
+    "Demon's Horn",
+    "Dragon's Claw",
+    "Kraken's Eye",
+    "Wurm's Tooth"
+  ],
+  [
     "Angelfire Crusader",
     "Firescreamer",
     "Flame Spirit",
@@ -340,13 +357,6 @@
     "Disciple of Grace",
     "Disciple of Law",
     "Disciple of Malice"
-  ],
-  [
-    "Bonesplitter",
-    "Leonin Scimitar",
-    "Short Sword",
-    "Slagwurm Armor",
-    "Vulshok Battlegear"
   ],
   [
     "Canyon Wildcat",
@@ -536,9 +546,19 @@
     "Trumpet Blast"
   ],
   [
+    "Benalish Trapper",
+    "Loxodon Mystic",
+    "Master Decoy"
+  ],
+  [
     "Blade Sliver",
     "Muscle Sliver",
     "Plated Sliver"
+  ],
+  [
+    "Bloodrock Cyclops",
+    "Crazed Goblin",
+    "Goblin Brigand"
   ],
   [
     "Breezekeeper",
@@ -636,9 +656,19 @@
     "Ramosian Sergeant"
   ],
   [
+    "Sisay's Ring",
+    "Sol Ring",
+    "Ur-Golem's Eye"
+  ],
+  [
     "Staunch Defenders",
     "Teroh's Faithful",
     "Venerable Monk"
+  ],
+  [
+    "Tel-Jilad Chosen",
+    "Tel-Jilad Outrider",
+    "Yavimaya Scion"
   ],
   [
     "About Face",
@@ -733,20 +763,12 @@
     "Heat of Battle"
   ],
   [
-    "Benalish Trapper",
-    "Master Decoy"
-  ],
-  [
     "Black Knight",
     "White Knight"
   ],
   [
     "Blizzard Elemental",
     "Vigilant Drake"
-  ],
-  [
-    "Bloodrock Cyclops",
-    "Goblin Brigand"
   ],
   [
     "Blue Elemental Blast",
@@ -875,6 +897,10 @@
   [
     "Defiant Falcon",
     "Ramosian Sky Marshal"
+  ],
+  [
+    "Deflection",
+    "Shunt"
   ],
   [
     "Demonic Tutor",
@@ -1277,6 +1303,10 @@
     "Rogue Kavu"
   ],
   [
+    "Reconstruction",
+    "Ritual of Restoration"
+  ],
+  [
     "Reef Shaman",
     "Sea Snidd"
   ],
@@ -1313,10 +1343,6 @@
     "Silkenfist Order"
   ],
   [
-    "Sisay's Ring",
-    "Sol Ring"
-  ],
-  [
     "Skulking Fugitive",
     "Tar Pit Warrior"
   ],
@@ -1335,10 +1361,6 @@
   [
     "Talruum Minotaur",
     "Wild Colos"
-  ],
-  [
-    "Tel-Jilad Chosen",
-    "Yavimaya Scion"
   ],
   [
     "Telepathic Spies",

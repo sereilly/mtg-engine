@@ -4,10 +4,10 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **6414**
-- Distinct behaviours: **5830**
-- Cards sharing a behaviour with another: **847** in **263** classes
-- Unverified cards covered by a verified peer: **245**
+- Cards in the catalog: **6576**
+- Distinct behaviours: **5979**
+- Cards sharing a behaviour with another: **863** in **266** classes
+- Unverified cards covered by a verified peer: **248**
 
 | Size | Cards |
 | --- | --- |
@@ -18,28 +18,29 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 12 | Argothian Swine, Crash of Rhinos, Defiant Elf, Fangren Hunter, Giant Warthog, Goliath Beetle, Iron Tusk Elephant, Jhovall Rider, **Moorish Cavalry**, Pygmy Razorback, **War Mammoth**, Wild Elephant |
 | 12 | Death Speakers, Galina's Knight, Guma, Ihsan's Shade, Karoo Meerkat, Llanowar Knight, Oraxid, **Repentant Blacksmith**, Scalebane's Elite, Shivan Zombie, Vodalian Zombie, Yavimaya Barbarian |
 | 10 | **Elvish Archers**, Halberdier, Hornet Cobra, Land Leeches, Lightning Hounds, Ramirez DePietro, Sabretooth Tiger, Serra Zealot, **Stone-Throwing Devils**, Youthful Knight |
+| 7 | Belbe's Percher, Cloud Djinn, Cloud Elemental, Cloud Spirit, Hoverguard Observer, Rishadan Airship, Stronghold Zeppelin |
 | 7 | **Benalish Hero**, Benalish Infantry, Icatian Phalanx, Kjeldoran Escort, Kjeldoran Warrior, Shield Bearer, **Timber Wolves** |
 | 7 | Blistering Barrier, Glacial Wall, Wall of Earth, Wall of Heat, **Wall of Ice**, **Wall of Stone**, **Wall of Wood** |
+| 7 | Craven Giant, Goblin Raider, Hulking Cyclops, Hulking Ogre, Ogre Taskmaster, Scavenging Scarab, Spineless Thug |
 | 6 | Alpha Myr, **Metallic Sliver**, **Obsianus Golem**, Omega Myr, Phyrexian Hulk, Phyrexian Walker |
 | 6 | Archangel, Bay Falcon, Diving Griffin, Skyshroud Falcon, Tempest Drake, Zephyr Falcon |
-| 6 | Belbe's Percher, Cloud Djinn, Cloud Elemental, Cloud Spirit, Rishadan Airship, Stronghold Zeppelin |
 | 6 | Benthic Behemoth, Bull Hippo, Devouring Deep, Pale Bears, Rootwater Commando, Segovian Leviathan |
+| 6 | Bonesplitter, Leonin Scimitar, Short Sword, Slagwurm Armor, Vulshok Battlegear, Vulshok Morningstar |
 | 6 | Burn Bright, Scare Tactics, Shield Wall, Solidarity, Vitalizing Wind, Warrior's Honor |
 | 6 | Canopy Spider, Giant Mantis, **Giant Spider**, Needleshot Gourna, Plated Spider, Rib Cage Spider |
 | 6 | Cat Warriors, Heartwood Treefolk, Leaf Dancer, Rushwood Dryad, **Shanodin Dryads**, Slinking Serpent |
 | 6 | Clergy en-Vec, Femeref Healer, Master Healer, Orim, Samite Healer, **Samite Healer**, Sanctum Custodian |
-| 6 | Craven Giant, Goblin Raider, Hulking Cyclops, Hulking Ogre, Ogre Taskmaster, Spineless Thug |
 | 6 | Divine Transformation, Feast of the Unicorn, Giant Strength, Hero's Resolve, **Holy Strength**, **Unholy Strength** |
 | 6 | Drowned, Metathran Zombie, Phyrexian Monitor, Restless Dead, Unworthy Dead, Walking Dead |
 | 6 | Fetid Horror, **Frozen Shade**, Hoar Shade, Looming Shade, **Nantuko Shade**, Primeval Shambler |
 | 5 | Adventurers' Guildhouse, Cathedral of Serra, Mountain Stronghold, Seafarer's Quay, Unholy Citadel |
 | 5 | Aerathi Berserker, Frost Giant, Hunding Gjornersen, Marhault Elsdragon, Wolverine Pack |
 | 5 | Angel of Retribution, Ekundu Griffin, Sabertooth Wyvern, Sky Spirit, Thunder Spirit |
+| 5 | Angel's Feather, Demon's Horn, Dragon's Claw, Kraken's Eye, Wurm's Tooth |
 | 5 | Angelfire Crusader, Firescreamer, Flame Spirit, Ridgeline Rager, Storm Shaman |
 | 5 | Black Scarab, Blue Scarab, Green Scarab, Red Scarab, White Scarab |
 | 5 | **Black Ward**, **Blue Ward**, **Green Ward**, **Red Ward**, **White Ward** |
 | 5 | Bloated Toad, Darkwatch Elves, Disciple of Grace, Disciple of Law, Disciple of Malice |
-| 5 | Bonesplitter, Leonin Scimitar, Short Sword, Slagwurm Armor, Vulshok Battlegear |
 | 5 | Canyon Wildcat, Dwarven Grunt, Goblin Spelunkers, Mountain Goat, Rock Badger |
 | 5 | **Circle of Protection: Black**, **Circle of Protection: Blue**, **Circle of Protection: Green**, **Circle of Protection: Red**, **Circle of Protection: White** |
 | 5 | **Crystal Rod**, **Iron Star**, **Ivory Cup**, **Throne of Bone**, **Wooden Sphere** |
@@ -70,7 +71,9 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Ambush Party, Goblin Berserker, Goblin Striker |
 | 3 | Armor Sliver, Barbed Sliver, Spectral Sliver |
 | 3 | **Army of Allah**, Morale, Trumpet Blast |
+| 3 | Benalish Trapper, Loxodon Mystic, Master Decoy |
 | 3 | **Blade Sliver**, **Muscle Sliver**, **Plated Sliver** |
+| 3 | Bloodrock Cyclops, Crazed Goblin, **Goblin Brigand** |
 | 3 | Breezekeeper, Teferi's Drake, Tolarian Drake |
 | 3 | Cateran Brute, Cateran Kidnappers, Cateran Persuader |
 | 3 | Cave Tiger, Rabid Wolverines, Viashino Weaponsmith |
@@ -90,7 +93,9 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Killer Whale, Manta Riders, Whiptongue Frog |
 | 3 | Lone Wolf, Pride of Lions, Thorn Elemental |
 | 3 | Ramosian Commander, Ramosian Lieutenant, Ramosian Sergeant |
+| 3 | Sisay's Ring, **Sol Ring**, Ur-Golem's Eye |
 | 3 | Staunch Defenders, Teroh's Faithful, Venerable Monk |
+| 3 | Tel-Jilad Chosen, Tel-Jilad Outrider, **Yavimaya Scion** |
 | 2 | About Face, Transmutation |
 | 2 | Absolute Grace, Absolute Law |
 | 2 | Acridian, Winding Wurm |
@@ -114,10 +119,8 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Basalt Monolith**, Grim Monolith |
 | 2 | Basri's Solidarity, Titania's Boon |
 | 2 | Battle Strain, Heat of Battle |
-| 2 | Benalish Trapper, Master Decoy |
 | 2 | **Black Knight**, **White Knight** |
 | 2 | Blizzard Elemental, Vigilant Drake |
-| 2 | Bloodrock Cyclops, **Goblin Brigand** |
 | 2 | **Blue Elemental Blast**, **Red Elemental Blast** |
 | 2 | Boa Constrictor, Llanowar Vanguard |
 | 2 | Bog Gnarr, Glade Gnarr |
@@ -150,6 +153,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Deepwood Wolverine, Snorting Gahr |
 | 2 | Defender of Chaos, Defender of Law |
 | 2 | Defiant Falcon, Ramosian Sky Marshal |
+| 2 | Deflection, Shunt |
 | 2 | **Demonic Tutor**, Diabolic Tutor |
 | 2 | **Desert Twister**, Vindicate |
 | 2 | Dirtwater Wraith, Whispering Shade |
@@ -250,6 +254,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Plains**, Snow-Covered Plains |
 | 2 | Plated Rootwalla, Rootwalla |
 | 2 | Reckless Ogre, Rogue Kavu |
+| 2 | Reconstruction, Ritual of Restoration |
 | 2 | Reef Shaman, Sea Snidd |
 | 2 | Revitalize, Reviving Dose |
 | 2 | Rishadan Cutpurse, Rishadan Footpad |
@@ -259,13 +264,11 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Scoria Cat, Spur Grappler |
 | 2 | **Shatter**, Verdigris |
 | 2 | Silkenfist Fighter, Silkenfist Order |
-| 2 | Sisay's Ring, **Sol Ring** |
 | 2 | Skulking Fugitive, Tar Pit Warrior |
 | 2 | Snow-Covered Swamp, **Swamp** |
 | 2 | Soltari Monk, Soltari Priest |
 | 2 | Stronghold Taskmaster, Urborg Shambler |
 | 2 | Talruum Minotaur, Wild Colos |
-| 2 | Tel-Jilad Chosen, **Yavimaya Scion** |
 | 2 | Telepathic Spies, Wanderguard Sentry |
 | 2 | Torment, **Weakness** |
 | 2 | Towering Baloth, Treespring Lorian |

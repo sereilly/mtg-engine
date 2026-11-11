@@ -42,6 +42,21 @@
   ]
  },
  {
+  "card": "Aether Snap",
+  "clause": "remove all counters from all permanents and exile all tokens",
+  "ignored": [
+   "all",
+   "all"
+  ]
+ },
+ {
+  "card": "Aether Vial",
+  "clause": "you may put a creature card with mana value equal to the number of charge counters on this artifact from your hand onto the battlefield",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
   "card": "Aftershock",
   "clause": "destroy target artifact, creature, or land. aftershock deals 3 damage to you",
   "ignored": [
@@ -174,6 +189,90 @@
   "clause": "arc lightning deals 3 damage divided as you choose among one, two, or three targets",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Arcbound Bruiser",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Crusher",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Fiend",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Hybrid",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Lancer",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Overseer",
+  "clause": "put a +1/+1 counter on each creature you control with modular",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Arcbound Overseer",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Ravager",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Reclaimer",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Slith",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Stinger",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
+  "card": "Arcbound Worker",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
   ]
  },
  {
@@ -1115,6 +1214,41 @@
   ]
  },
  {
+  "card": "Echoing Calm",
+  "clause": "destroy target enchantment and all other enchantments with the same name as that enchantment",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Echoing Courage",
+  "clause": "target creature and all other creatures with the same name as that creature get +2/+2 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Echoing Decay",
+  "clause": "target creature and all other creatures with the same name as that creature get -2/-2 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Echoing Ruin",
+  "clause": "destroy target artifact and all other artifacts with the same name as that artifact",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Echoing Truth",
+  "clause": "return target nonland permanent and all other permanents with the same name as that permanent to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Elder Druid",
   "clause": "you may tap or untap target artifact, creature, or land",
   "ignored": [
@@ -1277,6 +1411,13 @@
   ]
  },
  {
+  "card": "Fangren Firstborn",
+  "clause": "put a +1/+1 counter on each attacking creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Farsight Mask",
   "clause": "if this artifact is untapped, you may draw a card",
   "ignored": [
@@ -1392,6 +1533,13 @@
   ]
  },
  {
+  "card": "Furnace Dragon",
+  "clause": "if you cast it from your hand, exile all artifacts",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Fyndhorn Pollen",
   "clause": "all creatures get -1/-0 until end of turn",
   "ignored": [
@@ -1446,6 +1594,13 @@
   "clause": "add one mana of any color. if there are no mining counters on this land, sacrifice it",
   "ignored": [
    "land,"
+  ]
+ },
+ {
+  "card": "Genesis Chamber",
+  "clause": "if this artifact is untapped, that creature's controller creates a 1/1 colorless myr artifact creature token",
+  "ignored": [
+   "artifact"
   ]
  },
  {
@@ -2475,6 +2630,13 @@
   ]
  },
  {
+  "card": "Metal Fatigue",
+  "clause": "tap all artifacts",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Metamorphose",
   "clause": "put target permanent an opponent controls on top of its owner's library. that opponent may put an artifact, creature, enchantment, or land card from their hand onto the battlefield",
   "ignored": [
@@ -2603,6 +2765,13 @@
   ]
  },
  {
+  "card": "Murderous Spoils",
+  "clause": "destroy target nonblack creature. it can't be regenerated. you gain control of all equipment that were attached to it",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Mutilate",
   "clause": "all creatures get -1/-1 until end of turn for each swamp you control",
   "ignored": [
@@ -2670,6 +2839,13 @@
   "clause": "destroy all artifacts, creatures, and enchantments",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Nim Abomination",
+  "clause": "if this creature is untapped, you lose 3 life",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -3259,6 +3435,13 @@
   ]
  },
  {
+  "card": "Retract",
+  "clause": "return all artifacts you control to their owner's hand",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Retribution of the Meek",
   "clause": "destroy all creatures with power 4 or greater. they can't be regenerated",
   "ignored": [
@@ -3339,6 +3522,13 @@
  {
   "card": "Roar of the Kha",
   "clause": "untap all creatures you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Roaring Slagwurm",
+  "clause": "tap all artifacts",
   "ignored": [
    "all"
   ]
@@ -3465,6 +3655,13 @@
  {
   "card": "Saproling Burst",
   "clause": "destroy all tokens created with this enchantment. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Savage Beating",
+  "clause": "untap all creatures you control. after this phase, there is an additional combat phase",
   "ignored": [
    "all"
   ]
@@ -3830,6 +4027,13 @@
   ]
  },
  {
+  "card": "Soulscour",
+  "clause": "destroy all nonartifact permanents",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Soulshriek",
   "clause": "target creature you control gets +x/+0 until end of turn, where x is the number of creature cards in your graveyard. sacrifice that creature at the beginning of the next end step",
   "ignored": [
@@ -4128,6 +4332,13 @@
   "clause": "each opponent may put any number of artifact, creature, enchantment, and/or land cards from their hand onto the battlefield",
   "ignored": [
    "and/or"
+  ]
+ },
+ {
+  "card": "Test of Faith",
+  "clause": "prevent the next 3 damage that would be dealt to target creature this turn. for each 1 damage prevented this way, put a +1/+1 counter on that creature",
+  "ignored": [
+   "1"
   ]
  },
  {
@@ -4738,6 +4949,13 @@
   "clause": "that player adds one mana of any type that land produced. that land doesn't untap during its controller's next untap step",
   "ignored": [
    "controller's"
+  ]
+ },
+ {
+  "card": "Wirefly Hive",
+  "clause": "flip a coin. if you win the flip, create a 2/2 colorless insect artifact creature token with flying named wirefly. if you lose the flip, destroy all permanents named wirefly",
+  "ignored": [
+   "all"
   ]
  },
  {

@@ -36,7 +36,7 @@
       "hooked_lines_pct_of_supported": 0.0
     },
     "<pool>": {
-      "entries_per_100_supported_cards": 0.8,
+      "entries_per_100_supported_cards": 0.7,
       "hooked_cards_pct_of_supported": 0.7,
       "hooked_lines_pct_of_supported": 0.4
     },
@@ -51,9 +51,9 @@
       "hooked_lines_pct_of_supported": 0.0
     },
     "ARN": {
-      "entries_per_100_supported_cards": 20.5,
-      "hooked_cards_pct_of_supported": 19.2,
-      "hooked_lines_pct_of_supported": 12.1
+      "entries_per_100_supported_cards": 19.2,
+      "hooked_cards_pct_of_supported": 17.9,
+      "hooked_lines_pct_of_supported": 11.2
     },
     "ATQ": {
       "entries_per_100_supported_cards": 3.5,
@@ -64,6 +64,11 @@
       "entries_per_100_supported_cards": 0.8,
       "hooked_cards_pct_of_supported": 0.8,
       "hooked_lines_pct_of_supported": 0.6
+    },
+    "DST": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
     },
     "EXO": {
       "entries_per_100_supported_cards": 0.0,
