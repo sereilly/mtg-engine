@@ -264,7 +264,11 @@ def test_w1g4_willbender_re_aims_an_activated_ability(set_pool):
 
     assert bears.damage_marked == 0
     assert any("Prodigal Sorcerer now targets" in line for line in game.log)
-    assert (game.players[0].life, game.players[1].life) == (20, 19)
+    # Re-aimed at what the ping does most at (``_default_retarget_choice``'s
+    # priced damage, kg5): the 1/1 Prodigal Sorcerer it destroys, over a
+    # point of its controller's life.
+    assert (game.players[0].life, game.players[1].life) == (20, 20)
+    assert "Prodigal Sorcerer" in [card.name for card in game.players[1].graveyard], game.log[-6:]
 
 
 def test_w1g4_willbender_cannot_target_a_spell_with_two_targets(set_pool):
