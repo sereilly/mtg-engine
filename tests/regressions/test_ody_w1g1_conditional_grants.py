@@ -23,12 +23,17 @@ work for the second one:
 
 from __future__ import annotations
 
+import ast
+from functools import lru_cache
+from pathlib import Path
+
 import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.granted_abilities import (DERIVABLE_STATIC_KINDS,
                                       derived_line_supported)
+from engine.linked_exile_keywords import LINKED_EXILE_FAMILY
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from tests.helpers import resolve_stack
@@ -385,42 +390,113 @@ def test_a_conditional_grant_does_not_take_a_line_another_reader_owns(
 # The pool: no conditional static carries a part nobody reads
 # ---------------------------------------------------------------------------
 
+#: Keys a pass reads **by the reading code's own constant**, each with the
+#: modules that read it — taught from the code, not listed: the key is the
+#: constant those modules import, and
+#: ``test_each_constant_named_key_is_read_where_the_census_says`` holds every
+#: module named here to a ``payload.get(<constant>)`` of its own, so a reader
+#: that stops reading the key turns that test red instead of leaving the key
+#: allowed over nothing.
+#:
+#: ``LINKED_EXILE_FAMILY`` (Death-Mask Duplicant, DST): "…this creature has
+#: landwalk / protection" while a card exiled with it has one — every member
+#: of the family those cards print, granted by the lords pass's conditional
+#: self-grant step (landwalk) and by ``_protection_qualities`` (protection).
+_READ_BY: dict[str, tuple[str, ...]] = {
+    LINKED_EXILE_FAMILY: ("engine/mixins/lords.py", "engine/mixins/protection.py"),
+}
+
 #: Every key a ``conditional_static`` payload may carry, each read by a pass:
 #: the delta and its complement by ``_refresh_dynamic_creatures``, the
 #: keywords and the granted lines by ``_recalculate_lord_buffs``, the colour by
 #: ``_refresh_global_statics``, protection by ``_protection_qualities``, and
-#: the two combat permissions at their declarations.
+#: the two combat permissions at their declarations — and the keys
+#: :data:`_READ_BY` names with their readers.
 _READ_KEYS = frozenset({
     "condition", "subject", "power", "toughness", "otherwise_power",
     "otherwise_toughness", "keywords", "protection_from", "cant_be_blocked",
     "ignores_defender", "colors", "ability_lines",
-})
+}) | frozenset(_READ_BY)
+
+_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_every_conditional_static_in_the_pool_carries_only_parts_a_pass_reads():
-    examined = 0
-    stray: dict[str, set[str]] = {}
-    unreadable: dict[str, list[str]] = {}
+@lru_cache(maxsize=1)
+def _pool_conditional_statics() -> tuple[tuple[str, dict], ...]:
+    """``(card name, payload)`` for every ``conditional_static`` a supported
+    card's program carries, over both manifest roles."""
     pool: dict[str, object] = {}
     for path in manifest_set_paths(include_measured=True):
         for card in load_cards(path):
             pool.setdefault(card.name, card)
+    found: list[tuple[str, dict]] = []
     # ``compiled_units``: a split card's text is on its halves (CR 709.4c).
     for card, program in compiled_units(pool.values()):
         if not program.supported:
             continue
         for instruction in program.instructions:
-            if instruction.kind != "conditional_static":
-                continue
-            examined += 1
-            extra = set(instruction.payload) - _READ_KEYS
-            if extra:
-                stray[card.name] = extra
-            for line in instruction.payload.get("ability_lines") or ():
-                if not derived_line_supported(line):
-                    unreadable.setdefault(card.name, []).append(line)
+            if instruction.kind == "conditional_static":
+                found.append((card.name, dict(instruction.payload)))
+    return tuple(found)
+
+
+def _stray_keys(read_keys) -> dict[str, set[str]]:
+    stray: dict[str, set[str]] = {}
+    for name, payload in _pool_conditional_statics():
+        extra = set(payload) - set(read_keys)
+        if extra:
+            stray.setdefault(name, set()).update(extra)
+    return stray
+
+
+def test_every_conditional_static_in_the_pool_carries_only_parts_a_pass_reads():
+    unreadable: dict[str, list[str]] = {}
+    statics = _pool_conditional_statics()
+    for name, payload in statics:
+        for line in payload.get("ability_lines") or ():
+            if not derived_line_supported(line):
+                unreadable.setdefault(name, []).append(line)
     # A floor, so a refactor that stops this loop finding the instruction
     # cannot leave it green over nothing: 81 on the day it was written.
-    assert examined >= 70, examined
+    assert len(statics) >= 70, len(statics)
+    stray = _stray_keys(_READ_KEYS)
     assert not stray, stray
     assert not unreadable, unreadable
+
+
+def _reads_payload_key(source: str, constant: str, key: str) -> bool:
+    """Whether *source* reads a payload key by ``<x>.get(<constant>)`` (or the
+    key spelled out), or by ``<x>[<constant>]``."""
+    def names_it(node) -> bool:
+        return (isinstance(node, ast.Name) and node.id == constant) or (
+            isinstance(node, ast.Constant) and node.value == key
+        )
+
+    for node in ast.walk(ast.parse(source)):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and node.args
+            and names_it(node.args[0])
+        ):
+            return True
+        if isinstance(node, ast.Subscript) and names_it(node.slice):
+            return True
+    return False
+
+
+def test_each_constant_named_key_is_read_where_the_census_says():
+    """Every :data:`_READ_BY` key is read by each module it names — and the
+    two halves are validated backwards: the reader check fails on a module
+    whose read is taken out, and the census names Death-Mask Duplicant when
+    its key is not declared at all (the red it was taught to clear)."""
+    constants = {LINKED_EXILE_FAMILY: "LINKED_EXILE_FAMILY"}
+    for key, modules in _READ_BY.items():
+        for module in modules:
+            source = (_ROOT / module).read_text(encoding="utf-8")
+            assert _reads_payload_key(source, constants[key], key), (key, module)
+            stripped = source.replace(f".get({constants[key]})", ".get(None)")
+            assert not _reads_payload_key(stripped, constants[key], key), module
+    undeclared = _stray_keys(_READ_KEYS - frozenset(_READ_BY))
+    assert undeclared.get("Death-Mask Duplicant") == {LINKED_EXILE_FAMILY}, undeclared
