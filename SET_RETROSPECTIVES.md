@@ -1882,3 +1882,92 @@ shuffles, the web's Time Vault decline, the role-refs cast default,
 Mirrodin's AI and client leftovers, three seen-not-measured. ROADMAP:
 **drained** the graveyard's arrival seam, the protection backspaces and the
 +0/+1 store.
+
+### KG5 — 2026-11-10 (a round, not a set)
+
+*Every entry in the playbook's Known gaps, twenty-three of them, in fourteen
+groups; then what those groups measured and left, in eight more launched as
+a second wave from the ninth link beside the groups still running; and
+`target_permanent_index` with the role-refs cast default alone and last
+(`ids`).* Of the twenty-one entries outside `ids`, seventeen drained, each on
+the board it names: "at end of combat" as the step begins and the step marks
+as stack objects (CR 511.2, 603.7); the instant-speed cast builder onto the
+main one's; the reverse "when" retry; the four "next time" readings beside
+CR 615.8 and Desperate Gambit's names; CR 616.1e for an entry, land mana and
+the chosen discard; a second AI seat at a flagged step and Camouflage's
+stall; Balduvian Shaman; "could produce" as CR 106.7's fixpoint; Oubliette's
+hook; Infernal Denizen (the handler was right: CR 118.12, 118.3); CR
+509.1g's blockers; Tithe's one shuffle; Time Vault's decline, and its skip
+in wave 2; the Mirrodin client and wire leftovers, Krark's Thumb's "ignore
+one" with them; and both seen-not-measured entries. Four were rewritten to
+what is left: `effect_order`'s measured default (a damage event's first
+contended round only), CR 400.4a (every road but a split counted search),
+and the two AI-leftover entries, folded into one.
+
+Nearly every group found the larger defect beside its entry, and wave 2 was
+briefed from them:
+- `sacrifice_self` never checked control, so about a hundred printed
+  "sacrifice this" triggers sacrificed a source that had changed hands
+  since (Time Elemental, Fog Elemental), and CR 511.2's until-end-of-combat
+  sweep ran before the step's window;
+- the road list for CR 400.4a was a third of the real one: 38 callers of the
+  battlefield funnel, 23 asking nothing, and a bare "card" search could put
+  a Lightning Bolt onto the battlefield; nine more roads then had to ask
+  Worms of the Earth;
+- a web AI that played a land handed the person priority, so every web AI
+  cast its spells postcombat, and on the AI's turn every step's objects
+  resolved with the person unasked;
+- a face-down Exalted Angel sacrificed for a cost paid 6, Rethink always
+  asked {0}, and a face-down creature exiled for a cost lost its real card
+  (CR 708.9);
+- one gate declined all 173 sacrifice-cost abilities; thirteen Auras with
+  host triggers were read as gifts; flanking and every block pump were
+  missing from the fight forecast (111 fights wrong);
+- 26 of 27 arrival log lines were written whatever the entry did, and
+  Duress, Coercion and Chains of Mephistopheles discarded past Library of
+  Leng unasked (the briefed `leng_declined=True` would have kept them so).
+
+*What the integration learned.*
+- **Wave 2 launched from a link, mid-chain**, nine wave-1 branches merged,
+  while wave 1's AI groups ran; the AI follow-up waited for all four AI
+  reports and launched from the link that held them. The rule already said
+  so.
+- **The clean merge that collided**: kindred's new single find called
+  `shuffle_library_of` where grammar had put every search shuffle behind
+  `shuffle_after_search`. Each report's list of functions touched in other
+  groups' rows found it; that list is now the merge's reading list. A split
+  against an edit conflicted only in the old home (`_rehearse_activation`).
+- **A wire change's backwards reader sat in no list**: `test_batch15` looked
+  a Copy Artifact up by its wire `name`, imported only `web.app`, and waited
+  seven links for a gate running `tests/regressions`.
+- **Seeded AI rows moved only under the AI branches together**, each green
+  alone; two were reseeded once on the tip, by a search holding each seed to
+  the test's own assertions (5151 to 5155, 69 to 141).
+- **An order-dependent web census**: green in a meeting run, red in a folder
+  run of the same tree, because a session's seed does not seed the game's
+  RNG — seeded in the test, and a Known gap.
+- **Memory**: 9–17 GB free beside the owner's ~13 GB; gates at `-n 3`/`-n
+  4`, four wave-2 groups launched and three queued, and `regen.sh` on every
+  link too heavy — links committed with their scans, trackers regenerated at
+  two tips. The reports for this phase had to be recovered from the session
+  transcript.
+
+*Edits in place:* the merge's reading list and the moved-and-edited
+function; a wire field's meaning runs `tests/ui` and `tests/regressions`
+whole; reseed once after the last AI branch; trackers at the tip when memory
+is short; the reports saved as they land; a web test seeds its own RNG;
+`drive_combat`'s end of combat. CLAUDE.md's subject files and ARCHITECTURE
+carry the round's seams; ROADMAP drops eight drained clauses.
+
+*Known gaps:*
+- **Drained:** seventeen of twenty-one, and wave 2's own finds.
+- **Rewritten:** `effect_order`'s measured default; CR 400.4a's split counted
+  search; the AI leftovers (kg5's AI groups' measured-and-left, Mirrodin's
+  folded in).
+- **Added:** prevention leftovers; a payable Alliances toll after Land
+  Equilibrium, with Worms and Mox Diamond beside it; a replaced land play's
+  watchers (a ruling to ask); three windows the web leaves a person unasked;
+  three mana readers; a roles copy's targets; Mishra's War Machine's damage;
+  a copy's name in the handlers; a seeded web session's RNG.
+
+<!-- kg5 integrator: ids outcome and the full gate -->

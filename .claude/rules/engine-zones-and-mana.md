@@ -49,7 +49,13 @@ and you can open this file directly whenever its subject is yours.
   you to discard" is a question about the cause — and with `as_cost` when the
   discard pays a cost, because "if an effect causes you to discard" (Library
   of Leng) is one too. Every discard in the four cost-paying modules passes it
-  (`tests/engine/test_discard_cost_seam.py`).
+  (`tests/engine/test_discard_cost_seam.py`). So does a cost CR 118.12 pays
+  at resolution: an offer printing "if [player] does/doesn't" or "unless"
+  marks its action's discards `as_cost` at lowering
+  (`lowering/control_flow._paid_as_cost`, `COST_PAYABLE_DISCARD_KINDS`); the
+  chosen discard's prompt carries `_as_cost` with no library top, and
+  `discard_cause_seat(as_cost=True)` is None — a cost is caused by nobody
+  (`tests/engine/test_kg5_costs_resolution_discard_costs.py`).
 - **Every "put into a hand / a library"** goes through `Game.put_card_into_hand`
   (`mixins/zone_funnels.py`)
   / `put_card_into_library` (CR 903.9b has no single fire site).
@@ -71,7 +77,11 @@ and you can open this file directly whenever its subject is yours.
   `controller_index_of` answers its seat), and at a table that holds for
   answers an entry that leaves a prompt open finishes at its last answer
   (`_finish_answered_entries`). A caller acts on the entered permanent through
-  `then` (`tests/engine/test_kg3_entry_callers.py`). No default is stamped
+  `then` (`tests/engine/test_kg3_entry_callers.py`), which runs for an entry
+  a replacement took away too, so whatever it does to the permanent, or says
+  of it, asks `entry_awaiting.entry_happened` first; a line written once an
+  event has closed asks `entry_replaced`
+  (`tests/engine/test_kg5_entry2_entry_log_lines.py`). No default is stamped
   before a person's prompt (`_stamps_entry_default`), and a table that holds
   for nothing takes an entry prompt's default as it is armed
   (`Game._an_entry_nobody_waits_for`). **Permanents one event puts onto the
@@ -98,8 +108,19 @@ and you can open this file directly whenever its subject is yours.
   for the event (`after_this_departure`); a loop whose repetitions sacrifice
   at their answers (Fade Away, Tariff) holds them on its context
   (`sacrificing_together_through`, `OracleExecutionContext.sacrifice_batch`)
-  for its last step. `tests/engine/test_kg4_together_departure_roads.py`
-  holds every departing call made in a loop to the block.
+  for its last step — and a toll's penalty that sacrifices nothing waits for
+  those sacrifices (`run_penalty`, `penalties_after=`: Read the Runes'
+  ruling, the sacrifices then the discards).
+  `tests/engine/test_kg4_together_departure_roads.py`
+  holds every departing call made in a loop to the block. **A card that
+  cannot enter stays where it is** (CR 400.4a, and CR 614.17's "can't",
+  Worms of the Earth): every road that puts a card onto the battlefield out
+  of a zone asks `permanent_cards.stays_out_of_battlefield` before it takes
+  the card (`is_permanent_card` is CR 110.4a's one reading;
+  `cant_enter_sources` asks the registry's `cant_enter_battlefield`
+  predicates), and `tests/engine/test_kg5_kindred_entry_roads.py` and
+  `test_kg5_entry2_cant_enter_roads.py` hold every caller of
+  `_put_permanent_onto_battlefield` to it.
 - **Leaving a hand is one transition**: `Game.take_card_from_hand(owner, card)`
   removes exactly one copy by identity — every copy of a card in a hand is the
   same `CardDefinition` object. Guarded by `tests/engine/test_hand_removal_seam.py`.
@@ -129,7 +150,18 @@ and you can open this file directly whenever its subject is yours.
   on all three roads (explicit tap, a cost an effect collects, an activation).
   **A tap is the activation of one mana ability, and asking for a symbol picks
   it** (`board_payment.tap_alone_ability_for`); what a land can make is read per
-  ability (`tap_alone_symbols`), never off the printed summary.
+  ability (`tap_alone_symbols`), never off the printed summary. **Two
+  substitutions on one land are CR 616.1 candidates, one per effect**
+  (`land_mana_swaps.swapped_productions`, registered with `instances=`; a
+  one-symbol record such as Quarum Trench Gnomes' is one,
+  `ManaSubstitution.replaces`), chosen before the tap, which cannot wait
+  mid-payment: the symbol asked for picks the first order that makes it
+  (`ordered_substitutions`), so the tap's `mana_color` is the answer and no
+  prompt is armed. The substitution readers start from
+  `Permanent.unswapped_produced_mana`. What a land "could produce" (CR
+  106.7) is `mana_could_produce.lands_could_produce`: every order of each
+  land's substitutions, and `also=` for a land that has left, beside the
+  board it left.
 - `engine/board_payment.py` — `board_can_pay`: can this seat pay from its pool
   plus what its untapped lands would add (default — what an automatic payment
   asks), or plus every tap-alone source and every mana ability whose cost taps

@@ -83,6 +83,17 @@ and you can open this file directly whenever its subject is yours.
   seam that enters them (`_leave_combat_step`,
   `Game.combat_skips_blocks_and_damage()`, by the declaration, not the live
   attacker map).
+- **"At end of combat" triggers fire as the step begins** (CR 511.2), before
+  the active player's priority: `EndOfCombatStepMixin._begin_end_of_combat_step`,
+  once per step (`Game.end_of_combat_triggers_fired`), whichever road begins
+  it. **A step's delayed mark is a delayed triggered ability on the stack**
+  (CR 603.7) — a destroy, sacrifice or return at end of combat, the end step
+  or cleanup: every mark is written through
+  `destruction_events.mark_delayed_destruction` with its seat, source and
+  actor, `delayed_triggers.delayed_mark_events` makes one object per creation
+  (Dragon Whelp's fifth activation is a second), controlled by the seat that
+  wrote it, and `carry_out_delayed_mark` resolves it, finding its permanent
+  by id (CR 603.7c).
 - `engine/phases/upkeep_effects.py` — `@upkeep_effect(condition, kind)` for the
   pay-or-consequence upkeep triggers; a duplicate pair raises at import.
 

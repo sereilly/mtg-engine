@@ -659,13 +659,6 @@ one card prints this") reads as a work item long after it stopped being true.
   and the AI still reads Conspiracy's and Disharmony's sides wrong (a
   `derived_static_rule` reading, and a pronoun walk across steps).
 
-- **`land_enters` has one fire site, inside land-*play* resolution**
-  (`mixins/stack/resolution.py`), so a land an effect puts onto the battlefield
-  triggers nothing — Ankh of Mishra deals no damage for one. The fix is nearly
-  free: the row can fall to `matching_permanent_enters`, whose "that land's
-  controller" already reads `event_subject_controller`. (FEM; re-verified
-  2026-09-07.)
-
 - **`web/` layer reads are unguarded.** `tests/engine/test_layer_reads.py`
   walks `engine/` only, and the last two layer-read bugs were both in `web/`
   and both found by a promotion smoke test rather than a guard — most recently
@@ -695,13 +688,6 @@ one card prints this") reads as a work item long after it stopped being true.
   (`mixins/effects.py` writes `metadata["vitality_counters"]` behind a
   substring test), skipping the cap enforcement and the emptied-kinds record
   every other placement goes through.
-
-- **`handlers/_amounts.py`'s `"triggering_spell"` mana value has CR 202.3b's
-  gap** — it reads the cast card's `cmc`, so an {X} spell's mana value on the
-  stack is wrong. The same bug was fixed for Spell Blast and Mana Drain through
-  `targeting.stack_object_mana_value`; this site cannot use it because the cast
-  fire site records only the `CardDefinition`, not the stack item. Fixing it
-  means giving that fire site the object. (Re-verified 2026-09-07.)
 
 - **What stands after the round after Seventh Edition** (round 3,
   2026-10-06 to 10-18). The round between Planeshift and Seventh Edition left
@@ -1127,9 +1113,8 @@ one card prints this") reads as a work item long after it stopped being true.
   * *A copy with no recorded choice copies the first creature in seat
     order* — CR 707.5's "may" made for the player on a non-cast entry
     (W3G3).
-  * *`ai_valuation` has no side for `phase_out_target_creature_until_source_leaves`
-    (Oubliette) or `create_copy_token` (Dance of Many)*, so their unasked
-    default target is still the first candidate (W3G3).
+  * *`ai_valuation` has no side for `create_copy_token` (Dance of Many)*, so
+    its unasked default target is still the first candidate (W3G3).
   * *Cadaverous Bloom's "Add {B}{B} or {G}{G}" ignores the colour
     announced* — `mana_color` G produces {B}{B}; the only card in the pool
     printing that shape (W3G5).
@@ -1177,15 +1162,6 @@ one card prints this") reads as a work item long after it stopped being true.
     `trigger_target` names one target per click; a one-slot picker narrowed
     by a Flagbearer does not say why; a click on the middle of a lower stack
     card hits the card above.
-  * *Replacements that are never offered as a choice* (CR 616.1e). Since
-    kg4 a death, a move into a graveyard and a discard ask the affected
-    player (`apply_replacements(..., joined=)`, `answered_restart`); what
-    is left is SET_PLAYBOOK's Known-gaps entry (an entry, land mana, the
-    chosen discard's else-branch).
-    And Library of Leng is *offered* on a discard that pays a cost, against
-    its ruling ("costs aren't effects"): eight cost sites call
-    `_discard_card`, and one `as_cost` flag on the seam closes that and a
-    cost paid inside another player's resolution reading as opponent-caused.
   * *Costs named and not held, the rest of it.* A named permanent pays a
     spell's additional cost or the cast is refused (43 of 43 substituted a
     default); an **alternative** cost's short list is still topped up
@@ -1215,11 +1191,7 @@ one card prints this") reads as a work item long after it stopped being true.
     attacker that changed sides.
   * *Small, each with a repro in its group's report.*
     `destroy_all_matching` logs what it aimed at, not what died (55 cards
-    compile to the kind). ("<Creature type> card" and a bare creature type
-    naming a permanent read Kindred cards since kg4; what is left is the CR
-    400.4a entry seam, in SET_PLAYBOOK's Known gaps.)
-    `put_self_into_zone` passes `source.card` alone, so a *copy* of Legacy
-    Weapon leaving that way is read off its printed face; `MILLED_THIS_WAY`
+    compile to the kind). `MILLED_THIS_WAY`
     records a card a replacement sent to a hidden zone. Dodecapod's counters
     arrive after its entry is announced (Sand Golem's arrangement). A mana
     source asked for a colour it does not print makes its first printed one.
@@ -1337,11 +1309,10 @@ one card prints this") reads as a work item long after it stopped being true.
     player role (Shower of Sparks, Lunge, Donate) **was closed by round 3's
     J5** (`tests/rules/test_roles_spell_target_legality.py`: 5 of 9 had acted
     on an illegal player, and 3 of 3 all-illegal objects resolved). Roles are not
-    retargetable (`_CHANGEABLE_CHANNELS` excludes "role"), and a copy is
-    offered new targets, on every copy road, only when it chose exactly one
-    target (one permanent or player, or one spell or graveyard card through
-    CR 115.7's `change_slots`): a copy with several targets or a mode keeps
-    the original's. "Another target
+    retargetable (`_CHANGEABLE_CHANNELS` excludes "role"); a copy is offered
+    new targets slot by slot on every road, several targets and modes
+    included, and a roles copy or one printing "target" twice with different
+    descriptions keeps the original's (SET_PLAYBOOK's Known gaps). "Another target
     player" is held only by the blanket CR 115.3 refusal (`distinct: True` is
     not lifted by `target_descriptions.roles_spec`). The AI never announces two
     players.
@@ -1447,18 +1418,6 @@ one card prints this") reads as a work item long after it stopped being true.
     then measure who relies on the sweep's "manually placed" exemption
     before narrowing it.
     Reproduction: `.worktrees/scratch/tor/w2g2/drive_single_auras.py`.
-  * *Library of Leng and madness on a forced discard.* Drained at kg4: a
-    discard's destination is one contention set
-    (`Game.discarded_card_destination`), asked through
-    `answered_restart`; no caller had to tolerate a suspension, because
-    every contending effect sends the card somewhere else. (A discard paid
-    as a cost meets no Library: costs are not effects, its 2004-10-04
-    ruling.) The chosen discard's else-branch is the Known gap left.
-  * *The AI's default target for a graveyard-card trigger is the pile's
-    first match*: Dawn of the Dead reanimated Llanowar Elves over a Hill
-    Giant. Twenty-three cards (Gravedigger, Animate Dead, Necromancy ...). A
-    weight, read through `ai_valuation` the way `graveyard_price_order` reads
-    a price.
   * *A library-top setup printed on a permanent* (Goblin Recruiter, Dwarven
     Recruiter, Sterling Grove) is scored by type and body, not rehearsed, so
     the chosen-draw premium Vampiric Tutor now earns does not reach it. And

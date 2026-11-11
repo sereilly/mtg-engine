@@ -96,7 +96,11 @@ cost — `mana_combination.cast_split_offer`), the active seat's
 owed, that permanent listed in its controller's `battlefield` as arriving
 (`serialization._serialize_arriving`, `entering: true`; the engine has it in
 no zone until the answer, CR 614.12a), as are an open entry event's puts —
-to their controller alone (CR 101.4a). Every request body the client builds
+to their controller alone (CR 101.4a). A permanent's `name` is its name (CR
+707.2: a copy's is what it copies) and `printed_name` the physical card's (a
+face-down one's blank), which the client matches a card across zones and
+groups a pile by; a test reading the payload looks a copy up by
+`printed_name`. Every request body the client builds
 is held to its route: presence (`tests/ui/test_kg_client_request_schemas.py`),
 each value's type (`test_kg3_wire_request_shapes.py`), and what an armed
 prompt's handler takes (`test_kg3_wire_prompt_state_bodies.py`). **Every
