@@ -55,6 +55,7 @@ from engine.special_actions import (permanent_special_action_sentence,  # noqa: 
 from engine.cast_timing import (flash_permission_sentence,  # noqa: E402
                                 sacrifices_at_cleanup_if_cast_at_instant_speed,
                                 static_flash_permission)
+from engine.activation_timing import activation_timing_permission  # noqa: E402
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
 from engine.game_result_bans import game_result_ban_line  # noqa: E402
@@ -261,6 +262,10 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # one a card grants itself. Its own channel because it is its own reader.
     ("cast_timing.py (static flash permission)",
      lambda s: static_flash_permission(s) is not None),
+    # Its activation twin: "You may activate equip abilities any time you
+    # could cast an instant" (Leonin Shikari), read by the sorcery-timing row.
+    ("activation_timing.py (instant-speed ability class)",
+     lambda s: activation_timing_permission(s) is not None),
     # CR 116's special actions — "You may discard this card any time you could
     # cast an instant" (Circling Vultures, the one card CR 116.2e names). No
     # stack and so no instruction, which is exactly the population this census

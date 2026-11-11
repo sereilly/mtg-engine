@@ -174,7 +174,7 @@ class ActivationRestriction:
     askable_mid_payment: bool = False
 
 
-def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
+def _as_a_sorcery(game: "Game", controller_index: int, source, ability_text: str = "") -> bool:
     """CR 601.3d's timing: your own main phase, with an empty stack.
 
     Delegated rather than spelled here, because the cast path asks the identical
@@ -184,6 +184,13 @@ def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
     """
     from .cast_timing import a_sorcery_could_be_cast
 
+    # "You may activate equip abilities any time you could cast an instant."
+    # (Leonin Shikari.) The permission lifts this clause and no other, and
+    # CR 304.5 says what it leaves: the activator must have priority.
+    from .activation_timing import instant_timing_permits
+
+    if ability_text and instant_timing_permits(game, controller_index, source, ability_text):
+        return _as_an_instant(game, controller_index, source)
     return a_sorcery_could_be_cast(game, controller_index)
 
 
@@ -521,6 +528,7 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only as a sorcery$"),
         _as_a_sorcery,
         "this ability is sorcery-speed",
+        reads_line=True,
     ),
     ActivationRestriction(
         re.compile(r"^activate only as an instant$"),

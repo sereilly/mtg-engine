@@ -490,6 +490,16 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append("flash_permissions")
+    # "You may activate equip abilities any time you could cast an instant."
+    # (Leonin Shikari.) The same permission over an *ability* class, read by
+    # the "Activate only as a sorcery" row it lifts (`activation_timing`).
+    from .activation_timing import activation_timing_permission
+
+    if any(
+        activation_timing_permission(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("activation_timing")
     # "Creatures with mountainwalk can be blocked as though they didn't have
     # mountainwalk." (Crevasse and its four siblings.) The blockers step reads
     # the permanent's own text, so there is no instruction — and on an
