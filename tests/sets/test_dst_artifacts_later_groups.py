@@ -150,4 +150,58 @@ def test_w1g9_auriok_siege_sled_denies_the_artifact_creature_a_block(set_pool):
     _w1g9_drive_combat(game)
     assert bob.life == 17
 
+
+
+def _w1g9_names(player):
+    return [permanent.card.name for permanent in player.battlefield]
+
+
+def test_w1g9_genesis_chamber_gives_each_entering_creatures_controller_a_myr(set_pool):
+    """"Whenever a nontoken creature enters, if this artifact is untapped, that
+    creature's controller creates a 1/1 colorless Myr artifact creature token."
+    Alice's Bears give Alice a Myr and Bob's Zombies give Bob one; the Myr
+    entering is a token and sets nothing off; tapped, the Chamber does nothing
+    (CR 603.4)."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g9_table(set_pool)
+    chamber = _w1g9_put(game, 0, dst["Genesis Chamber"])
+    alice.hand.extend([lea["Grizzly Bears"], lea["Llanowar Elves"]])
+    bob.hand.append(lea["Scathe Zombies"])
+
+    assert game.cast_from_hand(0, "Grizzly Bears").supported
+    _w1g9_settle(game)
+    assert _w1g9_names(alice) == ["Genesis Chamber", "Grizzly Bears", "Myr Token"]
+    myr = alice.battlefield[2]
+    assert (myr.effective_power, myr.effective_toughness) == (1, 1)
+    assert myr.has_type("artifact") and myr.has_type("creature")
+
+    game.active_player_index = 1
+    assert game.cast_from_hand(1, "Scathe Zombies").supported
+    _w1g9_settle(game)
+    assert _w1g9_names(bob) == ["Scathe Zombies", "Myr Token"]
+    assert _w1g9_names(alice).count("Myr Token") == 1
+
+    chamber.tapped = True
+    game.active_player_index = 0
+    assert game.cast_from_hand(0, "Llanowar Elves").supported
+    _w1g9_settle(game)
+    assert _w1g9_names(alice).count("Myr Token") == 1
+
+
+def test_w1g9_genesis_chamber_tapped_before_resolution_makes_nothing(set_pool):
+    """The intervening "if" is asked again on resolution (CR 603.4): the
+    Chamber was untapped as the Bears entered and is tapped in response, so the
+    trigger resolves and creates nothing."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g9_table(set_pool)
+    chamber = _w1g9_put(game, 0, dst["Genesis Chamber"])
+    alice.hand.append(lea["Grizzly Bears"])
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Genesis Chamber"], game.stack
+    chamber.tapped = True
+    _w1g9_settle(game)
+    assert "Myr Token" not in _w1g9_names(alice)
+    assert any("its condition is no longer true" in line for line in game.log)
+
 # ==== end W1G9 ======================================================

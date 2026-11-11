@@ -274,6 +274,11 @@ _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
     # `pronouns._parse_its_controller_creates_rider`'s, which the sentence
     # loop tries before any statement and which this row therefore never meets.
     (("its", "controller"), "controller"),
+    # "Whenever a nontoken creature enters, if this artifact is untapped, **that
+    # creature's controller** creates a 1/1 … Myr …" (Genesis Chamber.) The
+    # row above spelled with the noun, one referent — the pair
+    # ``pronouns._accept_removed_permanents_controller`` reads as one.
+    (("that", "creature", "'s", "controller"), "controller"),
 )
 
 
