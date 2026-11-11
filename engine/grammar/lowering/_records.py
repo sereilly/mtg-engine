@@ -55,6 +55,8 @@ from __future__ import annotations
 # `oracle_types` names and `_deaths`' two); `_events` is read only for the two
 # keys it defines itself.
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                             ATTACHED_TO_DESTROYED_TARGET,
+                             DESTROYED_TARGET_HOST,
                              BIDDING_WINNER,
                              CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
@@ -898,6 +900,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         # rather than one entry per loop iteration: "they" is every player at
         # once, so the sentence has one answer each and no loop to bind them.
         PER_OBJECT_SEAT_RECORDS["controller"],
+        # …and the attachments either way round as the destroy found them
+        # (Unforge, Murderous Spoils) — see ``oracle_types.DESTROYED_TARGET_HOST``.
+        DESTROYED_TARGET_HOST, ATTACHED_TO_DESTROYED_TARGET,
     ),
     # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
     # (Sacred Boon.) The shield object itself, because what it prevents is

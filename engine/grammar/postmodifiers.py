@@ -533,6 +533,19 @@ def _parse_postmodifiers(
             if stream.accept_phrase("that", "'s") and stream.at_word("attached"):
                 continue
             stream.reset(relative)
+            # "all Equipment **that were attached to it**" (Murderous Spoils).
+            # The past tense names the attachment as it stood when the object
+            # the sentence's "it" points back at was acted on — a record of an
+            # earlier step, never a read of the board (the object has left).
+            # Its own field, which no matcher tests: only a lowering holding
+            # that step's record admits it.
+            if (
+                stream.accept_phrase("that", "were", "attached", "to", "it")
+                or stream.accept_phrase("that", "was", "attached", "to", "it")
+            ):
+                d.was_attached_to_it = True
+                continue
+            stream.reset(relative)
         if stream.at_word("that"):
             # "…**that isn't the target of an ability from another creature
             # named ~**" (Goblin Artisans). A guard against two copies aiming

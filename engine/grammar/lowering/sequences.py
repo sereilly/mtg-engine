@@ -253,12 +253,18 @@ def _lower_steps(
         # **single-target** destroy, where the record can hold at most one
         # object and the two readings coincide exactly. A sweep printing this
         # sentence refuses, naming the reason.
+        #
+        # "If **that Equipment was attached to a creature**, Unforge deals 2
+        # damage to **that creature**." (Unforge.) The same rewrite over the
+        # destroy's other look-back, on the same terms: one object at most, so
+        # the "if" and the loop coincide, and the loop is what binds "that
+        # creature" to the host the record names.
         if isinstance(step, ast.Conditional) and isinstance(
-            step.condition, ast.DiedThisWay
+            step.condition, (ast.DiedThisWay, ast.WasAttachedTo)
         ):
             if step.otherwise is not None:
                 raise LoweringError(
-                    "'dies this way' has no reading for an else branch",
+                    "a destroy's look-back has no reading for an else branch",
                     node=step,
                 )
             if not (
@@ -268,9 +274,23 @@ def _lower_steps(
                 and not previous.also_targets
             ):
                 raise LoweringError(
-                    "'if <noun> dies this way' reads the one permanent the "
+                    "'if <noun> dies this way' / 'was attached to' reads the one permanent the "
                     "sentence in front of it destroyed, and that sentence "
                     "destroys none or several",
+                    node=step,
+                )
+            # "that **Equipment**" restates what the destroy targeted; a noun
+            # naming something else is a sentence about another object.
+            if isinstance(step.condition, ast.WasAttachedTo) and (
+                step.condition.subject.card_types,
+                step.condition.subject.subtypes,
+            ) != (
+                previous.subject.filter.card_types,
+                previous.subject.filter.subtypes,
+            ):
+                raise LoweringError(
+                    "'that <noun> was attached to' names something other than "
+                    "what the destroy in front of it targeted",
                     node=step,
                 )
             # Lowered through the ordinary dispatcher rather than by calling

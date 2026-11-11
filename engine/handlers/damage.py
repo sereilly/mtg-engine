@@ -468,6 +468,31 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             game, victim, damage, source_permanent or card, asks=True,
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "loop_object":
+        # "If that Equipment was attached to a creature, Unforge deals 2
+        # damage to **that creature**." The object the enclosing loop is on
+        # (``for_each``'s ``iteration_target``), its printed narrowing
+        # re-checked as the damage is dealt; one that has left is dealt
+        # nothing (CR 400.7).
+        from ..subject_filters import subject_matches
+
+        victim = context.iteration_target
+        if getattr(victim, "permanent_id", None) is None or not game.is_on_battlefield(victim):
+            game.log.append(f"{card.name}: the creature it named is gone")
+            return True, "resolved"
+        described = instruction.payload.get("filter")
+        if described and not subject_matches(
+            game, victim, described,
+            observer=game.players.index(caster), source=source_permanent,
+        ):
+            game.log.append(
+                f"{card.name}: {victim.card.name} no longer answers the clause"
+            )
+            return True, "resolved"
+        apply_damage_to_creature(
+            game, victim, damage, source_permanent or card, asks=True,
+        )
+        return True, "resolved"
     if instruction.payload.get("recipient") == "event_subject":
         # "Whenever a creature without flying attacks you, this enchantment
         # deals 1 damage to **it**." (Barbed Foliage.) The object the *trigger's

@@ -35,7 +35,7 @@ from ._common import (_describe_several_targets, _is_source, _is_you,
                       _names_several_targets, _targets_payload,
                       testable_filter_payload)
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
-from ._record_keys import LOOP_BOUND_TARGET
+from ._record_keys import LOOP_BOUND_OBJECT, LOOP_BOUND_TARGET
 from ...target_roles import ITERATION_TARGET
 from ._events import (DAMAGED_PERMANENT_CONTROLLER, EVENT_SUBJECT_CONTROLLER,
                       EVENT_SUBJECT_PLAYER, LOOP_BOUND_PLAYER,
@@ -96,6 +96,22 @@ def lower_damage_recipient(
         # would fall through to whatever the resolution context was carrying.
         # The same gate `destroy_bound_permanent` makes of the same quantifier
         # one family over, refusing with the same sentence.
+        #
+        # "If that Equipment was attached to a creature, Unforge deals 2 damage
+        # to **that creature**." (Unforge.) Inside a loop over objects the
+        # words name the object the iteration is on (`for_each` binds it as
+        # ``iteration_target``) — the innermost binder, so asked first.
+        if LOOP_BOUND_OBJECT in produced:
+            described = testable_filter_payload(
+                recipient.filter,
+                refusal="the loop-object damage cannot test this restriction",
+                node=node,
+                require_narrowing=False,
+            )
+            payload["recipient"] = "loop_object"
+            if described:
+                payload["filter"] = described
+            return (OracleInstruction("deal_damage", "", payload),)
         if event in _EVENT_SUBJECT_OBJECTS:
             # "…this enchantment deals that much damage to **that creature**"
             # (Mangara's Equity), under an ordinary trigger rather than a

@@ -40,7 +40,8 @@ writes it and the loop here that reads it still spell it once.
 from __future__ import annotations
 
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
-                             DREW_COUNT, OracleInstruction)
+                             DESTROYED_TARGET_HOST, DREW_COUNT,
+                             OracleInstruction)
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from ...target_roles import (any_number_of_opponents_roles,
                              any_number_of_players_or_planeswalkers_roles,
@@ -655,6 +656,49 @@ def _lower_for_each_destroyed(
                 "iterator": {
                     "produced_by": "destroyed_this_way_objects", **narrowing,
                 },
+                "effect": inner,
+            },
+        ),
+    )
+
+
+def _lower_for_each_attached_host(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"If that Equipment was attached to a creature, Unforge deals 2 damage to
+    **that creature**." (Unforge.) The loop ``lowering/sequences`` rewrites the
+    ``Conditional`` into: over the permanent the single-target destroy in front
+    recorded its target was attached to (``oracle_types.DESTROYED_TARGET_HOST``,
+    at most one), narrowed by the printed host noun — so with nothing attached,
+    or attached to something the noun does not name, the body never runs.
+
+    Refused without that producer, for ``_lower_for_each_destroyed``'s reason.
+    The host is still on the battlefield (the destroy took what was attached to
+    it), but the narrowing is held to the pure matcher all the same, since the
+    loop applies it through ``permanent_matches_filter``.
+    """
+    if DESTROYED_TARGET_HOST not in produced:
+        raise LoweringError(
+            "'that <noun> was attached to' with no earlier step in this effect "
+            "that destroyed a target", node=node,
+        )
+    narrowing = node.iterator.host.to_payload()
+    if untestable_filter_keys(narrowing, allowed=OBJECT_ONLY_FILTER_KEYS) or (
+        node.iterator.host.zone != "battlefield"
+    ):
+        raise LoweringError(
+            "the host a destroy recorded is narrowed only by what the matcher "
+            "can ask of one object", node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-host loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                "iterator": {"produced_by": DESTROYED_TARGET_HOST, **narrowing},
                 "effect": inner,
             },
         ),

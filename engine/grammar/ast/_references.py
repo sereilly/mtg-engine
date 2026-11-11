@@ -230,6 +230,13 @@ class ObjectFilter:
     #: emitted as ``named_among``, which no permanent matcher tests, so only
     #: a consumer that carries it (``engine/lord_buffs.py``) admits it.
     named_among: tuple[str, ...] = ()
+    #: "all Equipment **that were attached to it**" (Murderous Spoils): the
+    #: attachment as it stood when an earlier step acted on the object "it"
+    #: names — a record, never a board read, since that object has left.
+    #: Emitted as ``was_attached_to_it``, which no matcher tests, so only a
+    #: lowering that holds the step's record (``ATTACHED_TO_DESTROYED_TARGET``)
+    #: admits it.
+    was_attached_to_it: bool = False
     #: "…a creature with flying **not named Escaped Shapeshifter**" — the
     #: negative of ``named``, when the excluded name is spelled out. A name
     #: rather than an identity, so a second copy of the card is excluded too
