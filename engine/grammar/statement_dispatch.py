@@ -412,10 +412,26 @@ def lower_statement(
         # so "that creature" inside a conjunction refused where the same clause
         # in a sequence lowered. Dream Fighter's "this creature **and** that
         # creature phase out" is one conjunction and nothing else.
-        return _lower_steps(
-            _one_creature_type_choice(statement.effects), produced, event,
+        #
+        # "Put two +1/+1 counters on target creature **and** two +1/+1 counters
+        # on **another** target creature." (Stand Together.) The printed
+        # "another" is the proof of two announcements here exactly as it is
+        # across the sentences of a ``Sequence`` below (Withdraw), so the pair
+        # is planned as two roles the same way — and a conjunction the planner
+        # declines is refused by the same rule. Without this the conjunction
+        # lowered as two one-target steps: one picker, and both halves placed
+        # on the first creature named.
+        effects = _one_creature_type_choice(statement.effects)
+        another = plan_another_target_roles(effects)
+        if another is None:
+            _refuse_unfused_distinctness(effects)
+        lowered = _lower_steps(
+            effects if another is None else another.steps, produced, event,
             event_subject, lower_statement=lower_statement,
         )
+        if another is None:
+            return lowered
+        return stamp_another_target_roles(lowered, another)
 
     if isinstance(statement, ast.DestroyUnlessPay):
         return _lower_destroy_unless_pay(statement, dispatch_event)
