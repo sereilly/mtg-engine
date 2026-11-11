@@ -19,6 +19,7 @@ export ROUND=ons
 | `census_new.py CODE` | Phase 1, after the ingest | new-to-pool cards, the origin trap, unsupported cards, layouts |
 | `card_table.py CODE <census-dir>` | grouping | one line per card: U / P / . with type, cost, text |
 | `furthest.py CODE <groups.json> <out>` | briefing, Phase 0 round 3 | per refused line, the layer that refused it (`scripts/probe_line.py`'s verdict) and, where the grammar refused, the furthest production that accepted |
+| `write_briefs.py CODE --groups <groups.json> --census <dir> --out <scratch> [--yield YIELD.md]` (`--wave 2 --w2-base <link> --base-reds <file>`) | briefing | the common brief from `brief_templates/` (the rules once; the census's counts, hollow cards, keyword reading, groups, base, size band, per-set sections and yield filled) and a skeleton `BRIEF.md` per group; TODO lines are the integrator's |
 | `gen_cards.py CODE <logs> <groups.json> <out>` | briefing | each group's `CARDS.md` from the instruments' output |
 | `open_test_files.py CODE <group>...` | before the fan-out | per-set test files with one marked section per group |
 | `headroom.py` | briefing, every stage | modules inside the size band (`check_all --caps` without the checks) |
