@@ -1475,6 +1475,27 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     `ai_casts._times_worth_taking` takes "kicked" whenever the lands can pay,
     the main phase's policy, which the instant-speed builder shares since
     kg5.
+  - From Darksteel's W2G2, each measured: **a spell that does nothing is
+    proposed when a cast trigger pays for it** — the rehearsal gives the
+    spell's card back on the premise that every cast spends one, so the
+    Feather cycle's 1 life nets it positive (Hallow in response to Aether
+    Vial, a defender's Tears of Rage, seed 4242). Part: `ai_rehearsal.
+    _rehearse` resolves only the objects above the spell (its cast triggers,
+    CR 603.3) and reads the standing there; if the spell's own resolution
+    moves nothing beyond that, the card is not given back. **Weights held
+    for the owner's call**: Eater of Days is always cast (body 34.9 against
+    two `SKIPPED_TURN_WORTH` 16; permanents are not rehearsed); Lich's Tomb
+    scores a flat 2.3 at any life (part: a cast gate weighing the "don't
+    lose" static against the seat's life); Death Cloud's X=6 at 10 life read
+    +26.5 on its board, consistent with the standing. Seen in W2G1's whole
+    game: Nourish cast at 17 life with nothing threatening, and an untapped
+    Nim Abomination left to cost 3 life three end steps running. Found by
+    reading: Aggravated Assault's second-main activation is not read through
+    the combat it adds (`_read_through_the_fight` gates on
+    `combat_is_still_to_come` first); Aether Vial is never activated in the
+    simulations because the creatures it would put are cast for mana first
+    (the doors' order); Panoptic Mirror's imprint picks the lowest slot among
+    cards of one mana value.
   *Clears:* the next AI round.
 
 - **Three mana readers still skip what a substitution does** (kg5 `mana2`,
@@ -1578,3 +1599,39 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   at the deal, as `run_ai_simulation` seeds the module RNG; sessions in one
   server share that RNG, so one game per seed beside another table needs the
   engine's random reads on an RNG the game owns. *Clears:* a web round.
+
+- **Darksteel's engine and client leftovers, each measured.** (a) A damage
+  redirect re-issues the damage as a separate event, so a creature dealt
+  Incinerate's or Flamebreak's damage through a redirect is not stamped
+  "can't be regenerated" (`handlers/damage._after_dealt` reads the original
+  event; no ruling covers it). (b) The engine log names a restricted mana's
+  raw key ("spendable only on artifact_or_artifact_ability",
+  `handlers/mana.py`) where the wire's `restricted_mana_words` has the
+  sentence. (c) A granted ability's served text is lowercased by the Aura
+  reader ("{t}, unattach Heartseeker: …"). (d) To respond to a spell a person
+  must click it on the canvas stack within about a second, before the
+  client's auto-pass; Leonin Battlemage's "you may untap" is asked on every
+  cast while it is already untapped. (e) Not driven in a browser: Sundering
+  Titan's leaves-the-battlefield trigger, Leonin Bola's and Surestrike
+  Trident's granted abilities (text checked), the Cataclysm and Planar
+  Overlay paths of the restructured keep modal. *Clears:* (a) a damage
+  round; (b)–(e) a client round.
+
+- **The toolkit wishes Darksteel's groups wrote down** (each cost a round's
+  worth of minutes somewhere): `oracle_diff compare` cannot filter a new
+  defaulted field's spelling (W1G2's nine moves read as 2,407; its
+  `scratch/dst/w1g2/od_filtered.py` is the filter); `sim_fingerprint` has no
+  `snapshot --rev <commit>` (three groups rebuilt a base snapshot from an
+  export); `probe_line.py` shows no AST fields and not the innermost
+  `LoweringError`'s file and line (W1G2, W1G3, W1G9 each wrote a scratch
+  probe); `simulate_ai_games.py` and `checked_sim.py` take no pinned cards;
+  no `explain_cast` for an activation (W2G2); no `fails_before.sh <test>
+  <file…>` to show a test red against a module's base version (W2G3 swapped
+  files by hand four times); `tests_for_diff.py --list` writes CRLF paths
+  and reads from `main` by default (512 files for a wave-2 branch); no
+  canvas position handle for a browser test (W2G1's `scratch/dst/w2g1/pw.sh`)
+  and `serve_board.py` does not reload code; and **Phase 1's yield arrived
+  about 80 minutes into the wave**, every one of its 13 reds a census whose
+  population reads the measured set — a marker (or a `tests_for_diff` mode)
+  naming those tests would run them first, in minutes, and put the table in
+  the briefs. *Clears:* a toolkit round, before the next set.
