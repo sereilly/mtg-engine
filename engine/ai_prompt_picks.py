@@ -1092,9 +1092,9 @@ def _copy_table_record(table, *, create: bool = False) -> "dict | None":
 
 def _mark_bought(table, choice) -> None:
     """Where *choice* was an offer whose price buys a copy offer of its own
-    behind it (``ai_prompts.offer_buys_a_copy_offer``), record on *table*
+    behind it (``ai_offer_answers.offer_buys_a_copy_offer``), record on *table*
     that its seat takes that copy: paying for it is the plan."""
-    from .ai_prompts import offer_buys_a_copy_offer
+    from .ai_offer_answers import offer_buys_a_copy_offer
 
     if offer_buys_a_copy_offer(choice.data):
         record = _copy_table_record(table)
@@ -1126,7 +1126,7 @@ def _weighed_copy_offer(game, choice) -> "bool | None":
 def copy_offer_pick(game, choice) -> "bool | None":
     """Whether a seat nobody asks takes a copy offer (True), declines it
     (False), or None where nothing weighs it and the stated reading
-    (``ai_prompts.copy_offer_turns_on_its_taker``) answers.
+    (``ai_offer_answers.copy_offer_turns_on_its_taker``) answers.
 
     Outside a rehearsal: :func:`_weighed_copy_offer`. Inside one, on a scratch
     table a copy offer is being weighed on: the copy a rehearsed price bought

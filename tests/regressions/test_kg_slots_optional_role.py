@@ -238,10 +238,10 @@ def test_a_first_target_gone_means_nobody_is_pumped_or_fought():
 
 
 def test_the_ai_skips_the_optional_role_when_its_side_has_nothing():
-    """``ai_targets._role_chain`` answers an optional role where it can and
+    """``ai_slot_targets._role_chain`` answers an optional role where it can and
     stops where it cannot — a chain that refused it would leave the pump in
     hand."""
-    from engine.ai_targets import _choose_role_targets
+    from engine.ai_slot_targets import _choose_role_targets
 
     game, mine, also, _theirs = _table(theirs=False)
     picked = _choose_role_targets(game, 0, _POOL["Primal Might"])
@@ -252,7 +252,7 @@ def test_the_ai_skips_the_optional_role_when_its_side_has_nothing():
 
 
 def test_the_ai_aims_the_fight_at_the_other_side():
-    from engine.ai_targets import _choose_role_targets
+    from engine.ai_slot_targets import _choose_role_targets
 
     game, _mine, _also, theirs = _table()
     _seat, _indices, ids, _stack, _refs = _choose_role_targets(game, 0, _POOL["Primal Might"])

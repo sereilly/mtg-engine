@@ -3,7 +3,7 @@ aimed at the side its effect wants.
 
 "Return up to X target creatures to their owners' hands, where X is one plus
 the number of cards named Aether Burst in all graveyards as you cast this
-spell." (Aether Burst.) `ai_targets._choose_several_targets` had three roads
+spell." (Aether Burst.) `ai_slot_targets._choose_several_targets` had three roads
 for a counted list — a printed maximum, an X the caster pays for, and an X the
 game counts — and the third fell through to the several-slot default at the
 bottom of the function: *the caster's own board*, on the argument that every

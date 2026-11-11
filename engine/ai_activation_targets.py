@@ -148,7 +148,7 @@ def _choose_activation_role_targets(
     """One object per **role** for an activated ability, or None when no legal
     chain exists.
 
-    ``ai_targets._choose_role_targets``' twin on the activation side, and it is a twin
+    ``ai_slot_targets._choose_role_targets``' twin on the activation side, and it is a twin
     rather than a shared body for the reason the two specs are derived
     separately: a spell's roles come from the card and an ability's from *that
     ability* (CR 602.2b), so the walks start from different calls. What they

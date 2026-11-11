@@ -19,10 +19,10 @@ inward:
   (:func:`_times_worth_taking`);
 * and, for one fixed answer, the **announcement** itself
   (:func:`_cast_candidate_announcing`): its gates (``ai_cast_gates``), its
-  targets (``ai_targets``, ``ai_divisions``), its X, its payment
-  (``ai_payment``), and the rehearsal that decides whether it is worth
-  proposing (``ai_scoring``) — read, at instant speed, as that moment reads
-  it (``ai_scoring.read_at_instant_speed``, ``held_at_instant_speed``,
+  targets (``ai_targets``, ``ai_slot_targets``, ``ai_divisions``), its X,
+  its payment (``ai_payment``), and the rehearsal that decides whether it is
+  worth proposing (``ai_scoring``) — read, at instant speed, as that moment
+  reads it (``ai_scoring.read_at_instant_speed``, ``held_at_instant_speed``,
   ``ai_cast_score.kept_above_the_floor``).
 
 :func:`_priced_candidate` is a candidate with its plan told what it pays for,
@@ -123,13 +123,15 @@ from .ai_cast_gates import (
 from .ai_targets import (
     _cast_graveyard_denial,
     _choose_aura_target,
-    _choose_role_targets,
-    _names_x_targets,
-    _choose_several_targets,
     _NOT_OBJECT_SPECS,
     _choose_single_object_target,
     _chosen_stack_target,
     _guarded_stack_target,
+)
+from .ai_slot_targets import (
+    _choose_role_targets,
+    _names_x_targets,
+    _choose_several_targets,
 )
 from .ai_divisions import choose_divided_targets
 from .ai_imprint import held_for_an_imprint

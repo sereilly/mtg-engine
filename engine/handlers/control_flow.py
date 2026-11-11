@@ -1068,7 +1068,7 @@ def _offer_to_seat(
         "_context": context,
         # Who the card offers this to, as printed: one seat's answer is read
         # differently when every seat is being asked the same question
-        # (``ai_prompts.offer_buys_own_drawback``).
+        # (``ai_offer_answers.offer_buys_own_drawback``).
         "_offered_actor": instruction.payload.get("actor", "you"),
         # The offer itself, so the prompt can say *which* of a line's offers
         # this is: Chain of Vapor's "may sacrifice a land" and its nested "may

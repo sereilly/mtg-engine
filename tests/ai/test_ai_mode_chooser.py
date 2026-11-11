@@ -613,7 +613,7 @@ _MODE_QUESTIONS = {
 _VALUATION_MODULES = frozenset({
     "ai_valuation.py", "ai_weighed_cast.py", "ai_target_sides.py",
     "ai_slot_sides.py", "ai_rehearsal.py", "ai_standing.py", "ai_scratch_copy.py",
-    "ai_prompt_readers.py",
+    "ai_prompt_readers.py", "ai_offer_readers.py",
 })
 
 

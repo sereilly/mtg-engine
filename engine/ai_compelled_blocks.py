@@ -554,7 +554,7 @@ def compelled_block_declined(game: "Game", player_index: int, entry: dict) -> bo
     """Whether a seat nobody asks declines an offer whose accept branch
     compels the announced target to block the offer's source — the provoke
     "may" — because the block is worth nothing to it (or less)."""
-    from .ai_prompt_readers import _offer_target_permanent
+    from .ai_offer_readers import _offer_target_permanent
 
     accept = entry.get("_on_accept") or ()
     if not any(compels_a_block_on_source(step) for step in accept):

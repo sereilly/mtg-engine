@@ -7,8 +7,8 @@ card exiled with this artifact. If you do, you may cast the copy without
 paying its mana cost." (Panoptic Mirror.) With nothing exiled its upkeep
 ability does nothing for the rest of the game, so the activation is the
 only thing the permanent its seat paid for ever does — the reading
-``ai_prompts`` already takes of an imprint *offer* (Chrome Mox, Isochron
-Scepter: "taken", ``ai_prompt_readers.offers_a_hand_imprint``). As an
+``ai_offer_answers`` already takes of an imprint *offer* (Chrome Mox, Isochron
+Scepter: "taken", ``ai_offer_readers.offers_a_hand_imprint``). As an
 *activation* it was rehearsed like any other, and a rehearsal reads to the
 end of the turn: the card leaving the hand was all it saw, every X measured
 under nothing, and the AI never imprinted (DST W1G3: 0 imprints in five
@@ -35,7 +35,7 @@ from __future__ import annotations
 import random
 import weakref
 
-from .ai_prompt_readers import offers_a_hand_imprint
+from .ai_offer_readers import offers_a_hand_imprint
 from .ai_standing import CARD_WORTH
 from .linked_exile import cards_still_exiled_with
 

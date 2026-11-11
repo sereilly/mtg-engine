@@ -10,7 +10,7 @@ such level was ordered by ``ai_standing.permanent_worth``.
 from __future__ import annotations
 
 from engine import Game, PlayerState
-from engine.ai_targets import _choose_role_targets
+from engine.ai_slot_targets import _choose_role_targets
 from engine.models import Permanent
 from tests.helpers import _mk_card, resolve_stack
 

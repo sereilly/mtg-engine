@@ -94,7 +94,7 @@ from .ai_actions import (
 )
 from .target_keywords import cast_target_zone
 
-# ``ai_targets`` imports this module, so its role chooser is reached late
+# ``ai_slot_targets`` imports this module, so its role chooser is reached late
 # (``engine/late_modules.py``) rather than by an import that would be a cycle.
 _late = LateModules(__package__)
 
@@ -955,14 +955,14 @@ def _score_spell_target(
     # was refused for every one of them and each scored -SWING_CAP wherever it
     # was weighed in the abstract — a library search, a scry, the top of a
     # library — whatever it would have done. The chain is the cast path's own
-    # (``ai_targets._choose_role_targets``, the one ``ai_casts`` announces),
+    # (``ai_slot_targets._choose_role_targets``, the one ``ai_casts`` announces),
     # so the cast weighed is the cast the seat would make. With no chain on
     # this board (``()``) the seat-only announcement stands, and is refused
     # as the cast would be. Not asked inside a rehearsal, where no rehearsal
     # is run (``_rehearse_announcement``) and the chain would be wasted.
     roles = (
         None if rehearsing()
-        else _late.ai_targets._choose_role_targets(game, caster_index, card)
+        else _late.ai_slot_targets._choose_role_targets(game, caster_index, card)
     )
     if roles:
         seat, indices, ids, stack_index, refs = roles

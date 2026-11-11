@@ -12,7 +12,7 @@ bottomed it under a scry and passed it over in a search. Found by kg/slots
 
 The census asks every roles spell in the shipped pool on one rich mirrored
 board, with the chain the cast path itself would announce
-(``ai_targets._choose_role_targets``). On the base tree (``c42aec75``) 13 of
+(``ai_slot_targets._choose_role_targets``). On the base tree (``c42aec75``) 13 of
 the 18 that had a chain scored -SWING_CAP (the five that did not are kicker
 cards whose unkicked cast names one target).
 """
@@ -24,7 +24,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.ai_actions import _cast_spec
 from engine.ai_scoring import SWING_CAP, _score_spell_target
-from engine.ai_targets import _choose_role_targets
+from engine.ai_slot_targets import _choose_role_targets
 from engine.ai_weighed_cast import SPELL_TYPES
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units

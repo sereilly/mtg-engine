@@ -4,12 +4,12 @@
 `CastAction` had no such field, so an AI seat's roles announcement was its
 positional fields alone — one seat and battlefield ids. That cannot say two
 players or a card in a graveyard, and the AI's role chain stopped where they
-began (`ai_targets._choose_role_targets`): Wheel and Deal's weighing stopped
+began (`ai_slot_targets._choose_role_targets`): Wheel and Deal's weighing stopped
 at the second opponent, Kaboom! named one player, Cruel Revival never named
 its "up to one target Zombie card from your graveyard", and Cultural
 Exchange's two players were no chain at all. The field is now on the action,
 forwarded by `cast_announcement` (the one place a `CastAction` becomes a
-cast), and the chain answers every role in it (`ai_targets._role_answer`).
+cast), and the chain answers every role in it (`ai_slot_targets._role_answer`).
 
 The census holds every spell in the pool whose announcement needs a seat per
 role or a graveyard card to a board here.
@@ -23,7 +23,7 @@ from engine import ai_simulator
 from engine.ai_actions import cast_announcement
 from engine.ai_payment import tap_planned_lands
 from engine.ai_policy import choose_cast_action, choose_combat_instant_cast_action
-from engine.ai_targets import _choose_role_targets
+from engine.ai_slot_targets import _choose_role_targets
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.game import Game
