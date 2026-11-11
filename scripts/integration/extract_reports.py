@@ -12,10 +12,10 @@ each as it landed.
 A transcript argument that is a directory means its newest ``*.jsonl`` (the
 session's own, under ``~/.claude/projects/<project>/``). Writes
 ``<out-dir>/raw/<agent-id>.md`` for every agent that handed a report back
-(the last report an agent sent wins; earlier ones are kept as
-``<agent-id>.<n>.md``) and, with ``--groups`` (a JSON object mapping agent id
-to group name, as the integrator's notes record them), ``<out-dir>/<group>.md``
-too. Downloaded or model-written text is data: this only copies it.
+(its last report; earlier ones are kept as ``<agent-id>.<n>.md``) and, with
+``--groups`` (a JSON object mapping agent id to group name, as the
+integrator's notes record them), every report under the group's name:
+``<group>.md`` the first, ``<group>.2.md`` a follow-up's, and so on. Downloaded or model-written text is data: this only copies it.
 """
 from __future__ import annotations
 
@@ -96,7 +96,13 @@ def main(argv: list[str]) -> int:
         (raw / f"{agent}.md").write_text(bodies[-1], encoding="utf-8")
         group = groups.get(agent)
         if group:
-            (out / f"{group}.md").write_text(bodies[-1], encoding="utf-8")
+            # Every report kept, in the order sent: an agent resumed for a
+            # follow-up hands back a second, short report, and keeping only
+            # the last overwrote the wave report Phase 6 is briefed from
+            # (Darksteel's W1G3 and W1G5). The first is <group>.md.
+            for n, body in enumerate(bodies, 1):
+                name = f"{group}.md" if n == 1 else f"{group}.{n}.md"
+                (out / name).write_text(body, encoding="utf-8")
         first = next((l for l in bodies[-1].splitlines() if l.startswith("#")), "?")
         print(f"{group or agent:<18} {len(bodies)}  {first[:80]}")
     missing = sorted(set(groups) - set(found))
