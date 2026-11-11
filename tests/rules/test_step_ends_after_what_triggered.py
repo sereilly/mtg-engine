@@ -104,11 +104,17 @@ def _state_triggers(pool):
                 yield card, trig
 
 
-def _left_waiting_when_the_upkeep_ended(pool, card, trig, path) -> "bool | None":
+def _left_waiting_when_the_upkeep_ended(
+    pool, card, trig, path, asked: "set | None" = None,
+) -> "bool | None":
     """Run an upkeep whose last trigger makes *trig*'s state true as it
     resolves. True when the step ended with the state trigger still waiting —
     on the stack, or not announced at all; None when this trigger is not one
-    that reaches the stack this way."""
+    that reaches the stack this way.
+
+    *asked*, when given, collects ``(card name, path)`` for every row whose
+    upkeep armed a decision of the card's own — a "may", a target — beside
+    the census's order prompt: the backwards check's "another road"."""
     # The state must not already hold as the card arrives: Transcendence's
     # "when you have 20 or more life, you lose the game" at the table's 20
     # resolved during the setup, the game was over (CR 104.1) and no upkeep
@@ -149,6 +155,14 @@ def _left_waiting_when_the_upkeep_ended(pool, card, trig, path) -> "bool | None"
         }])
 
     game._enqueue_triggered_batch = with_one_more
+    arm = game.arm_pending_choice
+
+    def arm_and_note(kind, *args, **kwargs):
+        if asked is not None and kind != "order_triggers":
+            asked.add((card.name, path))
+        return arm(kind, *args, **kwargs)
+
+    game.arm_pending_choice = arm_and_note
     try:
         game.resolve_upkeep(0)
         # The census's own trigger and the card's go on the stack together,
@@ -161,7 +175,20 @@ def _left_waiting_when_the_upkeep_ended(pool, card, trig, path) -> "bool | None"
             game._resolve_priority_window()
     finally:
         EFFECT_HANDLERS.pop("census_make_state_true", None)
+        game.arm_pending_choice = arm
     assert made, card.name
+    if game.is_game_over():
+        # CR 104.1: "A game ends immediately when a player wins". Darksteel
+        # Reactor's "you win the game", announced and resolved inside the
+        # upkeep it was made true in, ends the game with its own upkeep
+        # trigger still on the stack — an object that will never resolve,
+        # not one waiting for a draw step that will never come. Only the
+        # state trigger's own instance left there would be late.
+        return any(
+            item.source_permanent is permanent
+            and item.ability_text == trig.source_line
+            for item in game.stack
+        )
     if game.stack and game.pending_choices:
         return False  # held on a decision it armed: still its own step's
     if game.stack:
@@ -170,11 +197,13 @@ def _left_waiting_when_the_upkeep_ended(pool, card, trig, path) -> "bool | None"
     return bool(game.stack)
 
 
-def _census(pool) -> tuple[list[str], int]:
+def _census(pool, asked: "set | None" = None) -> tuple[list[str], int]:
     waiting, stacked = [], set()
     for card, trig in _state_triggers(pool):
         for path in PATHS:
-            left = _left_waiting_when_the_upkeep_ended(pool, card, trig, path)
+            left = _left_waiting_when_the_upkeep_ended(
+                pool, card, trig, path, asked,
+            )
             if left is None:
                 continue
             if left:
@@ -208,13 +237,24 @@ def test_the_census_names_all_ten_with_the_windows_check_switched_off(
         PhaseStepsMixin, "_check_between_resolutions", lambda self: None,
     )
 
-    waiting, cards = _census(pool)
+    asked: set = set()
+    waiting, cards = _census(pool, asked)
 
     assert cards >= _MIN_STACKED, waiting
-    # On every path, bar the odd row a path reaches by another road: a prompt
-    # an answer settles runs the state check itself, which announces one of
-    # the ten inside the step.
+    # On every path, bar the rows a path reaches by another road: a decision
+    # of the card's own in the same upkeep — Darksteel Reactor's "you may put
+    # a charge counter" — holds the step open on an interactive seat, and an
+    # answer a driver settles runs the state check itself, which announces the
+    # state trigger inside the step. Those rows are named rather than
+    # allowed for by a count; one row more may still reach it unasked.
+    every = {entry.split(" [")[0] for entry in waiting}
     for path in PATHS:
-        named = sum(entry.endswith(f"[{path}]") for entry in waiting)
-        assert named >= cards - 1, (path, waiting)
+        named = {
+            entry.split(" [")[0] for entry in waiting
+            if entry.endswith(f"[{path}]")
+        }
+        unexplained = {
+            name for name in every - named if (name, path) not in asked
+        }
+        assert len(unexplained) <= 1, (path, sorted(unexplained), waiting)
     assert {f"Bomb Squad [{path}]" for path in PATHS} <= set(waiting)
