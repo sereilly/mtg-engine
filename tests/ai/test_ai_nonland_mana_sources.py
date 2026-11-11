@@ -108,7 +108,7 @@ def test_w2g5_every_nonland_source_the_plan_counts_makes_what_it_counted(pool):
     source is said to make must leave that mana in the pool and the source
     tapped. Where it does not count a bare "{T}: Add …", the reason has to be
     the payload — restricted mana, an amount the board decides."""
-    counted, uncounted_tap_alone, costed = [], [], []
+    counted, uncounted_tap_alone, costed, restricted = [], [], [], []
     for name, card in sorted(pool.items()):
         if card.primary_type in ("instant", "sorcery", "land"):
             continue
@@ -158,6 +158,14 @@ def test_w2g5_every_nonland_source_the_plan_counts_makes_what_it_counted(pool):
             _w2g5_cost(**planned.run) if planned.run
             else _w2g5_cost(**{planned.symbols[0]: planned.amount})
         )
+        if planned.spend_only is not None:
+            # Restricted mana (CR 106.6) is planned only for a payment its
+            # restriction admits, and this one is for nothing stated: the
+            # source is left out of it (kg5 plans and spends it for the
+            # payments it may make, ``test_kg5_ai2_restricted_mana.py``).
+            assert _plan_land_taps(game, game.players[0], required) is None, name
+            restricted.append(name)
+            continue
         plan = _plan_land_taps(game, game.players[0], required)
         assert plan is not None, (name, required, planned)
         _w2g5_pay(game, plan)
@@ -175,9 +183,11 @@ def test_w2g5_every_nonland_source_the_plan_counts_makes_what_it_counted(pool):
     } <= set(counted)
     # Bare "{T}: Add …" the plan leaves out, each for what its payload carries.
     assert {
-        "Adarkar Unicorn", "Soldevi Machinist", "Vodalian Arcanist",  # CR 106.6
+        "Adarkar Unicorn",  # CR 106.6, and "{U} or {C}{U}" a yield cannot state
         "Priest of Titania", "Rofellos, Llanowar Emissary", "Metalworker",
     } <= set(uncounted_tap_alone)
+    # …and restricted mana, counted only for what it may pay (CR 106.6).
+    assert {"Soldevi Machinist", "Vodalian Arcanist"} <= set(restricted)
     # …and a mana ability that costs more than the tap is not free mana.
     assert {"Black Lotus", "Lotus Petal", "Mana Cylix", "Morgue Toad",
             "Tinder Wall", "Celestial Prism"} <= set(costed)
@@ -192,7 +202,10 @@ def test_w2g5_every_nonland_source_the_plan_counts_makes_what_it_counted(pool):
      ManaYield(symbols=("B",), amount=1)),
     ("{T}: Add one mana of any color that a land an opponent controls could produce.",
      ManaYield(amount=1, board_narrowed=True)),
-    ("{T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.", None),
+    # CR 106.6: the restriction rides the yield, for the planner to read
+    # against what a payment is for (kg5, ``test_kg5_ai2_restricted_mana.py``).
+    ("{T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.",
+     ManaYield(symbols=("C",), amount=1, spend_only="instant_or_sorcery")),
     ("{T}: Add {G} for each Elf on the battlefield.", None),
 ])
 def test_w2g5_a_mana_abilitys_yield_is_read_off_its_payload(text, expected):
