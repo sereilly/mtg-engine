@@ -56,7 +56,7 @@ ASKED_UPSTREAM = {
     "mixins/stack/choices/search.py:_place_found_card":
         "mixins/stack/choices/search.py:_resolve_search_library_picks",
     # A land play: refused before the land leaves the hand.
-    "mixins/stack/resolution.py:_resolve_card":
+    "mixins/stack/permanent_spell_resolution.py:_resolve_permanent_spell":
         "mixins/stack/casting.py:_cast_onto_stack",
 }
 

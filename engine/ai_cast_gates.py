@@ -65,7 +65,7 @@ def _cast_life_price(
     is mandatory or taken (`optional_cost_taken`, the cast path's own reader),
     at the announced X, plus what a required alternative cost asks
     (`PermittedCast.cost`: a flashback cost printed with "Pay 3 life")."""
-    from .mixins.stack.casting import optional_cost_taken
+    from .mixins.stack.cast_additional_costs import optional_cost_taken
 
     total = 0
     for cost in additional_costs(card):

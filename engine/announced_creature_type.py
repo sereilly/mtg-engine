@@ -41,8 +41,9 @@ from __future__ import annotations
 GRAVEYARD_ANNOUNCED_CREATURE_TYPE = "graveyard_announced_creature_type"
 
 #: The ``StackItem.choices`` key the announcement rides to resolution on —
-#: the one ``mixins/stack/casting.py`` has written for a choice-shaped cost
-#: since Caller of the Hunt, so one cast that made both choices made one.
+#: the one the cast's push (``mixins/stack/cast_completion.py``) has written
+#: for a choice-shaped cost since Caller of the Hunt, so one cast that made
+#: both choices made one.
 CHOSEN_CREATURE_TYPE_CHOICE = "chosen_creature_type"
 
 

@@ -38,7 +38,7 @@ _RETURNING = ("leave_linked_exile", "_reanimate_creature_to_battlefield", "creat
 _REVIEWED = {
     ("mixins/oracle_instructions.py", "_apply_aura_effect"): (
         "Animate Dead attaches itself to the creature it reanimates at once: "
-        "the Aura is on the battlefield and ``_resolve_card`` bins an Aura "
+        "the Aura is on the battlefield and ``_resolve_permanent_spell`` bins an Aura "
         "left unattached (CR 303.4g) the moment this returns. Its resolution "
         "is held while the creature's choice is owed, so no state-based check "
         "sees the host before it arrives; the tapped flag set on the object "

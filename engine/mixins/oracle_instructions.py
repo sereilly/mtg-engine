@@ -327,9 +327,9 @@ class OracleInstructionsMixin:
         # "When **you play a card**" (Juju Bubble). CR 701.18b: casting a card
         # as a spell is one of the two ways to play it, so this is announced
         # here — the other way, playing it as a land, is announced from the
-        # land branch of `_resolve_card`. Its own event rather than a wider
-        # reading of the cast one, because a card that fired only on casts
-        # would sit through a land drop the rule counts.
+        # land branch of `_resolve_permanent_spell`. Its own event rather
+        # than a wider reading of the cast one, because a card that fired
+        # only on casts would sit through a land drop the rule counts.
         emit(self, "you_play_card", subject=card, caster_index=caster_index)
         # The same event for a *delayed* ability (CR 603.7): "Until end of turn,
         # whenever you cast a black spell, …" (Mountain Titan). A delayed

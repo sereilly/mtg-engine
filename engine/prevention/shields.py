@@ -119,7 +119,8 @@ def carry_spell_shields_onto_permanent(item, perm, game=None) -> bool:
     have ended the spell's own.
 
     Returns whether anything was carried. Called by the one road a permanent
-    spell takes onto the battlefield (``ResolutionMixin._resolve_card``).
+    spell takes onto the battlefield
+    (``PermanentSpellResolutionMixin._resolve_permanent_spell``).
 
     Hallow's shield (``PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE``) carries
     its rider with it: the marker has no payee, so it becomes the same kind of

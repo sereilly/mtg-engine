@@ -1,17 +1,21 @@
 """What a cast announces about the spell itself (CR 601.2a–c): where it is
-cast from, its modes, and each mode's targets.
+cast from, the costs it announces, its modes, and each mode's targets.
 
 ``_spell_source`` finds the card in the zone it is cast from and the
-permission that lets it be (CR 601.3). The mode methods carry CR 601.2b's
-choice of modes, and CR 700.2e's when an opponent makes it
+permission that lets it be (CR 601.3). ``_announced_cast_costs`` is the
+announcement CR 601.2b makes of the costs — the printed additional costs, the
+optional offers taken (kicker, buyback) folded into the price, an offer's X —
+and of the choices made beside them (a creature type, a declined copy, the
+cards a discard names), before any target is judged. The mode methods carry
+CR 601.2b's choice of modes, and CR 700.2e's when an opponent makes it
 (``_arm_opponent_mode_choice``, ``arm_modal_mode_targets``);
 ``_mode_announcements`` is every announcement a cast makes, one per chosen
 mode, and ``_mode_target_refusal`` asks CR 601.2c's target gates of each.
 
-Split out of ``casting.py`` at the 2,000-line cap, and composed onto ``Game``
-with the other parts of ``SpellCastingMixin``; the steps of
-``_cast_onto_stack`` here are moved out of it whole and called from it in its
-order.
+Split out of ``casting.py`` at the 2,000-line cap (``_announced_cast_costs``
+at the pre-Fifth-Dawn split), and composed onto ``Game`` with the other parts
+of ``SpellCastingMixin``; the steps of ``_cast_onto_stack`` here are moved out
+of it whole and called from it in its order.
 """
 
 from __future__ import annotations
@@ -23,6 +27,17 @@ from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...oracle import compile_card_oracle
 from ...refusals import refuse
 from ...target_keywords import announced_slot, cast_target_zone
+from ...cast_costs import (
+    additional_costs, buyback_cost, cast_announces_x, optional_x_offers,
+)
+from ...cost_modifiers import (
+    buyback_cost_reduction, CostReduction, reduce_cost,
+)
+from ...enter_effects import copy_on_enter_type
+from ...game_types import first_target_id
+from .cast_additional_costs import (
+    _optional_cost_announcement, _optional_cost_totals, optional_cost_taken,
+)
 
 
 def _mode_announcements(
@@ -220,6 +235,229 @@ class CastAnnouncementMixin:
                     card_name, classify_card(source_zone[hand_index]).effect_kind, details,
                 )
         return hand_index, permission, source_seat, source_zone
+
+    def _announced_cast_costs(
+        self, *, card, caster, caster_index, chosen_creature_type,
+        classification, cost_hand_index, cost_other_hand_indices, decline_copy,
+        extra_generic_tax, extra_pip_tax, from_zone, hand_index,
+        optional_cost_payments, target_permanent_ids, target_permanent_index,
+        x_value,
+    ):
+        """The costs a cast announces (CR 601.2b), and the choices it makes
+        beside them, before any of its targets is judged and before anything is
+        paid.
+
+        The printed additional costs the zone it is cast from charges; the
+        optional offers it takes (kicker, buyback), folded into the price with
+        buyback's own reduction (CR 601.2f), an offer's X and the colours that
+        X may be paid in; the creature type a cost or a graveyard target's
+        narrowing has the caster choose; a declined copy-as-it-enters
+        (CR 707.5); and the cards a discard cost names, resolved while the hand
+        still holds the spell.
+
+        A step of ``_cast_onto_stack``, moved out of it whole and called from
+        it in its place: "above" and "below" in its comments are places in the
+        cast as that method runs it.
+
+        Returns the refusal, or ``(cast_costs, chosen_type_word, copy_declined,
+        cost_hand_cards, extra_generic_tax, offer_x_colorings, optional_paid,
+        x_value)``.
+        """
+        # A printed additional cost (CR 601.2b). Only the costs this *zone*
+        # charges: Demonic Embrace prints one card with two prices —
+        # {1}{B}{B} from the hand and {1}{B}{B} plus 3 life plus a card from the
+        # graveyard — so a cost naming a zone applies to that zone alone, and
+        # an unmarked cost ("as an additional cost to cast this spell") applies
+        # wherever the spell is cast from.
+        #
+        # Gathered here and *checked* below, once X has been announced. See the
+        # gate's own note for why the check moved.
+        cast_costs = tuple(
+            cost for cost in additional_costs(card)
+            if cost.from_zone is None or cost.from_zone == from_zone
+        )
+
+        # CR 601.2b's optional additional costs, announced now and folded into
+        # the mana below. **Not** part of `_unpayable_additional_cost`: an offer
+        # is not a price, so declining one cannot make a spell uncastable, and
+        # taking one past what the pool holds is refused by the mana payment
+        # itself — which is where CR 601.2h puts an unpayable mana cost, and
+        # which spends nothing on the way to refusing.
+        optional_paid, optional_denial = _optional_cost_announcement(
+            card, cast_costs, optional_cost_payments,
+        )
+        if optional_denial is not None:
+            return refuse(
+                card.name, classification.effect_kind, optional_denial,
+            )
+        # CR 601.2b's choice-shaped price, announced here — beside the optional
+        # offers above and before any mana is spent, which is where CR 601.2b
+        # puts every choice a cast makes. It charges nothing, so there is no
+        # CR 601.2h gate to pass: every creature type is a legal answer.
+        #
+        # Refused rather than repaired when the word is not a creature type
+        # (idiom 9): a picker's list is only true if the engine declines what is
+        # not on it, and a silently-corrected answer would make the spell's own
+        # P/T disagree with what the player chose.
+        #
+        # The same announcement with no price behind it, for a spell whose
+        # *targets* are of the type chosen (Aphetto Dredging: "the creature
+        # type before the targets", its ruling). Made here, before the target
+        # gates below judge what was named under it.
+        chosen_type_word: str | None = None
+        if any(
+            cost.choose_creature_type for cost in cast_costs
+        ) or self._cast_type_narrows_graveyard_targets(card):
+            from ...grammar.vocabulary import CREATURE_TYPES, display_type_word
+
+            if chosen_creature_type is not None:
+                chosen_type_word = str(chosen_creature_type).strip().lower()
+                if chosen_type_word not in CREATURE_TYPES:
+                    denial = (
+                        f"{chosen_creature_type} is not a creature type "
+                        f"(CR 601.2b, CR 205.3m)"
+                    )
+                    return refuse(
+                        card.name, classification.effect_kind, denial,
+                    )
+            else:
+                chosen_type_word = self._default_cast_creature_type(
+                    caster_index, card
+                )
+            self.log.append(
+                f"{caster.name} chose "
+                f"{display_type_word(chosen_type_word) if chosen_type_word else 'no creature type'} "
+                f"to cast {card.name}"
+            )
+
+        # The copy-as-it-enters "may" declined (``decline_copy``), announced
+        # with the copy target it replaces and checked here, before anything
+        # is paid. Naming a permanent to copy *and* declining to copy is two
+        # answers to one question, refused rather than ranked.
+        copy_declined = bool(decline_copy) and copy_on_enter_type(
+            compile_card_oracle(card).normalized_text or ""
+        ) is not None
+        if copy_declined and (
+            target_permanent_index is not None
+            or first_target_id(target_permanent_ids) is not None
+        ):
+            return refuse(
+                card.name, classification.effect_kind,
+                "a cast cannot both name a permanent to copy and decline "
+                "to copy (CR 707.5)",
+            )
+
+        # "Buyback costs cost {2} less." (Memory Crystal.) CR 601.2f applied to
+        # CR 702.27a's offer, so it is read here — where the offer's symbols
+        # become mana this cast owes — and nowhere near the spell's own mana
+        # cost, which this modifier says nothing about.
+        #
+        # Only the buyback offer is reduced, never every optional cost this
+        # spell prints: Primitive Justice's "you may pay {1}{R} and/or {1}{G}"
+        # is CR 601.2b's repeated offer and no keyword at all, and reducing it
+        # would be a card Memory Crystal does not print. The offer is picked out
+        # by asking ``cast_costs.buyback_cost`` for this card's key — the same
+        # reader ``buyback_paid`` uses at resolution, so the offer this
+        # discounts is exactly the offer that buys the card back.
+        buyback_key = buyback_cost(card.oracle_text or "")
+        buyback_off, buyback_by = (
+            buyback_cost_reduction(self) if buyback_key is not None else (0, [])
+        )
+        # "Kicker {X}" (Verdeloth the Ancient), "Kicker {X}{2}" (Kangee). An X
+        # that lives in an *offer* (CR 107.3a's "additional cost with an {X} in
+        # it"), so CR 601.2b's two announcements depend on each other: a caster
+        # who took the offer names a number and pays for it just below, and one
+        # who declined names none. The number is settled here, before anything
+        # reads it, so a stray X sent with a declined kicker cannot reach the
+        # permanent ("create X Saprolings") by another road -- and an X nobody
+        # announced for a kicker that *was* taken is the 0 it reads as.
+        if optional_x_offers(card, from_zone=from_zone):
+            if cast_announces_x(card, from_zone=from_zone, taken=optional_paid):
+                x_value = max(0, int(x_value or 0))
+            else:
+                x_value = None
+        # "Spend only colored mana on X. No more than one mana of each color
+        # may be spent this way." (Emblazoned Golem's "Kicker {X}".) The X of
+        # such an offer is not generic mana: it is one unit of each of X
+        # colours, and *which* colours is the payer's CR 601.2h choice. So the
+        # offer contributes only its non-X part to the taxes below, and the
+        # candidate colourings travel to the payment, which takes the first
+        # the pool can pay with real units of those colours.
+        #
+        # ``((),)`` -- one choice, of nothing -- for every other cast, so the
+        # payment below makes exactly one pass and sets nothing aside.
+        offer_x_colorings: tuple[tuple[str, ...], ...] = ((),)
+        for offer, times in _optional_cost_totals(cast_costs, optional_paid):
+            colorings = offer.x_colorings(x_value)
+            if colorings is None:
+                charged = offer.cost_at(x_value)
+            elif not colorings:
+                # There are five colours, so no X above five can be paid one
+                # mana of each. Refused here -- before any cost is paid, and
+                # whether or not this game charges mana -- because the sentence
+                # bounds the announcement itself: an X the cost cannot be paid
+                # at is not one the caster may name (CR 601.2h, CR 601.2e).
+                refusal = (
+                    f"{card.name}: X can't be {x_value} -- no more than one "
+                    f"mana of each color may be spent on X"
+                )
+                return refuse(
+                    card.name, classification.effect_kind, refusal,
+                )
+            else:
+                charged = offer.cost_at(0)
+                offer_x_colorings = colorings
+            if buyback_off and offer.symbols == buyback_key:
+                # Through ``reduce_cost``, the one place CR 118.7's arithmetic
+                # lives: a generic reduction touches only the generic component
+                # and clamps at zero, so a buyback of {1} under two Crystals is
+                # free rather than negative.
+                charged = reduce_cost(charged, CostReduction(generic=buyback_off))
+                self.log.append(
+                    f"{card.name}'s buyback costs {{{buyback_off}}} less "
+                    f"({', '.join(sorted(set(buyback_by)))})"
+                )
+            for symbol, count in charged.items():
+                if symbol == "generic":
+                    extra_generic_tax += count * times
+                else:
+                    extra_pip_tax[symbol] = (
+                        extra_pip_tax.get(symbol, 0) + count * times
+                    )
+        # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
+        # mana clause of an optional price that is not only mana: folded into
+        # the same payment as the offers above, and only for the caster who
+        # took the price — through the one reader the gate and the collector
+        # below skip an untaken offer by, so the mana and the discard are
+        # charged together or not at all.
+        for cost in cast_costs:
+            if cost.mana_symbols and optional_cost_taken(cost, optional_paid):
+                for symbol, count in cost.mana_cost.items():
+                    if symbol == "generic":
+                        extra_generic_tax += count
+                    else:
+                        extra_pip_tax[symbol] = extra_pip_tax.get(symbol, 0) + count
+
+        # Resolve the named discard **here**, while `cost_hand_index` still
+        # indexes the hand the caster was looking at. The spell leaves that hand
+        # further down, and every card after it slides up a slot — so an index
+        # read afterwards names the neighbour, and one past the shortened end
+        # fell through to a bare `0` and discarded the *first* card in hand. A
+        # cast that names a card it cannot pay with is refused rather than
+        # silently repointed, before any mana is spent.
+        cost_hand_cards, cost_denial = self._resolve_discard_cost_cards(
+            caster_index, card, cast_costs,
+            cost_hand_index=cost_hand_index,
+            cost_other_hand_indices=cost_other_hand_indices,
+            spell_hand_index=hand_index if from_zone == "hand" else None,
+            x_value=x_value,
+        )
+        if cost_denial is not None:
+            return refuse(card.name, classification.effect_kind, cost_denial)
+        return (
+            cast_costs, chosen_type_word, copy_declined, cost_hand_cards,
+            extra_generic_tax, offer_x_colorings, optional_paid, x_value,
+        )
 
     def _resolve_chosen_modes(
         self, card, mode_choices: list[dict] | None, *,

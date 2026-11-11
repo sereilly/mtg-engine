@@ -540,9 +540,10 @@ class TriggeredAbilitiesMixin:
                 effect_kind=trig.effect_kind,
                 ability_text=trig.source_line,
                 # CR 107.3m: the cast's X, stamped on the permanent by
-                # `_resolve_card`. "When this Aura enters, … put X sleep
-                # counters on it" (Venarian Gold) reads it, and without it
-                # every amount in an entry trigger resolved "x" to zero.
+                # `_resolve_permanent_spell`. "When this Aura enters, …
+                # put X sleep counters on it" (Venarian Gold) reads it, and
+                # without it every amount in an entry trigger resolved "x"
+                # to zero.
                 x_value=permanent.metadata.get("cast_x_value"),
             )
             chooses = self._entry_trigger_chooses_a_target(

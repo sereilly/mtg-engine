@@ -86,7 +86,7 @@ _COST_PRODUCES: dict[type, str] = {
     # "Sacrifice a creature: … **If the sacrificed creature was a Thrull**, …"
     # (Ebon Praetor.) The activation path records the permanent the cost ate
     # under ``sacrificed_for_cost``, and the cast path records the same key
-    # for an additional cost (``engine/mixins/stack/casting.py``).
+    # for an additional cost (``engine/mixins/stack/cast_completion.py``).
     #
     # **Nothing gates on this row today, and that is the honest state rather
     # than an oversight.** ``CostObjectWas`` reads both this channel and the

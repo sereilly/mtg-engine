@@ -67,7 +67,7 @@ PERMANENT_BY_CONSTRUCTION = {
     "handlers/tokens.py:create_token": "a token (CR 111.1), not a card in a zone",
     "mixins/permanent_state.py:create_token_copy": "a token copy (CR 707.2)",
     "mixins/stack/choices/card_names.py:_resolve_name_and_strip": "the tokens it makes",
-    "mixins/stack/resolution.py:_resolve_card":
+    "mixins/stack/permanent_spell_resolution.py:_resolve_permanent_spell":
         "a permanent spell resolving (CR 608.3); an instant or sorcery spell "
         "goes to its owner's graveyard instead (CR 608.2n)",
     "mixins/stack/choices/spells.py:_resolve_face_down_cast":
