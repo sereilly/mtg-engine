@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from typing import Union
 
 from .conditions import Condition
-from .conditions import DiedThisTurn, DiedThisWay
+from .conditions import DiedThisTurn, DiedThisWay, WasAttachedTo
 from .loops import (CardsDrawnThisWay, ChosenThisWay, CountersPlacedThisWay,
                     CountersRemovedThisWay, EachAdditionalCostPaid,
                     EachLifeLost, EachShortOfThisWay, ExiledThisWay,
@@ -791,7 +791,7 @@ class ForEach:
     Every other set read off a record is in ``ast/loops.py``, and the union
     names each of them (held by ``test_grammar_layering``).
     """
-    iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
+    iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay | WasAttachedTo
                 | ExiledThisWay | TappedThisWay | ChosenThisWay | EachLifeLost
                 | EachShortOfThisWay | EachAdditionalCostPaid
                 | CountersPlacedThisWay | CountersRemovedThisWay

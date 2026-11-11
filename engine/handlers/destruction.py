@@ -23,6 +23,8 @@ from ..destruction_events import (begin_destruction_hold,
                                   end_destruction_hold,
                                   mark_delayed_destruction)
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                            ATTACHED_TO_DESTROYED_TARGET,
+                            DESTROYED_TARGET_HOST,
                             LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
                             LAST_TARGET_OWNER,
@@ -63,6 +65,11 @@ def _record_destroyed_this_way(
     """
     context.results["destroyed_this_way_objects"] = died
     context.results["destroyed_this_way"] = len(died)
+    # The attachment records the singular branch writes before its destroy,
+    # empty from every branch that wrote none, so a step citing them never
+    # reads a record its producer skipped.
+    context.results.setdefault(DESTROYED_TARGET_HOST, [])
+    context.results.setdefault(ATTACHED_TO_DESTROYED_TARGET, [])
     context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = {
         perm.permanent_id: controllers[perm.permanent_id]
         for perm in died
@@ -400,6 +407,17 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         context.results[DESTROYED_TARGET_COUNTERS] = sum(
             counter_kinds_on(victim).values()
         )
+        # "If that Equipment was attached to a creature, Unforge deals 2
+        # damage to that creature" / "You gain control of all Equipment that
+        # were attached to it" (Murderous Spoils): the attachments as the
+        # destroy finds them, either way round (CR 608.2h). Before the destroy,
+        # for the mana value's reason: the words name the object as it was
+        # acted on, not the outcome.
+        from ..aura_attachment import auras_attached_to
+
+        host = victim.metadata.get("attached_to")
+        context.results[DESTROYED_TARGET_HOST] = [host] if host is not None else []
+        context.results[ATTACHED_TO_DESTROYED_TARGET] = list(auras_attached_to(victim))
         # "…Its power is equal to **that creature's power** and its toughness is
         # equal to **that creature's toughness**." (Broken Visage.) Frozen here
         # for the mana value's reason and one step more urgently: P/T is

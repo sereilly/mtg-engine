@@ -208,6 +208,13 @@ class LordBuffsMixin:
             target_perm.effective_card.name
         ) != name_key(str(filt.named)):
             return False
+        # "Equipment named Sword of Kaldra, Shield of Kaldra, and Helm of
+        # Kaldra" (Shield of Kaldra): any one of a printed list, compared
+        # as the single name above is.
+        if filt.named_among and name_key(target_perm.effective_card.name) not in {
+            name_key(str(name)) for name in filt.named_among
+        }:
+            return False
         # "Creatures **with flying** get +1/+1." (Serra Aviary.) Layer 6 asked
         # from layer 7c — ``has_keyword``, never ``card.keywords``, so a
         # creature wearing an Aura's flying is in the anthem (CR 613.1f) and one

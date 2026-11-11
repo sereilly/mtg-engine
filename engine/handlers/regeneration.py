@@ -48,7 +48,18 @@ def regeneration_target_legal(perm: Permanent, described: dict) -> bool:
     Krosan Warchief, Vitality Charm), over any permanent with it (CR 109.2,
     205.3m): a Kindred Enchantment — Beast is a Beast, and regeneration
     replaces the destruction of any permanent (CR 701.19a). One answer for the
-    picker (``legality_enumeration``), the cast gate and this resolution."""
+    picker (``legality_enumeration``), the cast gate and this resolution.
+
+    **A printed card type is the floor, not "creature".** "Regenerate target
+    **artifact**" (Welding Jar, Loxodon Mender, Pteron Ghost) names every
+    artifact — CR 701.19a regenerates any permanent — and the creature floor
+    ``creature_floor_holds`` keeps for a described card type made all three
+    regenerate artifact creatures only: their picker offered no Equipment and
+    no Ingot, so the ability was refused with nothing to name. The type the
+    phrase prints is tested by the matcher itself (``type_filter``,
+    ``type_filter_all`` for "artifact creature")."""
+    if described.get("type_filter") or described.get("type_filter_all"):
+        return permanent_matches_filter(perm, described)
     return creature_floor_holds(perm, described) and permanent_matches_filter(
         perm, described
     )

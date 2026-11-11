@@ -80,10 +80,20 @@ def _parse_unattach(stream: TokenStream) -> ast.Statement:
     be consumed.
     """
     stream.expect_word("unattach")
+    printed = stream.words_from()[:2]
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected what to unattach")
     if not stream.accept_word("from"):
+        # "When this Aura enters, **unattach enchanted Equipment**." (Carry
+        # Away.) No host printed: CR 701.3d's unattach from whatever it is
+        # attached to. Only "enchanted Equipment" at the sentence's end — the
+        # reference keeps no noun, so the words are checked here — and CR
+        # 701.3d unattaches nothing but Equipment; anything else refuses.
+        if printed == ("enchanted", "equipment") and (
+            stream.exhausted or stream.at_punct(".")
+        ):
+            return ast.Unattach(subject)
         raise stream.error("expected 'from' after what is unattached")
     host = parse_recipient(stream)
     if host is None:

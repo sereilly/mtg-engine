@@ -612,6 +612,13 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if static_flash_permission(normalized) is not None:
         return True
+    # "You may activate equip abilities any time you could cast an instant."
+    # (Leonin Shikari.) Its activation twin, read by the sorcery-timing row
+    # it lifts (`activation_timing.instant_timing_permits`).
+    from .activation_timing import activation_timing_permission
+
+    if activation_timing_permission(normalized) is not None:
+        return True
     # "Enchanted creature has haste." (Enraging Licid; four of the five print
     # one of these.) CR 303.4m: an ability that refers to the "enchanted
     # [object]" refers to whatever that permanent is attached to, **even if the

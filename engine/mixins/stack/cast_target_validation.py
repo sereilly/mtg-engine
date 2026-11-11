@@ -71,6 +71,9 @@ _ENCHANT_TARGET_MATCHERS = {
     "land": lambda perm: perm.has_type("land"),
     "enchantment": lambda perm: perm.has_type("enchantment"),
     "wall": lambda perm: perm.has_type("wall"),
+    # "Enchant **Equipment**" (Carry Away): the artifact subtype (CR 301.5),
+    # through layer 4 like the Wall row above it.
+    "equipment": lambda perm: perm.has_type("equipment"),
     # "Enchant **permanent**" (Faith's Fetters). Everything on the battlefield
     # is one (CR 110.1), so the answer is yes — written out rather than left to
     # the fallback below, which says yes for a noun nobody has read.
@@ -1063,6 +1066,12 @@ class CastTargetValidationMixin:
                 described = primary.payload
 
             def _legal_pump_target(p) -> bool:
+                # "Regenerate target **artifact**": regeneration's own floor,
+                # the printed card type (``regeneration_target_legal``).
+                if primary.kind == "grant_regeneration_to_target_creature":
+                    from ...handlers.regeneration import regeneration_target_legal
+
+                    return regeneration_target_legal(p, described)
                 if not creature_floor_holds(p, described):
                     return False
                 # Righteousness only targets a creature that is currently blocking.

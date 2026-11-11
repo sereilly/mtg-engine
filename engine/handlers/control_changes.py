@@ -249,8 +249,18 @@ def gain_control_of_all_matching(
     seat = game.players.index(context.caster)
     described = {
         key: value for key, value in instruction.payload.items()
-        if key not in ("targets", "subtype_filter_from")
+        if key not in ("targets", "subtype_filter_from", "permanents_among")
     }
+    # "…all Equipment **that were attached to it**." (Murderous Spoils.) The
+    # set is what an earlier step of this resolution recorded (the destroy's
+    # look-back at what its target wore, CR 608.2h), narrowed by the printed
+    # noun — by identity, so a permanent recorded and since gone is not taken.
+    # A missing record is no permanents, never the whole board.
+    among_key = instruction.payload.get("permanents_among")
+    among = (
+        None if among_key is None
+        else [p for p in ((context.results or {}).get(str(among_key)) or ())]
+    )
     # "…you gain control of all creatures **of that type**." (Peer Pressure.)
     # The word the choosing step in front of this one wrote (CR 608.2d),
     # turned into the ordinary ``subtype_filter`` the matcher answers through
@@ -265,6 +275,8 @@ def gain_control_of_all_matching(
         described["subtype_filter"] = str(chosen_word)
     took = 0
     for permanent in list(game.all_permanents()):
+        if among is not None and not any(permanent is one for one in among):
+            continue
         if not subject_matches(game, permanent, described, observer=seat):
             continue
         if game.controller_index_of(permanent) == seat:

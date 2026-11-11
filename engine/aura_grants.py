@@ -26,9 +26,9 @@ from . import fast_paths
 from .late_modules import LateModules
 from .aura_attachment import auras_attached_to
 from .aura_restrictions import (
-    _KEYWORD_GRANT_AND_RESTRICTION,
     aura_restrictions,
     aura_combat_restriction,
+    keyword_grant_and_restriction,
 )
 from .aura_vocabulary import (
     _NOUN,
@@ -392,9 +392,19 @@ def aura_conditional_grant_holds(permanent, state: str) -> bool:
 #: +2/+0, and granted **nothing**: the claim came from the P/T row of
 #: ``_TEMPLATES``, which is checked first and says "and optional granted
 #: keyword or ability" without asking whether anything grants one.
-_QUOTED_ABILITY_GRANT = re.compile(
-    rf'^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has "(?P<ability>[^"]+)"$'
-)
+#:
+#: …and the keyword run in front of the quote: "Equipped creature has **first
+#: strike and** "{T}, Unattach Surestrike Trident: …"" (Surestrike Trident),
+#: the same line in two layer-6 channels. The run is captured as ``keywords``
+#: and granted by :func:`aura_keyword_grants`, which reads it off this same
+#: match, so the keyword cannot be claimed without the quote nor the quote
+#: folded without the keyword.
+_QUOTED_ABILITY_GRANT = _LazyPattern(lambda: re.compile(
+    rf'^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has '
+    rf'(?:(?P<keywords>(?:{_keyword_alternation()})'
+    rf'(?:(?:, and |, | and )(?:{_keyword_alternation()}))*),? and )?'
+    rf'"(?P<ability>[^"]+)"$'
+))
 
 
 @lru_cache(maxsize=None)
@@ -663,7 +673,7 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         if match is not None:
             grants.extend(_keyword_list(match.group("keyword")))
         elif (
-            (compound := _KEYWORD_GRANT_AND_RESTRICTION.match(line)) is not None
+            (compound := keyword_grant_and_restriction(line)) is not None
             # …and only when the restriction half **has** a reader. The
             # pattern's own note says a tail the table cannot read "leaves the
             # whole line unmatched", and nothing made that true: "has flying
@@ -684,6 +694,16 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
             # :func:`aura_combat_restriction` off the same line, exactly as
             # Consecrate Land's compound below splits between two readers.
             grants.extend(_keyword_list(compound.group("keyword")))
+        elif (
+            (quoted := _QUOTED_ABILITY_GRANT.match(line)) is not None
+            and quoted.group("keywords")
+        ):
+            # "…has first strike and "{T}, Unattach …"" (Surestrike Trident):
+            # the keyword half of the quoted grant's own match. Whether the
+            # quote is readable is the claim's question (``aura_effect_claim``
+            # asks it before any row), so the two halves stand or fall
+            # together there.
+            grants.extend(_keyword_list(quoted.group("keywords")))
         elif _COMPOUND_INDESTRUCTIBLE.match(line):
             # Consecrate Land prints one line carrying two effects. Its trailing
             # clause is claimed separately as a restriction, so matching only
@@ -1054,9 +1074,10 @@ def aura_land_animation(oracle_text: str) -> MappingProxyType | None:
 #: "You control enchanted **artifact creature**." (Domineer.) The same sentence
 #: over the two-word noun its enchant clause names; the noun says nothing the
 #: attachment has not already settled, so it is admitted here alone rather than
-#: added to ``_NOUN``, which every Aura template in the family reads.
+#: added to ``_NOUN``, which every Aura template in the family reads. "You
+#: control enchanted **Equipment**." (Carry Away) is admitted the same way.
 _ATTACHED_CONTROL_CHANGE = re.compile(
-    rf"^you control {_ATTACHED} (?:artifact creature|{_NOUN})$"
+    rf"^you control {_ATTACHED} (?:artifact creature|equipment|{_NOUN})$"
 )
 
 

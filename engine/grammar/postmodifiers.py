@@ -61,7 +61,7 @@ from . import ast
 from .errors import GrammarError
 from .histories import accept_history_relation, accept_relative_clause_history
 from .lexer import SELF
-from .names import parse_card_name
+from .names import accept_card_name_list, parse_card_name
 from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
                       _parse_keyword_list, accept_source_reference)
 from .seat_relations import accept_seat_relation
@@ -533,6 +533,19 @@ def _parse_postmodifiers(
             if stream.accept_phrase("that", "'s") and stream.at_word("attached"):
                 continue
             stream.reset(relative)
+            # "all Equipment **that were attached to it**" (Murderous Spoils).
+            # The past tense names the attachment as it stood when the object
+            # the sentence's "it" points back at was acted on — a record of an
+            # earlier step, never a read of the board (the object has left).
+            # Its own field, which no matcher tests: only a lowering holding
+            # that step's record admits it.
+            if (
+                stream.accept_phrase("that", "were", "attached", "to", "it")
+                or stream.accept_phrase("that", "was", "attached", "to", "it")
+            ):
+                d.was_attached_to_it = True
+                continue
+            stream.reset(relative)
         if stream.at_word("that"):
             # "…**that isn't the target of an ability from another creature
             # named ~**" (Goblin Artisans). A guard against two copies aiming
@@ -815,6 +828,14 @@ def _parse_postmodifiers(
             # of cards by name had nowhere to say so.
             probe = stream.mark()
             stream.advance()
+            # "Equipment **named Sword of Kaldra, Shield of Kaldra, and Helm
+            # of Kaldra**" (Shield of Kaldra): a printed list is a union of
+            # names, its own field so no reader of ``named`` mistakes it for
+            # one name with commas in it.
+            among = accept_card_name_list(stream)
+            if among:
+                d.named_among = among
+                continue
             try:
                 d.named = parse_card_name(stream)
             except GrammarError:

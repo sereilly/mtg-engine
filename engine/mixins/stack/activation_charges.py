@@ -931,6 +931,19 @@ class ActivationChargesMixin:
             # down here, where the cost is paid — the one place an activation
             # cost taps anything other than the source (engine/cost_tap_records.py).
             record_tapped_to_pay(permanent, tapped_for_cost)
+        # "{T}, **Unattach Heartseeker**: Destroy target creature." CR 701.3d's
+        # unattach, paid with the {T} above (CR 601.2h): the Equipment stays on
+        # the battlefield, and what it grants the creature (the ability being
+        # activated among it) is gone the moment it moves (CR 611.3b) — the
+        # ability already activated resolves on its own (CR 113.7a).
+        if ability.cost.unattach_granter_id is not None:
+            from ...equipment import unattach_equipment
+
+            granter = self.permanent_by_id(ability.cost.unattach_granter_id)
+            if granter is not None and unattach_equipment(
+                self, granter, f"{permanent.card.name}'s cost"
+            ):
+                self._recompute_continuous_effects()
         if tap_cost_permanents:
             self.log.append(
                 f"{permanent.card.name}: tapped "

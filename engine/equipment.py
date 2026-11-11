@@ -178,7 +178,14 @@ def is_equip_ability(card, ability) -> bool:
     keyword is not an equip ability, and a reduction keyed on the effect would
     discount it.
     """
-    wanted = (getattr(ability, "source_line", "") or "").strip()
+    return is_equip_ability_text(card, getattr(ability, "source_line", "") or "")
+
+
+def is_equip_ability_text(card, ability_text: str) -> bool:
+    """:func:`is_equip_ability` asked of an ability's line rather than of the
+    compiled ability — the form a reader holding only the line has
+    (``activation_restrictions.activation_denial``)."""
+    wanted = (ability_text or "").strip()
     if not wanted:
         return False
     return any(
@@ -487,6 +494,7 @@ __all__ = [
     "expand_equip_lines",
     "has_equip_ability",
     "is_equip_ability",
+    "is_equip_ability_text",
     "is_equip_line",
     "is_equipment",
     "unattach_equipment",

@@ -70,6 +70,7 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         qualifiers=qualifiers,
         with_plus1_counter=filt.with_plus1_counter,
         named=filt.named,
+        named_among=filt.named_among,
         # "Creatures **with flying** get +1/+1." (Serra Aviary.) Carried
         # through like every other field, so the equality below is what
         # decides whether the table can express it — the same round trip and
@@ -120,6 +121,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "other_than_source": lord.other_than_source,
         "with_plus1_counter": lord.with_plus1_counter,
         "named": lord.named,
+        "named_among": lord.named_among,
         "with_keywords": lord.with_keywords,
         "without_keywords": lord.without_keywords,
         "chosen_land_type": lord.chosen_land_type,

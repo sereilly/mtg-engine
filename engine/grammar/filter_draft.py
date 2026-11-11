@@ -232,6 +232,10 @@ class _FilterDraft:
     # ``ast.ObjectFilter.outside_the_game``.
     outside_the_game: bool = False
     named: str | None = None
+    #: See ``ast.ObjectFilter.named_among``.
+    named_among: tuple[str, ...] = ()
+    #: See ``ast.ObjectFilter.was_attached_to_it``.
+    was_attached_to_it: bool = False
     #: See ``ast.ObjectFilter.not_named`` / ``not_named_source`` /
     #: ``with_protection_from``.
     not_named: str | None = None
@@ -405,6 +409,8 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         token_only=d.token_only,
         their_choice=d.their_choice,
         named=d.named,
+        named_among=d.named_among,
+        was_attached_to_it=d.was_attached_to_it,
         not_named=d.not_named,
         not_named_source=d.not_named_source,
         with_protection_from=d.with_protection_from,

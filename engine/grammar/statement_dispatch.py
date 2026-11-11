@@ -126,6 +126,7 @@ from .lowering import (
     _lower_repeat_process_until,
     _lower_repeat_process_while,
     _lower_repeat_until_pile_chosen,
+    _lower_for_each_attached_host,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
     lower_strip_each_exiled,
@@ -624,6 +625,11 @@ def lower_statement(
         object_loop = frozenset({LOOP_BOUND_OBJECT})
         if isinstance(statement.iterator, ast.DiedThisWay):
             return _lower_for_each_destroyed(statement, repeated(object_loop), produced)
+        # "If that Equipment was attached to a creature, … that creature"
+        # (Unforge): the destroy's other look-back, rewritten into a loop the
+        # same way and binding its one object the same way.
+        if isinstance(statement.iterator, ast.WasAttachedTo):
+            return _lower_for_each_attached_host(statement, repeated(object_loop), produced)
         if isinstance(statement.iterator, ast.ExiledThisWay):
             # "…search that player's library for all cards with the same name
             # as **that card** and exile them." (Haunting Echoes.) One strip by

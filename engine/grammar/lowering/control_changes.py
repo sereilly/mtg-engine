@@ -22,7 +22,8 @@ outgrow its parse family without the parse family having to split with it.
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY,
+from ...oracle_types import (ATTACHED_TO_DESTROYED_TARGET,
+                             CHOSEN_CREATURE_TYPE_THIS_WAY,
                              LAST_TARGET_CONTROLLER, OracleInstruction)
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
@@ -659,6 +660,20 @@ def _lower_gain_control(
                     )
                 swept = dataclasses.replace(swept, of_bound_type=False)
                 bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+            # "…you gain control of all Equipment **that were attached to
+            # it**." (Murderous Spoils.) The attachments a single-target
+            # destroy in front recorded as it found them (CR 608.2h) — the set
+            # is that record, narrowed by the printed noun. No such step, and
+            # the words name nothing: refused rather than taking every
+            # Equipment on the table.
+            if swept.was_attached_to_it:
+                if ATTACHED_TO_DESTROYED_TARGET not in produced:
+                    raise LoweringError(
+                        "'that were attached to it' names attachments no step "
+                        "of this effect recorded", node=node,
+                    )
+                swept = dataclasses.replace(swept, was_attached_to_it=False)
+                bound_type["permanents_among"] = ATTACHED_TO_DESTROYED_TARGET
             described = _filter_payload(swept)
             # ``owner`` is the phrase's whole content here and the pure matcher
             # cannot answer it — an owner is a seat, and CR 108.3's answer is

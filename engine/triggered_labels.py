@@ -728,6 +728,9 @@ TRIGGERED_LABELS: dict[str, str] = {
     # its grammar category's own word (`attachments`), the way
     # `change_event_object_targets` reads `triggered_retargeting`.
     "attach_all_to_source": "triggered_attachments",
+    # Carry Away: "When this Aura enters, unattach enchanted Equipment." The
+    # same bucket, the other direction of CR 701.3.
+    "unattach_attached_permanent": "triggered_attachments",
     # Confusion in the Ranks: "Whenever an artifact, creature, or enchantment
     # enters, its controller chooses target permanent another player controls
     # that shares a card type with it. Exchange control of those permanents."

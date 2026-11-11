@@ -238,6 +238,35 @@ def attach_all_to_source(
     return True, "resolved"
 
 
+@effect_handler("unattach_attached_permanent")
+def unattach_attached_permanent(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"When this Aura enters, unattach enchanted Equipment." (Carry Away;
+    CR 701.3d.)
+
+    The permanent this ability's source is attached to comes off whatever it
+    is attached to and stays on the battlefield. Its 2004-12-01 ruling is the
+    reason the trigger exists: gaining control of an Equipment doesn't move it,
+    so this is what frees it for the new controller's equip ability. Nothing
+    enchanted (the Aura left, or its Equipment did) or an Equipment attached to
+    nothing is a resolution that does nothing.
+    """
+    from ..equipment import is_equipment, unattach_equipment
+    from ._targets import attached_host
+
+    card_name = getattr(context.card, "name", "")
+    equipment = attached_host(game, context.source_permanent)
+    if equipment is None or not is_equipment(equipment):
+        game.log.append(f"{card_name}: it enchants no Equipment")
+        return True, "resolved"
+    if not unattach_equipment(game, equipment, card_name):
+        game.log.append(f"{card_name}: {equipment.card.name} is attached to nothing")
+        return True, "resolved"
+    game._recompute_continuous_effects()
+    return True, "resolved"
+
+
 @effect_handler("unattach_all_from_target")
 def unattach_all_from_target(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

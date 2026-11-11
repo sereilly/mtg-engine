@@ -1338,6 +1338,19 @@ TARGET_PLAYER_OR_CONTROLLER = "target_player_or_controller"
 #: exist (CR 707.10a).
 SPELL_RETURNED_TO_HAND = "spell_returned_to_hand"
 
+#: What the target of a single-target destroy was **attached to**, and what
+#: was attached **to it**, as the destroy step found them (CR 608.2h): lists
+#: of permanents, empty when there was nothing. "If that Equipment was
+#: attached to a creature, Unforge deals 2 damage to that creature" reads the
+#: first (its 2004-12-01 ruling: the creature it was attached to *when it was
+#: destroyed*); "You gain control of all Equipment that were attached to it"
+#: (Murderous Spoils) reads the second. Written before the destroy, so they
+#: describe the object as it was acted on whether or not it then died, and
+#: here rather than beside their one writer for ``COUNTERED_SPELL_CONTROLLER``'s
+#: reason: the handler writes them, the lowering's ``_PRODUCES`` declares them.
+DESTROYED_TARGET_HOST = "destroyed_target_host_objects"
+ATTACHED_TO_DESTROYED_TARGET = "attached_to_destroyed_target_objects"
+
 #: The ``deal_damage`` recipient meaning "the controller of the last <noun
 #: phrase> that dealt damage to you this turn" (Suffocation). A seat nobody
 #: chose and no event froze: it is read at resolution out of

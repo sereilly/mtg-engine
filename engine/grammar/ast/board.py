@@ -276,7 +276,9 @@ class Unattach:
     """
 
     subject: Recipient
-    host: Recipient
+    #: None when no host is printed: "When this Aura enters, unattach
+    #: enchanted Equipment." (Carry Away) — off whatever it is attached to.
+    host: "Recipient | None" = None
 
 
 @dataclass(frozen=True)

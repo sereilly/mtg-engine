@@ -14,7 +14,8 @@ the ones that were never about a noun phrase.
 
 from __future__ import annotations
 
-from .lexer import SELF, render
+from .errors import GrammarError
+from .lexer import PUNCT, SELF, render
 from .stream import TokenStream
 
 
@@ -102,6 +103,55 @@ def parse_card_name(stream: TokenStream) -> str:
     return render(stream.tokens[start:stream.mark()])
 
 
+def accept_card_name_list(stream: TokenStream) -> tuple[str, ...]:
+    """The names of a printed **list** after ``named``, or ``()`` with the
+    cursor unmoved.
+
+    "Equipment named **Sword of Kaldra, Shield of Kaldra, and Helm of
+    Kaldra** have indestructible." (Shield of Kaldra.) A list of three or more
+    with its serial comma: :func:`parse_card_name` reads a comma followed by a
+    name word as a legendary title's ("Chandra, Flame's Catalyst"), so it
+    stops at ", and" holding the first items as one name. What makes those
+    commas separators rather than a title's is the ", and" / ", or" closing
+    the run, so only that shape is read here; a single name — commas
+    included — is :func:`parse_card_name`'s, and a two-name "A and B" is not
+    read at all ("and" ends a name for the reasons ``_NAME_STOPS`` gives).
+    """
+    start = stream.mark()
+    try:
+        parse_card_name(stream)
+    except GrammarError:
+        stream.reset(start)
+        return ()
+    head_end = stream.mark()
+    if not (
+        stream.at_punct(",")
+        and (stream.peek_word(1) in ("and", "or"))
+    ):
+        stream.reset(start)
+        return ()
+    stream.advance(2)
+    try:
+        last = parse_card_name(stream)
+    except GrammarError:
+        stream.reset(start)
+        return ()
+    names: list[str] = []
+    segment = start
+    for index in range(start, head_end + 1):
+        token = stream.tokens[index] if index < head_end else None
+        if token is None or (token.kind == PUNCT and token.text == ","):
+            if index == segment:
+                stream.reset(start)
+                return ()
+            names.append(render(stream.tokens[segment:index]))
+            segment = index + 1
+    if len(names) < 2:
+        stream.reset(start)
+        return ()
+    return (*names, last)
+
+
 #: The words a *bare* name scan stops before. Each opens the clause that follows
 #: a name in the one template that prints one — a duration, a conjunct, or the
 #: word ending a replacement. No card in the pool has any of them in its name
@@ -158,7 +208,7 @@ def accept_source_card_name(stream: TokenStream) -> str | None:
     return render(stream.tokens[mark:stream.mark()])
 
 
-__all__ = ["accept_source_card_name", "parse_card_name"]
+__all__ = ["accept_card_name_list", "accept_source_card_name", "parse_card_name"]
 
 
 def accept_name_comparison(

@@ -200,7 +200,12 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "colour override (layer 5) — aura_color_grants / layer_bridge",
     ),
     (
-        re.compile(rf'^{_ATTACHED} {_NOUN} has "[^"]+"$'),
+        # The fold's own pattern, so a line is claimed exactly when
+        # `aura_granted_ability_lines` hands its quote over — a keyword run in
+        # front of the quote included ("has first strike and \"…\"",
+        # Surestrike Trident), whose keywords `aura_keyword_grants` reads off
+        # the same match.
+        _QUOTED_ABILITY_GRANT,
         "granted ability line — aura_granted_ability_lines / Permanent.effective_card",
     ),
     (
@@ -728,11 +733,27 @@ def aura_anthem_claim(normalized_line: str) -> str | None:
     ``lord_buff`` instruction is what the recompute reads. A claim in the wrong
     one of the two would leave the Aura supported with no instruction behind it.
     """
-    from .lord_buffs import lord_buff_for
+    from .lord_buffs import LORD_BUFF_KIND, lord_buff_for
 
-    if lord_buff_for(normalized_line) is None:
-        return None
-    return "board-wide anthem — lord_buffs, applied by _recalculate_lord_buffs"
+    if lord_buff_for(normalized_line) is not None:
+        return "board-wide anthem — lord_buffs, applied by _recalculate_lord_buffs"
+    # …or the grammar's lowering of the same anthem, which reads noun phrases
+    # the text table does not ("Equipment named Sword of Kaldra, Shield of
+    # Kaldra, and Helm of Kaldra have indestructible", Shield of Kaldra) and
+    # hands the recompute the one ``lord_buff`` it reads. Every instruction
+    # the line lowers to must be one, so nothing else rides the claim.
+    from .grammar import ast as grammar_ast
+    from .grammar import compile_line
+
+    compiled = compile_line(normalized_line)
+    if (
+        compiled.parse_error is None and compiled.lowering_error is None
+        and isinstance(compiled.node, grammar_ast.StaticAbilityNode)
+        and compiled.instructions
+        and all(i.kind == LORD_BUFF_KIND for i in compiled.instructions)
+    ):
+        return "board-wide anthem — grammar lord_buff, applied by _recalculate_lord_buffs"
+    return None
 
 
 #: The instruction kinds a *static* line printed about the attached permanent
@@ -1305,7 +1326,9 @@ def aura_continuous_claim(line: str) -> str | None:
         return "static P/T grant (layer 7c) — auras.aura_static_pt_grant"
     if _PT_PER_COUNTER_LINE.match(normalized):
         return "per-counter P/T grant (layer 7c) — auras.aura_pt_grant_per_counter"
-    if aura_keyword_grants(normalized):
+    # A keyword run beside a quote is the quoted row's to claim, which asks
+    # first whether the quote can be read (`aura_effect_claim`).
+    if aura_keyword_grants(normalized) and _QUOTED_ABILITY_GRANT.match(normalized) is None:
         return "keyword grant (layer 6) — auras.aura_keyword_grants"
     if aura_keyword_removals(normalized):
         return "keyword removal (layer 6) — auras.aura_keyword_removals"

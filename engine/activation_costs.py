@@ -87,6 +87,23 @@ def _parse_loyalty_cost(cost_part: str) -> tuple[int | None, int | None]:
 _TAP_ATTACHED_COST_RE = re.compile(r"^tap (?:enchanted|equipped) \w+$")
 
 
+#: "{T}, **Unattach Heartseeker**: …" with the granter's name already written
+#: as the relation ``granted_abilities.bind_granter`` binds (CR 201.5a): the
+#: grammar's ``UnattachGranterCost`` and this reader delimit the same words.
+_UNATTACH_GRANTER_COST_RE = re.compile(
+    r"^unattach the permanent with id (\d+) that granted this ability$"
+)
+
+
+def _unattached_granter_id(cost_lower: str) -> int | None:
+    """The id of the Equipment a cost clause unattaches, or None."""
+    for segment in cost_lower.split(","):
+        match = _UNATTACH_GRANTER_COST_RE.match(segment.strip())
+        if match is not None:
+            return int(match.group(1))
+    return None
+
+
 def _taps_the_attached_permanent(cost_lower: str) -> bool:
     """Whether a cost clause taps the permanent this Aura or Equipment is on.
 
@@ -1215,4 +1232,5 @@ def parse_activated_ability_cost(
         mill_cards=_mill_cost(cost_lower),
         graveyard_to_library_bottom=_graveyard_to_library_bottom_cost(cost_lower),
         mana_alternatives=mana_alternatives,
+        unattach_granter_id=_unattached_granter_id(cost_lower),
     )

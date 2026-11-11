@@ -258,6 +258,11 @@ class LordBuffFilter:
     # (CR 707.2) and a text change has changed, never the printed face. By name,
     # not identity: a second copy and a token wearing the name both match.
     named: str | None = None
+    # "Equipment **named Sword of Kaldra, Shield of Kaldra, and Helm of
+    # Kaldra** have indestructible." (Shield of Kaldra.) The field above
+    # over a printed list: the permanent answers to any one of the names,
+    # compared the same way.
+    named_among: tuple[str, ...] = ()
     # "Creatures **with flying** get +1/+1." (Serra Aviary.) The buffed set
     # narrowed by an *ability* rather than by a printed characteristic — which
     # makes it the one field of this filter whose answer comes out of another
@@ -985,6 +990,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["with_plus1_counter"] = True
     if buff.filter.named:
         payload["named"] = buff.filter.named
+    if buff.filter.named_among:
+        payload["named_among"] = list(buff.filter.named_among)
     if buff.filter.with_keywords:
         payload["with_keywords"] = list(buff.filter.with_keywords)
     if buff.filter.without_keywords:
@@ -1045,6 +1052,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             qualifiers=tuple(payload.get("while") or ()),
             with_plus1_counter=bool(payload.get("with_plus1_counter")),
             named=payload.get("named"),
+            named_among=tuple(payload.get("named_among") or ()),
             with_keywords=tuple(payload.get("with_keywords") or ()),
             without_keywords=tuple(payload.get("without_keywords") or ()),
             # An **empty** list is a printed answer, not a missing one: "Other

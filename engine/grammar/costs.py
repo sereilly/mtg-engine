@@ -23,7 +23,8 @@ from .phrases import _parse_card_alternatives, accept_graveyard_position
 from .prices import (_accept_mana_alternative, _accept_mana_run,
                      _accept_per_counter)
 from .errors import GrammarError
-from .lexer import MANA, SELF
+from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
+from .lexer import MANA, NUMBER, SELF
 from .lowering._common import (chargeable_tap_filter,
                                graveyard_position_payload)
 from ..keywords import keyword_ability_name
@@ -764,6 +765,22 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             costs.append(ast.TapPermanentsCost(number.value, tapped))
             stream.accept_punct(",")
             continue
+        if stream.at_word("unattach"):
+            # "{T}, **Unattach Heartseeker**: Destroy target creature." The
+            # ability an Equipment grants in quotes, read on its host once
+            # ``bind_granter`` has written the granter's name as the relation
+            # (CR 201.5a). Only that relation: "unattach" naming anything else
+            # is a cost no charger performs, and refuses.
+            mark = stream.mark()
+            stream.advance()
+            if stream.accept_phrase(*GRANTER_PHRASE_HEAD):
+                number = stream.accept_kind(NUMBER)
+                if number is not None and stream.accept_phrase(*GRANTER_PHRASE_TAIL):
+                    costs.append(ast.UnattachGranterCost(int(number.text)))
+                    stream.accept_punct(",")
+                    continue
+            stream.reset(mark)
+            raise stream.error("an unattach cost names the Equipment granting it")
         if stream.at_word("untap"):
             # "Untap a tapped land an opponent controls" (Benthic Explorers).
             # CR 602.1a — a cost is any action, and this one is performed on a

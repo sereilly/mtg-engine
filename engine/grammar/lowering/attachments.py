@@ -25,8 +25,8 @@ from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, PER_OBJECT_SEAT_RECORDS,
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import (_describe_targets, _filter_payload, _is_source, _is_target,
-                      _restrictions_beyond)
+from ._common import (_describe_targets, _filter_payload, _is_enchanted,
+                      _is_source, _is_target, _restrictions_beyond)
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
                       CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
@@ -192,6 +192,21 @@ def _lower_unattach(node: ast.Unattach) -> tuple[OracleInstruction, ...]:
     set that is not Equipment refuses.
     """
     subject, host = node.subject, node.host
+    if host is None:
+        # "When this Aura enters, **unattach enchanted Equipment**." (Carry
+        # Away.) The permanent this Aura is attached to, off whatever it in
+        # turn is attached to (CR 701.3d) — an Equipment, for the reason
+        # above, and named by the attachment alone: no narrowing beyond the
+        # noun is read.
+        if not (
+            _is_enchanted(subject)
+            and not _restrictions_beyond(subject.filter, frozenset({"is_enchanted"}))
+        ):
+            raise LoweringError(
+                "an unattach with no host printed names the enchanted Equipment",
+                node=node,
+            )
+        return (OracleInstruction("unattach_attached_permanent", "", {}),)
     if not (
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("all", "each")

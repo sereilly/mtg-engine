@@ -129,6 +129,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("return_to_hand_count", "a return-other-permanents-to-hand cost"),
         ("untap_filter", "an untap-another-permanent cost"),
         ("tap_attached", "a tap-the-attached-permanent cost"),
+        ("unattach_granter_id", "an unattach cost"),
         ("sacrifice_attached", "a sacrifice-the-attached-permanent cost"),
         ("mana_from_attached", "a cost read off an attached permanent"),
         ("exile_top_of_library", "a library-exile cost"),

@@ -129,6 +129,28 @@ class DiedThisWay:
     empty loop is a sentence that reports supported and does not run.
     """
     filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
+class WasAttachedTo:
+    """"If **that Equipment was attached to a creature**, Unforge deals 2
+    damage to **that creature**." (Unforge.)
+
+    :class:`DiedThisWay`'s shape over a different record: the permanent the
+    object a single-target destroy acted on was attached to, as the destroy
+    found it (``oracle_types.DESTROYED_TARGET_HOST``; the 2004-12-01 ruling,
+    "the creature that the Equipment was attached to when the Equipment was
+    destroyed"). Asked as a condition and walked as the one-member set "that
+    creature" names, which is why ``lowering/sequences`` rewrites the
+    ``Conditional`` into a loop exactly as it does the destroy family's.
+
+    ``subject`` is the printed object ("that **Equipment**"), a restatement of
+    what the destroy targeted; ``host`` narrows the record ("a **creature**").
+    """
+    subject: ObjectFilter = field(default_factory=ObjectFilter)
+    host: ObjectFilter = field(default_factory=ObjectFilter)
+
+
 @dataclass(frozen=True)
 class RevealedCardHasChosenName:
     """``if that card has the chosen name`` (Cursed Scroll).

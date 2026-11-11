@@ -726,6 +726,24 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     # was …` opening that is some other clause has to rewind rather than raise
     # out of the whole condition.
     that_mark = stream.mark()
+    # "if **that Equipment was attached to a creature**" (Unforge). The same
+    # past tense over the destroy's other look-back — what the object it
+    # destroyed was attached to — read before the quality branch below, whose
+    # "that <noun> was" prefix this shares. The host is a whole noun phrase,
+    # and both noun phrases are guarded so another clause rewinds.
+    if stream.accept_word("that"):
+        try:
+            subject = parse_object_filter(stream)
+        except GrammarError:
+            subject = None
+        if subject is not None and stream.accept_phrase(
+            "was", "attached", "to"
+        ) and stream.accept_word("a", "an"):
+            try:
+                return ast.WasAttachedTo(subject, parse_object_filter(stream))
+            except GrammarError:
+                pass
+    stream.reset(that_mark)
     if stream.accept_word("that"):
         noun = stream.peek_word()
         # "if that artifact **had counters on it**" (Dismantle). The same
