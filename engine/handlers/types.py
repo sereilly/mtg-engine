@@ -928,6 +928,59 @@ def change_supertype(game: Game, instruction: OracleInstruction, context: Oracle
     return True, "resolved"
 
 
+@effect_handler("lose_type")
+def lose_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, target artifact creature becomes blue **and isn't
+    an artifact**." (Neurok Transmuter.)
+
+    The removing mirror of :func:`gain_type`, through the same write API
+    (``type_changes.lose_types``, stamped as the effect is created — CR
+    613.7b), so of "becomes an artifact" and "isn't an artifact" on one
+    creature the later is what it is, and the cleanup step ends it by
+    dropping the record (``end_type_changes`` sweeps both lists). The
+    subtypes the lowering listed go with the card type (CR 205.1a): an
+    Equipment that stops being an artifact stops being an Equipment.
+
+    The target is re-asked through ``subject_matches`` (CR 608.2b) with no
+    fallback: a creature that stopped being an artifact creature in response
+    is not changed, and no bystander is.
+    """
+    from ..subject_filters import subject_matches
+
+    payload = instruction.payload
+    name = context.card.name if context.card is not None else "Effect"
+    filters = (payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    target_perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer, source=context.source_permanent
+        ),
+        fallback_players=(),
+        fallback_on_invalid_choice=False,
+    )
+    if target_perm is None:
+        game.log.append(f"{name}: no valid target")
+        return True, "resolved"
+    card_types = [str(word) for word in (payload.get("card_types") or ())]
+    lose_types(
+        target_perm,
+        card_types=card_types,
+        subtypes=[str(word) for word in (payload.get("subtypes") or ())],
+        source=name,
+        duration=str(payload.get("duration", "permanent")),
+        seat=observer if observer is not None else 0,
+    )
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{name}: {target_perm.card.name} is no longer "
+        + " ".join(card_types)
+    )
+    return True, "resolved"
+
+
 @effect_handler("swap_land_types_until_eot")
 def swap_land_types_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose a land type and a basic land type. Each land of the first chosen

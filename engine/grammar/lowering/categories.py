@@ -147,6 +147,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # one layer over the copiable values this replaces.
     "become_copy_of_bound_permanent": "characteristics",
     "change_supertype": "characteristics",
+    # "…and isn't an artifact" (Neurok Transmuter.) The gain's removing
+    # mirror on the same layer-4 channel, so the same family.
+    "lose_type": "characteristics",
     # "Target land becomes a Swamp until its controller's next untap step."
     # (Orcish Farmer.) CR 305.7 replaces the land's subtypes, which is the
     # same layer-4 question the two above ask about a card type and a

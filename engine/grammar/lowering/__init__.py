@@ -141,6 +141,7 @@ from .types import (
     _lower_land_type_while_counter,
     _lower_become_that_type,
     _lower_change_supertype,
+    _lower_lose_type,
     _lower_become_aura,
     _lower_gain_type,
 )
@@ -571,6 +572,7 @@ __all__ = [
     "_lower_become_that_type",
     "_lower_turn_face",
     "_lower_change_supertype",
+    "_lower_lose_type",
     "_lower_become_aura",
     "_lower_gain_type",
     "_lower_change_text",
