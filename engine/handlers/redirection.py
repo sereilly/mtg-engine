@@ -480,6 +480,65 @@ def redirect_damage_off_target_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_damage_dealt_to_you_onto_target_until_eot")
+def redirect_damage_dealt_to_you_onto_target_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Turn the Tables: "All combat damage that would be dealt to you this turn
+    is dealt to target attacking creature instead."
+
+    Sivvi's Valor's record with its two ends exchanged: it hangs off the
+    caster (CR 109.5's "you") and answers to every source, and the taker is
+    the announced creature, re-checked against the printed phrase here
+    (CR 608.2b) — an attacker no longer attacking as this resolves is no legal
+    target. After that nothing is frozen but the object: the rulings
+    (2004-12-01) are CR 614.9's liveness rule, which
+    ``damage_redirects.live_recipient`` asks at each event — "If the targeted
+    creature has been removed from combat but is still on the battlefield, the
+    damage will be redirected", and "If the targeted creature isn't on the
+    battlefield when the combat damage would be dealt, the damage isn't
+    redirected."
+    """
+    from ..subject_filters import subject_matches
+
+    card_name = getattr(context.card, "name", "")
+    payload = instruction.payload
+    caster = context.caster
+    if caster not in game.players or getattr(caster, "lost", False):
+        game.log.append(f"{card_name}: its controller is gone")
+        return True, "resolved"
+    described = (payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(caster)
+    taker = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+        # No scan-the-board fallback: damage moved onto a creature nobody
+        # named is damage the player never chose to move.
+        fallback_players=(),
+    )
+    if taker is None:
+        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+        return True, "resolved"
+    combat_only = bool(payload.get("combat_only"))
+    add_redirect(
+        caster,
+        DamageRedirect(
+            new_recipient=taker, combat_only=combat_only,
+            source_name=card_name or None,
+        ),
+    )
+    game.log.append(
+        f"{card_name}: all " + ("combat " if combat_only else "")
+        + f"damage that would be dealt to {caster.name} this turn is dealt to "
+        f"{taker.card.name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_chosen_source_damage_between_targets_until_eot")
 def redirect_chosen_source_damage_between_targets_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

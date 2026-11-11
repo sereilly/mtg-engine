@@ -115,7 +115,24 @@ def _parse_damage_dealt_event(
         # "A source you control" is a *seat*, not a set of permanents: a spell
         # is a source too, and no ObjectFilter can name one. The narrowing rides
         # the controller field, which is what the dispatcher reads.
-        subject = ast.ObjectFilter(controller="you")
+        #
+        # "…**other than this artifact** deals damage to an opponent" (Talon of
+        # Pain). The ability's own source excluded by identity — CR 109.3's
+        # "this" — read as the condition table's ``damager_other_than_self``
+        # marker and tested there (``event_filters``). The noun is consumed
+        # against the self-reference set, never skipped.
+        other = stream.mark()
+        excluded = (
+            stream.accept_phrase("other", "than")
+            and (
+                stream.accept_kind(SELF) is not None
+                or (stream.accept_word("this")
+                    and stream.accept_word(*_DAMAGER_NOUNS))
+            )
+        )
+        if not excluded:
+            stream.reset(other)
+        subject = ast.ObjectFilter(controller="you", other_than_source=excluded)
     elif stream.accept_phrase("a", "source", "an", "opponent", "controls"):
         # "Whenever **a source an opponent controls** deals damage to you"
         # (Farsight Mask). The same seat narrowing about the other side, on

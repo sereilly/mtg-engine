@@ -259,8 +259,14 @@ def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:
     # armed on a creature the trigger bound rather than a rider on a destroy.
     # Consuming the words and leaving the duration unread would take that
     # production's line away and mis-read the card.
+    #
+    # "**The creature** can't be regenerated." (Mephitic Ooze.) The same
+    # back-reference with the definite article — the trigger's "destroy that
+    # creature" named it, and the next sentence names it again — so it is the
+    # same branch with one more determiner, under the same required sentence
+    # end and for the same reason.
     if (
-        stream.accept_word("that")
+        stream.accept_word("that", "the")
         and stream.accept_word(*_DESTROYED_THIS_WAY_NOUNS)
         and stream.accept_phrase("can't", "be", "regenerated")
         and (stream.exhausted or stream.at_punct("."))

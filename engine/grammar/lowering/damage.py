@@ -125,9 +125,18 @@ def _lower_halved_damage(
 
 #: Instruction kinds that *read* the two CR 701.19c / CR 614 riders a damage
 #: clause can print ("it can't be regenerated this turn", "if it would die this
-#: turn, exile it instead"). One kind, because one handler stamps them —
-#: ``handlers/damage.deal_damage``, on the single creature it resolved.
-_RIDER_READING_KINDS = frozenset({"deal_damage"})
+#: turn, exile it instead"), each with the riders it reads.
+#: ``handlers/damage.deal_damage`` stamps both on the single creature it
+#: resolved; the three player-and-creature sweeps stamp the regeneration ban on
+#: each creature they actually dealt damage to ("Creatures dealt damage this
+#: way can't be regenerated this turn", Flamebreak —
+#: ``handlers/damage_sweeps._mass_damage_players_and_creatures``).
+_RIDER_READING_KINDS: dict[str, frozenset[str]] = {
+    "deal_damage": frozenset({"no_regen", "exile_if_dies"}),
+    "earthquake_damage": frozenset({"no_regen"}),
+    "hurricane_damage": frozenset({"no_regen"}),
+    "deal_damage_each_creature_and_player": frozenset({"no_regen"}),
+}
 
 
 
@@ -169,7 +178,7 @@ def _lower_damage(
         # reaches `deal_damage` by a route that rebuilt the payload.
         if (
             len(lowered) != 1
-            or lowered[0].kind not in _RIDER_READING_KINDS
+            or key not in _RIDER_READING_KINDS.get(lowered[0].kind, frozenset())
             or not lowered[0].payload.get(key)
         ):
             raise LoweringError(
@@ -703,9 +712,16 @@ def _lower_damage_shape(
             raise LoweringError(
                 "a board sweep cannot carry a computed damage amount", node=node
             )
-        if back_reference:
-            return (OracleInstruction(sweep, "", dict(back_reference)),)
-        return (OracleInstruction(sweep, "", {"amount": amount}),)
+        swept: dict[str, object] = (
+            dict(back_reference) if back_reference else {"amount": amount}
+        )
+        if node.riders.no_regen:
+            # "Creatures dealt damage this way can't be regenerated this turn."
+            # (Flamebreak.) Emitted only when printed, so every other sweep's
+            # payload is byte-identical; `_lower_damage`'s post-condition holds
+            # the kind to the riders its handler reads.
+            swept["no_regen"] = True
+        return (OracleInstruction(sweep, "", swept),)
 
     if not node.recipients:
         # "…deals 3 damage" with nobody named. The split below lowers one

@@ -105,9 +105,24 @@ def prevent_and_count_kind(line: str) -> str | None:
 #: cannot answer would shield against nothing while the card reported
 #: supported. A type and a colour together is a card nobody prints, and the
 #: alternation cannot read one.
+#:
+#: **And two more narrowings, each read where it is asked** (Thunderstaff: "As
+#: long as this artifact is untapped, if a creature would deal **combat**
+#: damage to you, prevent 1 of that damage."). The untapped clause is part of
+#: the printed line, as Veteran Bodyguard's is (``replacements.redirects``), so
+#: it is matched here and asked of the printing permanent at each event — a
+#: tapped Thunderstaff shields nothing, and untapping it again is the shield
+#: again (CR 611.3a: a static ability's effect applies while its condition
+#: holds). "Combat" is the event's own flag (CR 510.2). The per-event shave is
+#: the ruling's count (2004-12-01): "it prevents 1 damage from each creature,
+#: each time it would deal combat damage to you" — three double strikers are
+#: six events, six points.
 _PREVENT_N_OF_DAMAGE_RE = re.compile(
-    r"^if (?:a (?:(?P<color>white|blue|black|red|green) )?source"
+    r"^(?P<untapped>as long as this (?:artifact|creature|enchantment|land|permanent)"
+    r" is untapped, )?"
+    r"if (?:a (?:(?P<color>white|blue|black|red|green) )?source"
     r"|an? (?P<card_type>artifact|creature|enchantment|land)) would deal "
+    r"(?P<combat>combat )?"
     r"damage to (?P<to>.+?), prevent (?P<points>\d+) of that damage$"
 )
 
@@ -139,14 +154,17 @@ def static_points_shield(line: str) -> dict | None:
             return None
     word = match.group("color")
     card_type = match.group("card_type")
+    # ``untapped`` and ``combat`` (Thunderstaff) — see the pattern's comment.
+    gates = {"untapped": match.group("untapped") is not None,
+             "combat": match.group("combat") is not None}
     if word is None:
         return {"points": int(match.group("points")), "color": None,
-                "card_type": card_type, "protects": protects}
+                "card_type": card_type, "protects": protects, **gates}
     from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 
     return {"points": int(match.group("points")),
             "color": _COLOR_WORD_TO_SYMBOL[word], "card_type": card_type,
-            "protects": protects}
+            "protects": protects, **gates}
 
 
 def prevent_n_of_damage(line: str) -> int | None:
@@ -190,6 +208,13 @@ def _static_point_lines(game, event: dict):
         for line in (permanent.effective_card.oracle_text or "").splitlines():
             described = static_points_shield(line)
             if described is None:
+                continue
+            if described["untapped"] and permanent.tapped:
+                # "As long as this artifact is untapped, …" (Thunderstaff):
+                # asked of the printing permanent now, at this event.
+                continue
+            if described["combat"] and not event.get("combat"):
+                # "…would deal **combat** damage to you" (CR 510.2).
                 continue
             protects = described["protects"]
             if isinstance(recipient, PlayerState):

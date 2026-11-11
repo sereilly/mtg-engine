@@ -46,6 +46,7 @@ import dataclasses
 
 from . import ast
 from .delay_openers import (_DELAYED_OPENERS, _delayed_bound_subject,
+                            _parse_board_wide_creature_delay,
                             _parse_land_tapped_for_mana,
                             _parse_source_block_pair_delay,
                             _parse_targeted_combat_delay,
@@ -55,6 +56,7 @@ from .delay_openers import (_DELAYED_OPENERS, _delayed_bound_subject,
 from .errors import GrammarError
 from .conditions import _parse_condition
 from .nouns import parse_object_filter
+from .rebinding import rebind_pronoun_to_event_subject
 from .sentence_rebinding import rebind_pronoun_to_delay_target
 from .stream import TokenStream
 
@@ -146,6 +148,7 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     agent = None
     watches: str | None = None
     target: "ast.TargetSpec | None" = None
+    board_wide = False
 
     # "**This turn,** when target creature you control attacks and isn't
     # blocked, …" (Delif's Cone, Delif's Cube). CR 603.7b's stated duration
@@ -340,6 +343,16 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
             stream.reset(after_whenever)
             if stream.accept_phrase("a", "player", "gains", "life"):
                 event, once, duration = "player_gains_life", False, None
+        if event is None:
+            # "Until end of turn, **whenever a creature is dealt damage**,
+            # destroy it." / "…**whenever a creature dies**, …" (Shriveling
+            # Rot.) False Cure's shape over the two board-wide creature events,
+            # the window left to the leading reader for its reason.
+            stream.reset(after_whenever)
+            board = _parse_board_wide_creature_delay(stream)
+            if board is not None:
+                (event, subject), once, duration = board, False, None
+                board_wide = True
     else:
         for phrase, kind, kind_once, kind_duration, kind_binds in _DELAYED_OPENERS:
             if stream.accept_phrase(*phrase):
@@ -412,6 +425,14 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     effect = resolve_that_turn(effect) or effect
     effect = fold_flip_stakes(stream, effect, parse_statement)
     effect = fold_counter_countdown(stream, effect, parse_statement)
+    if board_wide:
+        # "…whenever a creature is dealt damage, destroy **it**." The pronoun
+        # names the object the event was about, exactly as it does behind the
+        # static condition (Death Pits of Rath) — the same rebinding, so the
+        # lowering reads it as the event's subject and never as the spell.
+        effect = rebind_pronoun_to_event_subject(
+            ast.TriggerEvent(event, "whenever", subject=subject), effect,
+        )
     if target is not None:
         # CR 603.7c: the ability is about the object its opener chose, so the
         # pronouns behind the comma name that object rather than the ability's

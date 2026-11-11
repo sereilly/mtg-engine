@@ -68,6 +68,12 @@ END_OF_TURN = "end_of_turn"
 #: source would silence a second copy too. A ``StackItem`` is one object per
 #: cast, and ``Game.resolving_items`` is where a damage path can reach it.
 PREVENT_BY_RESOLVING_OBJECT = "prevent_by_resolving_object"
+#: The same blanket with CR 615.5's rider: "Prevent all damage target spell
+#: would deal this turn. **You gain life equal to the damage prevented this
+#: way.**" (Hallow.) Its own kind because the kind selects the interceptor,
+#: and this one pays ``payee_seat`` for every point it absorbs — and so that
+#: CR 616.1e can offer it beside Hidden Retreat's riderless one.
+PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE = "prevent_by_resolving_object_and_gain_life"
 PREVENT_NEXT_N = "prevent_next_n"
 #: "Prevent the next X damage that would be dealt to target creature this turn.
 #: **For each 1 damage prevented this way, put a +1/+1 counter on that
@@ -803,7 +809,9 @@ def make_named_source_pool(
     )
 
 
-def make_resolving_object_shield(source, source_name: str | None = None) -> Shield:
+def make_resolving_object_shield(
+    source, source_name: str | None = None, *, payee_seat: int | None = None,
+) -> Shield:
     """Hidden Retreat's blanket over one cast spell's damage.
 
     No ``amount`` and no ``uses``: "prevent **all** damage … this turn" is every
@@ -812,12 +820,17 @@ def make_resolving_object_shield(source, source_name: str | None = None) -> Shie
     deals while it resolves — a sorcery that has a creature deal it — is left
     where the card put it; the *cast* is what the shield is found by, and the
     card is what it answers to.
+
+    *payee_seat* is Hallow's rider: the seat that gains life equal to what the
+    shield prevents, which makes it the rider's kind.
     """
     return Shield(
-        kind=PREVENT_BY_RESOLVING_OBJECT,
+        kind=(PREVENT_BY_RESOLVING_OBJECT if payee_seat is None
+              else PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE),
         amount=None,
         uses=None,
         source=source,
+        payee_seat=payee_seat,
         source_name=source_name,
     )
 

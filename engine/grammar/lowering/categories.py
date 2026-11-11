@@ -474,6 +474,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # contention set.
     "redirect_damage_from_target_until_eot": "damage",
     "redirect_damage_from_chosen_source_until_eot": "damage",
+    # Turn the Tables: every source's damage to the caster, onto a target.
+    "redirect_damage_dealt_to_you_onto_target_until_eot": "damage",
     # "…the next time that source would deal damage this turn, it deals double
     # that damage instead." (Desperate Gambit's winning flip.) Filed with the
     # redirects for their reason and not with the prevention beside it: the

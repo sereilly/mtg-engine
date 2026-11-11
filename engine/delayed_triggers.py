@@ -332,6 +332,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # the same place and the same number ``you_gain_life`` is announced with —
     # carrying the gainer's seat ("that player") and how much arrived.
     "player_gains_life": "the life-gain seam in mixins/effects.py",
+    # "Until end of turn, whenever a creature is dealt damage, destroy it."
+    # (Shriveling Rot.) Death Pits of Rath's board-wide event created for a
+    # turn: announced where the static one is, once per creature per dealing
+    # (``_announce_dealt_damage_triggers``), with the same frozen context —
+    # so the effect is lowered under the static condition's own name and "it"
+    # is the damaged creature by id (``event_subject_permanent_id``).
+    "creature_dealt_damage": "the dealt-damage announcement in mixins/effects.py",
+    # "Until end of turn, whenever a creature dies, that creature's controller
+    # loses life equal to its toughness." (Shriveling Rot.) The board-wide
+    # death scan's delayed twin, announced with its ``died_context`` (CR
+    # 603.10: the last-known controller and toughness), under the static
+    # condition's own name for the reason the row above gives.
+    "creature_dies": "the board-wide death scan in mixins/deaths.py",
 }
 
 

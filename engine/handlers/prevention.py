@@ -1572,7 +1572,10 @@ def prevent_damage_by_target_spell_until_eot(
             f"{'/'.join(str(t) for t in wanted)} spell it named"
         )
         return True, "resolved"
-    add_shield(item, make_resolving_object_shield(item.card, card_name or None))
+    # Hallow's "You gain life equal to the damage prevented this way" pays the
+    # seat that cast it (CR 109.5), captured now.
+    payee = game.players.index(context.caster) if instruction.payload.get("rider") else None
+    add_shield(item, make_resolving_object_shield(item.card, card_name or None, payee_seat=payee))
     game.log.append(
         f"{card_name}: damage {item.card.name} would deal this turn is prevented"
     )

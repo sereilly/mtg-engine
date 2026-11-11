@@ -41,6 +41,7 @@ from ._common import (
     testable_filter_payload,
 )
 from ._events import _RECORDED_PERMANENTS
+from ._prevented_riders import _names_a_target_spell, spell_shield_rider
 from ._targets import _names_several_targets
 
 
@@ -581,11 +582,7 @@ def _lower_prevent_all(
                     node=node,
                 )
             payload["also_blocking_target"] = True
-        if (
-            isinstance(spec, ast.TargetSpec)
-            and spec.quantifier == "target"
-            and spec.filter.zone == "stack"
-        ):
+        if _names_a_target_spell(spec):
             # "…dealt by **target instant or sorcery spell** this turn."
             # (Hidden Retreat.) The source is a spell, not a permanent, which
             # is why it is a kind of its own and not this payload with a zone
@@ -620,13 +617,16 @@ def _lower_prevent_all(
                     "second source",
                     node=node,
                 )
+            # "…You gain life equal to the damage prevented this way." (Hallow.)
+            # CR 615.5's rider, emitted only when printed so the two riderless
+            # cards' payloads are byte-identical.
             return (
                 OracleInstruction(
                     "prevent_damage_by_target_spell_until_eot", "",
                     (
                         {"card_types": list(spec.filter.card_types)}
                         if spec.filter.card_types else {}
-                    ),
+                    ) | spell_shield_rider(node),
                 ),
             )
         if several:

@@ -290,6 +290,18 @@ class EffectsMixin:
                 seat, observer, trig, trigger_context=dict(context),
             ))
         self._enqueue_triggered_batch(events)
+        # "Until end of turn, whenever a creature is dealt damage, destroy it."
+        # (Shriveling Rot.) The board-wide scope's delayed twin (CR 603.7): it
+        # belongs to no permanent, so no scan above reaches it. Same context,
+        # same once-per-dealing total; the entry's noun phrase is tested
+        # against the damaged permanent (``DelayedTrigger.matches``).
+        if self.delayed_triggers:
+            from ..delayed_triggers import fire_delayed_triggers
+
+            fire_delayed_triggers(
+                self, "creature_dealt_damage", subject=permanent,
+                trigger_context=dict(context),
+            )
 
     def _controller_index_of(self, permanent: Permanent) -> int:
         """Index of the player who currently controls *permanent* (0 if not found —

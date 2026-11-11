@@ -462,6 +462,46 @@ def _parse_land_tapped_for_mana(stream: TokenStream) -> "ast.ObjectFilter | None
     return land
 
 
+def _parse_board_wide_creature_delay(
+    stream: TokenStream,
+) -> "tuple[str, ast.ObjectFilter] | None":
+    """``a creature is dealt damage`` / ``a creature dies`` — the board-wide
+    openers no bound object narrows (Shriveling Rot: "Until end of turn,
+    whenever a creature is dealt damage, destroy it." / "…whenever a creature
+    dies, that creature's controller loses life equal to its toughness.").
+
+    Returns ``(event, subject)`` under the **static** conditions' own names,
+    because they are the same events announced from the same sites with the
+    same frozen context (``engine/delayed_triggers.DELAYED_EVENTS``) — so the
+    effect behind the comma is lowered under the same event-keyed readings a
+    Death Pits of Rath or a Fecundity gets. The window is left to the leading
+    "until end of turn" reader, as False Cure's is.
+
+    The damaged creature may be narrowed by any noun phrase the matcher tests
+    (the fire site asks it of the live permanent); the dying one is the bare
+    "a creature" only — the death scan announces it with the permanent gone,
+    and no narrowing is tested against a graveyard card there. Both refuse
+    with the cursor untouched.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("a", "creature", "dies"):
+        return "creature_dies", ast.ObjectFilter(card_types=("creature",))
+    stream.reset(mark)
+    if not stream.accept_word("a", "an"):
+        return None
+    try:
+        damaged = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if damaged.card_types != ("creature",) or not stream.accept_phrase(
+        "is", "dealt", "damage"
+    ):
+        stream.reset(mark)
+        return None
+    return "creature_dealt_damage", damaged
+
+
 #: The combat events a ``this turn, when target <noun> …`` opener can name, by
 #: the words printed after the target phrase. Two rows would be two spellings of
 #: one shape, so the phrase is the key and the event is the value — a card

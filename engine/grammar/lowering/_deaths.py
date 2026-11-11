@@ -94,13 +94,16 @@ DEAD_CHARACTERISTIC_RECORDS: dict[str, str] = {
 }
 
 #: And **which** deaths freeze them: a claim about a fire site, verified one at
-#: a time. ``creature_dies`` is deliberately absent though the same context
-#: announces it — the scan reaching it rebuilds a context of its own for a
-#: ``target_gains_life`` instruction, so a trigger lowered onto that kind with
-#: an ``amount_from_trigger`` would arrive with the numbers missing and use the
-#: payload's default. A row goes in when that branch is retired, not before.
+#: a time. ``creature_dies`` joined at Darksteel (Shriveling Rot's delayed
+#: "…loses life equal to its toughness"): its scan hands every ability the
+#: same ``died_context``, and the one branch that rebuilt a context of its own
+#: — Soul Net's legacy ``target_gains_life`` shape — now declines a gain that
+#: reads ``amount_from_trigger``, so such a gain reaches the frozen numbers
+#: (``mixins/deaths._fire_creature_dies_triggers``). The delayed ability is
+#: announced from the same scan with the same context.
 DEAD_CHARACTERISTIC_EVENTS: frozenset[str] = frozenset({
     "dies",                    # the permanent's own death loop
     "permanent_dies",          # _fire_permanent_dies_triggers
     "attached_creature_dies",  # _fire_creature_dies_triggers' died_context
+    "creature_dies",           # the same scan, and its delayed twin
 })

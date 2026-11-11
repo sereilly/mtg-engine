@@ -133,6 +133,18 @@ def _during_combat(game: "Game", caster_index: int) -> bool:
     return game.current_turn_phase == "combat"
 
 
+def _during_own_combat(game: "Game", caster_index: int) -> bool:
+    """Savage Beating: "only during combat **on your turn**" — Angelic Favor's
+    window with the seat its line prints, the pairing
+    :func:`_own_combat_before_blockers` makes one row over. Without it the
+    shorter row read the clause as a prefix and lifted the seat: the spell was
+    castable in an opponent's combat, for blockers' double strike."""
+    return (
+        game.active_player_index == caster_index
+        and _during_combat(game, caster_index)
+    )
+
+
 def _after_combat(game: "Game", caster_index: int) -> bool:
     # Glyph of Reincarnation: after the combat *phase* has ended, so the
     # postcombat main phase and the ending phase. The end of combat step is
@@ -318,7 +330,16 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "can only be cast during an opponent's turn after their upkeep step",
         names_seat="active",
     ),
-    # **After the three rows it is a strict prefix of**, for the reason the last
+    # "Cast this spell only during combat **on your turn**." (Savage Beating.)
+    # A strict prefix of Melee's row above, so below it (its message stays
+    # Melee's own), and above the bare "during combat" it extends — which,
+    # matched as a substring, had been the only row this clause met.
+    CastRestriction(
+        "cast this spell only during combat on your turn",
+        _during_own_combat,
+        "can only be cast during combat on your turn",
+    ),
+    # **After the four rows it is a strict prefix of**, for the reason the last
     # row in this table gives: `check_cast_timing` reports the *first* violated
     # restriction, so above "during combat before blockers are declared" this
     # would answer Blaze of Glory with a window wider than the one it prints.

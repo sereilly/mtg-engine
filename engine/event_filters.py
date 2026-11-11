@@ -653,6 +653,10 @@ def _damage_dealt_filter(
         # derives the seat for both.
         if event.payload.get("damager_seat") != observer:
             return False
+        if payload.get("damager_other_than_self") and damager is permanent:
+            # "…**other than this artifact**" (Talon of Pain): by identity, so
+            # a second Talon's damage still counts for this one.
+            return False
     elif payload.get("damager_controller") == "an opponent":
         # "Whenever a source **an opponent controls** deals damage to you"
         # (Farsight Mask.) The same seat question about the other side: a seat
