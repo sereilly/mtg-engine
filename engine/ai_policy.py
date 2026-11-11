@@ -57,6 +57,7 @@ from .ai_rehearsal import (blocks_owed, blocks_still_to_come, deliberating,
                            pays_before_the_blocks)
 from .ai_valuation import (copies_for_the_spells_before_it, entry_sacrifice_is_unavoidable,
                            entry_targets_a_spell, is_mana_ability)
+from .cast_restrictions import window_closes_before_the_blocks
 from .faces import castable_faces
 from .game import Game
 from .models import CardDefinition
@@ -729,7 +730,15 @@ def _weighed_at_instant_speed_now(
 
     if card.primary_type == "land":
         return False
-    if blocks_still_to_come(game) and player_index not in game.combat_defending_players():
+    if (
+        blocks_still_to_come(game)
+        and player_index not in game.combat_defending_players()
+        # …unless its printed window shuts before then (Tears of Rage,
+        # Teleport, Camouflage: "only during the declare attackers step"),
+        # which makes this the last moment it can be cast at all, and the
+        # rehearsal through the fight the judge (`read_at_instant_speed`).
+        and not window_closes_before_the_blocks(game, player_index, card)
+    ):
         # Before the blocks a spell is cast for a block it adds, and the
         # blocks are the defending seats': the attacker's tricks wait for
         # the declare-blockers step (its abilities are still weighed here —

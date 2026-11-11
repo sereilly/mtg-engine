@@ -63,6 +63,7 @@ from .ai_valuation import (
     mana_ability_amount,
 )
 from .cast_costs import additional_costs, cast_announces_x
+from .cast_restrictions import window_closes_before_the_blocks
 from .classifier import classify_card
 from .faces import castable_faces
 from .game import Game
@@ -610,7 +611,11 @@ def read_at_instant_speed(
     rest of the combat fought — the blocks declared by the policy, the damage
     dealt — and made there only for a block it adds that pays
     (``ai_rehearsal.pays_before_the_blocks``): an ambush. Everything else
-    waits for the declare-blockers step, or the end step. **In a response
+    waits for the declare-blockers step, or the end step — except a card
+    whose printed window shuts before the blocks
+    (``cast_restrictions.window_closes_before_the_blocks``: Tears of Rage,
+    Teleport, Camouflage), which is read through the fight and made for what
+    it leaves, since there is no later step to wait for. **In a response
     before the blocks** (``blocks_owed``: an attack trigger on the stack) the
     copy resolves the stack and then owes the blocks, so it is read with the
     rest of that combat fought, or the attack it answers deals no damage on
@@ -628,6 +633,17 @@ def read_at_instant_speed(
             game, seat, card, cast_announcement(planned),
             planned=planned, through_combat=True,
         )
+        if window_closes_before_the_blocks(game, seat, card):
+            # A card whose printed window shuts before the blocks (Tears of
+            # Rage: "only during the declare attackers step") has no
+            # declare-blockers step to wait for: it is cast now for what the
+            # fight leaves, or not at all.
+            if fought is None or not fought.accepted:
+                return rehearsal, (
+                    "before the blocks, its last window, and the reading through"
+                    " the fight was not run or was refused"
+                )
+            return fought, None
         if not pays_before_the_blocks(rehearsal, fought):
             return rehearsal, (
                 "before the blocks, and it adds no block that pays"

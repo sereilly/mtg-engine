@@ -989,6 +989,53 @@ def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -
     return None
 
 
+class _AtTheBlocks:
+    """*game* read as it will stand in this combat's declare-blockers step:
+    the step a timing row is asked about, every other field the game's own.
+    The declaration is a turn-based action as the step begins (CR 509.1), so
+    every castable moment of it is after the blocks; it is not skipped
+    (CR 508.8), because the attack it follows is declared."""
+
+    current_turn_phase = "combat"
+    current_step = "declare_blockers"
+    combat_attackers_locked = True
+
+    def __init__(self, game: "Game") -> None:
+        self._game = game
+
+    def __getattr__(self, name: str):
+        return getattr(self._game, name)
+
+    def combat_skips_blocks_and_damage(self) -> bool:
+        return False
+
+
+def window_closes_before_the_blocks(game: "Game", caster_index: int, card) -> bool:
+    """Whether *card*'s printed casting window is open now and **shut once
+    this combat's blockers are declared** — "Cast this spell only during the
+    declare attackers step" (Tears of Rage, Teleport), "… during your declare
+    attackers step" (Camouflage), "… before blockers are declared" (Rapid
+    Fire), Blaze of Glory's and Melee's. A spell cast before the blocks for
+    what it does after them waits for the declare-blockers step, where the
+    blocks are known (``ai_rehearsal.pays_before_the_blocks``); one of these
+    has no such step to wait for.
+
+    Read off the rows the card prints (:data:`CAST_RESTRICTIONS`, matched as
+    :func:`check_cast_timing` matches them), each asked of now and of this
+    turn's declare-blockers step through its own predicate — so a row added
+    to the table is read the way it is enforced, and there is no list of
+    phrases beside it to fall out of step with it.
+    """
+    text = (getattr(card, "oracle_text", "") or "").lower()
+    printed = [restriction for restriction in CAST_RESTRICTIONS if restriction.phrase in text]
+    if not printed:
+        return False
+    if not all(restriction.is_legal(game, caster_index) for restriction in printed):
+        return False
+    at_the_blocks = _AtTheBlocks(game)
+    return any(not restriction.is_legal(at_the_blocks, caster_index) for restriction in printed)
+
+
 def timing_fixed_seat(game: "Game", caster_index: int, card) -> "int | None":
     """The seat this spell's own timing clause names, or None when none does.
 
