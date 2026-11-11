@@ -711,11 +711,13 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
     batch = game.new_keep_batch()
     owing = set(seats)
 
+    every_battlefield = bool(payload.get("every_battlefield"))
+
     def ask(seat: int) -> None:
         if seat in owing:
             game.arm_keep_permanents(
                 seat, pool=pool, slots=slots, reason=card_name, fate=fate,
-                batch=batch,
+                batch=batch, every_battlefield=every_battlefield,
             )
 
     def done() -> None:

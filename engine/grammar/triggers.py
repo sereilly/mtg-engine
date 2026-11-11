@@ -378,6 +378,12 @@ def _parse_one_shot_event(stream: TokenStream, word: str) -> ast.TriggerEvent | 
             # permanent noun the branch above consumes as a word.
             if stream.accept_phrase("or", "dies"):
                 return ast.TriggerEvent("enters_or_dies", word)
+            # "When this creature enters **or leaves the battlefield**, …"
+            # (Sundering Titan.) The same CR 603.1 shape, the departure half
+            # announced where ``leaves_battlefield`` is.
+            if stream.accept_phrase("or", "leaves"):
+                stream.accept_phrase("the", "battlefield")
+                return ast.TriggerEvent("enters_or_leaves_battlefield", word)
             return ast.TriggerEvent("enters_battlefield", word)
         if stream.accept_word("leaves"):
             stream.accept_phrase("the", "battlefield")

@@ -73,7 +73,9 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 import pytest
 
-_ENTRY_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
+_ENTRY_CONDITIONS = frozenset({
+    "enters_battlefield", "enters_or_dies", "enters_or_leaves_battlefield",
+})
 _ROADS = ("cast", "cast_bare", "put")
 
 # 278 entry triggers on 269 permanents across both roles (October 2026).

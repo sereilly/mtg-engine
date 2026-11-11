@@ -348,6 +348,8 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Retribution.) The sacrifice acting on a permanent a ``choose_permanent``
     # step recorded, beside the one acting on a permanent a trigger bound.
     "sacrifice_recorded_permanent": "destruction",
+    # Tears of Rage: every recorded permanent, the plural of the row above.
+    "sacrifice_recorded_permanents": "destruction",
     # Tariff's whole paragraph. In the destruction category because what the
     # sentence is *about* is a sacrifice; the offer in front of it is the price
     # of not making one, exactly as `self_damage_unless_pay` sits under the
@@ -379,6 +381,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # lowered. The family is the pick's, not the Plains': what this instruction
     # does is choose.
     "choose_permanents": "attachments",
+    # Scrounge's "target opponent chooses an artifact card in their
+    # graveyard": the pick above one zone over, the same family.
+    "choose_graveyard_card": "attachments",
     "tap_self": "tapping",
     "untap_target_permanent": "tapping",
     # "…**and untap it**" behind a removal from combat (Reconnaissance). The

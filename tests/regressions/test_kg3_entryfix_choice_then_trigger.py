@@ -63,7 +63,9 @@ from tests.regressions.test_kg3_entry_choice_census import _choosers
 from tests.helpers import settle
 
 _C = {card.name: card for card in load_catalog()}
-_ENTRY_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
+_ENTRY_CONDITIONS = frozenset({
+    "enters_battlefield", "enters_or_dies", "enters_or_leaves_battlefield",
+})
 WARDEN = "Soul Warden"
 
 #: Two shipped permanents print both lines (November 2026). A floor.

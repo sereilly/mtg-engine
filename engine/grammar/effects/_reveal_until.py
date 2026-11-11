@@ -56,8 +56,10 @@ already share.
 """
 
 from .. import ast
+from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
+from ..readers import accept_source_reference
 from ..stream import TokenStream
 
 
@@ -167,6 +169,87 @@ def _accept_reveal_until_from_top(
         )
     stream.reset(mark)
     return None
+
+
+def accept_subject_reveals_until_or_count(
+    stream: TokenStream, subject: "ast.PlayerRef",
+) -> "ast.RevealUntil | None":
+    """``<target opponent> reveals cards from the top of their library until a
+    <card> or <N> cards are revealed, whichever comes first. If a <card> is
+    revealed this way, put it onto the battlefield under your control [and
+    sacrifice this <permanent>]. Put the rest of the revealed cards into that
+    player's graveyard.`` — the subject already read; or None, unconsumed.
+    (Thought Dissector.)
+
+    :func:`_accept_reveal_until_from_top`'s run with a second stop and the
+    library somebody else's: the printed subject is an announced opponent
+    (CR 601.2c), the find goes to the effect's controller, and "the rest of the
+    revealed cards" — every card turned over that is not the find, all of them
+    when the count ran out first — go to the library's owner's graveyard. All
+    three sentences, for :class:`ast.RevealUntil`'s reason, and every word of
+    them: the "if" clause must name the run's own card phrase again.
+    """
+    if subject.kind not in ("target_opponent", "target_player"):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("reveals") or not stream.accept_phrase(
+        "cards", "from", "the", "top", "of", "their", "library", "until",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        filt = parse_object_filter(stream)
+        if not filt.is_card or not stream.accept_word("or"):
+            raise GrammarError("not this run")
+        limit = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_phrase("cards", "are", "revealed")
+        and stream.accept_punct(",")
+        and stream.accept_phrase("whichever", "comes", "first")
+        and stream.accept_punct(".")
+        and stream.accept_word("if")
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        again = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if again != filt or not (
+        stream.accept_phrase("is", "revealed", "this", "way")
+        and stream.accept_punct(",")
+        and stream.accept_phrase(
+            "put", "it", "onto", "the", "battlefield", "under", "your", "control",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    sacrifice = False
+    rider = stream.mark()
+    if stream.accept_phrase("and", "sacrifice") and accept_source_reference(stream):
+        sacrifice = True
+    else:
+        stream.reset(rider)
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase(
+            "put", "the", "rest", "of", "the", "revealed", "cards", "into",
+            "that", "player", "'s", "graveyard",
+        )
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RevealUntil(
+        subject.kind, filt, destination="battlefield", rest="graveyard",
+        limit=limit, under_your_control=True, sacrifice_source=sacrifice,
+    )
 
 
 def names_the_revealed_cards_placed(stream: TokenStream) -> bool:

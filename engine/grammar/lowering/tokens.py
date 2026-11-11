@@ -393,6 +393,19 @@ def _lower_create_token(
         # both powers — a toughness read through that channel would be handed
         # one (see the note beside the phrase in ``amounts.parse_equal_to``).
         for key, amount in zip(("power_from", "toughness_from"), node.pt_from):
+            if (
+                isinstance(amount, ast.CharacteristicOfSubject)
+                and amount.referent is not None and amount.referent.is_source
+                and amount.characteristic in ("power", "toughness")
+            ):
+                # "…equal to **this creature's power**" (Gemini Engine): the
+                # source's, taken as the token is made (CR 608.2h), on the
+                # shared evaluator's ``object_characteristic`` spec.
+                payload[f"{key}_spec"] = {"object_characteristic": {
+                    "object": "source", "characteristic": amount.characteristic,
+                    "offset": 0,
+                }}
+                continue
             if not isinstance(amount, ast.ThatMuch):
                 raise LoweringError(
                     "a token's stated power/toughness is a back-reference",

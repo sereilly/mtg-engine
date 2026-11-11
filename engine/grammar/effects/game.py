@@ -672,6 +672,20 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
         # would demand a word this sentence does not print.
         stream.advance()
         return ast.SkipTurn(subject)
+    # "When this creature enters, you skip your next **two turns**." (Eater of
+    # Days.) The same skip counted: CR 614.10a's two "next" skips, each spent
+    # on one turn — the node's ``count``, read only with the plural noun.
+    counted = stream.mark()
+    try:
+        many = parse_amount(stream)
+    except GrammarError:
+        many = None
+    if (
+        isinstance(many, ast.Fixed) and many.value >= 2
+        and stream.accept_word("turns")
+    ):
+        return ast.SkipTurn(subject, count=many.value)
+    stream.reset(counted)
     # "…skips their next **combat phase** this turn." (Moment of Silence.)
     # CR 506.1: the combat phase has five steps and is not one, so the printed
     # noun decides which counter the skip goes into — and the two are read here

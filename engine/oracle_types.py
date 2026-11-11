@@ -938,6 +938,22 @@ BASE_PT_SET_PERMANENTS = "base_pt_set_permanents"
 #: prints the other.
 CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
 
+#: "Target opponent chooses an artifact card in their graveyard. **Put that
+#: card** onto the battlefield under your control." (Scrounge.) The card the
+#: ``choose_graveyard_card`` pick took — by identity, because a card in a
+#: graveyard has no id and two copies there are one ``CardDefinition`` — or
+#: None when the pile held none. Here rather than in a lowering module because
+#: the pick prompt writes it and ``reanimate_bound_card`` reads it.
+CHOSEN_GRAVEYARD_CARD = "chosen_graveyard_card"
+
+#: "Attacking creatures you control get +X/+0 until end of turn … **Sacrifice
+#: those creatures** at the beginning of the next end step." (Tears of Rage.)
+#: The ids of the creatures a one-shot global buff reached — the set CR 611.2c
+#: fixed as it resolved — so a later sentence (a delayed one, through the
+#: frozen scratchpad) names exactly those and not whatever matches the noun
+#: phrase by then.
+BUFFED_THIS_WAY_PERMANENTS = "buffed_this_way_permanents"
+
 #: "Remove target attacking creature you control from combat **and untap it**."
 #: (Reconnaissance.) The permanent the removal took out of combat, recorded
 #: because the step behind it names it with a bare pronoun and nothing else in
@@ -1423,7 +1439,13 @@ BIDDING_WINNER = "bidding_winner"
 #: the prompt's: a fate admitted with no performer would be a card that asks
 #: every seat a question and then moves nothing.
 RETURN_CHOSEN_TO_HAND = "return_chosen_to_hand"
-KEEP_FATES = frozenset({RETURN_CHOSEN_TO_HAND})
+#: "…choose a land of each basic land type, **then destroy those lands**."
+#: (Sundering Titan.) The chosen half destroyed, together (CR 701.8). A pool
+#: that prints no controller is every battlefield's (the prompt's
+#: ``every_battlefield``), which only a fate that moves the chosen may ask:
+#: a seat cannot sacrifice what it does not control (CR 701.21a).
+DESTROY_CHOSEN = "destroy_chosen"
+KEEP_FATES = frozenset({RETURN_CHOSEN_TO_HAND, DESTROY_CHOSEN})
 
 
 #: The permanent "counter target activated ability" records: the source the

@@ -106,6 +106,7 @@ from .board import (
     _parse_sacrifice_expansion_permanents,
     parse_keep_then_sacrifice_rest,
     parse_choose_each_then_return,
+    parse_choose_each_then_destroy,
     _parse_delayed_self_action,
     _parse_that_object,
 )
@@ -126,6 +127,7 @@ from .attachments import (
     parse_choose_host_at_random,
     parse_excess_choice_paragraph,
     parse_player_chooses_permanent,
+    parse_player_chooses_graveyard_card,
 )
 from .control_changes import (
     _parse_bid_life_for_control,
@@ -230,6 +232,7 @@ from .reveal import (
     _parse_reveal_top,
     accept_subject_reveals_counted_top_sorted,
     accept_subject_reveals_top_of_library,
+    accept_subject_reveals_until_or_count,
     parse_bin_revealed_card,
     parse_graveyard_top_opponent_chooses,
     parse_put_revealed_cards_on_bottom,
@@ -379,6 +382,7 @@ __all__ = [
     "parse_choose_host_at_random",
     "parse_excess_choice_paragraph",
     "parse_player_chooses_permanent",
+    "parse_player_chooses_graveyard_card",
     "_parse_return",
     "_parse_put_source_into_zone",
     "_parse_return_instead_of_untapping",
@@ -404,6 +408,7 @@ __all__ = [
     "_parse_sacrifice",
     "parse_keep_then_sacrifice_rest",
     "parse_choose_each_then_return",
+    "parse_choose_each_then_destroy",
     "_parse_sacrifice_expansion_permanents",
     "_parse_delayed_self_action",
     "_parse_shuffle_graveyard_into_library",
@@ -442,6 +447,7 @@ __all__ = [
     "accept_subject_reveals_counted_top_sorted",
     "accept_subject_reveals_top_caster_picks",
     "accept_subject_reveals_top_of_library",
+    "accept_subject_reveals_until_or_count",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_graveyard_position",
     "_parse_exile_top_of_library",

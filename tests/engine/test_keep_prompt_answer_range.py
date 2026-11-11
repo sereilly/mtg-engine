@@ -39,7 +39,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.handlers.sacrifices import keep_slots_sized
 from engine.models import Permanent
 from engine.oracle import compiled_units
-from engine.oracle_types import RETURN_CHOSEN_TO_HAND
+from engine.oracle_types import DESTROY_CHOSEN, RETURN_CHOSEN_TO_HAND
 
 KIND = "keep_chosen_sacrifice_rest"
 
@@ -157,7 +157,9 @@ def test_w2g1_every_keep_prompt_accepts_the_range_its_slots_print(set_pool):
         headless.auto_resolve_pending_choices()
         assert not headless.pending_choices, name
         left = len(list(headless.controlled_by(0)))
-        if payload.get("fate") == RETURN_CHOSEN_TO_HAND:
+        # The chosen leave under either moving fate — Planar Overlay's return
+        # and Sundering Titan's destruction (DST W1G9) — so the fewest go.
+        if payload.get("fate") in (RETURN_CHOSEN_TO_HAND, DESTROY_CHOSEN):
             assert before - left == smallest, name
         else:
             assert left == before - len(live) + largest, name

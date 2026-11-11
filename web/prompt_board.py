@@ -891,9 +891,7 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
     under this one it is a card the player can click and never legally choose.
     """
     choice = choices[0]
-    live = ctx.game.keep_choice_candidates(
-        choice.player_index, choice.data.get("pool") or {}
-    )
+    live = ctx.game.keep_candidates_of(choice)
     slot_filters = ctx.game._keep_slot_filters(choice.data.get("slots"))
     fate = choice.data.get("fate")
     extra: dict = {}
@@ -905,6 +903,14 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
         ]
     printed = list(choice.data.get("slots") or ())
     needs = ctx.game.keep_slot_needs(live, printed)
+    # Sundering Titan's "a land" reaches every battlefield (``DESTROY_CHOSEN``
+    # with ``every_battlefield``): each candidate carries its own seat.
+    seats = (
+        range(len(ctx.game.players)) if choice.data.get("every_battlefield")
+        else (choice.player_index,)
+    )
+    if choice.data.get("every_battlefield"):
+        extra["every_battlefield"] = True
     return {
         **extra,
         "player_seat": choice.player_index,
@@ -921,13 +927,14 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
         ],
         "candidates": [
             {
-                "seat": choice.player_index,
+                "seat": seat,
                 "index": index,
                 "id": ctx.game.permanent_id_of(perm),
                 "name": perm.effective_card.name,
                 "fills": ctx.game.keep_slots_answered_by(perm, printed),
             }
-            for index, perm in enumerate(ctx.game.players[choice.player_index].battlefield)
+            for seat in seats
+            for index, perm in enumerate(ctx.game.players[seat].battlefield)
             if any(perm is candidate for candidate in live)
         ],
     }

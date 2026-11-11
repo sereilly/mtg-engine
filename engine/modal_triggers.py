@@ -78,7 +78,12 @@ MODAL_HEAD_KEY = "modal"
 #: as the permanent is cast (the standing approximation
 #: ``cast_targets._cast_target_spec`` documents; CR 603.3d would choose it as the
 #: trigger is put on the stack).
-ENTRY_TRIGGER_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
+#:
+#: ``enters_or_leaves_battlefield`` (Sundering Titan) likewise for its entry
+#: half; its departure half is ``control_seam``'s, beside ``leaves_battlefield``.
+ENTRY_TRIGGER_CONDITIONS = frozenset({
+    "enters_battlefield", "enters_or_dies", "enters_or_leaves_battlefield",
+})
 
 #: Trigger conditions this engine carries out **inline**, without ever putting
 #: the ability on the stack. **Empty**, and meant to stay that way.

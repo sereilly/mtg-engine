@@ -249,6 +249,7 @@ from .attachments import (
     _lower_announced_choice,
     _lower_choose_permanent,
     _lower_choose_permanents,
+    _lower_choose_graveyard_card,
 )
 from .phasing import (_lower_cant_phase_out, _lower_phase_out,
                       _lower_simultaneous_phasing)
@@ -614,6 +615,7 @@ __all__ = [
     "_lower_announced_choice",
     "_lower_choose_permanent",
     "_lower_choose_permanents",
+    "_lower_choose_graveyard_card",
     "_fused_event_object_exchange",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",

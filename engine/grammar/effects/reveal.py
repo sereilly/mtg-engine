@@ -55,6 +55,7 @@ from ..phrases import accept_a_card_at_random_from_hand, accept_article_descript
 from ..references import parse_player_ref
 from ..stream import TokenStream
 from ._reveal_until import (_accept_reveal_until_from_top,
+                            accept_subject_reveals_until_or_count,
                             parse_put_revealed_cards_on_bottom)
 
 

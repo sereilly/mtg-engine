@@ -57,6 +57,7 @@ from .effects import (
     parse_bin_revealed_card,
     parse_put_revealed_cards_on_bottom,
     parse_choose_host_at_random,
+    parse_choose_each_then_destroy,
     parse_put_outside_game_card_into_hand,
     _parse_force_chosen_creature_to_attack,
     _parse_add_mana,
@@ -754,6 +755,11 @@ def parse_imperative_verb(
         random_host = parse_choose_host_at_random(stream)
         if random_host is not None:
             return random_host
+        # "…choose a land of each basic land type, then destroy those lands."
+        # (Sundering Titan.) Declines without consuming, like every arm here.
+        destroyed_each = parse_choose_each_then_destroy(stream)
+        if destroyed_each is not None:
+            return destroyed_each
         # Demonic Consultation's naming paragraph. Tried before the two below
         # it because all three open with the same four words and this one is
         # the only one whose fifth token is a full stop followed by "exile" —

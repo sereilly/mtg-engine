@@ -1103,6 +1103,8 @@ class ControlSeamMixin:
                     # here for `creature_attacks_or_blocks`' reason: one
                     # ability, two events, so both sites read the one kind.
                     "phases_out_or_leaves_battlefield",
+                    # Sundering Titan's "enters or leaves the battlefield".
+                    "enters_or_leaves_battlefield",
                 },
             ):
                 leaving.append((perm, make_trigger_event(seat, perm, trig)))

@@ -50,6 +50,21 @@ from ._record_keys import (CHOSEN_PERMANENT, CHOSEN_PLAYER, DAMAGE_RECIPIENT,
 _CHOSEN_CREATURES = ast.ObjectFilter(card_types=("creature",))
 
 
+def _describes_creatures(described: dict) -> bool:
+    """Whether the tested payload *described* names only creatures, as CR
+    509.1a's requirement asks of the creature that must block.
+
+    "creature", or a juxtaposition holding it: "Target **artifact creature**
+    blocks this creature this turn if able" (Auriok Siege Sled) lowers to
+    ``type_filter_all`` — every permanent it names is an artifact *and* a
+    creature, so it is a creature. A union ("artifact or creature") is not."""
+    if described.get("type_filter") == "creature":
+        return True
+    return described.get("type_filter") is None and "creature" in (
+        described.get("type_filter_all") or ()
+    )
+
+
 def _chosen_set_payload(
     subject, produced: frozenset[str], node
 ) -> dict[str, object]:
@@ -499,7 +514,7 @@ def _lower_blocks_this_turn_if_able(
             node=node,
             require_narrowing=False,
         )
-        if described.get("type_filter") != "creature":
+        if not _describes_creatures(described):
             raise LoweringError(
                 "a block requirement names a creature", node=node
             )
@@ -576,7 +591,7 @@ def _lower_blocks_this_turn_if_able(
         node=node,
         require_narrowing=False,
     )
-    if described.get("type_filter") != "creature":
+    if not _describes_creatures(described):
         # CR 509.1a is about creatures; a noun phrase this lowering cannot
         # confirm names one would put the mark on a permanent that can never
         # meet the requirement.

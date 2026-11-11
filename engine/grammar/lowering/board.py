@@ -37,8 +37,10 @@ anything but a sacrifice or a regeneration.
 
 import dataclasses
 
-from ...oracle_types import (KEEP_FATES, X_FROM_COUNT,
-                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
+from ...oracle_types import (BUFFED_THIS_WAY_PERMANENTS, DESTROY_CHOSEN,
+                             KEEP_FATES,
+                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+                             OracleInstruction)
 from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
@@ -47,7 +49,8 @@ from ._chosen_members import _lower_sacrifice_one_of_chosen
 from ._filters import testable_filter_payload
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
-                      _is_enchanted, _is_source, player_deed_payload)
+                      _is_enchanted, _is_source, _restrictions_beyond,
+                      player_deed_payload)
 from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_QUANTITIES, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload)
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 
@@ -326,7 +329,26 @@ def _lower_sacrifice(
         and not node.subject.targeted
         and not _is_source(node.subject)
     ):
-        if node.subject.quantifier == "that":
+        if (
+            node.subject.quantifier == "those"
+            and node.player.kind == "you"
+            and BUFFED_THIS_WAY_PERMANENTS in produced
+            and not _restrictions_beyond(
+                node.subject.filter, frozenset({"card_types"})
+            )
+        ):
+            # "Attacking creatures you control get +X/+0 … **Sacrifice those
+            # creatures** at the beginning of the next end step." (Tears of
+            # Rage.) The set the buff in front reached, by its record — no
+            # choice and no noun phrase re-read, so a creature that stopped
+            # attacking still goes and one that started does not.
+            return (
+                OracleInstruction(
+                    "sacrifice_recorded_permanents", "",
+                    {"permanents_from": BUFFED_THIS_WAY_PERMANENTS},
+                ),
+            )
+        if node.subject.quantifier in ("that", "those"):
             # "Sacrifice **that** creature" / "…**the** permanent" outside a
             # delay that bound it. A back-reference names one object the
             # sentence already holds, and this prompt offers a *choice* — so
@@ -334,6 +356,8 @@ def _lower_sacrifice(
             # referent dropped and the card compiling supported. Refused by
             # name instead: measured over the pool, only "a", "any number" and
             # "all" ever reach this prompt, so nothing printed loses support.
+            # "**Those** creatures" is the plural of the same back-reference
+            # (it was read as "a creature" until Tears of Rage asked).
             raise LoweringError(
                 "a back-reference names one object, not a choice for the "
                 "sacrifice prompt", node=node,
@@ -765,6 +789,11 @@ def _lower_keep_chosen_sacrifice_rest(
                 f"no keep prompt performs {node.fate!r}", node=node
             )
         payload["fate"] = node.fate
+        if node.fate == DESTROY_CHOSEN and node.pool.controller is None:
+            # Sundering Titan's "a land": no controller printed, so the lands
+            # of every battlefield (its ruling: "If the only land of a certain
+            # type is one you control, you must choose it").
+            payload["every_battlefield"] = True
     kept = OracleInstruction("keep_chosen_sacrifice_rest", "", payload)
     if not node.discard_same_way:
         return (kept,)

@@ -225,6 +225,12 @@ def _parse_token_name_words(stream: TokenStream) -> str | None:
         # and the clause reaches the reader that answers it.
         if token.text == "for" and stream.peek_word(1) == "each":
             break
+        # "…token **named Twin that's attacking**." (Gemini Engine.) The entry
+        # state behind the name, for the clause above's reason: no token is
+        # named "… that's …", and read on, the token was "Twin That 's
+        # Attacking" and entered untouched by combat.
+        if token.text == "that" and stream.peek_word(1) in ("'s", "are"):
+            break
         parts.append(token.text)
         stream.advance()
     return " ".join(parts) if parts else None
@@ -274,6 +280,11 @@ _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
     # `pronouns._parse_its_controller_creates_rider`'s, which the sentence
     # loop tries before any statement and which this row therefore never meets.
     (("its", "controller"), "controller"),
+    # "Whenever a nontoken creature enters, if this artifact is untapped, **that
+    # creature's controller** creates a 1/1 … Myr …" (Genesis Chamber.) The
+    # row above spelled with the noun, one referent — the pair
+    # ``pronouns._accept_removed_permanents_controller`` reads as one.
+    (("that", "creature", "'s", "controller"), "controller"),
 )
 
 
@@ -662,13 +673,9 @@ def _finish_create_token(
     # "…that are tapped and attacking" (Basri Ket): the tokens' entry state.
     # Both words are recorded — a token entering merely tapped, or merely
     # attacking, would be a different effect wearing the same head.
-    tapped = attacking = False
     # Basri Ket prints the plural ("that are"), Falconer Adept the singular
     # contraction ("that's") — one entry state, two spellings.
-    if stream.accept_phrase("that", "are", "tapped", "and", "attacking") or stream.accept_phrase(
-        "that", "'s", "tapped", "and", "attacking"
-    ):
-        tapped = attacking = True
+    tapped, attacking = _accept_token_entry_state(stream)
 
     # CR 111.4 — the creating ability may set the token's name. When it does
     # not, the name follows from the subtypes, and lowering (not the parser)
@@ -681,6 +688,10 @@ def _finish_create_token(
         if named is None:
             raise stream.error("expected a token name after 'named'")
         name = named
+        # "…named Twin **that's attacking**" (Gemini Engine): the entry state
+        # printed behind the name, read by the same reader as in front of it.
+        if not (tapped or attacking):
+            tapped, attacking = _accept_token_entry_state(stream)
         # "…named Tombspawn **for each creature card in their graveyard**."
         # The same clause at its other printed position, read by the same
         # fragment — a second reader would be a second answer to which sets may
@@ -769,6 +780,20 @@ def _finish_create_token(
     )
 
 
+def _accept_token_entry_state(stream: TokenStream) -> tuple[bool, bool]:
+    """``that are tapped and attacking`` / ``that's attacking`` — a token's
+    entry state as ``(tapped, attacking)``, or ``(False, False)`` with the
+    cursor unmoved. "Tapped and attacking" (Basri Ket) and "attacking" alone
+    (Gemini Engine's Twin, which "enters as an untapped attacking creature",
+    2004-12-01) are two states, and each is recorded as printed."""
+    for verb in ("are", "'s"):
+        if stream.accept_phrase("that", verb, "tapped", "and", "attacking"):
+            return True, True
+        if stream.accept_phrase("that", verb, "attacking"):
+            return False, True
+    return False, False
+
+
 def _parse_token_trigger_sentences(stream: TokenStream) -> tuple[str, ...]:
     """Triggered abilities of the token printed as *unquoted* sentences after it.
 
@@ -829,6 +854,26 @@ def _parse_token_trigger_sentences(stream: TokenStream) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _stated_token_amount(stream: TokenStream) -> "ast.Amount | None":
+    """One half of a token's stated P/T: an ``equal to`` back-reference, or
+    "equal to **this creature's power**" (Gemini Engine) — the ability's own
+    source, read as the token is made (the ruling, 2004-12-01: "Once the token
+    has been created, its power and toughness aren't dependent on Gemini
+    Engine's"). None, cursor unmoved, for anything else."""
+    from ..where_x import accept_source_characteristic
+
+    amount = parse_equal_to(stream)
+    if amount is not None:
+        return amount
+    mark = stream.mark()
+    if stream.accept_phrase("equal", "to"):
+        own = accept_source_characteristic(stream)
+        if own is not None and own.offset == 0:
+            return own
+    stream.reset(mark)
+    return None
+
+
 def parse_create_token_with_stated_pt(stream: TokenStream) -> "ast.CreateToken | None":
     """``Create a <colours> <subtypes> creature token. Its power is equal to
     <A> and its toughness is equal to <B>.`` (Broken Visage.)
@@ -884,14 +929,14 @@ def parse_create_token_with_stated_pt(stream: TokenStream) -> "ast.CreateToken |
     if not stream.accept_phrase("its", "power", "is"):
         stream.reset(mark)
         return None
-    power = parse_equal_to(stream)
+    power = _stated_token_amount(stream)
     if power is None or not stream.accept_word("and"):
         stream.reset(mark)
         return None
     if not stream.accept_phrase("its", "toughness", "is"):
         stream.reset(mark)
         return None
-    toughness = parse_equal_to(stream)
+    toughness = _stated_token_amount(stream)
     if toughness is None:
         stream.reset(mark)
         return None

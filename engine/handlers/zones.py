@@ -23,8 +23,8 @@ from typing import TYPE_CHECKING
 
 from ..exiled_records import source_object
 from ..models import Permanent
-from ..oracle_types import LAST_TARGET_CONTROLLER
-from ._filters import graveyard_card_matches
+from ..oracle_types import CHOSEN_GRAVEYARD_CARD, LAST_TARGET_CONTROLLER
+from ._filters import graveyard_card_matches, graveyard_slots_matching
 from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
                        frozen_that_player_seat, pile_owner_still_a_target,
                        resolve_target_permanent, resolve_target_permanents)
@@ -388,6 +388,11 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
 #: cards are going and the one answer path knows where to put them.
 GRAVEYARD_PICK_TO_LIBRARY_BOTTOM = "library_bottom"
 
+#: The destination of a pick that moves nothing: the card is recorded under
+#: ``CHOSEN_GRAVEYARD_CARD`` for the sentence behind it (Scrounge's "Put
+#: **that card** onto the battlefield …"), and stays where it is.
+GRAVEYARD_PICK_CHOSEN = "chosen"
+
 
 @effect_handler("put_chosen_graveyard_cards_on_library_bottom")
 def put_chosen_graveyard_cards_on_library_bottom(
@@ -410,6 +415,43 @@ def put_chosen_graveyard_cards_on_library_bottom(
     game.arm_graveyard_exile_pick(
         seat, seat,
         {**instruction.payload, "destination": GRAVEYARD_PICK_TO_LIBRARY_BOTTOM},
+        context,
+    )
+    return True, "resolved"
+
+
+@effect_handler("choose_graveyard_card")
+def choose_graveyard_card(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"**Target opponent chooses an artifact card in their graveyard.**"
+    (Scrounge.)
+
+    The chooser's pick of one card out of their own pile, made as the effect
+    resolves through the graveyard pick prompt with nothing moved
+    (``GRAVEYARD_PICK_CHOSEN``): the answer records the card for the sentence
+    behind this one. The seat is ``_chooser_seat``'s answer — the announced
+    opponent (CR 601.2c). A card is chosen whenever the pile holds one (no
+    "up to"); a pile holding none records None and asks nobody, and the
+    sentence behind it then finds nothing to move.
+    """
+    from .permanent_choices import _chooser_seat
+
+    context.results[CHOSEN_GRAVEYARD_CARD] = None
+    seat = _chooser_seat(game, instruction.payload, context)
+    if seat is None:
+        game.log.append(f"{context.card.name}: nobody to choose a card")
+        return True, "resolved"
+    chooser = game.players[seat]
+    if not graveyard_slots_matching(
+        instruction.payload, chooser.graveyard, context.card, game=game, owner=chooser,
+    ):
+        game.log.append(
+            f"{context.card.name}: no card in {chooser.name}'s graveyard to choose"
+        )
+        return True, "resolved"
+    game.arm_graveyard_exile_pick(
+        seat, seat, {**instruction.payload, "destination": GRAVEYARD_PICK_CHOSEN},
         context,
     )
     return True, "resolved"

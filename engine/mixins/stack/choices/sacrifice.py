@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from ....pending_choices import ChoiceSpec, PendingChoice
 from ....oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
-                              KEEP_FATES, RETURN_CHOSEN_TO_HAND)
+                              DESTROY_CHOSEN, KEEP_FATES,
+                              RETURN_CHOSEN_TO_HAND)
 from ....subject_filters import subject_matches
 
 
@@ -242,18 +243,34 @@ class SacrificeChoicesMixin:
     # the partition moves, so the *default* reads the fate; the validation does
     # not.
 
-    def keep_choice_candidates(self, player_index: int, pool: dict) -> list:
+    def keep_choice_candidates(
+        self, player_index: int, pool: dict, *, every_battlefield: bool = False,
+    ) -> list:
         """The seat's own permanents the pool phrase describes.
 
         Its own battlefield and no other, and that is CR 701.21a rather than a
         convenience: a player cannot sacrifice a permanent they do not control,
         so a pool reaching another board would offer keeps whose complement
         could not be taken.
+
+        *every_battlefield* is the one exception, for a fate that moves only
+        the chosen half (Sundering Titan's ``DESTROY_CHOSEN``, whose "a land"
+        prints no controller): every seat's permanents, in seat order.
         """
-        return [
-            perm for perm in self.controlled_by(player_index)
-            if subject_matches(self, perm, pool or {})
-        ]
+        board = (
+            self.all_permanents() if every_battlefield
+            else self.controlled_by(player_index)
+        )
+        return [perm for perm in board if subject_matches(self, perm, pool or {})]
+
+    def keep_candidates_of(self, choice: PendingChoice) -> list:
+        """:meth:`keep_choice_candidates` for an armed prompt, its scope read
+        off the prompt — the one reading the resolver, the default and the
+        web renderer share."""
+        return self.keep_choice_candidates(
+            choice.player_index, choice.data.get("pool") or {},
+            every_battlefield=bool(choice.data.get("every_battlefield")),
+        )
 
     @staticmethod
     def _keep_slot_filters(slots) -> list[dict]:
@@ -393,6 +410,7 @@ class SacrificeChoicesMixin:
     def arm_keep_permanents(
         self, player_index: int, *, pool: dict, slots: list, reason: str,
         fate: str | None = None, batch: dict | None = None,
+        every_battlefield: bool = False,
     ) -> None:
         """Ask *player_index* which of their permanents to keep, then take the
         rest (Cataclysm, Limited Resources).
@@ -413,7 +431,9 @@ class SacrificeChoicesMixin:
         chooses …" — see :meth:`new_keep_batch`. With one, an answer is *held*
         and nothing moves until the last of them is in.
         """
-        candidates = self.keep_choice_candidates(player_index, pool)
+        candidates = self.keep_choice_candidates(
+            player_index, pool, every_battlefield=every_battlefield,
+        )
         if not candidates:
             return
         described = [
@@ -429,6 +449,8 @@ class SacrificeChoicesMixin:
             if not self._match_keeps(candidates, self._keep_slot_filters(described)):
                 return
             extra["fate"] = fate
+            if every_battlefield and fate == DESTROY_CHOSEN:
+                extra["every_battlefield"] = True
         self.arm_pending_choice(
             "keep_permanents", player_index,
             pool=dict(pool or {}),
@@ -468,9 +490,8 @@ class SacrificeChoicesMixin:
         ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
         if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
             return False
-        pool = choice.data.get("pool") or {}
         slot_filters = self._keep_slot_filters(choice.data.get("slots"))
-        live = self.keep_choice_candidates(choice.player_index, pool)
+        live = self.keep_candidates_of(choice)
         kept = []
         for pid in ids:
             perm = self.permanent_by_id(pid)
@@ -562,9 +583,13 @@ class SacrificeChoicesMixin:
         """
         plans: list[tuple[PendingChoice, list, list | None]] = []
         doomed: list = []
+        destroyed: list = []
         for choice, kept in answers:
             if choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
                 plans.append((choice, kept, None))
+                continue
+            if choice.data.get("fate") == DESTROY_CHOSEN:
+                destroyed.append((choice, kept))
                 continue
             live = self.keep_choice_candidates(
                 choice.player_index, choice.data.get("pool") or {}
@@ -585,6 +610,34 @@ class SacrificeChoicesMixin:
                     self._return_the_chosen(choice, kept)
                 else:
                     self._log_the_rest_sacrificed(choice, kept, rest)
+            for choice, chosen in destroyed:
+                self._destroy_the_chosen(choice, chosen)
+
+    def _destroy_the_chosen(self, choice: PendingChoice, chosen: list) -> None:
+        """"…then destroy those lands." (Sundering Titan.) Every chosen
+        permanent destroyed in the one event the caller holds (CR 701.8; the
+        ruling: "they are destroyed simultaneously"), each through its own
+        controller's destroy sweep, so regeneration and indestructible apply."""
+        reason = choice.data.get("reason", "Effect")
+        died: list = []
+        # The caller's event already (re-entrant): stated here as well, so the
+        # loop is one departure whoever calls it (CR 603.10a).
+        with self.leaving_together():
+            for perm in chosen:
+                seat = self.controller_index_of(perm)
+                if seat is None or not self.is_on_battlefield(perm):
+                    continue
+                # The chooser's seat is the effect's controller ("choose" has
+                # no other subject), the seat a destruction announces (CR 109.5).
+                died.extend(self._destroy_swept_permanents(
+                    self.players[seat],
+                    lambda candidate, picked=perm: candidate is picked,
+                    cause=choice.player_index,
+                ))
+        self.log.append(
+            f"{reason} destroyed "
+            + (", ".join(perm.card.name for perm in died) or "nothing")
+        )
 
     def _return_the_chosen(self, choice: PendingChoice, chosen: list) -> None:
         """What was chosen goes to its owner's hand; the rest stays.
@@ -647,10 +700,18 @@ class SacrificeChoicesMixin:
         headless play need, and a seat that should keep its best permanents
         wants a weight in ``engine/ai_valuation.py`` rather than a branch here.
         """
-        pool = choice.data.get("pool") or {}
-        live = self.keep_choice_candidates(choice.player_index, pool)
+        live = self.keep_candidates_of(choice)
         slot_filters = self._keep_slot_filters(choice.data.get("slots"))
-        if choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
+        if choice.data.get("fate") == DESTROY_CHOSEN:
+            # Sundering Titan's destruction: the fewest permanents, and every
+            # other seat's before the chooser's own — the chooser's land is
+            # chosen only where no other seat has one of that type (the
+            # ruling: "If the only land of a certain type is one you control,
+            # you must choose it"). Seat order among the others.
+            own = [p for p in live if self.controller_index_of(p) == choice.player_index]
+            others = [p for p in live if not any(p is mine for mine in own)]
+            picks = self.fewest_keeps(others + own, choice.data.get("slots"))
+        elif choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
             picks = self.fewest_keeps(live, choice.data.get("slots"))
         else:
             picks = list(self._match_keeps(live, slot_filters).values())

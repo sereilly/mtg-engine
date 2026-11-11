@@ -63,6 +63,13 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # never be reached, which is this table's standing longest-first rule.
     ("enters_or_dies",
      r"when (?!(?:a|an|another) )(?:this|.+?) enters(?: the battlefield)? or dies"),
+    # "When this creature enters **or leaves the battlefield**, …" (Sundering
+    # Titan.) The row above with the departure for its second event, announced
+    # at the entry site and at ``leaves_battlefield``'s; above the bare entry
+    # row for the same longest-first reason.
+    ("enters_or_leaves_battlefield",
+     r"when (?!(?:a|an|another) )(?:this|.+?) enters(?: the battlefield)?"
+     r" or leaves(?: the battlefield)?"),
     ("enters_battlefield",
      r"when (?!(?:a|an|another) )(?:this|.+) enters(?: the battlefield)?"),
     # "When this creature is turned face up, …" (CR 702.37e, 708.8; Legions

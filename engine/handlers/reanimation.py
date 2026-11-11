@@ -726,6 +726,11 @@ def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: Or
         # nothing in it says which one to prefer. Reanimating the first would be
         # a choice the card never offers anybody.
         cards = creatures_it_damaged_that_died(context.source_permanent)
+    elif instruction.payload.get("card_from"):
+        # Scrounge's "that card": the card an earlier step's pick recorded
+        # (``oracle_types.CHOSEN_GRAVEYARD_CARD``), None when it found none.
+        card = context.results.get(str(instruction.payload["card_from"]))
+        cards = [card] if card is not None else []
     else:
         card = (context.trigger_context or {}).get("dead_card")
         cards = [card] if card is not None else []
@@ -925,10 +930,16 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
             return True, "resolved"
         game.remove_from_battlefield(source)
     else:
+        # "…from **your** graveyard" (Screams from Within): the controller's
+        # pile alone (its 2004-12-01 ruling).
+        piles = (
+            [game.players[seat]] if instruction.payload.get("from_controller_graveyard")
+            else game.players
+        )
         found = next(
             (
                 (player, index)
-                for player in game.players
+                for player in piles
                 for index, held in enumerate(player.graveyard)
                 if held is card
             ),

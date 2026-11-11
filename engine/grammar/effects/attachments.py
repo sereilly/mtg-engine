@@ -522,3 +522,39 @@ def parse_player_chooses_permanent(
     # branches; the rider that reads "If they don't" is what says so, and it
     # sets the flag through `dataclasses.replace`.
     return ast.ChoosePermanent(chooser, spec, host_for_source=host_for_source)
+
+
+def parse_player_chooses_graveyard_card(
+    stream: TokenStream, chooser: "ast.PlayerRef"
+) -> "ast.ChooseGraveyardCard | None":
+    """``<player> chooses a <card phrase> in their graveyard.`` — the subject
+    already read. (Scrounge.)
+
+    :func:`parse_player_chooses_permanent`'s pick one zone over, which that
+    production refuses by its zone gate. One card, untargeted, out of the
+    **chooser's own** pile — "their" is the seat this sentence names — and the
+    sentence ends there; the act on the card is the next sentence's. Any other
+    pile ("your graveyard", Forgotten Lore's paragraph) or anything after the
+    noun phrase refuses without consuming.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        spec is None
+        or spec.targeted
+        or spec.quantifier not in ("a", "an")
+        or spec.count not in (None, 1)
+        or spec.filter.zone != "graveyard"
+        or not spec.filter.is_card
+        or getattr(spec.filter.zone_owner, "kind", None) != "owner"
+        or not (stream.exhausted or stream.at_punct("."))
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ChooseGraveyardCard(chooser, spec.filter)

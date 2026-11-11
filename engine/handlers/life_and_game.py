@@ -1248,8 +1248,14 @@ def skip_next_turn(game: Game, instruction: OracleInstruction, context: OracleEx
     means (CR 109.5).
     """
     seat = game.seat_index(context.caster)
-    game.skip_next_turn(seat, int(instruction.payload.get("count", 1) or 1))
-    game.log.append(f"{game.players[seat].name} will skip their next turn")
+    count = int(instruction.payload.get("count", 1) or 1)
+    game.skip_next_turn(seat, count)
+    # "…skip your next **two turns**" (Eater of Days) says how many.
+    game.log.append(
+        f"{game.players[seat].name} will skip their next turn"
+        if count == 1 else
+        f"{game.players[seat].name} will skip their next {count} turns"
+    )
     return True, "resolved"
 
 

@@ -29,7 +29,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
+from ...oracle_types import (CHOSEN_GRAVEYARD_CARD, OracleInstruction,
+                             REVEALED_TOP_CARDS_BY_SEAT)
 from ...subject_filters import (SOURCE_COUNTED_MANA_VALUE,
                                 SOURCE_RESOLVED_CARD_KEYS, card_only_filter)
 from .. import ast
@@ -567,7 +568,12 @@ def _lower_put_onto_battlefield(
         # under any other event these words name a card nobody wrote down, and
         # the handler would find nothing while the card compiled supported.
         from_ledger = event == DAMAGED_BY_SOURCE_DIED
-        if not from_ledger and event not in BOUND_CARD_EVENTS:
+        # "Target opponent chooses an artifact card in their graveyard. **Put
+        # that card** onto the battlefield under your control." (Scrounge.) The
+        # card an earlier step of this same effect picked, read off its record
+        # by identity — gated on that step being in front, like the event.
+        from_pick = CHOSEN_GRAVEYARD_CARD in produced
+        if not from_ledger and not from_pick and event not in BOUND_CARD_EVENTS:
             raise LoweringError(
                 "'that card' names the firing event's object, and this event "
                 "records none",
@@ -591,6 +597,8 @@ def _lower_put_onto_battlefield(
             # handler reads either record rather than two kinds doing the same
             # move from two places.
             payload["from_damage_deaths"] = True
+        elif from_pick:
+            payload["card_from"] = CHOSEN_GRAVEYARD_CARD
         if node.sacrifice_when_control_lost:
             # The rider is carried out by the instruction that makes the
             # permanent, because there is no permanent to link until it does

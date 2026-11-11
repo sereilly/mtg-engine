@@ -56,6 +56,8 @@ from __future__ import annotations
 # keys it defines itself.
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              ATTACHED_TO_DESTROYED_TARGET,
+                             BUFFED_THIS_WAY_PERMANENTS,
+                             CHOSEN_GRAVEYARD_CARD,
                              DESTROYED_TARGET_HOST,
                              BIDDING_WINNER,
                              CHOSEN_COLOR_THIS_WAY,
@@ -117,6 +119,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # ``_record_keys.CHOSEN_PERMANENT``. …and the **other** member of the set
     # it was offered (Retribution) — see ``_record_keys.OTHER_CHOSEN_PERMANENT``.
     "choose_permanent": (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT),
+    # Scrounge's pick — see ``oracle_types.CHOSEN_GRAVEYARD_CARD``.
+    "choose_graveyard_card": CHOSEN_GRAVEYARD_CARD,
+    # Tears of Rage's "those creatures" — ``oracle_types.BUFFED_THIS_WAY_PERMANENTS``.
+    "buff_creatures_global": BUFFED_THIS_WAY_PERMANENTS,
     # "…**Those creatures** gain haste until end of turn." (Reins of Power.)
     # Every creature the swap moved, both directions — by then the two sets
     # have changed hands, so neither printed seat phrase names them. See

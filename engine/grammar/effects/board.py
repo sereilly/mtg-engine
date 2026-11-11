@@ -760,3 +760,48 @@ def parse_choose_each_then_return(
         tuple(ast.KeepSlot(1, described) for described in each),
         fate="return_chosen_to_hand",
     )  # parse_choose_each_then_return
+
+
+def parse_choose_each_then_destroy(
+    stream: TokenStream,
+) -> "ast.KeepChosenSacrificeRest | None":
+    """``Choose <a permanent> of each <characteristic>, then destroy those
+    <permanents>.`` — the bare imperative, so the chooser is the effect's
+    controller. (Sundering Titan.)
+
+    :func:`parse_choose_each_then_return`'s sibling with the other fate for
+    the chosen half: the same one-slot-per-value list from the one reader of
+    "of each basic land type" (``distinct.accept_one_of_each``), so a land with
+    two basic types may stand for both (the card's ruling, 2020-08-07). "Those
+    <noun>" must repeat the slot's noun and add nothing, and the clause ends
+    the sentence; anything else refuses without consuming.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+    slot = _accept_keep_slot(stream)
+    each = (
+        accept_one_of_each(stream, slot.filter)
+        if slot is not None and slot.count == 1 else None
+    )
+    stream.accept_punct(",")
+    if each is None or not (
+        stream.accept_word("then") and stream.accept_phrase("destroy", "those")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        named = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if named != dataclasses.replace(slot.filter, controller=None) or not (
+        stream.exhausted or stream.at_punct(".", ";")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.KeepChosenSacrificeRest(
+        ast.PlayerRef("you"), slot.filter,
+        tuple(ast.KeepSlot(1, described) for described in each),
+        fate="destroy_chosen",
+    )

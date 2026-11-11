@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from ..destruction_events import mark_delayed_destruction
 from ..face_down import permanent_name
 from ..models import Permanent
-from ..oracle_types import LAST_TARGET_NAME
+from ..oracle_types import BUFFED_THIS_WAY_PERMANENTS, LAST_TARGET_NAME
 from ..pt import add_pt_modifier, pt_change_text
 from ..source_tapped_effects import record_while_tapped
 from ..keywords import grant_keyword
@@ -496,6 +496,11 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
     toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
     affected = global_buff_affected(game, instruction, context)
+    # "…**Sacrifice those creatures** at the beginning of the next end step."
+    # (Tears of Rage.) The set this buff reached, by id, written even when empty.
+    context.results[BUFFED_THIS_WAY_PERMANENTS] = tuple(
+        perm.permanent_id for perm in (affected or ())
+    )
     if affected is None:
         return True, "resolved"
     for perm in affected:

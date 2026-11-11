@@ -597,6 +597,15 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         # does — it is CR 109.5's answer already resolved, and a scan would
         # differ from it under a control change.
         seat = game.players.index(context.caster)
+    elif whose == "target":
+        # "**Target opponent** reveals cards …" (Thought Dissector): the seat
+        # the activation announced (CR 601.2c), gone if it has left the game.
+        chosen = context.target
+        seat = (
+            game.players.index(chosen)
+            if chosen is not None and chosen in game.players and not chosen.lost
+            else None
+        )
     else:
         seat = context.results.get(whose)
     if seat is None:
@@ -630,14 +639,25 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
 
     revealed: list = []
     found = None
+    # "…until an artifact card **or X cards** are revealed, whichever comes
+    # first." (Thought Dissector.) The second stop: a run that has turned over
+    # this many cards with no match ends there — the match itself counted
+    # among them when it is the last one (it is "revealed" either way).
+    limit = payload.get("limit")
+    if limit is not None:
+        limit = max(0, int(context.x_value or 0) if limit == "x" else int(limit))
     # The run stops on the match **without taking it**: it is still the top
     # card when the sentence moves it (CR 701.20b), so a card the move cannot
     # make is a card that never left.
-    while player.library:
+    while player.library and (limit is None or len(revealed) < limit):
         if matches(player.library[0]):
             found = player.library[0]
             break
         revealed.append(player.library.pop(0))
+    if revealed and limit is not None:
+        # Thought Dissector's pile is public as it is turned over; recorded
+        # for that run alone, so every other run's reveal record is as it was.
+        game.record_reveal(seat, [card.name for card in revealed])
 
     if found is not None:
         game.log.append(f"{player.name} revealed {found.name}")
@@ -647,14 +667,42 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
             # battlefield": the run may stop on a Kindred instant of the type,
             # which CR 400.4a leaves on top of the library, above "the rest",
             # which still go where the card sends them (CR 609.3).
-            if not stays_out_of_battlefield(game, found, player, "library"):
+            #
+            # "…under **your** control" (Thought Dissector): the effect's
+            # controller, with the owner recorded (CR 108.3), the arrangement
+            # every "under your control" reanimation makes.
+            to_seat = (
+                game.players.index(context.caster)
+                if payload.get("under_your_control") else seat
+            )
+            if not stays_out_of_battlefield(game, found, player, "library", seat=to_seat):
                 player.library.pop(0)
+                arriving = Permanent(card=found)
+                if to_seat != seat:
+                    arriving.metadata["owner_player_index"] = seat
                 game._put_permanent_onto_battlefield(
-                    seat, Permanent(card=found), None, from_zone="library",
+                    to_seat, arriving, None, from_zone="library",
                 )
+            # "…**and sacrifice this artifact**." Only with a find, and only if
+            # the source is still there to sacrifice — the card's ruling
+            # (2004-12-01): the artifact card comes in "even if Thought
+            # Dissector has already left the battlefield and you can't
+            # sacrifice it."
+            source = context.source_permanent
+            if (
+                payload.get("sacrifice_source_on_find")
+                and source is not None and game.is_on_battlefield(source)
+                and game.controller_index_of(source) == game.players.index(context.caster)
+            ):
+                game.sacrifice_permanent(source)
+                game.log.append(f"{context.card.name} was sacrificed")
         else:
             player.library.pop(0)
             game.put_card_into_hand(player, found)
+    elif limit is not None and len(revealed) >= limit:
+        game.log.append(
+            f"{player.name} revealed {len(revealed)} card(s) and found nothing"
+        )
     else:
         game.log.append(f"{player.name} revealed their library and found nothing")
 

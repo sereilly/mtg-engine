@@ -32,6 +32,7 @@ from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
                       CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS)
+from ._piles import one_card_pile_pick
 from ._seats import _CHOOSER_SEATS
 
 
@@ -838,3 +839,34 @@ _ANNOUNCED_CHOOSERS: dict[str, dict] = {
 }
 
 
+def _lower_choose_graveyard_card(
+    node: ast.ChooseGraveyardCard,
+) -> tuple[OracleInstruction, ...]:
+    """"**Target opponent** chooses an artifact card in their graveyard."
+    (Scrounge.)
+
+    ``choose_graveyard_card``: the chooser's pick of one card out of their own
+    pile, made as the effect resolves through the graveyard pick prompt, its
+    card recorded for the sentence behind it (``CHOSEN_GRAVEYARD_CARD``). The
+    narrowing is ``one_card_pile_pick``'s — one card type or none, a colour,
+    "other than this card" — so the candidate rule is the graveyard exile
+    pick's own, and anything wider refuses.
+
+    Only an **announced** chooser: the seat is a target (CR 601.2c), so the
+    picker offers it and ``_chooser_seat`` reads it back. Any other seat would
+    need a reader this does not have, and a guessed seat is a decision taken
+    from the wrong player.
+    """
+    announced = _ANNOUNCED_CHOOSERS.get(node.chooser.kind)
+    if announced is None:
+        raise LoweringError(
+            f"no prompt asks {node.chooser.kind!r} to choose a card in their "
+            "graveyard",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        **one_card_pile_pick(node.filter, "chooser", node),
+        "chooser": _CHOOSER_SEATS[node.chooser.kind],
+        "targets": dict(announced),
+    }
+    return (OracleInstruction("choose_graveyard_card", "", payload),)
