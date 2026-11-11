@@ -85,6 +85,16 @@ class ManaRestriction:
 
 
 def _type_line(obj) -> str:
+    """A *card*'s printed type line: the spell being cast, or a card in a hand
+    or graveyard whose ability is activated there.
+
+    Printed, and not because CR 613 stops at the battlefield — it does not
+    (CR 613.1 is about every object, and CR 611.2f's effects modify a spell's
+    characteristics) — but because no card in the pool changes the card type
+    of a spell or of a card outside the battlefield, so the printed line is
+    the whole of what a type question there can get. A permanent is asked
+    through the layers instead (:func:`_activating_an_artifact_ability`).
+    """
     return (getattr(obj, "type_line", "") or "").lower()
 
 
@@ -157,13 +167,21 @@ def _activating_an_artifact_ability(purpose: "PaymentPurpose") -> bool:
     Machinist.)
 
     Read off the permanent whose ability it is, through what that permanent
-    *effectively* is: an artifact animated into a creature is still an artifact
-    (CR 205.1b), and a permanent a type change made one counts for the same
-    reason.
+    *is* — every layer, CR 613.1d's type changes included: an artifact
+    animated into a creature is still an artifact (CR 205.1b), a land under
+    Mycosynth Lattice is one, and an artifact creature Neurok Transmuter made
+    "isn't an artifact" is not (CR 205.1a). This read ``effective_card``,
+    which is layers 1 and 3 only, so the Lattice's Blinkmoth Nexus could not
+    be paid for and the Transmuter's stripped Sentinel could. A card in a
+    hand or graveyard (an ability activated there) has no permanent and is
+    read printed (:func:`_type_line`).
     """
+    if purpose.kind != ACTIVATE:
+        return False
     source = purpose.source
-    effective = getattr(source, "effective_card", None) or source
-    return purpose.kind == ACTIVATE and "artifact" in _type_line(effective)
+    if hasattr(source, "has_type"):
+        return bool(source.has_type("artifact"))
+    return "artifact" in _type_line(source)
 
 
 def _artifact_spell_or_artifact_ability(purpose: "PaymentPurpose") -> bool:
