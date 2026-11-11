@@ -120,6 +120,45 @@ def test_w1g2_whispersilk_cloak_unblockable_and_shroud(set_pool):
     _w1g2_settle(game)
     assert bears not in game.controlled_by(0)
 
+
+def test_w1g2_shield_of_kaldra_makes_the_named_equipment_indestructible(set_pool):
+    """"Equipment named Sword of Kaldra, Shield of Kaldra, and Helm of Kaldra
+    have indestructible." Every name on the list, whoever controls it (the
+    sentence names no controller), and nothing off it; and "Equipped creature
+    has indestructible" on the creature it equips."""
+    dst, mrd, lea = set_pool("DST"), set_pool("MRD"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    shield = _w1g2_put(game, dst["Shield of Kaldra"], 0)
+    sword = _w1g2_put(game, mrd["Sword of Kaldra"], 1)
+    scimitar = _w1g2_put(game, mrd["Leonin Scimitar"], 1)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    assert shield.has_keyword("indestructible")
+    assert sword.has_keyword("indestructible")
+    assert not scimitar.has_keyword("indestructible")
+    assert not bears.has_keyword("indestructible")
+
+    game.players[0].hand = [lea["Shatter"], lea["Shatter"], lea["Shatter"]]
+    for victim in (sword, shield, scimitar):
+        result = game.cast_from_hand(0, "Shatter", target_permanent_ids=[victim.permanent_id])
+        assert result.supported, result
+        _w1g2_settle(game)
+    assert sword in game.controlled_by(1)
+    assert shield in game.controlled_by(0)
+    assert scimitar not in game.controlled_by(1)
+
+    _w1g2_equip(game, 0, shield, bears)
+    assert bears.has_keyword("indestructible")
+    game.players[0].hand = [lea["Terror"]]
+    result = game.cast_from_hand(0, "Terror", target_permanent_ids=[bears.permanent_id])
+    assert result.supported, result
+    _w1g2_settle(game)
+    assert bears in game.controlled_by(0)
+
+    # The Shield leaving takes the Sword's indestructible with it (CR 611.3b).
+    game.remove_from_battlefield(shield)
+    _w1g2_settle(game)
+    assert not sword.has_keyword("indestructible")
+
 # ==== end W1G2 ======================================================
 
 

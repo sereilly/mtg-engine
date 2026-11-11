@@ -728,11 +728,27 @@ def aura_anthem_claim(normalized_line: str) -> str | None:
     ``lord_buff`` instruction is what the recompute reads. A claim in the wrong
     one of the two would leave the Aura supported with no instruction behind it.
     """
-    from .lord_buffs import lord_buff_for
+    from .lord_buffs import LORD_BUFF_KIND, lord_buff_for
 
-    if lord_buff_for(normalized_line) is None:
-        return None
-    return "board-wide anthem — lord_buffs, applied by _recalculate_lord_buffs"
+    if lord_buff_for(normalized_line) is not None:
+        return "board-wide anthem — lord_buffs, applied by _recalculate_lord_buffs"
+    # …or the grammar's lowering of the same anthem, which reads noun phrases
+    # the text table does not ("Equipment named Sword of Kaldra, Shield of
+    # Kaldra, and Helm of Kaldra have indestructible", Shield of Kaldra) and
+    # hands the recompute the one ``lord_buff`` it reads. Every instruction
+    # the line lowers to must be one, so nothing else rides the claim.
+    from .grammar import ast as grammar_ast
+    from .grammar import compile_line
+
+    compiled = compile_line(normalized_line)
+    if (
+        compiled.parse_error is None and compiled.lowering_error is None
+        and isinstance(compiled.node, grammar_ast.StaticAbilityNode)
+        and compiled.instructions
+        and all(i.kind == LORD_BUFF_KIND for i in compiled.instructions)
+    ):
+        return "board-wide anthem — grammar lord_buff, applied by _recalculate_lord_buffs"
+    return None
 
 
 #: The instruction kinds a *static* line printed about the attached permanent

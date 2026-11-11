@@ -305,6 +305,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # count over every card in the graveyard.
     if self.named:
         payload["named"] = self.named
+    if self.named_among:
+        payload["named_among"] = list(self.named_among)
     # The two negatives beside it, each emitted so that every gate asking
     # "are all this payload's keys testable?" sees the narrowing — a
     # dropped exclusion on a condition is a static that holds on a board the

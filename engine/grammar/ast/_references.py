@@ -223,6 +223,13 @@ class ObjectFilter:
     #: which holds the seat "your" names; the pure matcher refuses it.
     power_vs_count: "Comparison | None" = None
     named: str | None = None
+    #: "Equipment **named Sword of Kaldra, Shield of Kaldra, and Helm of
+    #: Kaldra**" (Shield of Kaldra): a printed list of names, any one of
+    #: which the object answers to. Its own field rather than ``named``
+    #: with commas, so a reader of one name never reads a list as one;
+    #: emitted as ``named_among``, which no permanent matcher tests, so only
+    #: a consumer that carries it (``engine/lord_buffs.py``) admits it.
+    named_among: tuple[str, ...] = ()
     #: "…a creature with flying **not named Escaped Shapeshifter**" — the
     #: negative of ``named``, when the excluded name is spelled out. A name
     #: rather than an identity, so a second copy of the card is excluded too
