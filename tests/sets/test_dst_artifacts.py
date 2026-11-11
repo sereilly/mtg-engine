@@ -180,10 +180,10 @@ def test_w1g2_heartseeker_grants_destroy_and_unattaches_as_its_cost(set_pool):
     """'Equipped creature gets +2/+1 and has "{T}, Unattach Heartseeker:
     Destroy target creature."' The ability is the creature's (2004-12-01: the
     equipped creature's controller activates it, and it can target a creature
-    with protection from artifacts); "Unattach Heartseeker" moves the
+    with protection from artifacts). "Unattach Heartseeker" moves the
     Equipment off and leaves it on the battlefield (CR 701.3d) as the cost is
-    paid, so the +2/+1 is gone before the ability resolves — and the ability,
-    once activated, resolves however the Equipment moves after (CR 113.7a)."""
+    paid, so the +2/+1 is gone before the ability resolves. Once on the stack
+    the ability exists independently of where the Equipment goes after."""
     from engine.targeting import derive_activation_spec
 
     dst, mrd, lea = set_pool("DST"), set_pool("MRD"), set_pool("LEA")
