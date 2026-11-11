@@ -368,14 +368,28 @@ def _controls_noun_condition(text: str) -> dict[str, object] | None:
     if not rest:
         return None
     counted: dict[str, object] = {}
+    other: dict[str, object] = {}
     if article == "no":
         counted = {"count": 0, "op": "eq"}
+    elif article == "another" and who == "you":
+        # "…as long as you control **another** artifact creature" (Darksteel's
+        # Drill-Skimmer). The article carries CR 113.7's source exclusion —
+        # the grammar's condition reader folds the same word onto
+        # ``other_than_source`` (``condition_counts``), whose payload is
+        # ``exclude_self`` — and ``conditional_static_holds`` hands the pivot
+        # to ``subject_matches`` as *source*, so the creature never counts
+        # itself. Your own board only: the opponent iteration scopes by seat
+        # and asks no observer, and "an opponent controls another …" is a
+        # sentence nothing prints.
+        other = {"exclude_self": True}
     elif article not in ("a", "an"):
         return None
     payload = _noun_phrase_payload(rest)
     if not payload:
         return None
-    return {"kind": "controls", "who": who, "filter": payload, **counted}
+    return {
+        "kind": "controls", "who": who, "filter": {**payload, **other}, **counted,
+    }
 
 
 def _parse_effect_text(text: str) -> dict[str, object] | None:
@@ -426,12 +440,19 @@ def _protection_list(text: str) -> list[str] | None:
     one. The words are validated through ``keywords.protection_quality`` — the
     same reader that answers the board — so a quality the shield cannot model
     refuses the line instead of compiling into a static that protects nobody.
+
+    A member may be CR 702.16h/i shorthand for several abilities — "…has
+    protection from artifacts and **from each color**" (Pristine Angel) — so
+    each is asked of ``keywords.protection_qualities_named``, the reader the
+    printed-line gate and ``mixins/protection._protection_qualities`` both
+    ask, rather than of the one-quality reader beneath it: the gate and the
+    shield then read one sentence out of one phrase.
     """
-    from .keywords import protection_quality
+    from .keywords import protection_qualities_named
 
     words = [part.strip() for part in re.split(r",|\band from\b|\band\b", text)]
     words = [word for word in words if word]
-    if not words or any(protection_quality(word) is None for word in words):
+    if not words or any(protection_qualities_named(word) is None for word in words):
         return None
     return words
 

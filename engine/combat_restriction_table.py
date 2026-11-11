@@ -69,6 +69,8 @@ _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 #   cant_be_blocked_except_by       phases/block_legality
 #   matching_cant_be_blocked_except_by
 #                                   phases/block_legality (a board scan)
+#   matching_cant_be_blocked        phases/block_legality (a board scan)
+#                                   + legality.is_unblockable
 #   cant_block_subject              phases/block_legality
 #                                   (also the first half of "can't block or be
 #                                   blocked by", whose second half is
@@ -888,6 +890,19 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
             r"(?P<count>\w+) creatures?$"
         ),
         "matching_cant_be_blocked_by_more_than",
+    ),
+    (
+        # "Each creature you control can't be blocked **as long as defending
+        # player controls an artifact land**." (Tanglewalker.) Phantom
+        # Warrior's restriction printed on a permanent about a described set,
+        # so it is found by a board scan rather than read off the attacker's
+        # program — its own kind for the Familiar Ground row's reason above,
+        # and in ``CONDITIONAL_RESTRICTION_KINDS`` because the qualifier
+        # (stripped by ``_AS_LONG_AS`` first) is what makes it the card. The
+        # ``$`` keeps "…can't be blocked by more than one creature" on the row
+        # above; "each" is stripped here for that row's reason.
+        re.compile(r"^each (?P<unblockable_subject>.+) can't be blocked$"),
+        "matching_cant_be_blocked",
     ),
     (
         # "…can't be blocked by **Walls**" (Invisibility's mirror), "…by

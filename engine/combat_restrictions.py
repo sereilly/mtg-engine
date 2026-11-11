@@ -197,7 +197,13 @@ CONDITIONAL_RESTRICTION_KINDS: frozenset[str] = frozenset(
     # unconditionally is a board where the picker offers no block and the step
     # would have allowed one — the two disagreeing, which that predicate's own
     # docstring says is the failure it exists to prevent.
-    {"cant_be_blocked", "cant_be_blocked_by", "cant_attack", "cant_block"}
+    #
+    # ``matching_cant_be_blocked`` (Tanglewalker) is the board-scan twin of
+    # ``cant_be_blocked`` and has the same two readers, both of which ask.
+    {
+        "cant_be_blocked", "cant_be_blocked_by", "cant_attack", "cant_block",
+        "matching_cant_be_blocked",
+    }
 )
 
 
@@ -771,6 +777,16 @@ def combat_restriction_for(
         blocked_more_subject = payload.pop("blocked_more_subject", None)
         if blocked_more_subject is not None:
             described = _printed_noun(blocked_more_subject)
+            if described is None:
+                return None
+            payload["subject"] = described
+        # "Each **creature you control** can't be blocked …" (Tanglewalker).
+        # The same reader and the same refusal, and a dropped narrowing would
+        # make every creature on the table unblockable, the defender's own
+        # included.
+        unblockable_subject = payload.pop("unblockable_subject", None)
+        if unblockable_subject is not None:
+            described = _printed_noun(unblockable_subject)
             if described is None:
                 return None
             payload["subject"] = described
