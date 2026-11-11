@@ -563,6 +563,9 @@ _NUMBER_WORDS = {
     "eight": 8,
     "nine": 9,
     "ten": 10,
+    # "When this artifact has **twenty** or more charge counters on it"
+    # (Darksteel Reactor): the threshold the trigger-condition table reads.
+    "twenty": 20,
 }
 
 

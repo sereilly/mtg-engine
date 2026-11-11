@@ -48,7 +48,7 @@ from ._filters import testable_filter_payload
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, player_deed_payload)
-from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload)
+from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_QUANTITIES, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload)
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 
 
@@ -420,6 +420,21 @@ def _lower_sacrifice(
             # not control and answer zero every time.
             payload["count"] = "x"
             payload[X_FROM_COUNT] = {"source_counters": node.count.kind}
+        elif isinstance(node.count, ast.EachLifeLost):
+            # "Whenever you lose life, sacrifice a permanent for each 1 life
+            # you lost." (Lich's Tomb.) The firing loss, frozen by the sweep
+            # that announced it — the trigger channel Phyrexian Negator's
+            # "sacrifice that many permanents" already reads, one number for
+            # the one payer. Refused under an event that records no loss and
+            # over any unit but 1, for ``loops._lower_for_each_life_lost``'s
+            # reasons: an unrecorded number reads as zero.
+            key = _EVENT_QUANTITIES.get(event or "") if event == "you_lose_life" else None
+            if key is None or node.count.per != 1:
+                raise LoweringError(
+                    "a sacrifice per 1 life lost needs the loss its event "
+                    "recorded", node=node,
+                )
+            payload["amount_from_trigger"] = key
         elif node.count is not None:
             payload[X_FROM_COUNT_PER_RECIPIENT] = _per_payer_count(node)
         elif node.subject.quantifier == "any_number":

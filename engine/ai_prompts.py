@@ -1668,6 +1668,8 @@ def choose_amount_paid(game: Game, choice) -> int:
     limit = sum(max(0, int(v)) for v in player.mana_pool.values()) + 2 * len(lands)
     if worth is not None:
         limit = min(limit, worth)
+    if isinstance(choice.data.get("maximum"), int):
+        limit = min(limit, choice.data["maximum"])  # the printed ceiling (Well of Lost Dreams)
     affordable = 0
     for amount in range(1, limit + 1):
         if game.effect_payment_plan(player, generic_cost(amount), lands=lands) is None:
@@ -1730,6 +1732,11 @@ def _amount_worth_paying(game: Game, choice) -> "int | None":
             # amount but the board's.
             worth = None
             continue
+        if step.kind == "draw_controller_cards":
+            # "…you may pay {X}. If you do, draw X cards." (Well of Lost
+            # Dreams.) A card per mana for the payer, short of emptying the
+            # library it draws from.
+            return max(0, len(game.players[seat].library) - 1)
         if step.kind == "create_token" and payload.get("recipient_players") in (
             None, "each_player",
         ):

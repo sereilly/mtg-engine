@@ -70,6 +70,7 @@ from ._events import (
     _DEFENDING_PLAYER_EVENTS,
     _EVENT_QUANTITIES,
     _EVENT_SUBJECT_CONTROLLERS,
+    _LIFE_GAINED_EVENTS,
     LOOP_BOUND_OBJECT,
     SWEPT_CONTROLLER_SEATS,
     _EVENT_SUBJECT_PLAYERS,
@@ -81,17 +82,20 @@ from ._events import (
 )
 
 
-#: The events whose firing is a **life gain** and that freeze how much
-#: (``_EVENT_QUANTITIES``' ``life_gained``): "whenever you gain life" (Vito)
-#: and "whenever a player gains life" (False Cure's delayed ability).
-_LIFE_GAINED_EVENTS = frozenset({"you_gain_life", "player_gains_life"})
-
-
 #: The recipients "loses <a fraction of> their life" has one answer per seat
 #: for. A count taken against one of them and applied to all of them is the
 #: dropped-rider bug with an arithmetic face, so the fraction travels on the
 #: per-recipient channel for these and on the ordinary one for the rest.
 _PER_SEAT_LIFE_RECIPIENTS = frozenset({"each_player", "each_opponent"})
+
+#: The one-seat subjects a "for each … **they** control" loss counts on: the
+#: pronoun's antecedent is the clause's own subject, which for these is a seat
+#: the resolution names — chosen (CR 115.1), frozen by the firing event
+#: (CR 603.10) or the defender (CR 506.2). "You" prints "you control", and is
+#: the shared-channel branch's.
+_ONE_SEAT_COUNTED_LOSERS = frozenset({
+    "target_player", "target_opponent", "that_player", "defending_player",
+})
 
 #: The back-references that name **one number per seat** — a ``{seat: n}`` map
 #: an earlier step of the same effect wrote as each player answered it. "Each
@@ -696,6 +700,25 @@ def _lower_lose_life(
                     "recipient": node.player.kind,
                 }),
             )
+    # "**Target player** loses 1 life for each tapped artifact **they**
+    # control." (Burden of Greed.) "…**that player** loses 1 life for each
+    # artifact they control." (Emissary of Despair.) The branch above with a
+    # loop of one: "they" is the clause's own subject, so the count is the
+    # losing seat's board whichever seat that turns out to be — the
+    # per-recipient channel counts against each victim the handler names, so
+    # the count and the loss cannot land on two players. The recipient is then
+    # whatever the subject branches below make of the subject, each with the
+    # gate it already puts in front of its word.
+    one_seat_count = (
+        isinstance(node.per_each, ast.ObjectFilter)
+        and node.player.kind in _ONE_SEAT_COUNTED_LOSERS
+        and isinstance(node.amount, ast.Fixed)
+        and seat_scoped_count_spec(
+            node.per_each, node, multiplier=node.amount.value
+        )
+    )
+    if one_seat_count:
+        payload = {"amount": "x", X_FROM_COUNT_PER_RECIPIENT: one_seat_count}
     # "Target opponent loses 2 life **for each Swamp you control**." (Last
     # Stand.) The count is the effect's controller's own board — one number
     # whoever loses the life, so it is the shared ``x_from_count`` channel with
@@ -710,7 +733,9 @@ def _lower_lose_life(
     # reads the phrase into ``owner: "all"`` exactly as it does for Wellwisher's
     # gain. It fell to the graveyard branch below and refused there, because
     # that branch is the only other reader of a per-each count.
-    if (
+    if one_seat_count:
+        pass
+    elif (
         isinstance(node.per_each, ast.ObjectFilter)
         and node.per_each.zone == "battlefield"
         and (

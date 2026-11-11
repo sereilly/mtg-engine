@@ -229,6 +229,15 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
         return None
     if not (stream.accept_word("x") and stream.accept_word("is")):
         raise stream.error("expected 'X is' after 'where'")
+    # "…you may pay {X}, where X is **less than or equal to the amount of life
+    # you gained**." (Well of Lost Dreams.) A ceiling on an X the payer
+    # chooses (CR 107.3f), not a definition — its own node, so a lowering that
+    # reads definitions refuses it rather than fixing X at the bound. The one
+    # bound printed is the firing gain (``ast.EachLifeGained``'s count).
+    if stream.accept_phrase("less", "than", "or", "equal", "to"):
+        if stream.accept_phrase("the", "amount", "of", "life", "you", "gained"):
+            return ast.ChosenXAtMost(ast.EachLifeGained(per=1))
+        raise stream.error("expected the bound an X may not exceed")
     defined = _parse_where_x_alternatives(stream)
     # "…where X is the number of cards in your hand **minus the number of cards
     # in that player's hand**." (Bulwark.) A second whole definition on the far

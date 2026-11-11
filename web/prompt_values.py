@@ -539,6 +539,11 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     # A land may add more than one mana a tap (Ancient Tomb's {C}{C}), which
     # the plan counts (``Game.effect_payment_plan``): two a land bounds it.
     limit = sum(max(0, int(v)) for v in player.mana_pool.values()) + 2 * len(lands)
+    # …and a printed ceiling on the X, when the card has one (Well of Lost
+    # Dreams): the resolver rejects an answer above it.
+    ceiling = choice.data.get("maximum")
+    if isinstance(ceiling, int):
+        limit = min(limit, ceiling)
     for amount in range(1, limit + 1):
         if ctx.game.effect_payment_plan(seat, generic_cost(amount), lands=lands) is None:
             break
@@ -557,6 +562,11 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
         # player may pay any amount of mana" (Liege of the Hollows): one
         # answer, two printed sentences, and the panel says the one printed.
         **({"pays_x": True} if choice.data.get("pays_x") else {}),
+        # The printed ceiling itself, when the card has one (Well of Lost
+        # Dreams: "X is less than or equal to the amount of life you
+        # gained"), so a panel can say why the buttons stop where they do;
+        # ``maximum`` above is already held under it.
+        **({"ceiling": ceiling} if isinstance(ceiling, int) else {}),
     }
 
 

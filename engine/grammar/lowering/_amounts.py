@@ -27,7 +27,13 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import dropped_narrowings
 from ._events import (CAST_SPELL_EVENTS, _EVENT_SUBJECT_PLAYERS,
-                      EVENT_SUBJECT_PLAYER)
+                      EVENT_SUBJECT_PLAYER, frozen_seat_record)
+
+#: The count scope of "…**that player** controls" under an event that froze
+#: the seat a damage event hit — the record name ``frozen_seat_record`` gives
+#: the phrase under such an event, so the count and every other reader of the
+#: words share one spelling.
+DAMAGED_PLAYER_SCOPE = "damaged_player"
 
 
 # ---------------------------------------------------------------------------
@@ -160,16 +166,29 @@ def count_filter_on_frozen_seat(
     at nobody, and the count would fall back to the caster's board while the
     card compiled clean.
 
+    "…you gain 1 life for each artifact **that player** controls" under
+    "whenever this creature deals combat damage to a player" (Emissary of
+    Hope) is the same quantity one fire site over: the seat the damage hit,
+    which the damage seam freezes under its own key (CR 603.10) and every other
+    reader of the printed "that player" under such an event already asks for
+    (``frozen_seat_record``). It rides ``zone_owner`` as
+    :data:`DAMAGED_PLAYER_SCOPE`, the scope ``count_from_payload`` resolves
+    through ``frozen_that_player_seat``.
+
     A filter that does not name the seat comes back unchanged.
     """
     if filt.controller != "that_player":
         return filt
-    if event not in _EVENT_SUBJECT_PLAYERS:
+    if event in _EVENT_SUBJECT_PLAYERS:
+        seat = EVENT_SUBJECT_PLAYER
+    elif frozen_seat_record("that_player", event) == DAMAGED_PLAYER_SCOPE:
+        seat = DAMAGED_PLAYER_SCOPE
+    else:
         raise LoweringError(
             "'that player' in a count with no player target to name", node=node
         )
     return dataclasses.replace(
-        filt, controller=None, zone_owner=ast.PlayerRef(EVENT_SUBJECT_PLAYER),
+        filt, controller=None, zone_owner=ast.PlayerRef(seat),
     )
 
 

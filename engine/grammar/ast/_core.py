@@ -801,6 +801,21 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
+@dataclass(frozen=True)
+class ChosenXAtMost:
+    """"…you may pay {X}, **where X is less than or equal to** the amount of
+    life you gained." (Well of Lost Dreams.)
+
+    Not a definition of X but a **ceiling** on it: CR 107.3f leaves an X no
+    cost defines to the controller to choose, and this clause bounds that
+    choice. A where-clause node of its own so that every lowering which reads
+    a definition refuses it by not knowing it — a ceiling read as a definition
+    would be an X fixed at the bound, which is a different card. *bound* is the
+    quantity the X may not exceed.
+    """
+    bound: "Amount"
+
+
 Amount = Union[Fixed, Var, CountOf, GreatestManaValueAmong, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ChosenNumberAsCast, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 

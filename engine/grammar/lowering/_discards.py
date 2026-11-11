@@ -294,6 +294,14 @@ def each_player_discard(node: ast.Discard) -> tuple[OracleInstruction, ...]:
                 {"actor": node.player.kind, "any_number": True},
             ),
         )
+    if isinstance(node.count, ast.Var):
+        # "Each player loses X life, **discards X cards**, …" (Death Cloud.)
+        # The cast's X (CR 107.3a), one number for every seat — the handler
+        # sizes each seat's prompt through ``resolve_amount``, so it is the
+        # printed-count payload with the letter in it.
+        return (
+            OracleInstruction("each_player_discards_a_card", "", {"amount": "x"}),
+        )
     if not isinstance(node.count, ast.Fixed):
         raise LoweringError("each-player discards have a one-card handler", node=node)
     # A printed 1 keeps the empty payload every card written before the

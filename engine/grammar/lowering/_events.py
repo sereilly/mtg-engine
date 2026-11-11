@@ -389,6 +389,15 @@ _EVENT_QUANTITIES: dict[str, str] = {
 }
 
 
+#: The events whose firing is a **life gain** and that freeze how much
+#: (``_EVENT_QUANTITIES``' ``life_gained``): "whenever you gain life" (Vito)
+#: and "whenever a player gains life" (False Cure's delayed ability). On the
+#: floor because two families gate on it — a loss counted per 1 life gained
+#: (``life``) and a chosen X bounded by the gain (``where_x``, Well of Lost
+#: Dreams) — and two copies would be two answers to which events froze one.
+_LIFE_GAINED_EVENTS = frozenset({"you_gain_life", "player_gains_life"})
+
+
 def trigger_quantity_key(event: str | None) -> str | None:
     """The trigger context key *event* freezes its number under, or None.
 

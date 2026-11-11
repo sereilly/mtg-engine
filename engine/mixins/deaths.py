@@ -496,9 +496,17 @@ class DeathsMixin:
         so. Death that loses the game still ranks first (Lich beside the
         Aura whose ability is being paid: the Aura goes). With *paying_for*
         None the extra element is constant and the order is what it was.
+
+        "Lose the game" rather than "you lose the game": a permanent whose
+        **departure** can lose it ranks with one whose death does — "You don't
+        lose the game for having 0 or less life" (Lich's Tomb, Soul Echo) and
+        "You can't lose the game" (Platinum Angel). Lich's Tomb's own trigger
+        sacrifices permanents as its controller sinks below 0, and a default
+        that fed it the Tomb first lost the game to CR 704.5a on the next
+        check.
         """
         return (
-            "you lose the game" in permanent.effective_card.oracle_text.lower(),
+            "lose the game" in permanent.effective_card.oracle_text.lower(),
             paying_for is not None and permanent is paying_for,
             permanent.effective_power,
             permanent.permanent_id,

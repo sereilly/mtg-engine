@@ -817,6 +817,16 @@ def each_player_pays_any_mana(
     # (CR 107.3f), not "any amount of mana" — the same answer, said the way
     # the card prints it, on the prompt and in the log.
     pays_x = instruction.payload.get("actor") == "you"
+    # "…where X is **less than or equal to** the amount of life you gained"
+    # (Well of Lost Dreams): the ceiling the clause puts on that choice,
+    # counted as the prompt is armed and carried on it, so the resolver, the
+    # renderer and the AI's answer are held to one number.
+    bounded: dict[str, object] = {}
+    ceiling = instruction.payload.get("at_most")
+    if isinstance(ceiling, dict):
+        from ._amounts import count_from_payload
+
+        bounded["maximum"] = max(0, count_from_payload(game, context, ceiling))
     for seat in seats:
         context.results[MANA_PAID_BY_SEAT][seat] = 0
         game.arm_pending_choice(
@@ -824,6 +834,7 @@ def each_player_pays_any_mana(
             card_name=context.card.name if context.card is not None else "",
             _results=context.results,
             **({"pays_x": True} if pays_x else {}),
+            **bounded,
         )
         game.log.append(
             f"{game.players[seat].name} may pay "
