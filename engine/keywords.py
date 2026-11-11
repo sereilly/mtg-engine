@@ -377,6 +377,31 @@ def protection_qualities_named(
     return None if quality is None else (quality,)
 
 
+def printed_protection_clauses(program) -> list[str]:
+    """Each "protection from …" clause a compiled *program* states of its own
+    object, as the text after "from" — a whole static line, or one part of a
+    comma-joined keyword line ("Flying, first strike, protection from Demons
+    and from Dragons"), which is admitted as a keyword line and read the same
+    way. Each clause is still shorthand (CR 702.16g): its reader splits it.
+
+    One reader for a permanent's own printed protection
+    (``mixins/protection._protection_qualities``) and a card's in exile
+    (``linked_exile_keywords``, Death-Mask Duplicant), so the two cannot read
+    a different sentence out of one printed line.
+    """
+    prefix = "protection from "
+    clauses: list[str] = []
+    for instr in program.instructions:
+        if instr.kind == "static_line" and instr.value.startswith(prefix):
+            clauses.append(instr.value[len(prefix):].strip())
+        elif instr.kind == "keyword_line":
+            for part in instr.value.split(","):
+                part = part.strip()
+                if part.startswith(prefix):
+                    clauses.append(part[len(prefix):].strip())
+    return clauses
+
+
 #: How long a layer-6 keyword grant or removal lasts, each key naming the sweep
 #: that ends it. The same table :data:`GRANTED_ABILITY_DURATIONS` is for a
 #: quoted ability line, and literally the same object: a card printing one

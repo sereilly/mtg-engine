@@ -838,7 +838,13 @@ def _lower_exile(
                 "exile_cards_from_graveyard", "",
                 one_card_pile_pick(filt, frozen, node),
             ),)
-        if filt.zone_owner is not None or filt.subtypes or filt.colors:
+        # "Exile target creature card **from your graveyard**." (Death-Mask
+        # Duplicant's imprint.) The caster's own pile: the picker derived from
+        # the payload scopes to it (``own_graveyard_only``, the reanimation
+        # picker's flag), the announcement gates hold the named seat to it,
+        # and the handler takes the card from the caster's pile alone.
+        own_pile = filt.zone_owner is not None and filt.zone_owner.kind == "you"
+        if (filt.zone_owner is not None and not own_pile) or filt.subtypes or filt.colors:
             # The picker this lowers onto enumerates every graveyard. Whose pile
             # it may read, and a subtype or colour narrowing, are still shapes
             # nothing behind it tests — dropped here they would offer a card the
@@ -856,12 +862,15 @@ def _lower_exile(
                 "no graveyard picker reads a union of card types yet", node=node
             )
         if _restrictions_beyond(
-            filt, frozenset({"card_types", "zone", "is_card"})
+            filt, frozenset({"card_types", "zone", "is_card", "zone_owner"})
         ):
             raise LoweringError(
                 "no graveyard picker narrows to this card or this player yet",
                 node=node,
             )
+        # Emitted only when printed, so every pick compiled before this keeps
+        # a byte-identical payload.
+        scope: dict[str, object] = {"graveyard_owner": "you"} if own_pile else {}
         if filt.card_types:
             # "Exile target **artifact** card from a graveyard." (Grave
             # Robbers.) / "…target **creature** card…" (Eater of the Dead.) The
@@ -874,11 +883,13 @@ def _lower_exile(
                 OracleInstruction(
                     "exile_target_graveyard_card",
                     "",
-                    {"any_card": False, "card_type": filt.card_types[0]},
+                    {"any_card": False, "card_type": filt.card_types[0], **scope},
                 ),
             )
         return (
-            OracleInstruction("exile_target_graveyard_card", "", {"any_card": True}),
+            OracleInstruction(
+                "exile_target_graveyard_card", "", {"any_card": True, **scope},
+            ),
         )
 
     exile_payload = _filter_payload(filt)

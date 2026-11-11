@@ -22,6 +22,8 @@ from ..aura_grants import (AMONG_CONTROLLED_PROTECTION_COLORS,
                            CHOSEN_PROTECTION_COLOR, aura_protection_colors)
 from ..aura_attachment import auras_attached_to
 from ..keywords import abilities_lost_at, protection_flag_granted_after
+from ..linked_exile_keywords import (LINKED_EXILE_FAMILY,
+                                     linked_exile_protection_clauses)
 from ..lord_buffs import (LORD_BUFF_KIND, is_chosen_color_protection,
                           lord_buff_from_payload)
 from ..handlers._targets import attached_host
@@ -88,6 +90,7 @@ class ProtectionMixin:
         from ..keywords import (EACH_OF_ITS_COLORS,
                                 EACH_OF_THE_EXILED_CARDS_CARD_TYPES,
                                 PROTECTION_GRANT_STAMPS,
+                                printed_protection_clauses,
                                 protection_qualities_named,
                                 protection_removals)
 
@@ -133,26 +136,19 @@ class ProtectionMixin:
             ) or ():
                 _add(quality, stamp)
 
-        def _absorb(clause: str) -> None:
+        def _absorb(clause: str, stamp: int = 0) -> None:
             # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
             # separated variants) is shorthand for several separate protection
             # abilities.
             for word in re.split(r",|\band from\b|\band\b", clause):
-                _named(word)
+                _named(word, stamp)
 
-        for instr in program.instructions:
-            if instr.kind == "static_line" and instr.value.startswith("protection from "):
-                _absorb(instr.value[len("protection from "):].strip())
-            elif instr.kind == "keyword_line":
-                # Protection also rides comma-joined keyword lines ("Flying,
-                # first strike, lifelink, protection from Demons and from
-                # Dragons"), and a standalone protection line is admitted as a
-                # keyword line too — same shorthand, same reading as the
-                # static form above.
-                for part in instr.value.split(","):
-                    part = part.strip()
-                    if part.startswith("protection from "):
-                        _absorb(part[len("protection from "):].strip())
+        # The printed lines: a static "protection from …" line, or a part of a
+        # comma-joined keyword line ("Flying, first strike, lifelink,
+        # protection from Demons and from Dragons") — the one reader a card in
+        # exile is read by too (``keywords.printed_protection_clauses``).
+        for clause in printed_protection_clauses(program):
+            _absorb(clause)
         # "This creature has protection from **the chosen color**." (Voice of
         # All.) The permanent's own static, spending the choice it made as it
         # entered (CR 614.1c). **Derived**, like every grant below: read off the
@@ -311,7 +307,15 @@ class ProtectionMixin:
                         if instr.kind != "conditional_static":
                             continue
                         words = instr.payload.get("protection_from") or ()
-                        if not words:
+                        # "…this creature has protection" while a card exiled
+                        # with it has protection (Death-Mask Duplicant): every
+                        # protection those cards print (the 2004-12-01
+                        # ruling), read now — so a card leaving exile takes
+                        # its protection with it.
+                        copied = (
+                            instr.payload.get(LINKED_EXILE_FAMILY) == "protection"
+                        )
+                        if not (words or copied):
                             continue
                         recipient = granter
                         if instr.payload.get("subject") == "attached":
@@ -331,6 +335,11 @@ class ProtectionMixin:
                             quality = self._protection_quality_of(word)
                             if quality is not None:
                                 _add(quality, granter.timestamp)
+                        if copied:
+                            for clause in linked_exile_protection_clauses(
+                                self, granter
+                            ):
+                                _absorb(clause, granter.timestamp)
             finally:
                 in_progress.discard(permanent.permanent_id)
         # The metadata channel, for protection granted with a lifetime of its own

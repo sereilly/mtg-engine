@@ -483,6 +483,11 @@ def _graveyard_exile_spec(payload: dict) -> dict:
         # "creature" is the enumerator's own default, so naming it changes
         # nothing; every other type is carried.
         spec["card_type"] = card_type
+    # "…target creature card **from your graveyard**" (Death-Mask
+    # Duplicant): one pile, scoped on the flag the enumeration narrows by —
+    # unscoped, the picker would offer an opponent's creature cards.
+    if payload.get("graveyard_owner") == "you":
+        spec["own_graveyard_only"] = True
     return spec
 
 

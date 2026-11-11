@@ -434,6 +434,120 @@ def test_w1g3_panoptic_mirror_imprint_in_response_to_its_upkeep_trigger(set_pool
     _w1g3_settle(game)
     assert bob.life == 17
 
+
+def _w1g3_duplicant_with(set_pool, graveyard, *, bob_graveyard=(), interactive=False):
+    dst = set_pool("DST")
+    pool = {**set_pool("LEA"), **set_pool("LEG")}
+    game, alice, bob = _w1g3_table(interactive=interactive)
+    alice.graveyard.extend(pool[name] for name in graveyard)
+    bob.graveyard.extend(pool[name] for name in bob_graveyard)
+    duplicant = _w1g3_put(game, 0, dst["Death-Mask Duplicant"])
+    return game, alice, bob, duplicant
+
+
+def _w1g3_imprint_creature(game, duplicant, name):
+    alice = game.players[0]
+    slot = next(i for i, c in enumerate(alice.graveyard) if c.name == name)
+    result = game.activate_permanent_ability(
+        0, "Death-Mask Duplicant", permanent_index=game.battlefield_index_of(duplicant),
+        ability_index=0, target_player_index=0, target_graveyard_indices=[slot],
+    )
+    assert result.supported, result.details
+    _w1g3_settle(game)
+    game._recompute_continuous_effects()
+
+
+def test_w1g3_death_mask_duplicant_imprints_a_creature_card_from_its_own_graveyard(set_pool):
+    """"Imprint — {1}: Exile target creature card from your graveyard." The
+    picker is the caster's own pile and creature cards only: Bob's Black
+    Knight and Alice's Lightning Bolt are refused before anything is paid;
+    Serra Angel is exiled with the Duplicant (CR 607.2a), and the ability
+    may be activated again (the 2004-12-01 ruling: any number of times)."""
+    from engine.linked_exile import cards_still_exiled_with
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    game, alice, bob, duplicant = _w1g3_duplicant_with(
+        set_pool, ["Serra Angel", "Lightning Bolt", "Grizzly Bears"],
+        bob_graveyard=["Black Knight"],
+    )
+    (ability,) = compile_card_oracle(duplicant.card).activated_abilities
+    assert derive_activation_spec(ability).get("own_graveyard_only") is True
+    refused = game.activate_permanent_ability(
+        0, "Death-Mask Duplicant", permanent_index=game.battlefield_index_of(duplicant),
+        ability_index=0, target_player_index=1, target_graveyard_indices=[0],
+    )
+    assert not refused.supported and [c.name for c in bob.graveyard] == ["Black Knight"]
+    refused = game.activate_permanent_ability(
+        0, "Death-Mask Duplicant", permanent_index=game.battlefield_index_of(duplicant),
+        ability_index=0, target_player_index=0, target_graveyard_indices=[1],
+    )
+    assert not refused.supported, "Lightning Bolt is no creature card"
+    _w1g3_imprint_creature(game, duplicant, "Serra Angel")
+    _w1g3_imprint_creature(game, duplicant, "Grizzly Bears")
+    assert [c.name for c, _o in cards_still_exiled_with(game, duplicant)] == [
+        "Serra Angel", "Grizzly Bears",
+    ]
+    assert [c.name for c in alice.graveyard] == ["Lightning Bolt"]
+
+
+def test_w1g3_death_mask_duplicant_has_the_keywords_its_exiled_cards_have(set_pool):
+    """"As long as a card exiled with this creature has flying, this creature
+    has flying. The same is true for fear, first strike, double strike,
+    haste, landwalk, protection, and trample." Each keyword arrives with the
+    card that has it — landwalk and protection as the very abilities printed
+    (the 2004-12-01 ruling: all landwalk and protection abilities of the
+    imprinted cards), never the bare family word — and goes when that card
+    leaves exile (CR 611.3a)."""
+    game, alice, bob, duplicant = _w1g3_duplicant_with(
+        set_pool, ["Serra Angel", "White Knight", "Bog Wraith", "Livonya Silone"],
+    )
+
+    def has(word):
+        return game._has_keyword(duplicant, word)
+
+    assert not any(has(w) for w in ("flying", "first strike", "swampwalk"))
+    _w1g3_imprint_creature(game, duplicant, "Serra Angel")
+    assert has("flying") and not has("vigilance"), "vigilance is not on the list"
+    _w1g3_imprint_creature(game, duplicant, "White Knight")
+    assert has("first strike")
+    assert game._protection_qualities(duplicant) == {("color", "B")}
+    _w1g3_imprint_creature(game, duplicant, "Bog Wraith")
+    _w1g3_imprint_creature(game, duplicant, "Livonya Silone")
+    assert has("swampwalk") and has("legendary landwalk")
+    assert not has("landwalk") and not has("protection"), "no bare family word"
+    assert not has("trample") and not has("haste")
+    knight = next(c for c in alice.exile if c.name == "White Knight")
+    assert game.take_card_from_exile(0, knight)
+    game._recompute_continuous_effects()
+    assert game._protection_qualities(duplicant) == set()
+    assert has("first strike"), "Livonya Silone still has it"
+
+
+def test_w1g3_death_mask_duplicant_walks_and_is_protected_in_combat(set_pool):
+    """The copied abilities do what they print: Bog Wraith's swampwalk makes
+    the Duplicant unblockable while Bob controls a Swamp, and White Knight's
+    protection from black keeps Black Knight from blocking it (CR 702.16f)."""
+    lea = set_pool("LEA")
+    for imprinted in (False, True):
+        game, alice, bob, duplicant = _w1g3_duplicant_with(set_pool, ["Bog Wraith"])
+        if imprinted:
+            _w1g3_imprint_creature(game, duplicant, "Bog Wraith")
+        _w1g3_put(game, 1, lea["Swamp"])
+        _w1g3_put(game, 1, lea["Grizzly Bears"])
+        _w1g3_declare_attack(game, 0)
+        ok, _why = game.declare_blockers(1, {1: [0]})
+        assert ok is not imprinted, "swampwalk: the Bears cannot block"
+
+    for imprinted in (False, True):
+        game, alice, bob, duplicant = _w1g3_duplicant_with(set_pool, ["White Knight"])
+        if imprinted:
+            _w1g3_imprint_creature(game, duplicant, "White Knight")
+        _w1g3_put(game, 1, lea["Black Knight"])
+        _w1g3_declare_attack(game, 0)
+        ok, _why = game.declare_blockers(1, {0: [0]})
+        assert ok is not imprinted, "protection from black: Black Knight cannot block"
+
 # ==== end W1G3 ======================================================
 
 

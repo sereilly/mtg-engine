@@ -152,6 +152,15 @@ _STATE_CONDITION = re.compile(
 # is matched, so it is its own condition kind rather than a `controls` payload
 # with a graveyard filter — and the seat it asks about is printed, because "an
 # opponent" and "you" are different questions with different answers.
+#: "as long as **a card exiled with this creature has flying**" (Death-Mask
+#: Duplicant). A question about the cards the permanent's own imprint exiled
+#: (CR 607.2a), answered by ``linked_exile_keywords.linked_exile_has``; the
+#: quality is an implemented keyword or one of the two families (landwalk,
+#: protection) that module reads as "any member", and anything else refuses.
+_LINKED_EXILE_CONDITION = re.compile(
+    r"^a card exiled with (?:this creature|it) has (?P<quality>[a-z ]+)$"
+)
+
 _GRAVEYARD_SIZE_CONDITION = re.compile(
     r"^(?P<who>an opponent|you) ha(?:s|ve) (?P<count>\w+) or more cards in "
     r"(?:their|your) graveyard$"
@@ -254,6 +263,14 @@ def _parse_condition_text(text: str) -> dict[str, object] | None:
                 "power": {"op": "ge", "value": int(match.group("power"))},
             },
         }
+    match = _LINKED_EXILE_CONDITION.match(text)
+    if match is not None:
+        from .linked_exile_keywords import FAMILIES, LINKED_EXILE_HAS
+
+        quality = match.group("quality").strip()
+        if quality not in FAMILIES and quality not in _implemented_keywords():
+            return None
+        return {"kind": LINKED_EXILE_HAS, "quality": quality}
     return _controls_noun_condition(text)
 
 
@@ -500,10 +517,37 @@ def conditional_static_for(normalized_line: str) -> StaticBonus | None:
         if not separator:
             return None
     condition = _parse_condition_text(condition_text)
-    effect = _parse_effect_text(effect_text)
+    # The family reading first: "landwalk" and "protection" are in
+    # ``IMPLEMENTED_KEYWORDS`` as the family words a printed quality joins, so
+    # the keyword reading below would grant the bare word.
+    effect = (
+        _linked_family_effect(condition, effect_text) if condition is not None else None
+    )
+    if effect is None:
+        effect = _parse_effect_text(effect_text)
     if condition is None or effect is None:
         return None
     return StaticBonus("conditional_static", {**effect, "condition": condition})
+
+
+def _linked_family_effect(condition: dict, effect_text: str) -> dict | None:
+    """"…this creature **has landwalk**" / "…**has protection**" behind "as
+    long as a card exiled with this creature has" the same family (Death-Mask
+    Duplicant): every member of the family those cards print, which is a
+    grant only that condition can name. Read before the keyword effect, which
+    would grant the bare family word — a landwalk naming no land, protection
+    from no quality."""
+    from .linked_exile_keywords import (FAMILIES, LINKED_EXILE_FAMILY,
+                                        LINKED_EXILE_HAS)
+
+    quality = condition.get("quality")
+    if (
+        condition.get("kind") != LINKED_EXILE_HAS
+        or quality not in FAMILIES
+        or effect_text != f"has {quality}"
+    ):
+        return None
+    return {LINKED_EXILE_FAMILY: quality}
 
 
 #: The ``subject`` a ``controls`` condition carries when its pronoun is **each
@@ -560,6 +604,13 @@ def conditional_static_holds(
     # refuses the clauses that would need it before this is reached.
     if isinstance(source, GraveyardSource):
         source = None
+    # "As long as **a card exiled with this creature has flying**, …"
+    # (Death-Mask Duplicant): the cards its imprint exiled and still in exile,
+    # asked now (CR 611.3a).
+    if kind == "linked_exile_has":
+        from .linked_exile_keywords import linked_exile_has
+
+        return linked_exile_has(game, source, str(condition.get("quality") or ""))
     # "…as long as **it's** blocking / attacking / untapped". A state read off
     # one permanent, and *which* permanent is payload: an Aura's "it" is the
     # creature it enchants (an Aura never blocks), and a creature's own "it" is
