@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| DST *(measured)* | 165 | 285 | 69.5% | 63.2% | 43.2% | 103 |
+| DST *(measured)* | 165 | 285 | 70.2% | 65.3% | 45.3% | 109 |
 | **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -69,7 +69,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 928 | 485 | expected a subject |  |
+| 926 | 483 | expected a subject |  |
 | 197 | 101 | unrecognized effect verb |  |
 | 142 | 75 | unconsumed text |  |
 | 74 | 55 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -3620,8 +3620,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature is turned face up, return target creature to its owner's hand.`
 - **Echoing Calm**
   - `Destroy target enchantment and all other enchantments with the same name as that enchantment.`
+- **Echoing Courage**
+  - `Target creature and all other creatures with the same name as that creature get +2/+2 until end of turn.`
+- **Echoing Decay**
+  - `Target creature and all other creatures with the same name as that creature get -2/-2 until end of turn.`
 - **Echoing Ruin**
   - `Destroy target artifact and all other artifacts with the same name as that artifact.`
+- **Echoing Truth**
+  - `Return target nonland permanent and all other permanents with the same name as that permanent to their owners' hands.`
 - **El-Hajjâj**
   - `Whenever this creature deals damage, you gain that much life.`
   - `Whenever this creature deals damage, you gain that much life.`
@@ -9215,6 +9221,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}, {T}: Target creature you control gets +X/+X until end of turn. Destroy it at the beginning of the next end step.`
 - **Pulsating Illusion**
   - `Discard a card: This creature gets +4/+4 until end of turn. Activate only once each turn.`
+- **Pulse of the Dross**
+  - `Target player reveals three cards from their hand and you choose one of them. That player discards that card. Then if that player has more cards in hand than you, return Pulse of the Dross to its owner's hand.`
+- **Pulse of the Fields**
+  - `You gain 4 life. Then if an opponent has more life than you, return Pulse of the Fields to its owner's hand.`
+- **Pulse of the Forge**
+  - `Pulse of the Forge deals 4 damage to target player or planeswalker. Then if that player or that planeswalker's controller has more life than you, return Pulse of the Forge to its owner's hand.`
 - **Pulse of the Grid**
   - `Draw two cards, then discard a card. Then if an opponent has more cards in hand than you, return Pulse of the Grid to its owner's hand.`
 - **Pulse of the Tangle**

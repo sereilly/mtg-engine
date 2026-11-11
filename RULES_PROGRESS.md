@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**441 / 652 tracked rules covered (67%)** — 3689 tests, 0 unannotated.
+**441 / 652 tracked rules covered (67%)** — 3694 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -368,7 +368,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 201. Name
 
 - [ ] **201.1** The name of a card is printed on its upper left corner.
-- [x] **201.2** A card’s name is always considered to be the English version of its name, regardless of printed l... *(2 tests, subrules a)*
+- [x] **201.2** A card’s name is always considered to be the English version of its name, regardless of printed l... *(7 tests, subrules a)*
 - [ ] **201.3** Some cards with different English names are treated as though they had the same English name. Pai...
 - [ ] **201.4** If an effect instructs a player to choose a card name, the player must choose the name of a card ...
 - [x] **201.5** Text that refers to the object it’s on by name means just that particular object and not any othe... *(2 tests, subrules c)*
@@ -960,7 +960,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 708. Face-Down Spells and Permanents
 
 - [ ] **708.1** Some cards allow spells and permanents to be face down.
-- [x] **708.2** Face-down spells and face-down permanents have no characteristics other than those listed by the ... *(3 tests, subrules a)*
+- [x] **708.2** Face-down spells and face-down permanents have no characteristics other than those listed by the ... *(8 tests, subrules a)*
 - [x] **708.3** Objects that are put onto the battlefield face down are turned face down before they enter the ba... *(2 tests)*
 - [x] **708.4** Objects that are cast face down are turned face down before they are put onto the stack, so effec... *(2 tests)*
 - [x] **708.5** At any time, you may look at a face-down spell you control on the stack or a face-down permanent ... *(4 tests)*

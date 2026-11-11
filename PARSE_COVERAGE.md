@@ -707,7 +707,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Vug Lizard | `if this permanent came under your control since the beginning of your ` | permanent |
 | Vulshok Battlemaster | `attach all equipment on the battlefield to it` | all |
 | Wail of the Nim | `regenerate each creature you control` | each |
-| Wake of Destruction | `destroy target land and all other lands with the same name as that lan` | all other |
+| Wake of Destruction | `destroy target land and all other lands with the same name as that lan` | all |
 | Walking Sponge | `target creature loses your choice of flying, first strike, or trample ` | or |
 | Wall of Nets | `exile all creatures blocked by this creature` | all creature |
 | Wall of Resistance | `if this creature was dealt damage this turn, put a +0/+1 counter on it` | creature |
