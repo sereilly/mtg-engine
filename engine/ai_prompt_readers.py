@@ -610,6 +610,63 @@ def offered_gift_lands_on_the_wrong_side(game, seat: int, entry: dict) -> bool:
     return controller is not None and controller != seat
 
 
+def offered_counter_misses_every_card(game, seat: int, entry: dict) -> bool:
+    """Whether an offer's whole purchase is a counter on its own source that
+    another of the source's abilities reads as a mana value, and the counter
+    leaves that reading on no card the seat could put with it.
+
+    "At the beginning of your upkeep, you may put a charge counter on this
+    artifact. / {T}: You may put a creature card with mana value equal to the
+    number of charge counters on this artifact from your hand onto the
+    battlefield." (Aether Vial.) "Take gifts" added a counter every upkeep —
+    seven, in a deck with no creature card over four (DST W1G3). Declined
+    where a card in the hand answers the count **now** (the counter would
+    take it off the one the Vial can put this turn), and where no card of
+    the seat's own — its hand and its library, whose contents its owner knows
+    though not their order — has a mana value the count would ever reach
+    again. Which cards the reading admits is the handler's matcher, over the
+    filter the handler resolves (``handlers.hand.
+    resolve_source_counted_mana_value``)."""
+    from .ai_valuation import hand_entry_steps
+    from .handlers._filters import _card_matches_filter
+    from .handlers.hand import resolve_source_counted_mana_value
+    from .named_counters import counters_on
+    from .subject_filters import SOURCE_COUNTED_MANA_VALUE
+
+    steps = [step for step in entry.get("_on_accept") or () if getattr(step, "kind", None)]
+    if len(steps) != 1 or steps[0].kind != "add_named_counter_to_self":
+        return False
+    kind = str(steps[0].payload.get("counter") or "")
+    source = entry.get("_source_permanent")
+    if not kind or source is None or not game.is_on_battlefield(source):
+        return False
+    filters = [
+        dict(payload.get("card_filter") or {})
+        for ability in game.usable_abilities_of(source)
+        for payload in hand_entry_steps(ability.instruction)
+        if (payload.get("card_filter") or {}).get(SOURCE_COUNTED_MANA_VALUE) == kind
+    ]
+    if not filters:
+        return False
+    now = counters_on(source, kind)
+    player = game.players[seat]
+
+    def answers(card, described) -> bool:
+        return _card_matches_filter(card, described, game=game, owner=player)
+
+    for described in filters:
+        at_now = resolve_source_counted_mana_value(described, source)
+        if any(answers(card, at_now) for card in player.hand):
+            return True
+    after = now + int(steps[0].payload.get("count", 1) or 1)
+    for described in filters:
+        unbound = {key: value for key, value in described.items() if key != SOURCE_COUNTED_MANA_VALUE}
+        reached = {**unbound, "mana_value": {"op": "ge", "value": after}}
+        if any(answers(card, reached) for card in (*player.hand, *player.library)):
+            return False
+    return True
+
+
 def threatening_color(game, seat: int) -> str | None:
     """The colour of the opposing object a colour chosen *now* is answering,
     or None when nothing on the stack is one.
