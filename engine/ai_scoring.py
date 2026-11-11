@@ -542,10 +542,14 @@ def _weighed_through_the_fight(
     Asked only where it can change the answer, because it is a whole combat
     on two copies: the seat's own precombat main phase
     (``Rehearsal.combat_ahead``: or a postcombat one in which the cast adds
-    a combat), and a cast some of whose good is gone by
-    the end of the turn — all of it (``fleeting``), or more of it than is
-    left (``now`` above ``lasting``). A removal spell, a draw, a discard are
-    priced by what they leave and are not asked twice.
+    a combat, or a combat after which the turn holds another), and a cast
+    some of whose good is gone by the end of the turn — all of it
+    (``fleeting``), or more of it than is left (``now`` above ``lasting``)
+    — or that added a combat to the turn (``Rehearsal.added_a_combat``,
+    CR 500.8: Savage Beating's second bullet, cast in its caster's own
+    combat, is an attack no reading without the fight sees). A removal
+    spell, a draw, a discard are priced by what they leave and are not
+    asked twice.
 
     Asked by the cast being built and by the choosers that pick its target
     (`ai_targets._best_target`, `ai_targets._better_than_the_seat`), because which creature a
@@ -563,7 +567,10 @@ def _weighed_through_the_fight(
         or not rehearsal.combat_ahead
     ):
         return rehearsal
-    if not priced_by_the_fight(rehearsal.now, rehearsal.lasting, rehearsal.fleeting):
+    if not priced_by_the_fight(
+        rehearsal.now, rehearsal.lasting, rehearsal.fleeting,
+        added_a_combat=rehearsal.added_a_combat,
+    ):
         return rehearsal
     if (rehearsal.made_mana or rehearsal.opened_a_cast) and not priced_by_the_fight(
         rehearsal.now, rehearsal.lasting, False,

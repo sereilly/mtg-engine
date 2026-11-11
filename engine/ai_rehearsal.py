@@ -178,7 +178,15 @@ class Rehearsal:
     ``combat_ahead``
         once the cast had resolved, the caster's turn still had a combat
         phase to come (:func:`_combat_ahead`) — the one a precombat cast is
-        made before, or one the cast itself added;
+        made before, or one the cast itself added — or, cast in a combat, a
+        combat phase after that one (:func:`_combat_after_this_one`);
+    ``added_a_combat``
+        once the cast had resolved, the turn's plan held more combat phases
+        than the same table with nothing cast (:func:`combats_planned`; CR
+        500.8: "after this phase, there is an additional combat phase",
+        Savage Beating) — a cast whose good is an attack the turn did not
+        have, which only a reading through the fight can price
+        (:func:`priced_by_the_fight`);
     ``creature_ahead``
         once the cast had resolved, the caster controlled a creature
         (:func:`has_a_creature_to_fight_with`) — something that fight could
@@ -222,6 +230,7 @@ class Rehearsal:
     made_mana: bool = False
     through_combat: bool = False
     combat_ahead: bool = False
+    added_a_combat: bool = False
     opened_a_cast: bool = False
     creature_ahead: bool = False
     blocks_added: bool = False
@@ -327,6 +336,31 @@ def _combat_ahead(game) -> bool:
     return "combat" in plan
 
 
+def combats_planned(game) -> int:
+    """How many combat phases are left in *game*'s turn after the phase it
+    is in: the turn's own (CR 500.1) and every one an effect added (CR
+    500.8). Read without planning the turn, as :func:`_combat_ahead` reads
+    it. A cast that raises it is one whose good is an attack the turn did
+    not have (``Rehearsal.added_a_combat``)."""
+    from .mixins._constants import phases_after
+
+    plan = getattr(game, "turn_phases_remaining", None)
+    if plan is None:
+        plan = phases_after(game.current_turn_phase)
+    return sum(1 for phase in plan if phase == "combat")
+
+
+def _combat_after_this_one(game) -> bool:
+    """Whether *game* is in a combat phase with nothing on the stack and
+    another combat phase still in its turn's plan — "untap all creatures you
+    control. After this phase, there is an additional combat phase" (Savage
+    Beating, CR 500.8), cast in the first. A rehearsal plays it out from
+    where the combat under way stands (:func:`_fight_the_combat`)."""
+    if game.stack or game.pending_choices or game.is_game_over():
+        return False
+    return game.current_turn_phase == "combat" and combats_planned(game) > 0
+
+
 def has_a_creature_to_fight_with(game, seat: int) -> bool:
     """Whether *seat* controls a creature at all. With none there is no
     attack to declare whatever is cast first — a spell that *makes* one has
@@ -335,19 +369,30 @@ def has_a_creature_to_fight_with(game, seat: int) -> bool:
     return any(permanent.is_creature for permanent in game.controlled_by(seat))
 
 
-def priced_by_the_fight(now: float, lasting: float, fleeting: bool) -> bool:
+def priced_by_the_fight(
+    now: float, lasting: float, fleeting: bool, *, added_a_combat: bool = False,
+) -> bool:
     """Whether a cast made before the turn's combat is one a reading with no
     combat in it cannot price: some of its good is gone by the end of the
     turn — all of it (*fleeting*), or more of it than is left (*now* above
-    *lasting*). A removal spell, a draw, a discard are priced by what they
-    leave.
+    *lasting*) — or it **added a combat** to the turn (*added_a_combat*,
+    ``Rehearsal.added_a_combat``; CR 500.8), whose good is the attack made
+    in it. A removal spell, a draw, a discard are priced by what they leave.
+
+    *added_a_combat* is its own reason because neither standing sees an
+    attacker untapped for the combat a cast adds: an attacking creature's
+    body is in use whether or not it is tapped (``ai_standing.
+    permanent_worth``), and the tap is no difference once the turn is over —
+    so Savage Beating's "untap all creatures you control … an additional
+    combat phase", cast in its caster's own combat, measured nothing either
+    way and was held (DST W2G2).
 
     The policy asks it before reading a cast a second time with the fight
     fought (``ai_scoring._weighed_through_the_fight``), and the censuses ask
     it of the casts they make for real — one definition of which casts the
     fight is part of the price of.
     """
-    return bool(fleeting) or now > lasting + _NO_SWING
+    return bool(fleeting) or bool(added_a_combat) or now > lasting + _NO_SWING
 
 
 def pays_before_the_blocks(first: "Rehearsal | None", fought: "Rehearsal | None") -> bool:
@@ -924,8 +969,10 @@ def _untouched(
         without(clone, carried)
     _settle_scratch(clone)
     could_cast = _casts_open(clone, seat)
+    combats = combats_planned(clone)
     reading = _measured(clone, through_combat=through_combat, seat=seat)
     reading["could_cast"] = could_cast
+    reading["combats_planned"] = combats
     if cache is not None:
         cache[slot] = reading
     return reading
@@ -1174,8 +1221,12 @@ def _rehearse(
             )
         _settle_scratch(clone)
         # Whether a fight is still to come once the cast has resolved — read
-        # off the copy, because a cast can be what adds one.
-        combat_ahead = clone.active_player_index == seat and _combat_ahead(clone)
+        # off the copy, because a cast can be what adds one: after the main
+        # phase it was cast in, or after the combat (CR 500.8).
+        combat_ahead = clone.active_player_index == seat and (
+            _combat_ahead(clone) or _combat_after_this_one(clone)
+        )
+        added_a_combat = combats_planned(clone) > untouched["combats_planned"]
         # …and whether there is anything to fight it with, read off the same
         # copy: a cast can be what makes the creature (Animate Land).
         creature_ahead = has_a_creature_to_fight_with(clone, seat)
@@ -1274,7 +1325,8 @@ def _rehearse(
         return Rehearsal(
             accepted=True, changed=changed, now=now, lasting=lasting,
             fleeting=fleeting, made_mana=made_mana, through_combat=through_combat,
-            combat_ahead=combat_ahead, opened_a_cast=opened_a_cast,
+            combat_ahead=combat_ahead, added_a_combat=added_a_combat,
+            opened_a_cast=opened_a_cast,
             creature_ahead=creature_ahead,
             blocks_added=bool(reading["blocks"] - untouched["blocks"]),
             declarations_changed=(
@@ -1297,6 +1349,7 @@ __all__ = [
     "blocks_owed",
     "blocks_still_to_come",
     "combat_is_still_to_come",
+    "combats_planned",
     "forget_damage_history",
     "untap_for_the_next_turn",
     "has_a_creature_to_fight_with",

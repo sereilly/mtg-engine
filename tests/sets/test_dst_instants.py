@@ -1060,3 +1060,85 @@ def test_w1g9_tears_of_rage_sacrifices_the_set_it_pumped_not_the_attackers_by_th
     assert [p.card.name for p in alice.battlefield] == ["Llanowar Elves"]
 
 # ==== end W1G9 ======================================================
+
+
+# ==== W2G2 ==========================================================
+# The AI's policy on Darksteel's cards (wave 2): a cast that adds a combat
+# phase is priced through the fight it adds (CR 500.8).
+
+from engine import Game as _W2G2Game
+from engine.ai_actions import cast_announcement as _w2g2_cast_announcement
+from engine.ai_combat import run_ai_combat_phase as _w2g2_run_ai_combat_phase
+from engine.ai_policy import (
+    choose_combat_instant_cast_action as _w2g2_choose_combat_instant_cast_action,
+)
+from engine.models import Permanent as _W2G2Permanent
+from engine.models import PlayerState as _W2G2PlayerState
+from tests.helpers import _mk_creature_card as _w2g2_creature
+from tests.helpers import declare_attack as _w2g2_declare_attack
+from tests.helpers import settle as _w2g2_settle
+
+
+def _w2g2_attacking_table(set_pool, attacker, mana: int):
+    """The AI seat's own combat, blocks declared: *attacker* unblocked,
+    Savage Beating in hand, *mana* red in its pool and nothing across the
+    table."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _W2G2Game(players=[
+        _W2G2PlayerState(name="AI", hand=[dst["Savage Beating"]], library=[lea["Mountain"]] * 8),
+        _W2G2PlayerState(name="Opp", library=[lea["Island"]] * 8),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._settle()
+    permanent = _W2G2Permanent(card=attacker)
+    game._put_permanent_onto_battlefield(0, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    _w2g2_declare_attack(game, 0)
+    assert game.current_step == "declare_blockers"
+    game.players[0].mana_pool.update({"R": mana})
+    return game
+
+
+def _w2g2_cast_and_fight(game, action) -> None:
+    result = game.cast_from_hand(0, action.card_name, **_w2g2_cast_announcement(action))
+    assert result.supported, result.details
+    _w2g2_settle(game)
+    _w2g2_run_ai_combat_phase(game, 0)
+
+
+def test_w2g2_savage_beating_extra_combat_is_cast_where_it_is_the_only_bullet(set_pool):
+    """"Untap all creatures you control. After this phase, there is an
+    additional combat phase." The attacker already has double strike, so
+    the first bullet does nothing; the second is a second attack. A
+    rehearsal that ran the combat out declaring nothing read that bullet as
+    nothing that lasts (its untapped attacker is worth the same, attacking,
+    tapped or not), and the AI held the card. Read through the fight it
+    adds, it is the second attack's four damage, and the seat casts it
+    without the entwine it cannot pay for."""
+    striker = _w2g2_creature("Test Striker", 2, 2, "Double strike")
+    game = _w2g2_attacking_table(set_pool, striker, mana=5)
+    action = _w2g2_choose_combat_instant_cast_action(game, 0)
+    assert action is not None and action.card_name == "Savage Beating"
+    assert action.mode_index == 1 and not action.mode_choices
+    _w2g2_cast_and_fight(game, action)
+    assert any("Additional phases this turn" in line for line in game.log)
+    assert game.players[1].life == 20 - 4 - 4
+
+
+def test_w2g2_savage_beating_is_entwined_for_both_combats(set_pool):
+    """With the entwine cost in the pool, both bullets: double strike on the
+    2/2 in this combat and in the one the second bullet adds — eight damage,
+    where double strike alone is four. Before the added combat was fought by
+    any reading, the entwined cast measured what double strike alone did and
+    lost to it on printed order."""
+    game = _w2g2_attacking_table(set_pool, set_pool("LEA")["Grizzly Bears"], mana=7)
+    action = _w2g2_choose_combat_instant_cast_action(game, 0)
+    assert action is not None and action.card_name == "Savage Beating"
+    assert sorted(choice["index"] for choice in action.mode_choices) == [0, 1]
+    _w2g2_cast_and_fight(game, action)
+    assert game.players[1].life == 20 - 8
+
+# ==== end W2G2 ======================================================
