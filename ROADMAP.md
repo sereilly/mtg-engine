@@ -1885,6 +1885,19 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
+Run on 2026-11-11, with Darksteel shipped, it answers **Fifth Dawn** (5DN,
+2004-06-04, 165 cards, 162 of them new — re-measure against this pool), the
+block's third set: modular, imprint, affinity, entwine and equipment ship
+from its first two, and Fifth Dawn's own word is sunburst (CR 702.44); its
+scry cycle (CR 701.22) reads an action that ships (Darksteel Pendant).
+**Darksteel arrived at 65.5%** — 108
+of 165 read supported, six of them hollow (Aether Vial, Panoptic Mirror,
+Talon of Pain, Thunderstaff, Serum Powder, Darksteel Reactor), so the real
+work list was 63 — and modular (CR 702.43, eleven Arcbound cards) was its
+one new keyword, a rewrite onto two lines the engine already read. Nine
+wave-1 groups landed all 63 with no hook and no decline; wave 2's three
+groups took the client, the AI's policy and an engine pile, and moved
+`whenever_triggers.py`'s row notes out of the table (1,814 lines to 526).
 Run on 2026-11-09, with Mirrodin shipped, it answers **Darksteel** (DST,
 2004-02-06, 165 cards — re-measure against this pool), the block's second
 set: equipment, affinity, imprint, charge counters and entwine-free modal
@@ -2113,6 +2126,7 @@ a wave is five parallel worktree groups integrated serially.
 | SCG | 143 | 56.6% (81 read supported; 18 of them hollow) | 2 waves (nine groups landed 79 of the 80 with no hook; then five: the last card, the client, the AI pile, the engine pile, the rehearsal's inventories) + 3 follow-ups (the client's last prompt and an exile search's floor; the full-pass rehearsal's four census reds) + 4 closers after Phase 5 (the engine, the web, the AI, the client) + 1 follow-up their full gate found |
 | 8ED | 342 | 99.7% (11 new to the pool) | no group: one production by the integrator (Balance of Power), the eleven driven headless, promoted the day of the ingest + 1 AI fix the set's pinned AI games found |
 | MRD | 291 | 72.5% (211 read supported; 27 of them hollow: entwine, affinity, imprint) | 2 waves (twelve groups landed 103 of 107 with no hook; then nine: Mindslaver, Liar's Pendulum and Shared Fate, Second Sunrise and the graveyard's arrival seam, the wave-close census reds, the client, two engine piles, the AI pile, the rehearsal's inventories) + 4 follow-ups (the seam's Tempest Efreet red a full gate found, the client's second round, the rehearsal's second batch, the promotion's full-pass census reds) |
+| DST | 165 | 65.5% (108 read supported; 6 of them hollow) | 2 waves (nine groups landed all 63 with no hook and no decline; then three: the client in a browser, the AI pile with the promotion's last red, the engine pile with the whenever table's notes) + 2 follow-ups (the rehearsal's census reds, both in the censuses) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2128,20 +2142,21 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-11-08, after Eighth Edition's promotion): 6,146 unique cards
-over 39 sets, 8,992 printings, 100% supported. Grammar parses 90.0% of
-lines, lowers 89.5% and executes 62.1% (`GRAMMAR_COVERAGE.md`). **0.7%** of
-supported cards carry a name-keyed hook — 46 cards, 50 entries in 6
-registries (`HOOK_RELIANCE.md`) — and the projection that implies for the
-release line has fallen from 1,195 hand-written entries to **212**, across
-twenty-six consecutive sets that added no hook (Eighth Edition's eleven new
-cards added none). That is the measure moving the way the architecture needs
-it to.
-Parse coverage: 6,144 of 6,146 supported cards fully claimed, 2
+2026-11-11, after Darksteel's promotion): 6,576 unique cards
+over 41 sets, 9,448 printings, 100% supported. Grammar parses 89.7% of
+lines, lowers 89.2% and executes 62.1% (`GRAMMAR_COVERAGE.md`; the pool row
+moved down 0.2 on membership alone — Darksteel's own lines parse at 80.4%).
+**0.7%** of supported cards carry a name-keyed hook — 45 cards, 49 entries
+in 6 registries (`HOOK_RELIANCE.md`) — and the projection that implies for
+the release line has fallen from 1,195 hand-written entries to **195**,
+across twenty-eight consecutive sets that added no hook (Mirrodin's 268 new
+cards and Darksteel's 162 added none). That is the measure moving the way
+the architecture needs it to.
+Parse coverage: 6,574 of 6,576 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
-the CR coverage tracker (433 of 641 tracked rules, 3,521 tests).
-`CARD_VERIFICATION.md` is a log, not a target: 990 passed (694 in-game,
-296 auto), 70 equivalent, 0 failed, 5,086 untested.
+the CR coverage tracker (442 of 653 tracked rules, 3,716 tests).
+`CARD_VERIFICATION.md` is a log, not a target: 1,007 passed (694 in-game,
+313 auto), 74 equivalent, 0 failed, 5,495 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
