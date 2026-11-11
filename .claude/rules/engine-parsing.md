@@ -96,9 +96,11 @@ family independence and flat re-export.
   line is classified, so the word is not in `IMPLEMENTED_KEYWORDS`: equip
   (CR 702.6a), buyback (702.27a), kicker (702.33a), flashback (702.34),
   affinity (702.41a, `engine/affinity.py` — onto the self-reduction sentence,
-  whose price reader sums every reduction, 702.41b) and entwine (702.42a,
+  whose price reader sums every reduction, 702.41b), entwine (702.42a,
   `engine/entwine.py` — an optional additional cost that, paid, names every
-  mode). Every
+  mode) and modular (702.43a, `engine/modular.py` — "enters with N +1/+1
+  counters" and the dies trigger whose count is the departure look-back;
+  `has_printed_modular` answers "a creature with modular"). Every
   reader of a card's lines (`legality.py`, `parse_coverage.py`,
   `hook_reliance.py`) must start from that function or it reads a different card.
 - **Ability words** (CR 207.2c) are dropped by `oracle_types.strip_ability_word`

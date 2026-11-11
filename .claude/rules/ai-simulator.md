@@ -122,7 +122,12 @@ first combat and in response to another seat's object
   the bottom choice), asked by the simulator (`take_opening_mulligans`, CR
   103.5's rounds), the web pregame (`web/pregame.py`, by the same rounds)
   and the no-pregame deal (`session_store._begin_pregame`); the cards owed are
-  `Game.mulligan_effective_count` (CR 103.5c's free first mulligan).
+  `Game.mulligan_bottom_owed` — `mulligan_effective_count` (CR 103.5c's free
+  first mulligan) less what a hand exchange already bottomed. "Any time you
+  could mulligan" (CR 103.5b, Serum Powder) is `engine/mulligan_exchanges.py`
+  and `Game.pregame_hand_exchange`: a seat exchanges a hand it would not keep
+  before it mulligans (`ai_mulligan.take_hand_exchanges`), then declares
+  again.
 - **Priority**: `Game.offer_priority` gives it in CR 117.3b–d order, before each
   resolution and at a step's end on an empty stack; inert without a driver, at
   a table with an interactive seat, and in the untap step. The simulator and
