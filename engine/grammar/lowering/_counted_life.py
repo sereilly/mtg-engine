@@ -630,6 +630,13 @@ def lower_per_each_gain(
         own_seat = recipient == EVENT_SUBJECT_PLAYER and filt.controller == "that_player"
         if own_seat:
             filt = count_filter_on_frozen_seat(filt, event, node)
+        # "Whenever this creature deals combat damage to a player, **you** gain
+        # 1 life for each artifact **that player** controls." (Emissary of
+        # Hope.) The gainer is you and the count is another seat's board — the
+        # one the event froze, moved onto the count's scope by the same floor
+        # rewrite, which refuses under an event that froze no seat.
+        elif node.player.kind == "you" and filt.controller == "that_player":
+            filt = count_filter_on_frozen_seat(filt, event, node)
         # ``printed_count_spec`` rather than ``count_spec`` (W1G6): a phrase
         # naming no seat names every permanent on the battlefield, CR 403.1.
         # A filter the line above moved onto a frozen seat carries a

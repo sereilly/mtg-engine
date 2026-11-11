@@ -1652,9 +1652,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # words reach — a "when" line this table misses is re-asked here with the
     # word swapped, and there is no fallback the other way. Written the other
     # way round, Homarid's printing had no reader at all.
+    # "When this artifact has twenty or more charge counters on it" (Darksteel
+    # Reactor) is the same state in the other word order; the grammar's front
+    # end holds each opening to its own ending.
     ("counters_reach_threshold",
-     r"whenever there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
-     r"(?:artifact|creature|enchantment|permanent|land)"),
+     r"whenever (?:there are |this (?:artifact|creature|enchantment|permanent|land) has )"
+     r"(?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on "
+     r"(?:this (?:artifact|creature|enchantment|permanent|land)|it)"),
     # "**Whenever a creature has four or more fuse counters on it**, remove all
     # fuse counters from it and destroy it. That creature deals 4 damage to its
     # controller." (Bomb Squad.) The same CR 603.8 state, asked of **another

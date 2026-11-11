@@ -163,6 +163,23 @@ def _parse_state_trigger_event(
                 return ast.TriggerEvent("source_has_no_counters", word)
     stream.reset(empty_mark)
 
+    # "When **this artifact has twenty or more charge counters on it**, you
+    # win the game." (Darksteel Reactor.) The source's own threshold — the
+    # "there are … on this artifact" branch at the foot of this function in
+    # the other word order, so the same kind: the table's row reads both, and
+    # the number and the counter kind are consumed and dropped as they are
+    # there. Above the keyword branch, whose vocabulary test rewinds on a
+    # number anyway.
+    threshold_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_word("has"):
+        if stream.at_kind(NUMBER) or stream.peek_word() in NUMBER_WORDS:
+            stream.advance()
+            if stream.accept_phrase("or", "more") and stream.peek() is not None:
+                stream.advance()
+                if stream.accept_word("counters") and stream.accept_phrase("on", "it"):
+                    return ast.TriggerEvent("counters_reach_threshold", word)
+    stream.reset(threshold_mark)
+
     keyword_mark = stream.mark()
     if accept_source_reference(stream) and stream.accept_word("has"):
         word_token = stream.peek_word()

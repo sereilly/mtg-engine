@@ -40,9 +40,57 @@ from ..errors import LoweringError
 from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
                        count_filter_on_targeted_seat, counted_definition_spec)
 from ._amounts import _mentions_x, _stamp_x_from_count
-from ._events import (CAST_SPELL_EVENTS, _EVENT_SUBJECT_PLAYERS,
+from ._events import (CAST_SPELL_EVENTS, _EVENT_QUANTITIES, _EVENT_SUBJECT_PLAYERS,
                       EVENT_SUBJECT_PLAYER)
 from ._record_definitions import lower_record_definition
+
+
+#: The events whose firing is a life gain and that freeze how much — the
+#: bound "the amount of life you gained" reads (``_EVENT_QUANTITIES``).
+_LIFE_GAINED_EVENTS = frozenset({"you_gain_life", "player_gains_life"})
+
+
+def _lower_chosen_x_ceiling(
+    node: ast.WhereX,
+    inner: tuple[OracleInstruction, ...],
+    event: str | None,
+) -> tuple[OracleInstruction, ...]:
+    """"…you may pay {X}, **where X is less than or equal to** the amount of
+    life you gained. If you do, draw X cards." (Well of Lost Dreams.)
+
+    CR 107.3f: no cost defines this X, so its controller chooses it as they
+    pay — the ``each_player_pays_any_mana`` payment the bare "you may pay {X}"
+    already lowers to, every step behind it reading the paid amount as X. The
+    clause bounds that choice, so it rides the payment as ``at_most`` (a count
+    spec the handler evaluates as it arms the prompt) and stamps nothing.
+
+    Refused unless the sentence *is* that payment — a ceiling over anything
+    else would bound nothing — and unless the bound is the firing gain under
+    an event that froze one: an unrecorded bound reads as zero, and the offer
+    would be a {0} payment on a card reporting supported.
+    """
+    bound = node.definition.bound
+    key = _EVENT_QUANTITIES.get(event or "") if event in _LIFE_GAINED_EVENTS else None
+    if bound != ast.EachLifeGained(per=1) or key is None:
+        raise LoweringError(
+            "a chosen X is bounded only by the life the firing gain recorded",
+            node=node,
+        )
+    if (
+        node.as_cast
+        or not inner
+        or inner[0].kind != "each_player_pays_any_mana"
+        or inner[0].payload.get("actor") != "you"
+    ):
+        raise LoweringError(
+            "a ceiling on X bounds the X its controller chooses as they pay it",
+            node=node,
+        )
+    payment = OracleInstruction(
+        inner[0].kind, inner[0].value,
+        {**inner[0].payload, "at_most": {"trigger_record": key}},
+    )
+    return (payment,) + inner[1:]
 
 def _round_every_x_spec(
     instructions: tuple[OracleInstruction, ...], rounding: str, divisor: int
@@ -110,6 +158,8 @@ def lower_where_x(
     # at the announcement would freeze a zero. Refused rather than approximated,
     # because a card whose X is announced and whose X is counted are different
     # cards.
+    if isinstance(node.definition, ast.ChosenXAtMost):
+        return _lower_chosen_x_ceiling(node, inner, event)
     if node.as_cast and not _is_cast_time_countable(node.definition):
         raise LoweringError(
             "only a count of a zone can be taken as a spell is cast", node=node

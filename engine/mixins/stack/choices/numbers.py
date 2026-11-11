@@ -130,6 +130,12 @@ class NumberChoicesMixin:
             return False
         if value < 0:
             return False
+        # A printed ceiling on the X (Well of Lost Dreams' "less than or equal
+        # to the amount of life you gained"): above it is a rejection, for the
+        # board's reason below.
+        ceiling = choice.data.get("maximum")
+        if isinstance(ceiling, int) and value > ceiling:
+            return False
         seat = choice.player_index
         player = self.players[seat]
         plan = self.effect_payment_plan(player, generic_cost(value)) if value else None

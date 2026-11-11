@@ -539,6 +539,11 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     # A land may add more than one mana a tap (Ancient Tomb's {C}{C}), which
     # the plan counts (``Game.effect_payment_plan``): two a land bounds it.
     limit = sum(max(0, int(v)) for v in player.mana_pool.values()) + 2 * len(lands)
+    # …and a printed ceiling on the X, when the card has one (Well of Lost
+    # Dreams): the resolver rejects an answer above it.
+    ceiling = choice.data.get("maximum")
+    if isinstance(ceiling, int):
+        limit = min(limit, ceiling)
     for amount in range(1, limit + 1):
         if ctx.game.effect_payment_plan(seat, generic_cost(amount), lands=lands) is None:
             break

@@ -941,7 +941,9 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
     written for.
     """
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
-    fixed = int(instruction.payload.get("amount", 1) or 0)
+    # "…discards **X** cards" (Death Cloud): the cast's X, through the one
+    # reader of an amount payload.
+    fixed = resolve_amount(instruction.payload.get("amount", 1), context.x_value)
     could_not: list[int] = []
     owed: dict[int, int] = {}
     seats = game.apnap_seats()

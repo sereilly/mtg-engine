@@ -31,7 +31,7 @@ from ..errors import GrammarError
 from ..names import accept_original_expansion
 from ..distinct import accept_one_of_each
 from ..nouns import parse_object_filter
-from ..records import _parse_for_each_history
+from ..records import _parse_for_each_history, accept_each_life_lost
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (
@@ -141,6 +141,15 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     # this turn" as unconsumed text and refused the line. This reader declines
     # with the cursor unmoved, so asking it first costs the board reading
     # nothing.
+    # "Whenever you lose life, sacrifice a permanent **for each 1 life you
+    # lost**." (Lich's Tomb.) The firing event's loss as the count, through the
+    # one reader of the phrase Oath of Lim-Dûl's leading loop and
+    # Transcendence's trailing gain already share; one sacrifice of that many
+    # (CR 701.21a), not that many sacrifices. Asked first, for the history
+    # reader's reason below: the board reader would claim "for each".
+    life_lost = accept_each_life_lost(stream)
+    if life_lost is not None:
+        return ast.Sacrifice(player, subject, count=life_lost)
     history = _parse_for_each_history(stream, parse_object_filter)
     if history is not None:
         return ast.Sacrifice(player, subject, count=history)

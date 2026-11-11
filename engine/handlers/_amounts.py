@@ -36,7 +36,8 @@ from ._chosen import (_resolve_chosen_color, _resolve_chosen_subtype,
 from ._filters import (_card_matches_filter, permanent_effective_colors,
                        permanent_matches_filter, recorded_card_owner)
 from ._targets import (announced_role_seat, attached_host, defending_player_seat,
-                       resolve_role_permanent, resolve_target_permanent)
+                       frozen_that_player_seat, resolve_role_permanent,
+                       resolve_target_permanent)
 
 
 def resolve_amount(raw: object, x_value: int | None) -> int:
@@ -469,6 +470,18 @@ def count_from_payload(
             if isinstance(seat, int) and 0 <= seat < len(game.players)
             else context.caster
         )
+    elif scope == "damaged_player":
+        # "Whenever this creature deals combat damage to a player, you gain 1
+        # life for each artifact **that player** controls." (Emissary of Hope.)
+        # The seat the damage hit, frozen by the damage seam (CR 603.10), read
+        # through the one reader of a printed "that player" — the seat the
+        # discard, the reveal and the targeted destroy behind the same trigger
+        # resolve. No record counts nothing: never the caster's board, which
+        # is the one seat the phrase certainly does not name.
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            return 0
+        owner = game.players[seat]
     else:
         owner = context.target or context.caster
     # "…for each creature blocking **it**" (Barreling Attack), where "it" is
