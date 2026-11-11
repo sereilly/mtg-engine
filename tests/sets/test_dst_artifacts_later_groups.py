@@ -382,4 +382,34 @@ def test_w1g9_thought_dissector_gone_in_response_still_delivers_the_artifact(set
     assert _w1g9_names(alice) == ["Sol Ring"]
     assert [c.name for c in alice.graveyard] == ["Thought Dissector"]
 
+
+
+def test_w1g9_eater_of_days_skips_its_controllers_next_two_turns(set_pool):
+    """"When this creature enters, you skip your next two turns." CR 614.10a:
+    two "next" skips, each spent on one turn — after Alice's turn the next
+    three turns are Bob's, and the fourth is hers."""
+    dst = set_pool("DST")
+    game, alice, bob = _w1g9_table(set_pool)
+    alice.hand.append(dst["Eater of Days"])
+    assert game.cast_from_hand(0, "Eater of Days").supported
+    _w1g9_settle(game)
+    assert "Eater of Days" in _w1g9_names(alice)
+    assert game.skip_turn_counts.get(0) == 2
+    assert any("will skip their next 2 turns" in line for line in game.log)
+    assert [game.start_next_turn() for _ in range(4)] == [1, 1, 1, 0], game.log[-12:]
+    assert game.skip_turn_counts.get(0, 0) == 0
+
+
+def test_w1g9_eater_of_days_put_onto_the_battlefield_skips_too(set_pool):
+    """The trigger is the entry's, however it entered (CR 603.6a): put onto the
+    battlefield by an effect, it still costs two turns; a second Eater stacks
+    two more (CR 614.10a: each skip waits for its own turn)."""
+    dst = set_pool("DST")
+    game, alice, bob = _w1g9_table(set_pool)
+    _w1g9_put(game, 0, dst["Eater of Days"])
+    _w1g9_settle(game)
+    _w1g9_put(game, 0, dst["Eater of Days"])
+    _w1g9_settle(game)
+    assert game.skip_turn_counts.get(0) == 4
+
 # ==== end W1G9 ======================================================
