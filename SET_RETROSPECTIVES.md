@@ -2001,3 +2001,61 @@ before `ids` (two fail) and on the tip:
 
 The fix moved no seeded game against the tree before `ids`. The full pass ran
 again on the fixed tree before `main` moved.
+
+### DST — 2026-11-11
+
+*The Mirrodin block's second set: 165 cards, 162 new, 65.5% on arrival and
+six of those hollow, so 63 to do; one new keyword, modular.* The ingest's
+full pass read 13 reds, every one a census whose population reads the
+measured set (one a crash: Panoptic Mirror's "mana value X" handed to
+`int()`), sent to four owners. Wave 1's nine groups landed all 63 with no
+hook and no decline: modular as a rewrite onto two lines the engine already
+read (its count the existing departure look-back), the granted "Unattach"
+cost, Trinisphere's floor as CR 601.2f's last step, Mycosynth Lattice as
+three text-keyed rows, Serum Powder's CR 103.5b exchange, Death-Mask
+Duplicant's linked keywords. Wave 2's three took the client (driven in a
+browser, one whole game played), the AI (Savage Beating's added combat, the
+promotion's last red; the pre-block window of Tears of Rage, Teleport and
+Camouflage) and an engine pile (restricted mana through layer 4 both ways,
+Incinerate per Disintegrate's ruling, `drive_combat`'s double block, and
+`whenever_triggers.py`'s row notes moved out: 1,814 lines to 526). Shipped
+cards fixed beside them, about twenty: Pulse of the Grid and of the Tangle
+never returned; every "all other … with the same name" sweep destroyed a
+regenerated target twice; face-down creatures shared a name; Welding Jar and
+Loxodon Mender never targeted a noncreature artifact; Screams from Within
+never returned; Stand Together, Savage Beating, Reverse Polarity, CR 303.4d,
+the default sacrifice order (Lich's Tomb, Soul Echo, Platinum Angel), a
+pay-any-amount {X} that could not tap Sol Ring (Liege of the Hollows, Hollow
+Specter), Soldevi Machinist, Incinerate. The wave-1 rehearsal read four
+census reds, each fixed in its census, and a green sampled half; the
+promotion's full pass (40 minutes at `-n 7`) read three more, full-marked
+censuses no quick pass or rehearsal runs, each naming a Darksteel card: an
+unasked pick census whose "dearest" rule met W2G2's better one (Screams from
+Within takes the host it kills), a flash census whose premise "a flier none
+can block" forgot reach (Tangle Spider), and a second coin flip beside Bottle
+of Suleiman's reviewed row (Wirefly Hive) — all three fixed in the censuses, each validated backwards, by the AI group resumed on the promotion commit, and the red files re-run whole as the full pass before `main` moved. Phase 5: three seeded
+DST batches of six games, every one exit 0 with nothing illegal; W2G1's whole
+human-vs-AI game was the smoke game, but nothing was recorded through the
+Debug Menu, so `CARD_VERIFICATION.md` gained no row (Darksteel's 162 are
+untested or equivalent — a Phase 5 pass for the next session).
+
+*What the integration learned.* A subagent cannot write a report file, so
+every report came from the transcript (the extractor is committed; its first
+cut kept only an agent's last report and overwrote two wave reports with
+their follow-ups). `tests_for_diff` misses a census reached through a seat's
+choice or a trigger-condition kind (W1G3's graveyard-denial red; the
+conditional-grants and upkeep-window censuses the rehearsal found). Three
+links shared a meeting twice with no bisect. An ordered table in the band was
+78% notes. Phase 1's yield came 80 minutes into the wave, behind a 50-minute
+full pass.
+
+*Edits in place:* reports from the transcript; `tests_for_diff`'s blind
+spots; briefs that list the base's reds, ask for both snapshots and forbid
+`sed -i`; triple meetings and follow-ups under an alias; `open_test_files
+--later`; an ordered table measured for its notes. The rule files: four
+wave-1 sentences, the whenever notes, three of `ai-simulator.md`'s.
+*Known gaps:* **drained** "Camouflage is never cast"; **added** Darksteel's AI
+leftovers (a spell paid for by a cast trigger; three weights for the owner),
+its engine and client leftovers, and the toolkit wishes its groups wrote
+down. ROADMAP: the next set is Fifth Dawn; the pool numbers, stale since
+Eighth Edition, read again.
