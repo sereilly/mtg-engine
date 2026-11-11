@@ -181,7 +181,23 @@ def _lower_pump(
             )
         raise LoweringError(_durationless_reason(node.subject), node=node)
 
-    if node.x_definition is not None:
+    # "**Attacking creatures you control** get +X/+0 until end of turn, where X
+    # is the number of attacking creatures." (Tears of Rage.) A where-clause on
+    # a *class*: the global buff below owns the noun phrase, and the size is
+    # the count spec the "for each" team buff already carries on the same
+    # ``x_from_count`` key — taken once at resolution (CR 608.2h), with the set
+    # fixed then too (CR 611.2c). Handed to that branch rather than built here.
+    sweep_x_spec = None
+    if (
+        node.x_definition is not None
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("all", "each")
+        and not node.subject.targeted
+    ):
+        sweep_x_spec = _x_definition_spec(
+            node.x_definition, node, recorded=produced, event=event
+        )
+    elif node.x_definition is not None:
         # "gets -X/-X until end of turn, where X is the number of cards in
         # your graveyard" (Liliana, Waker of the Dead). X is defined by a
         # count, so the payload carries what to count and the handler computes
@@ -598,6 +614,9 @@ def _lower_pump(
             payload["x_from_count"] = count_spec(
                 node.per_each, node, offset=_per_each_offset(node)
             )
+        elif sweep_x_spec is not None:
+            # Tears of Rage's where-clause, measured above.
+            payload["x_from_count"] = sweep_x_spec
         if filt.colors:
             payload["color"] = filt.colors[0]
         # "**Nonwhite** creatures get -1/-1 until end of turn." (Holy Light.)

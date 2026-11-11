@@ -943,6 +943,14 @@ CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
 #: the pick prompt writes it and ``reanimate_bound_card`` reads it.
 CHOSEN_GRAVEYARD_CARD = "chosen_graveyard_card"
 
+#: "Attacking creatures you control get +X/+0 until end of turn … **Sacrifice
+#: those creatures** at the beginning of the next end step." (Tears of Rage.)
+#: The ids of the creatures a one-shot global buff reached — the set CR 611.2c
+#: fixed as it resolved — so a later sentence (a delayed one, through the
+#: frozen scratchpad) names exactly those and not whatever matches the noun
+#: phrase by then.
+BUFFED_THIS_WAY_PERMANENTS = "buffed_this_way_permanents"
+
 #: "Remove target attacking creature you control from combat **and untap it**."
 #: (Reconnaissance.) The permanent the removal took out of combat, recorded
 #: because the step behind it names it with a bare pronoun and nothing else in

@@ -29,7 +29,8 @@ from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             named_no_target)
 from ..resumption import run_resumable
 from ._filters import permanent_matches_filter
-from ._targets import (departed_object_said, one_recorded_permanent_id, attached_host,
+from ._targets import (departed_object_said, one_recorded_permanent_id,
+                       recorded_permanent_ids, attached_host,
                        block_pair_permanents, frozen_that_player_seat,
                        resolve_role_permanent, resolve_target_permanent,
                        resolve_target_permanents)
@@ -1273,6 +1274,43 @@ def sacrifice_recorded_permanent(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     game.sacrifice_permanent(victim)
     game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
+    return True, "resolved"
+
+
+@effect_handler("sacrifice_recorded_permanents")
+def sacrifice_recorded_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…**Sacrifice those creatures** at the beginning of the next end step."
+    (Tears of Rage.)
+
+    :func:`sacrifice_recorded_permanent`'s plural: every permanent an earlier
+    step recorded, read out of the delayed entry's frozen scratchpad first
+    (CR 603.7c — the creating resolution is long over) and this resolution's
+    own after. Sacrificed together (CR 701.21a, ``sacrifice_permanents``), and
+    only those the ability's controller still controls: a player can't
+    sacrifice a permanent they don't control. One already gone is skipped
+    (CR 608.2b).
+    """
+    key = instruction.payload.get("permanents_from")
+    frozen = (context.trigger_context or {}).get(str(key)) if key else None
+    ids = (
+        tuple(one for one in frozen if isinstance(one, int))
+        if isinstance(frozen, (list, tuple))
+        else recorded_permanent_ids(context, key)
+    )
+    seat = game.players.index(context.caster)
+    doomed = [
+        permanent for permanent in (game.permanent_by_id(one) for one in ids)
+        if permanent is not None and game.is_on_battlefield(permanent)
+        and game.controller_index_of(permanent) == seat
+    ]
+    if not doomed:
+        game.log.append(f"{context.card.name}: none of those permanents is left")
+        return True, "resolved"
+    gone = game.sacrifice_permanents(doomed)
+    game.log.append(
+        f"{context.card.name}: sacrificed "
+        + ", ".join(permanent.card.name for permanent in gone)
+    )
     return True, "resolved"
 
 
