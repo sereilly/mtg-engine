@@ -21,6 +21,7 @@ set) — the shape that would be a hollow line.
 from dataclasses import fields
 
 from engine.card_loader import load_cards, manifest_set_paths
+from engine.faces import compilation_units
 from engine.global_statics import GlobalStatic, global_static_for
 
 
@@ -38,7 +39,8 @@ def test_every_global_static_line_reaches_the_whole_texts_static():
     several = []
     unhonoured = []
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards(path):
+        # The text that compiles: a split card's halves, each in its place.
+        for card in compilation_units(load_cards(path)):
             if card.name in seen:
                 continue
             seen.add(card.name)

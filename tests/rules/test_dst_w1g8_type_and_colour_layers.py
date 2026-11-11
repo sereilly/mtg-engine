@@ -49,12 +49,16 @@ def test_march_waits_behind_the_lattice_whichever_is_older(set_pool, lattice_fir
     forest = _put(game, lea["Forest"])
     island = _put(game, lea["Island"], seat=1)
     bears = _put(game, lea["Grizzly Bears"])
-    order = [set_pool("DST")["Mycosynth Lattice"], mrd["March of the Machines"]]
-    if not lattice_first:
-        order.reverse()
-    placed = [_put(game, card) for card in order]
+    lattice_card = set_pool("DST")["Mycosynth Lattice"]
+    march_card = mrd["March of the Machines"]
+    if lattice_first:
+        lattice = _put(game, lattice_card)
+        march = _put(game, march_card)
+    else:
+        march = _put(game, march_card)
+        lattice = _put(game, lattice_card)
     settle(game)
-    lattice, march = placed if lattice_first else placed[::-1]
+    assert (lattice.timestamp < march.timestamp) is lattice_first
 
     assert not game.is_on_battlefield(forest)
     assert not game.is_on_battlefield(island)
