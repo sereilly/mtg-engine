@@ -35,7 +35,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import replace
 
-from ..oracle_types import CONDITION_DIFFERENCE
+from ..oracle_types import CONDITION_DIFFERENCE, DESTROYED_TARGET_COUNTERS
 from . import ast
 from .back_references import COMBAT_ROLES
 
@@ -303,6 +303,32 @@ def rebind_difference_to_condition(
     def _rewrite(amount: ast.ThatMuch) -> "ast.Minus | None":
         if amount.source == CONDITION_DIFFERENCE and not amount.bonus:
             return difference
+        return None
+
+    return _walk_specs(statement, _rewrite, ast.ThatMuch)
+
+
+def rebind_count_to_condition_counters(
+    condition: ast.Condition, statement: ast.Statement
+) -> ast.Statement:
+    """"If that artifact had counters on it, put **that many** +1/+1 counters
+    or charge counters on an artifact you control." (Dismantle.)
+
+    A bare "that many" names nothing the parser can see (``ast.ThatMuch``), and
+    after a destroy there are two numbers it could be (the frozen power and
+    toughness), so on its own it refuses. The condition in front of it is what
+    says which: the count of counters it asked about, which the destroy froze
+    as ``DESTROYED_TARGET_COUNTERS``. So the bare reference becomes that named
+    one, and the lowering then gates it on the destroy being in front of it
+    like every named back-reference. Any other condition leaves the arm as it
+    was.
+    """
+    if not isinstance(condition, ast.DestroyedTargetHadCounters):
+        return statement
+
+    def _rewrite(amount: ast.ThatMuch) -> "ast.ThatMuch | None":
+        if amount.source is None and not amount.bonus:
+            return ast.ThatMuch(DESTROYED_TARGET_COUNTERS)
         return None
 
     return _walk_specs(statement, _rewrite, ast.ThatMuch)

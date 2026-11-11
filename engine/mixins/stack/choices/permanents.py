@@ -428,6 +428,10 @@ class PermanentChoicesMixin:
         live = permanent_pick_order(self, choice, live)
         if prefers == "tapped":
             live = sorted(live, key=lambda perm: not perm.tapped)
+        elif prefers == "creature":
+            # "…put that many +1/+1 counters … on an artifact you control"
+            # (Dismantle): a creature first, where the counters count.
+            live = sorted(live, key=lambda perm: not perm.is_creature)
         elif prefers == "not_the_choosers":
             # "That player attaches this Aura to a land of their choice."
             # (Steam Vines, Kudzu.) The Aura destroys the land it is on, so a

@@ -999,6 +999,26 @@ class TriggerChoicesMixin:
                     return self._resolve_trigger_target(
                         choice, permanent_id=shielded[0].permanent_id
                     )
+            # "…you may move a +1/+1 counter from target creature onto this
+            # creature" (Arcbound Fiend): a move is worth what the target
+            # holds (CR 122.5), so the wanted side's creature with the most of
+            # that counter (``ai_target_sides.counter_holder_order``). The
+            # first on the wanted side was a creature with none.
+            from ....ai_target_sides import (counter_holder_order,
+                                             counter_moved_off_target)
+
+            moved = counter_moved_off_target(getattr(item, "ability_instruction", None))
+            if wanted and moved is not None:
+                holders = counter_holder_order([
+                    permanent for target in targets
+                    if target.get("kind") == "permanent" and target.get("seat") in wanted
+                    for permanent in (self.permanent_by_id(target.get("permanent_id")),)
+                    if permanent is not None
+                ], moved)
+                if holders:
+                    return self._resolve_trigger_target(
+                        choice, permanent_id=holders[0].permanent_id
+                    )
             if wanted and untaps_its_target(getattr(item, "ability_instruction", None)):
                 tapped = untap_target_order([
                     permanent for target in targets

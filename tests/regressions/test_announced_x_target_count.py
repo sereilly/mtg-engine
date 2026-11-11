@@ -55,7 +55,11 @@ def _announced_x_target_abilities():
 def _board(source_card):
     """The source on seat 0 with a hand to pay a discard; on seat 1, two of each
     kind of object the pool's "X target" lines name — tapped lands for an untap,
-    small creatures for Runed Arch's "power 2 or less"."""
+    small creatures for Runed Arch's "power 2 or less", and noncreature
+    artifacts, tapped and untapped, for Synod Artificer's "Tap / Untap X target
+    noncreature artifacts" (Darksteel). The artifacts go last, so every
+    ability that already found its two targets among the lands and creatures
+    names the same two it always did."""
     bait = []
     for tapped in (True, True, False, False):
         land = _nosick(Permanent(card=_mk_card(name="Bait Land", type_line="Land")))
@@ -65,6 +69,10 @@ def _board(source_card):
         bait.append(_nosick(Permanent(card=_mk_card(
             name="Bait Creature", type_line="Creature - Human", power=1, toughness=1,
         ))))
+    for tapped in (True, True, False, False):
+        artifact = _nosick(Permanent(card=_mk_card(name="Bait Artifact", type_line="Artifact")))
+        artifact.tapped = tapped
+        bait.append(artifact)
     filler = _mk_card(name="Filler", type_line="Creature - Human", power=1, toughness=1)
     game = Game(players=[
         PlayerState(
@@ -113,7 +121,9 @@ def test_an_activation_naming_x_targets_still_resolves_against_all_of_them():
     on both — the gate narrows the announcement, not the effect."""
     pool = {card.name: card for card in load_cards(manifest_set_paths())}
     game = _board(pool["Candelabra of Tawnos"])
-    tapped = [p for p in game.players[1].battlefield if p.tapped]
+    tapped = [
+        p for p in game.players[1].battlefield if p.tapped and p.has_type("land")
+    ]
     result = game.queue_permanent_ability(
         0, "Candelabra of Tawnos", target_player_index=1, x_value=2,
         target_permanent_ids=[p.permanent_id for p in tapped],

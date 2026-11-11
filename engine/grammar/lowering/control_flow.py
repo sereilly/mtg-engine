@@ -82,10 +82,21 @@ def _lower_one_of(
     Each option must lower to exactly one instruction: the mode payload carries
     one, and a silently truncated option is a branch the player could choose and
     then not get.
+
+    **One printed placement that lowers to a pick and a write** is the one
+    exception, and it is wrapped rather than truncated: "put that many +1/+1
+    counters or charge counters on an artifact you control" (Dismantle) is a
+    choice of kind whose every option is ``choose_permanent`` and the
+    placement reading its answer (``lowering/counters``' chosen placement).
+    Both steps of the chosen option run, in order, as a ``sequence`` — the
+    shape the same two steps already take outside a choice. Admitted for that
+    pairing alone, so every other multi-step alternative keeps its refusal.
     """
     modes = []
     for index, option in enumerate(node.options):
         lowered = lower_statement(option, produced, event=event, event_subject=event_subject, whole_effect=False)
+        if len(lowered) == 2 and _is_a_chosen_placement(lowered):
+            lowered = (OracleInstruction("sequence", "", {"steps": lowered}),)
         if len(lowered) != 1:
             raise LoweringError(
                 "an alternative that is not a single instruction has no mode to "
@@ -95,6 +106,18 @@ def _lower_one_of(
         label = node.labels[index] if index < len(node.labels) else ""
         modes.append({"label": label, "instruction": lowered[0]})
     return (OracleInstruction("choose_one", "", {"modes": tuple(modes)}),)
+
+
+def _is_a_chosen_placement(lowered: tuple[OracleInstruction, ...]) -> bool:
+    """Whether *lowered* is a ``choose_permanent`` and the counter placement
+    reading its answer — the one two-step alternative ``_lower_one_of``
+    wraps."""
+    pick, placement = lowered
+    return (
+        pick.kind == "choose_permanent"
+        and placement.kind in ("add_counter_to_target", "add_named_counter_to_target")
+        and placement.payload.get("permanents_from") == pick.payload.get("result_key")
+    )
 
 
 def _may_cost_payload(node: ast.May) -> dict[str, object]:

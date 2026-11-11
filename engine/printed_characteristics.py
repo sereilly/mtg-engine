@@ -354,6 +354,17 @@ def _printed_abilities_cached(
     if hexproof_from_printed and not bare_hexproof_printed:
         abilities.discard("hexproof")
         abilities.discard("hexproof from")
+    # **Modular is a word the rewrite consumes** (CR 702.43a,
+    # ``engine/modular.py``): by the time the lines above are read the keyword
+    # line is two sentences, so no keyword line names it — and "each creature
+    # you control **with modular**" (Arcbound Overseer) is a question about
+    # the word. It is still an ability the permanent has, so it is read off
+    # the *printed* text, beside the ingested field: a fixture printing the
+    # line, and a line a text change wrote, answer it as an Arcbound does.
+    from .modular import has_printed_modular
+
+    if has_printed_modular(oracle_text):
+        abilities.add("modular")
     return frozenset(abilities)
 
 

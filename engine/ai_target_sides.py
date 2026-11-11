@@ -171,6 +171,11 @@ _OPPONENT_KINDS = frozenset({
     # controller nothing about their own face-down creatures, which they may
     # look at already; the look is for an opponent's.
     "look_at_target_face_down",
+    # "…move a +1/+1 counter **from target creature** onto this creature"
+    # (Arcbound Fiend). Categorised ``counters`` beside the placements, which
+    # is the family and the opposite side: the target is the one the counter
+    # comes *off*.
+    "move_counter_to_self",
 })
 
 
@@ -1383,6 +1388,34 @@ def untap_target_order(permanents: list) -> list:
         return (2 if permanent.has_type("land") else 1, 0)
 
     return sorted((permanent for permanent in permanents if permanent.tapped), key=rank)
+
+
+def counter_moved_off_target(instruction: OracleInstruction | None) -> str | None:
+    """The kind of counter *instruction* moves **off** its target onto its
+    source ("…you may move a +1/+1 counter from target creature onto this
+    creature", Arcbound Fiend), every step and wrapper opened, or None.
+
+    A move is worth what the target holds: CR 122.5 makes it nothing at all
+    when the target has no such counter (:func:`counter_holder_order`)."""
+    if instruction is None:
+        return None
+    steps = _effect_steps(instruction)
+    if not steps or any(step.kind != "move_counter_to_self" for step in steps):
+        return None
+    kinds = {str((step.payload or {}).get("counter", "+1/+1")) for step in steps}
+    return kinds.pop() if len(kinds) == 1 else None
+
+
+def counter_holder_order(permanents: list, kind: str) -> list:
+    """The permanents of *permanents* holding a *kind* counter, the most
+    first — empty when none does, where a move is worth nothing wherever it
+    is aimed. Stable within a count, so equal candidates keep their order."""
+    from .named_counters import counters_on
+
+    return sorted(
+        (permanent for permanent in permanents if counters_on(permanent, kind) > 0),
+        key=lambda permanent: -counters_on(permanent, kind),
+    )
 
 
 def shields_its_target(instruction: OracleInstruction | None) -> bool:

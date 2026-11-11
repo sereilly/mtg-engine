@@ -383,6 +383,18 @@ def lower_record_condition(
                 "permanent", node=condition,
             )
         return {"kind": "destroyed_target_was", "filter": described}
+    if isinstance(condition, ast.DestroyedTargetHadCounters):
+        # "Destroy target artifact. **If that artifact had counters on it**, …"
+        # (Dismantle.) The same referent, gated the same way: with no destroy in
+        # front of it the record is absent and the clause would answer False
+        # forever on a card that compiled supported.
+        if "destroyed_target" not in produced:
+            raise LoweringError(
+                "'that <noun> had counters' with nothing in this effect that "
+                "destroyed one",
+                node=condition,
+            )
+        return {"kind": "destroyed_target_had_counters"}
     if isinstance(condition, ast.CostObjectWas):
         # "…**if the exiled creature was a Thrull**" (Soul Exchange);
         # "…**if the sacrificed creature was a Thrull**" (Ebon Praetor). The

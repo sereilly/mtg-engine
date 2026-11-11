@@ -581,6 +581,35 @@ def offered_untap_changes_nothing(game, entry: dict) -> bool:
     return target is not None and game.is_on_battlefield(target) and not target.tapped
 
 
+def offered_gift_lands_on_the_wrong_side(game, seat: int, entry: dict) -> bool:
+    """Whether what an offer buys is a gift to its announced target, and that
+    target is a permanent an opponent of *seat* controls.
+
+    "When this permanent is put into a graveyard from the battlefield, you may
+    put a +1/+1 counter on target artifact creature for each +1/+1 counter on
+    this permanent." (CR 702.43a, every Arcbound.) The target is mandatory
+    while one exists (CR 603.3d), so a seat whose only artifact creature left
+    is an opponent's still names it, and "take gifts" then put the dying
+    creature's counters on the opposing creature. The "may" is the card's own
+    answer to that board, asked as it resolves (CR 608.2d): declined where
+    every step that names the target helps it (``ai_target_sides.
+    ability_target_side`` is "you") and the target sits across the table.
+    """
+    from .ai_target_sides import ability_target_side
+    from .game_types import single_chosen_id
+
+    steps = [step for step in entry.get("_on_accept") or () if getattr(step, "kind", None)]
+    if not steps or {ability_target_side(step) for step in steps} != {"you"}:
+        return False
+    context = entry.get("_context")
+    announced = single_chosen_id(getattr(context, "target_permanent_id", None))
+    target = game.permanent_by_id(announced) if isinstance(announced, int) else None
+    if target is None or not game.is_on_battlefield(target):
+        return False
+    controller = game.controller_index_of(target)
+    return controller is not None and controller != seat
+
+
 def threatening_color(game, seat: int) -> str | None:
     """The colour of the opposing object a colour chosen *now* is answering,
     or None when nothing on the stack is one.

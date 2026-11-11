@@ -64,6 +64,7 @@ from .entwine import unsupported_entwine
 from .flashback import (FLASHBACK_CLAIM, flashback_x_unannounced,
                         unread_flashback_line)
 from .fading import unread_fading_line
+from .modular import unread_modular_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (unread_alternative_cost_sentence,
                                 unread_granted_alternative_cost_sentence)
@@ -459,6 +460,18 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented fading ability: {unread_fading}",
+            normalized_text,
+        )
+    # …and a **modular** line the CR 702.43a rewrite could not read
+    # (``engine/modular.py``) — "Modular—Sunburst", a count with no word — for
+    # fading's reason: a creature whose other line compiles would report
+    # supported as a 0/0 that dies on arrival with nothing to pass on.
+    unread_modular = unread_modular_line(oracle_text)
+    if unread_modular is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented modular ability: {unread_modular}",
             normalized_text,
         )
     # …and a **flashback** line the CR 702.34a rewrite could not read

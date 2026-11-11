@@ -152,12 +152,72 @@ def move_counter_from_self(game: Game, instruction: OracleInstruction, context: 
         # a move with nowhere to land is not a removal.
         game.log.append(f"{context.card.name}: nothing left to move a counter onto")
         return True, "no target"
-    remove_counters(source, counter, moving)
-    game.place_pt_counters(creature, counter, moving)
+    _move_counters(game, source, creature, counter, moving)
+    return True, "resolved"
+
+
+def _move_counters(game: Game, origin, destination, counter: str, moving: int) -> None:
+    """CR 122.5's one action: *moving* counters off *origin* and onto
+    *destination*, through the shared seams (``named_counters.remove_counters``
+    and ``Game.place_pt_counters``) so a P/T counter takes its layer 7c
+    contribution with it in both directions (CR 122.1a)."""
+    remove_counters(origin, counter, moving)
+    game.place_pt_counters(destination, counter, moving)
     game.log.append(
-        f"Moved {moving} {counter} counter(s) from {source.card.name} "
-        f"onto {creature.card.name}"
+        f"Moved {moving} {counter} counter(s) from {origin.card.name} "
+        f"onto {destination.card.name}"
     )
+
+
+@effect_handler("move_counter_to_self")
+def move_counter_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"At the beginning of your upkeep, you may move a +1/+1 counter from
+    target creature onto this creature." (Arcbound Fiend.)
+
+    :func:`move_counter_from_self` read from the other end: the target gives
+    the counter up and the ability's own permanent takes it. CR 122.5 names
+    every way the move is impossible, and each one moves nothing **to either
+    end**: the target holds no such counter (the card's 2004-12-01 ruling: "If
+    it doesn't have a counter on it when the ability resolves, nothing
+    happens"), the two ends are one object (the Fiend may target itself), or
+    either object is no longer on the battlefield — the target left (CR
+    608.2b, and no other creature is substituted for it) or the Fiend did,
+    in which case the target keeps its counter.
+    """
+    from ..subject_filters import subject_matches
+
+    destination = context.source_permanent
+    name = context.card.name if context.card is not None else "Effect"
+    if destination is None or not game.is_on_battlefield(destination):
+        game.log.append(f"{name}: no permanent to move a counter onto")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", "+1/+1"))
+    wanted = int(instruction.payload.get("count", 1) or 1)
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    origin = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described,
+            observer=game.players.index(context.caster), source=destination,
+        ),
+        # A chosen creature that has left is no creature at all (CR 608.2b):
+        # a scan would take a counter off one nobody named.
+        fallback_on_invalid_choice=False,
+    )
+    if origin is None:
+        game.log.append(f"{name}: nothing left to move a counter from")
+        return True, "no target"
+    if origin is destination:
+        game.log.append(
+            f"{name}: a counter cannot be moved from a permanent onto itself "
+            "(122.5)"
+        )
+        return True, "resolved"
+    held = counters_on(origin, counter)
+    if held <= 0:
+        game.log.append(f"{origin.card.name} has no {counter} counter to move")
+        return True, "resolved"
+    _move_counters(game, origin, destination, counter, min(held, wanted))
     return True, "resolved"
 
 
@@ -489,10 +549,18 @@ def remove_all_counters_from_matching(game: Game, instruction: OracleInstruction
     The source has usually left the battlefield by the time this resolves - the
     trigger is a leaves-the-battlefield one - so nothing here reads it.
     """
-    from ..named_counters import counters_on, remove_counters
+    from ..named_counters import (ANY_COUNTER_KIND, counter_kinds_on,
+                                  counters_on, remove_counters)
     from ..subject_filters import subject_matches
 
     kind = str(instruction.payload.get("counter", ""))
+    # "Remove all counters from all permanents" (Aether Snap): every kind on
+    # each permanent, "no matter what kind they are" (its 2004-12-01 ruling),
+    # each through the one removal seam so a P/T counter takes its layer 7c
+    # contribution with it (CR 122.1a) and loyalty empties a planeswalker for
+    # CR 704.5i. The kinds are read off the stores themselves
+    # (``counter_kinds_on``), so a counter some card invented goes too.
+    every_kind = kind == ANY_COUNTER_KIND
     filters = dict(instruction.payload.get("filter") or {})
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
@@ -511,16 +579,24 @@ def remove_all_counters_from_matching(game: Game, instruction: OracleInstruction
             source=context.source_permanent, that_player=that_player,
         ):
             continue
-        held = counters_on(perm, kind)
-        if held <= 0:
-            continue
-        remove_counters(perm, kind, held)
-        cleared.append(perm.card.name)
+        held_kinds = (
+            counter_kinds_on(perm) if every_kind
+            else {kind: counters_on(perm, kind)}
+        )
+        removed = False
+        for held_kind, held in held_kinds.items():
+            if held <= 0:
+                continue
+            remove_counters(perm, held_kind, held)
+            removed = True
+        if removed:
+            cleared.append(perm.card.name)
+    said = "" if every_kind else f"{kind} "
     if cleared:
         game.log.append(
-            f"{context.card.name} removed every {kind} counter from "
+            f"{context.card.name} removed every {said}counter from "
             + ", ".join(cleared)
         )
     else:
-        game.log.append(f"{context.card.name}: no {kind} counters to remove")
+        game.log.append(f"{context.card.name}: no {said}counters to remove")
     return True, "resolved"

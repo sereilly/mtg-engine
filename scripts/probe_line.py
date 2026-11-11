@@ -132,6 +132,7 @@ READERS: tuple[Reader, ...] = (
     Reader("engine.cast_costs", "unchosen_number_definition", "card gate: chosen number", "gate"),
     Reader("engine.cycling", "unread_cycling_line", "card gate: cycling", "gate"),
     Reader("engine.fading", "unread_fading_line", "card gate: fading", "gate"),
+    Reader("engine.modular", "unread_modular_line", "card gate: modular", "gate"),
     Reader("engine.flashback", "unread_flashback_line", "card gate: flashback", "gate"),
     Reader("engine.madness", "unread_madness_line", "card gate: madness", "gate"),
     Reader("engine.affinity", "unread_affinity_line", "card gate: affinity", "gate"),

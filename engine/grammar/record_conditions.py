@@ -728,6 +728,20 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     that_mark = stream.mark()
     if stream.accept_word("that"):
         noun = stream.peek_word()
+        # "if that artifact **had counters on it**" (Dismantle). The same
+        # referent in the same tense, asked of what sat on it — a counter of
+        # any kind (see ``ast.DestroyedTargetHadCounters``). The noun is
+        # dropped for the reason it is below.
+        if (
+            noun is not None
+            and noun in CARD_TYPES
+            and stream.peek_word(1) == "had"
+        ):
+            had_mark = stream.mark()
+            stream.advance(2)
+            if stream.accept_phrase("counters", "on", "it"):
+                return ast.DestroyedTargetHadCounters()
+            stream.reset(had_mark)
         if noun is not None and stream.peek_word(1) == "was":
             stream.advance(2)
             stream.accept_word("a", "an")

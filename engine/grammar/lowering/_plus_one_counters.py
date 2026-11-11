@@ -238,6 +238,31 @@ def lower_plus_one_placement(
         }
         _describe_targets(payload, node.subject)
         return (OracleInstruction("add_counter_to_target", "", payload),)
+    if (
+        isinstance(node.count, ast.CountersOnSource)
+        and _is_target(node.subject)
+        and not _names_several_targets(node.subject)
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier not in PAIR_ORDINALS
+        and not getattr(node.subject.filter, "their_choice", False)
+        and not node.then_double
+    ):
+        # "…you may put a +1/+1 counter on target artifact creature **for each
+        # +1/+1 counter on this permanent**." (CR 702.43a, every modular
+        # creature's death trigger.) The printed-number branch above with its
+        # number read off the source's own pile, through the ``x_from_count``
+        # channel every computed amount takes — ``count_from_payload``'s
+        # ``source_counters`` reader, which asks the source *object*. Under a
+        # leaves-the-battlefield trigger that object is the departed
+        # permanent, which keeps the counters it left with (CR 603.10a's
+        # look-back, CR 608.2h), so the count is the one it died with and not
+        # the zero a card in a graveyard carries.
+        payload: dict[str, object] = {
+            "power": 1, "toughness": 1, "count": "x",
+            "x_from_count": {"source_counters": node.count.kind},
+        }
+        _describe_targets(payload, node.subject)
+        return (OracleInstruction("add_counter_to_target", "", payload),)
     if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
         raise LoweringError("variable counter counts have no handler", node=node)
     if _is_source(node.subject):
