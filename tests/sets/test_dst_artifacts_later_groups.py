@@ -305,6 +305,112 @@ def test_w1g7_the_ai_prices_trinisphere_before_proposing_a_cast(set_pool):
             assert len(action.land_tap_indices) == 3
 
 
+# --- W1G7's drive list: Darksteel cards supported on arrival -------------
+
+
+def _w1g7_names(game, seat):
+    return sorted(p.card.name for p in game.players[seat].battlefield)  # _w1g7_names
+
+
+def test_w1g7_darksteel_forge_keeps_artifacts_through_wrath_shatter_and_damage(
+    set_pool,
+):
+    """"Artifacts you control have indestructible." CR 702.12b: a Wrath
+    leaves the controller's artifacts and takes the Bears and the opponent's
+    Ornithopter; Shatter does nothing to the Moonvessel; 3 damage on a 1/1
+    artifact creature is not lethal while the Forge stays — and is the moment
+    the Forge leaves (its 2020-08-07 ruling)."""
+    game, mine, _theirs = _w1g7_table(
+        set_pool, hand=["Wrath of God", "Shatter", "Lightning Bolt"],
+        mine=["Darksteel Forge", "Myr Moonvessel", "Grizzly Bears"],
+        theirs=["Myr Moonvessel"],
+    )
+    forge, moonvessel = mine[0], mine[1]
+    assert game.cast_from_hand(0, "Wrath of God").supported
+    _w1g7_settle(game)
+    assert _w1g7_names(game, 0) == ["Darksteel Forge", "Myr Moonvessel"]
+    assert _w1g7_names(game, 1) == []
+    assert game.cast_from_hand(
+        0, "Shatter", target_permanent_ids=[moonvessel.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    assert game.is_on_battlefield(moonvessel)
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[moonvessel.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    assert game.is_on_battlefield(moonvessel) and moonvessel.damage_marked == 3
+    assert game.sacrifice_permanent(forge) is not None
+    _w1g7_settle(game)
+    assert not game.is_on_battlefield(moonvessel)
+
+
+def test_w1g7_myr_matrix_pumps_every_myr_and_makes_more(set_pool):
+    """"Indestructible. Myr creatures get +1/+1. {5}: Create a 1/1 colorless
+    Myr artifact creature token." Both sides' Myr grow (no "you control"),
+    the token enters a 2/2, and Shatter leaves the Matrix where it is."""
+    game, mine, theirs = _w1g7_table(
+        set_pool, opponent_hand=["Shatter"],
+        mine=["Myr Matrix", "Myr Moonvessel"], theirs=["Myr Moonvessel"],
+        enforce=True,
+    )
+    matrix = mine[0]
+    assert (mine[1].effective_power, mine[1].effective_toughness) == (2, 2)
+    assert (theirs[0].effective_power, theirs[0].effective_toughness) == (2, 2)
+    game.players[0].mana_pool["C"] = 5
+    assert game.activate_permanent_ability(0, "Myr Matrix").supported
+    _w1g7_settle(game)
+    tokens = [
+        p for p in game.players[0].battlefield if p not in mine
+    ]
+    assert [(p.effective_power, p.effective_toughness) for p in tokens] == [(2, 2)]
+    assert tokens[0].has_type("myr") and tokens[0].has_type("artifact")
+    game.enforce_mana_costs = False
+    game.active_player_index = 1
+    assert game.cast_from_hand(
+        1, "Shatter", target_permanent_ids=[matrix.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    assert game.is_on_battlefield(matrix)
+
+
+def test_w1g7_darksteels_own_indestructibles_survive_destroy_effects(set_pool):
+    """Darksteel Gargoyle, Ingot, Pendant and Citadel each print
+    indestructible: a Wrath and a Shatter at each leave every one."""
+    names = ["Darksteel Gargoyle", "Darksteel Ingot", "Darksteel Pendant",
+             "Darksteel Citadel"]
+    game, mine, _theirs = _w1g7_table(
+        set_pool, hand=["Wrath of God", *["Shatter"] * 4], mine=names,
+    )
+    assert game.cast_from_hand(0, "Wrath of God").supported
+    _w1g7_settle(game)
+    for permanent in mine:
+        assert game.cast_from_hand(
+            0, "Shatter", target_permanent_ids=[permanent.permanent_id]
+        ).supported
+        _w1g7_settle(game)
+    assert _w1g7_names(game, 0) == sorted(names)
+
+
+def test_w1g7_the_darksteel_mana_rocks_make_what_they_print(set_pool):
+    """Ur-Golem's Eye adds {C}{C}, Darksteel Citadel {C}, Darksteel Ingot one
+    mana of the colour an interactive seat names."""
+    for rock, color, made in (
+        ("Ur-Golem's Eye", None, {"C": 2}),
+        ("Darksteel Citadel", None, {"C": 1}),
+        ("Darksteel Ingot", "U", {"U": 1}),
+    ):
+        game, mine, _theirs = _w1g7_table(
+            set_pool, mine=[rock], interactive=[0] if color else [], enforce=True,
+        )
+        assert game.activate_permanent_ability(0, rock).supported
+        if color:
+            assert game.resolve_pending_choice("mana_color_choice", 0, color=color)
+        _w1g7_settle(game)
+        assert _w1g7_floating(game, 0) == made, rock
+        assert mine[0].tapped
+
+
 # ==== end W1G7 ======================================================
 
 

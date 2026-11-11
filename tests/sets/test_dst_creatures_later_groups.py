@@ -313,6 +313,101 @@ def test_w1g7_vedalken_engineer_default_seat_makes_the_same_restricted_mana(
     assert len(restricted["artifact_or_artifact_ability"]) == 1
 
 
+# --- W1G7's drive list: Darksteel creatures supported on arrival ---------
+
+
+def test_w1g7_krark_clan_stoker_sacrifices_an_artifact_for_two_red(set_pool):
+    """"{T}, Sacrifice an artifact: Add {R}{R}." With Myr Moonvessel out the
+    Stoker makes {R}{R} and the Moonvessel's own death trigger adds {C};
+    with no artifact the activation is refused, nothing tapped."""
+    game, mine, _theirs = _w1g7_table(
+        set_pool, mine=["Krark-Clan Stoker", "Myr Moonvessel"],
+    )
+    game.enforce_mana_costs = True
+    stoker, moonvessel = mine
+    assert game.activate_permanent_ability(
+        0, "Krark-Clan Stoker", cost_permanent_ids=[moonvessel.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    assert not game.is_on_battlefield(moonvessel)
+    pool = {s: n for s, n in game.players[0].mana_pool.items() if n}
+    assert pool == {"R": 2, "C": 1}
+    game, mine, _theirs = _w1g7_table(set_pool, mine=["Krark-Clan Stoker"])
+    refused = game.activate_permanent_ability(0, "Krark-Clan Stoker")
+    assert not refused.supported and not mine[0].tapped
+
+
+def test_w1g7_hoverguard_observer_blocks_only_fliers(set_pool):
+    """"This creature can block only creatures with flying." It may block an
+    attacking Pristine Angel (tapped, so unprotected) and not a Grizzly
+    Bears."""
+    game, mine, theirs = _w1g7_table(
+        set_pool, mine=["Grizzly Bears", "Pristine Angel"],
+        theirs=["Hoverguard Observer"],
+    )
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(0, [0, 1], defending_player_index=1)
+    assert ok, why
+    game.advance_combat_phase()
+    ok, _why = game.declare_blockers(1, {0: 0})
+    assert not ok
+    ok, why = game.declare_blockers(1, {0: 1})
+    assert ok, why
+
+
+def test_w1g7_tel_jilad_outrider_cannot_be_blocked_by_an_artifact_creature(
+    set_pool,
+):
+    """"Protection from artifacts." CR 702.16f: a Myr Moonvessel can't block
+    it; a Grizzly Bears can."""
+    game, mine, theirs = _w1g7_table(
+        set_pool, mine=["Tel-Jilad Outrider"],
+        theirs=["Myr Moonvessel", "Grizzly Bears"],
+    )
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok, why
+    game.advance_combat_phase()
+    ok, _why = game.declare_blockers(1, {0: 0})
+    assert not ok
+    ok, why = game.declare_blockers(1, {1: 0})
+    assert ok, why
+
+
+def test_w1g7_leonin_battlemage_pumps_and_untaps_when_its_controller_casts(
+    set_pool,
+):
+    """"{T}: Target creature gets +1/+1 until end of turn. Whenever you cast a
+    spell, you may untap this creature." It pumps itself to 3/4, the Bolt its
+    controller casts offers the untap (an interactive seat says yes), and it
+    pumps again to 4/5."""
+    game, mine, theirs = _w1g7_table(
+        set_pool, hand=["Lightning Bolt"], mine=["Leonin Battlemage"],
+        theirs=["Hill Giant"], interactive=[0],
+    )
+    battlemage = mine[0]
+    assert game.activate_permanent_ability(
+        0, "Leonin Battlemage", target_permanent_ids=[battlemage.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    assert battlemage.tapped
+    assert (battlemage.effective_power, battlemage.effective_toughness) == (3, 4)
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[theirs[0].permanent_id]
+    ).supported
+    _w1g7_settle(game, answers={
+        "optional_pay": lambda g, c: g.confirm_optional_pay(
+            c.player_index, accept=True
+        ),
+    })
+    assert not battlemage.tapped
+    assert game.activate_permanent_ability(
+        0, "Leonin Battlemage", target_permanent_ids=[battlemage.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    assert (battlemage.effective_power, battlemage.effective_toughness) == (4, 5)
+
+
 # ==== end W1G7 ======================================================
 
 
