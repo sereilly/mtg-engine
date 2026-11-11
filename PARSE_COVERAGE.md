@@ -12,28 +12,6 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **661**
 
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**3 unclaimed sentence(s) across 3 supported card(s).**
-
-- **Aether Vial**
-  - `{t}: you may put a creature card with mana value equal to the number of charge counters on this artifact from your hand onto the battlefield`
-- **Panoptic Mirror**
-  - `at the beginning of your upkeep, you may copy a card exiled with this artifact. if you do, you may cast the copy without paying its mana cost`
-- **Serum Powder**
-  - `any time you could mulligan and this card is in your hand, you may exile all the cards from your hand, then draw that many cards`
-
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

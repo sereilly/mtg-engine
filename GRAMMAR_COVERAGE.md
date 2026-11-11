@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| DST *(measured)* | 165 | 285 | 74.4% | 71.9% | 51.2% | 122 |
+| DST *(measured)* | 165 | 285 | 75.4% | 73.7% | 52.6% | 123 |
 | **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -69,7 +69,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 918 | 475 | expected a subject |  |
+| 915 | 472 | expected a subject |  |
 | 196 | 100 | unrecognized effect verb |  |
 | 141 | 74 | unconsumed text |  |
 | 74 | 55 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -235,6 +235,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return X target creatures to their owners' hands.`
 - **Aether Vial**
   - `At the beginning of your upkeep, you may put a charge counter on this artifact.`
+  - `{T}: You may put a creature card with mana value equal to the number of charge counters on this artifact from your hand onto the battlefield.`
 - **Afflict**
   - `Target creature gets -1/-1 until end of turn.`
   - `Draw a card.`
@@ -2872,6 +2873,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return two target creature cards from your graveyard to your hand.`
 - **Death's-Head Buzzard**
   - `When this creature dies, all creatures get -1/-1 until end of turn.`
+- **Death-Mask Duplicant**
+  - `Imprint — {1}: Exile target creature card from your graveyard.`
 - **Deathbloom Thallid**
   - `When this creature dies, create a 1/1 green Saproling creature token.`
 - **Deathgazer**
@@ -8584,6 +8587,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Up to three target creatures can't block this turn.`
 - **Panoptic Mirror**
   - `Imprint — {X}, {T}: You may exile an instant or sorcery card with mana value X from your hand.`
+  - `At the beginning of your upkeep, you may copy a card exiled with this artifact. If you do, you may cast the copy without paying its mana cost.`
 - **Paradigm Shift**
   - `Exile all cards from your library. Then shuffle your graveyard into your library.`
 - **Parallax Dementia**
@@ -11493,6 +11497,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
 - **Spellbinder**
+  - `Imprint — When this Equipment enters, you may exile an instant card from your hand.`
   - `Whenever equipped creature deals combat damage to a player, you may copy the exiled card. If you do, you may cast the copy without paying its mana cost.`
 - **Spellgorger Barbarian**
   - `When this creature enters, discard a card at random.`
