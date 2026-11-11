@@ -231,6 +231,88 @@ def test_w1g7_tanglewalker_does_nothing_without_an_artifact_land(set_pool):
     assert ok, why
 
 
+def _w1g7_engineer_mana(set_pool, *, hand=(), mine=(), color=None):
+    """Seat 0 taps a Vedalken Engineer for two mana of one colour — as an
+    interactive seat answering the colour prompt when *color* is given, as a
+    default seat otherwise. Costs enforced from here on."""
+    game, board, _theirs = _w1g7_table(
+        set_pool, hand=hand, mine=["Vedalken Engineer", *mine],
+        interactive=[0] if color else [],
+    )
+    game.enforce_mana_costs = True
+    tapped = game.activate_permanent_ability(0, "Vedalken Engineer")
+    assert tapped.supported, tapped.details
+    if color:
+        owed = _w1g7_settle(game, defaults=False)
+        assert owed is not None and owed.kind == "mana_color_choice"
+        assert game.resolve_pending_choice("mana_color_choice", 0, color=color)
+    _w1g7_settle(game)
+    return game, board  # _w1g7_engineer_mana
+
+
+def _w1g7_restricted(game):
+    return {
+        key: {symbol: n for symbol, n in bucket.items() if n}
+        for key, bucket in game.players[0].restricted_mana.items()
+        if any(bucket.values())
+    }  # _w1g7_restricted
+
+
+def test_w1g7_vedalken_engineer_mana_casts_an_artifact_but_not_a_creature_spell(
+    set_pool,
+):
+    """"{T}: Add two mana of any one color. Spend this mana only to cast
+    artifact spells or activate abilities of artifacts." Two green from the
+    Engineer cannot pay for Grizzly Bears — the cast is refused and the mana
+    stays — and then pays for a Myr Moonvessel ({1}), one left over and still
+    restricted; none of it ever reaches the ordinary pool (CR 106.6)."""
+    game, _board = _w1g7_engineer_mana(
+        set_pool, hand=["Grizzly Bears", "Myr Moonvessel"], color="G",
+    )
+    assert _w1g7_restricted(game) == {"artifact_or_artifact_ability": {"G": 2}}
+    assert not any(game.players[0].mana_pool.values())
+    refused = game.cast_from_hand(0, "Grizzly Bears")
+    assert not refused.supported and "insufficient mana" in refused.details
+    assert [c.name for c in game.players[0].hand] == ["Grizzly Bears", "Myr Moonvessel"]
+    assert _w1g7_restricted(game) == {"artifact_or_artifact_ability": {"G": 2}}
+    cast = game.cast_from_hand(0, "Myr Moonvessel")
+    assert cast.supported, cast.details
+    _w1g7_settle(game)
+    assert "Myr Moonvessel" in [p.card.name for p in game.players[0].battlefield]
+    assert _w1g7_restricted(game) == {"artifact_or_artifact_ability": {"G": 1}}
+
+
+def test_w1g7_vedalken_engineer_mana_activates_an_artifact_not_a_creature(set_pool):
+    """The other half: the mana pays Darksteel Pendant's "{1}, {T}: Scry 1"
+    and not Shivan Dragon's "{R}: +1/+0" — a creature's ability is no
+    "ability of an artifact" — even when the colour chosen is red."""
+    game, board = _w1g7_engineer_mana(
+        set_pool, mine=["Darksteel Pendant", "Shivan Dragon"], color="R",
+    )
+    _engineer, pendant, dragon = board
+    assert _w1g7_restricted(game) == {"artifact_or_artifact_ability": {"R": 2}}
+    firebreath = game.activate_permanent_ability(0, "Shivan Dragon")
+    assert not firebreath.supported
+    assert dragon.effective_power == 5
+    scry = game.activate_permanent_ability(0, "Darksteel Pendant")
+    assert scry.supported, scry.details
+    _w1g7_settle(game)
+    assert pendant.tapped
+    assert _w1g7_restricted(game) == {"artifact_or_artifact_ability": {"R": 1}}
+
+
+def test_w1g7_vedalken_engineer_default_seat_makes_the_same_restricted_mana(
+    set_pool,
+):
+    """A seat nobody asks takes the colour prompt's default as it is armed:
+    two mana of one colour, under the same restriction."""
+    game, _board = _w1g7_engineer_mana(set_pool)
+    restricted = _w1g7_restricted(game)
+    assert list(restricted) == ["artifact_or_artifact_ability"]
+    assert sum(restricted["artifact_or_artifact_ability"].values()) == 2
+    assert len(restricted["artifact_or_artifact_ability"]) == 1
+
+
 # ==== end W1G7 ======================================================
 
 

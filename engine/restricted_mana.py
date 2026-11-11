@@ -166,6 +166,17 @@ def _activating_an_artifact_ability(purpose: "PaymentPurpose") -> bool:
     return purpose.kind == ACTIVATE and "artifact" in _type_line(effective)
 
 
+def _artifact_spell_or_artifact_ability(purpose: "PaymentPurpose") -> bool:
+    """"Spend this mana only to cast artifact spells **or** activate abilities
+    of artifacts." (Vedalken Engineer.)
+
+    The Workshop's clause and the Machinist's joined by "or": a payment either
+    one admits, each answered by its own predicate, so the two halves cannot
+    come to mean something here they do not mean alone.
+    """
+    return _casting_an_artifact(purpose) or _activating_an_artifact_ability(purpose)
+
+
 # The printed line, anchored at both ends. Anchored because a sentence saying
 # more than one of these is a restriction this file does not implement, and a
 # prefix match would claim it and then enforce the narrower rule — mana more
@@ -202,6 +213,18 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
         # ability's source, which only the activation path holds.
         re.compile(r"^spend this mana only to activate abilities of artifacts\.?$"),
         ManaRestriction("artifact_ability", _activating_an_artifact_ability),
+    ),
+    (
+        # Vedalken Engineer: the two rows above joined by "or". Its own row and
+        # key rather than two keys on one bucket, because a bucket carries one
+        # restriction and "or" widens it — two keys would be read as "and".
+        re.compile(
+            r"^spend this mana only to cast artifact spells or activate "
+            r"abilities of artifacts\.?$"
+        ),
+        ManaRestriction(
+            "artifact_or_artifact_ability", _artifact_spell_or_artifact_ability
+        ),
     ),
     (
         # Thran Turbine. The one clause printed as a prohibition; see

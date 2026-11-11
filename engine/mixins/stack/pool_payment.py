@@ -25,6 +25,7 @@ import re
 
 from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cost_modifiers import CostReduction, reduce_cost
+from ...cost_floors import apply_cost_floor, spell_cost_floor
 from ...mana_payment import pips_payable_by, pool_spent_on_generic
 from ...models import PlayerState
 from ...restricted_mana import CAST, PaymentPurpose
@@ -396,6 +397,13 @@ class PoolPaymentMixin:
         ordinary way from what is left.
         """
         purpose = PaymentPurpose(CAST, card=card)
+        # "…each spell that would cost less than three mana to cast costs three
+        # mana to cast." (Trinisphere.) CR 601.2f's last step, over the total
+        # this builds — the mana cost or what is paid in its place, the
+        # increases, then the reductions — and over nothing earlier
+        # (``engine/cost_floors.py``). Asked once: the total does not depend on
+        # how X is split among colours, and a set-aside unit is part of it.
+        floor, flooring = spell_cost_floor(self)
         for coloring in offer_x_colorings:
             give_back = self._set_aside_one_of_each(caster, coloring, purpose)
             if give_back is None:
@@ -412,8 +420,16 @@ class PoolPaymentMixin:
                     ),
                     reduction or CostReduction(),
                 )
-                if self._pay_mana_cost(caster, cost, purpose=purpose):
-                    return _x_mana_actually_spent(allocation, cost)
+                floored = apply_cost_floor(
+                    cost, floor - sum(1 for _symbol in coloring)
+                )
+                if self._pay_mana_cost(caster, floored, purpose=purpose):
+                    if floored is not cost:
+                        self.log.append(
+                            f"{card.name} costs {floor} mana to cast "
+                            f"({', '.join(flooring)})"
+                        )
+                    return _x_mana_actually_spent(allocation, floored)
             give_back()
         return None
 

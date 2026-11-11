@@ -92,6 +92,14 @@ def cost_modifier_claims_line(line: str) -> bool:
     text = line.strip().lower().rstrip(".")
     if ability_self_reduction(line) is not None:
         return True
+    # "…each spell that would cost less than three mana to cast costs three
+    # mana to cast." (Trinisphere.) CR 601.2f's floor, applied by every
+    # reader of a cast's price through ``engine/cost_floors.py`` — claimed
+    # through that module's own matcher, which reads the whole line.
+    from .cost_floors import cost_floor_for_line
+
+    if cost_floor_for_line(text) is not None:
+        return True
     # Claimed only when the whole subject list reads, for
     # `_sacrifice_symbol_modifier`'s reason one branch down: a pattern that
     # matches and then produces no modifier is a claim over a line nothing
@@ -1092,10 +1100,14 @@ def cast_mana_charge(
     is :meth:`Game.alternative_cost_mana`, the same arithmetic over the cost
     paid in the mana cost's place (CR 118.9d).
     """
+    from .cost_floors import floored_spell_cost
+
     tax, _taxing = spell_cost_tax(game, caster_index, card)
     pips, _pip_taxing = spell_symbol_tax(game, caster_index, card)
     reduction, _reducing = cost_reduction_for_cast(game, caster_index, card)
-    return reduce_cost(
+    # …and CR 601.2f's last step over the finished total (Trinisphere,
+    # ``engine/cost_floors.py``), which the payment applies too.
+    return floored_spell_cost(game, reduce_cost(
         game._parse_mana_cost(
             card.mana_cost,
             x_value=max(0, int(x_value or 0)),
@@ -1104,7 +1116,7 @@ def cast_mana_charge(
             extra_pips=pips,
         ),
         reduction,
-    )
+    ))
 
 
 def keyword_cost_modifiers(

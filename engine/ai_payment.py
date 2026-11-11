@@ -433,7 +433,12 @@ def _cost_for(
     allocation = game._x_color_allocations(
         x_spend_colors_from_text(card.oracle_text), max(0, x_value or 0)
     )[0]
-    return reduce_cost(
+    from .cost_floors import floored_spell_cost
+
+    # CR 601.2f's last step (Trinisphere), as the cast path pays it: priced
+    # without it, the AI proposes a one-mana spell on two lands and the cast
+    # refuses it.
+    return floored_spell_cost(game, reduce_cost(
         game._parse_mana_cost(
             mana_cost,
             x_value=x_value,
@@ -442,7 +447,7 @@ def _cost_for(
             extra_pips=pips,
         ),
         reduction,
-    )
+    ))
 
 
 def _charged_in_place_of_mana_cost(card: CardDefinition) -> "tuple[str, str | None]":
