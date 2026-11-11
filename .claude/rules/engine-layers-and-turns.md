@@ -59,7 +59,8 @@ and you can open this file directly whenever its subject is yours.
   **A new `PlayerState` or `Game` field is read by every `vars()` walker** — the
   rehearsal's `position_digest` and the AI censuses' board signatures: a field
   that moves on every resolution reads as a lasting change unless it is
-  listed as bookkeeping (`ai_rehearsal._PLAYER_BOOKKEEPING`).
+  listed as bookkeeping (`ai_rehearsal._PLAYER_BOOKKEEPING`, or
+  `_GAME_BOOKKEEPING` for a `Game` field).
 - `engine/continuous.py` + `engine/layer_bridge.py` — the CR 613 layer system
   (the bridge collects layers 2, 5, 6 and 7 and holds the computed accessors;
   layer 4 is `engine/type_layer.py`, and the printed seed every layer starts
@@ -147,7 +148,10 @@ and you can open this file directly whenever its subject is yours.
     as printed (`Game.phase_in_what_waited_for`).
   - Combat maps are index-keyed but follow their creatures
     (`_renumber_combat_after_removal`); a new combat map is added there, and
-    a new combat request field goes in `COMBAT_ID_FIELDS`.
+    a new combat request field goes in `COMBAT_ID_FIELDS`. A blocker whose
+    attackers have all left combat stays in `combat_blockers` with an empty
+    list (CR 509.1g): ask the state through `Permanent.is_blocking`, whom it
+    blocks through `creatures_blocked_by`.
 - `engine/auras.py` — what an Aura's effect lines say and whether they are
   implemented (the support gate); its continuous effects while attached are
   `aura_grants.py` and `aura_restrictions.py`. Use `attach_aura` / `detach_aura`
@@ -181,7 +185,11 @@ and you can open this file directly whenever its subject is yours.
   each requirements module the requirement list and the maximisation that
   judges a declaration and the AI's proposal — and `block_triggers.py` beside
   them, and the combat damage step has `combat_damage_assignment.py` (CR
-  510.1) beside it.
+  510.1) beside it. The cleanup step gives priority when a state-based action
+  or a trigger needs it (CR 514.3a: active player first, an offer round on the
+  empty stack, then another cleanup step, bounded by `_MAX_CLEANUP_ROUNDS`) —
+  at a table a priority driver plays; a person is not yet asked there
+  (SET_PLAYBOOK's Known gaps).
 - `engine/mixins/` — cross-cutting flow not tied to one step: priority and step
   navigation (`phase_steps`), per-turn and pregame management, state-based
   actions, effects, helpers. Consumes compiled programs; must never parse oracle

@@ -173,7 +173,8 @@ and you can open this file directly whenever its subject is yours.
   becomes-the-target, "chooses targets" only where one moved, then put onto
   the stack. Every copy road offers them through one offer
   (`spell_copies.offer_new_targets`): a prompt for a seat somebody asks, the
-  measured answer for one nobody asks. A spell judged from outside its own
+  measured answer for one nobody asks, slot by slot for several targets or a
+  mode (`change_slots`, CR 115.7d's `new_target_options`). A spell judged from outside its own
   resolution (a retarget, a copy's new target, Grip of Chaos) is read as it
   is — its colour and text (`_enumerate_targets(stack_item=…)`,
   `object_colors.judging_targets_of`) — and a spell's one target may be

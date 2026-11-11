@@ -79,11 +79,17 @@ answered by default or by `answers=`, the stack resolved through
 `defaults=False` returns the first owed prompt); `resolve_stack` is only the
 safe swap for a bare drain loop. A combat is walked with
 `drive_combat(game, through=...)`, whose default leaves the end of combat step
-so its triggers fire. Both are held by
+so combat is over (CR 511.3); the step's "at end of combat" triggers fire as
+it begins (CR 511.2), so every stop from the arrival on has resolved them.
+Both are held by
 `tests/engine/test_settle_and_drive_combat_helpers.py`. A web test that means
 "seat 0 acts first" on a table created without the pregame calls
 `tests.helpers.seat_plays_first(sid)`: that deal plays first whoever its flip
-names.
+names. A web test whose games must be one per seed calls `random.seed(seed)`
+before it creates the session: a session's seed builds its decks and flips
+its coin, and every shuffle and random pick after that reads the module RNG
+where the tests before it left it (SET_PLAYBOOK's Known gaps; kg5's
+`ai_vs_ai` census was green in a meeting run and red in a folder run).
 
 **Per-set tests follow `tests/sets/README.md`**, enforced by
 `tests/engine/test_set_test_convention.py`: get a set's cards from
