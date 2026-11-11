@@ -123,19 +123,21 @@ def _lower_halved_damage(
     return (dataclasses.replace(whole[0], payload=payload),)
 
 
-#: Instruction kinds that *read* the two CR 701.19c / CR 614 riders a damage
-#: clause can print ("it can't be regenerated this turn", "if it would die this
-#: turn, exile it instead"), each with the riders it reads.
-#: ``handlers/damage.deal_damage`` stamps both on the single creature it
-#: resolved; the three player-and-creature sweeps stamp the regeneration ban on
-#: each creature they actually dealt damage to ("Creatures dealt damage this
-#: way can't be regenerated this turn", Flamebreak —
+#: Instruction kinds that *read* the CR 701.19c / CR 614 riders a damage
+#: clause can print, each with the riders it reads: "it can't be regenerated
+#: this turn" (``no_regen``, a ban on the target whatever the damage did), "a
+#: creature dealt damage this way can't be regenerated this turn"
+#: (``no_regen_if_dealt``, a ban on what was dealt damage — CR 615.1a), and
+#: "if it would die this turn, exile it instead". ``handlers/damage.deal_damage``
+#: stamps them on the single creature it resolved; the three player-and-creature
+#: sweeps stamp the second on each creature they actually dealt damage to
+#: ("Creatures dealt damage this way…", Flamebreak —
 #: ``handlers/damage_sweeps._mass_damage_players_and_creatures``).
 _RIDER_READING_KINDS: dict[str, frozenset[str]] = {
-    "deal_damage": frozenset({"no_regen", "exile_if_dies"}),
-    "earthquake_damage": frozenset({"no_regen"}),
-    "hurricane_damage": frozenset({"no_regen"}),
-    "deal_damage_each_creature_and_player": frozenset({"no_regen"}),
+    "deal_damage": frozenset({"no_regen", "no_regen_if_dealt", "exile_if_dies"}),
+    "earthquake_damage": frozenset({"no_regen_if_dealt"}),
+    "hurricane_damage": frozenset({"no_regen_if_dealt"}),
+    "deal_damage_each_creature_and_player": frozenset({"no_regen_if_dealt"}),
 }
 
 
@@ -167,6 +169,7 @@ def _lower_damage(
     lowered = _lower_damage_shape(node, event, produced, event_subject)
     riders = (
         ("no_regen", node.riders.no_regen),
+        ("no_regen_if_dealt", node.riders.no_regen_if_dealt),
         ("exile_if_dies", node.riders.exile_if_dies),
     )
     for key, printed in riders:
@@ -715,12 +718,13 @@ def _lower_damage_shape(
         swept: dict[str, object] = (
             dict(back_reference) if back_reference else {"amount": amount}
         )
-        if node.riders.no_regen:
+        if node.riders.no_regen_if_dealt:
             # "Creatures dealt damage this way can't be regenerated this turn."
             # (Flamebreak.) Emitted only when printed, so every other sweep's
             # payload is byte-identical; `_lower_damage`'s post-condition holds
-            # the kind to the riders its handler reads.
-            swept["no_regen"] = True
+            # the kind to the riders its handler reads — and a pronoun's
+            # ``no_regen`` is none of a sweep's, so it refuses there.
+            swept["no_regen_if_dealt"] = True
         return (OracleInstruction(sweep, "", swept),)
 
     if not node.recipients:
@@ -773,6 +777,8 @@ def _lower_damage_shape(
         payload["amount_bonus"] = bonus
     if node.riders.no_regen:
         payload["no_regen"] = True
+    if node.riders.no_regen_if_dealt:
+        payload["no_regen_if_dealt"] = True
     if node.riders.exile_if_dies:
         payload["exile_if_dies"] = True
     if node.riders.unpreventable_to_creature:

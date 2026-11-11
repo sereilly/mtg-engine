@@ -28,7 +28,16 @@ from .costs import ManaCost
 class DamageRiders:
     """Trailing riders attached to a damage effect ("it can't be regenerated
     this turn, and if it would die this turn, exile it instead")."""
+    #: "If it's a creature, **it** can't be regenerated this turn." (Disintegrate.)
+    #: A ban on the target, whatever the damage did: "an effect of Disintegrate
+    #: and not an effect of the damage. It works even if the damage is
+    #: prevented or redirected" (its 2004-10-04 ruling).
     no_regen: bool = False
+    #: "**A creature dealt damage this way** can't be regenerated this turn."
+    #: (Incinerate; Flamebreak's plural.) A ban on what the damage was *dealt*
+    #: to, and prevented damage is not dealt (CR 615.1a) — so not
+    #: :attr:`no_regen` under a second spelling, and its own payload key.
+    no_regen_if_dealt: bool = False
     exile_if_dies: bool = False
     divided: bool = False
     divided_evenly: bool = False

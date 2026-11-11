@@ -635,6 +635,9 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
     if isinstance(statement, ast.DealDamage):
         merged = ast.DamageRiders(
             no_regen=statement.riders.no_regen or riders.no_regen,
+            no_regen_if_dealt=(
+                statement.riders.no_regen_if_dealt or riders.no_regen_if_dealt
+            ),
             exile_if_dies=statement.riders.exile_if_dies or riders.exile_if_dies,
             divided=statement.riders.divided,
             divided_evenly=statement.riders.divided_evenly,

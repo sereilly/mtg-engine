@@ -409,7 +409,7 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
     exile_if_dies = False
 
     if _accept_damaged_this_way_no_regen(stream):
-        return ast.DamageRiders(no_regen=True)
+        return ast.DamageRiders(no_regen_if_dealt=True)
 
     if stream.accept_phrase("if", "it", "'s", "a", "creature"):
         stream.accept_punct(",")
@@ -484,6 +484,12 @@ def _accept_damaged_this_way_no_regen(stream: TokenStream) -> bool:
     this way can't be regenerated", and it exists for the same reason: by the
     time the sentence is read there is no "it" left in the reader's hand, so
     the noun restates what the damage already named.
+
+    What the noun restates is the creatures the damage was **dealt** to, which
+    is not the pronoun's object: prevented damage is not dealt (CR 615.1a), so
+    a creature whose damage was all prevented may still be regenerated, while
+    Disintegrate's "it can't be regenerated" holds anyway (its 2004-10-04
+    ruling). Hence ``DamageRiders.no_regen_if_dealt``, not ``no_regen``.
 
     The noun is **only** "creature", and the single-word set is the honest one
     rather than a stub of a wider one. It is what the rider means: regeneration

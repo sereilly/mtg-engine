@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
-from ._amounts import evaluate_count
+from ._amounts import count_from_payload, per_recipient_amount
 from ..resumption import ask_in_turn_order
 from ._filters import seats_matching_deed
 from .registry import effect_handler
@@ -300,12 +300,18 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         # The source travels with the spec, because one of the shapes it can
         # carry is a pile of counters sitting on the ability's own permanent —
         # "…sacrifices a permanent of their choice **for each soot counter on
-        # this artifact**" (Smokestack). ``evaluate_count`` answers that key
-        # off the source it is handed and reads zero off the ``None`` it used
-        # to get here, which for Smokestack is a card that has never asked for
-        # anything.
-        count = evaluate_count(
-            game, context.caster, shared, source=context.source_permanent
+        # this artifact**" (Smokestack) — read off the source, where a ``None``
+        # read zero and the card never asked for anything.
+        #
+        # Through the **resolution's** reader, the one the dispatch point
+        # already substituted into ``x_value`` with: ``evaluate_count`` is the
+        # bottom layer, which a CR 604.3 recompute with no resolution also
+        # asks, and a key only a resolution can answer (``back_reference``,
+        # ``trigger_record``, the cost records) reached it unread and was
+        # counted as a scan of the caster's whole board (W1G5's first Lich's
+        # Tomb lowering sacrificed every permanent).
+        count = count_from_payload(
+            game, context, shared, instruction, source=context.source_permanent,
         )
     # "Whenever this creature is dealt damage, sacrifice **that many**
     # permanents." (Phyrexian Negator.) The number the firing event carried,
@@ -414,8 +420,12 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
                 batch=batch,
             )
             return
+        # One seat's share through the per-recipient reader, which answers
+        # the records an earlier step froze per seat (``seat_record``,
+        # ``resolution_record``, ``seat_tally_of``) before it counts a board —
+        # the bottom-layer call here read a record key as a board scan.
         owed = (
-            evaluate_count(game, game.players[seat], per_seat)
+            per_recipient_amount(game, context, per_seat, game.players[seat])
             if per_seat is not None else count
         )
         if owed <= 0:

@@ -33,6 +33,18 @@ from .activation_payment import COST_PERFORMING_KINDS, activation_cost_choice
 from ...refusals import refuse
 
 
+def _discard_refusal(hand: list, position) -> str:
+    """Why the hand position *position* cannot pay a discard cost, in the
+    words of the one of two reasons it is: there is no card there, or there
+    is one the printed phrase does not take ("Discard **an artifact card**",
+    Neurok Prodigy, offered a Grizzly Bears). One worder for both refusals,
+    which said "no card at hand position 0" of a card sitting at position 0.
+    """
+    if not (isinstance(position, int) and 0 <= position < len(hand)):
+        return f"no card at hand position {position} to discard for its cost"
+    return f"{hand[position].name} does not answer its discard cost"
+
+
 def _named_discard_positions(
     hand: list, cost, first: int | None, others: "list[int] | None",
     *, game=None, owner=None,
@@ -58,16 +70,13 @@ def _named_discard_positions(
             f"its cost discards {cost.discard_cards} card(s), each named once"
         )
     for position in named:
-        if not (isinstance(position, int) and 0 <= position < len(hand)):
-            return [], (
-                f"no card at hand position {position} to discard for its cost"
+        if not (
+            isinstance(position, int) and 0 <= position < len(hand)
+            and card_matches_any(
+                hand[position], cost.discard_filters, game=game, owner=owner,
             )
-        if not card_matches_any(
-            hand[position], cost.discard_filters, game=game, owner=owner,
         ):
-            return [], (
-                f"{hand[position].name} does not answer its discard cost"
-            )
+            return [], _discard_refusal(hand, position)
     return named, None
 
 
@@ -163,8 +172,8 @@ class ActivationChargesMixin:
                 or hand[cost_hand_index] not in payable
             ):
                 details = (
-                    f"{permanent.effective_card.name}: no card at hand position "
-                    f"{cost_hand_index} to discard for its cost"
+                    f"{permanent.effective_card.name}: "
+                    f"{_discard_refusal(hand, cost_hand_index)}"
                 )
                 return refuse(permanent.card.name, "unsupported", details)
             if not ability.cost.discard_at_random:

@@ -191,6 +191,24 @@ def regeneration_replaces_destruction(game: "Game", permanent: "Permanent") -> b
     return False
 
 
+def deny_regeneration_if_dealt(permanent: "Permanent", dealt: int) -> None:
+    """"A creature **dealt damage this way** can't be regenerated this turn"
+    (Incinerate; Flamebreak's "Creatures dealt damage this way…"), on one
+    creature a damage event just dealt *dealt* to.
+
+    Called from inside the event (the ``then`` of ``apply_damage_to_creature``),
+    so the mark is down before the state-based check that destroys the
+    creature. Only when something was dealt: prevented damage is damage that
+    "will not be dealt" (CR 615.1a), so a creature whose share was all
+    prevented was not dealt damage this way and may still be regenerated —
+    unlike Disintegrate's "it can't be regenerated", which its handler stamps
+    on the target whatever the damage did. One function for the single target
+    and the sweeps, so the two readers of the sentence cannot disagree again.
+    """
+    if dealt > 0 and permanent.is_creature:
+        permanent.metadata[CANT_BE_REGENERATED] = True
+
+
 def _apply(game: "Game", permanent: "Permanent", message: str) -> None:
     """CR 701.19a-b's alternate effect, all three parts of it: "remove all
     damage marked on it and its controller taps it. **If it's an attacking or
@@ -221,6 +239,7 @@ __all__ = [
     "CANT_BE_REGENERATED",
     "REGENERATED_THIS_TURN",
     "cant_be_regenerated",
+    "deny_regeneration_if_dealt",
     "regeneration_replaces_destruction",
     "regenerates_itself",
     "self_regeneration_line",
