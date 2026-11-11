@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**442 / 653 tracked rules covered (67%)** — 3706 tests, 0 unannotated.
+**442 / 653 tracked rules covered (67%)** — 3712 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -151,7 +151,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 105. Colors
 
 - [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(6 tests)*
-- [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(12 tests, subrules abc)*
+- [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(13 tests, subrules abc)*
 - [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(15 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
 - [ ] **105.5** If an effect refers to a color pair, it means exactly two of the five colors. There are ten color...
@@ -383,7 +383,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 205. Type Line
 
-- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(18 tests, subrules ab)*
+- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(19 tests, subrules ab)*
 - [x] **205.2** Card Types *(14 tests, subrules ab)*
 - [x] **205.3** Subtypes *(50 tests, subrules bim)*
 - [x] **205.4** Supertypes *(11 tests, subrules abcd)*
@@ -438,7 +438,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(56 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(57 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -747,7 +747,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.1** An effect is something that happens in the game as a result of a spell or ability. When a spell, ... *(3 tests)*
 - [x] **609.2** Effects apply only to permanents unless the instruction’s text states otherwise or they clearly c... *(3 tests)*
 - [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(13 tests)*
-- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(21 tests, subrules b)*
+- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(22 tests, subrules b)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
 - [x] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic... *(9 tests, subrules abc)*
@@ -781,14 +781,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(175 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(176 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(22 tests, subrules abc)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(15 tests)*
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(120 tests, subrules abdem)*
-- [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(42 tests, subrules abc)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(123 tests, subrules abdem)*
+- [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(44 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
 - [x] **613.11** Some continuous effects affect game rules rather than objects. For example, effects may modify a ... *(9 tests)*
@@ -930,7 +930,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(13 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
-- [x] **704.5** The state-based actions are as follows: *(110 tests, subrules abcdefghijkmnpqrsz)*
+- [x] **704.5** The state-based actions are as follows: *(111 tests, subrules abcdefghijkmnpqrsz)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
