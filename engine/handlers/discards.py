@@ -24,7 +24,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DISCARDED_CARDS_BY_SEAT,
                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..resumption import ask_in_turn_order, run_resumable
-from ._amounts import evaluate_count, resolve_amount
+from ._amounts import per_recipient_amount, resolve_amount
 from ._filters import _card_matches_filter
 from ._targets import frozen_that_player_seat
 from .registry import effect_handler
@@ -950,8 +950,12 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
     _seed_seat_discards(context.results, seats)
     for seat in seats:
         player = game.players[seat]
+        # Through the per-recipient reader, which answers a record an earlier
+        # step froze per seat before it counts a zone (``per_recipient_amount``);
+        # the bottom-layer ``evaluate_count`` read such a key as a board scan.
         count = (
-            evaluate_count(game, player, per_seat) if per_seat is not None else fixed
+            per_recipient_amount(game, context, per_seat, player)
+            if per_seat is not None else fixed
         )
         count = min(max(0, count), len(player.hand))
         if count == 0:
