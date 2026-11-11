@@ -55,6 +55,7 @@ from __future__ import annotations
 # `oracle_types` names and `_deaths`' two); `_events` is read only for the two
 # keys it defines itself.
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                             CHOSEN_GRAVEYARD_CARD,
                              BIDDING_WINNER,
                              CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
@@ -114,6 +115,8 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # ``_record_keys.CHOSEN_PERMANENT``. …and the **other** member of the set
     # it was offered (Retribution) — see ``_record_keys.OTHER_CHOSEN_PERMANENT``.
     "choose_permanent": (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT),
+    # Scrounge's pick — see ``oracle_types.CHOSEN_GRAVEYARD_CARD``.
+    "choose_graveyard_card": CHOSEN_GRAVEYARD_CARD,
     # "…**Those creatures** gain haste until end of turn." (Reins of Power.)
     # Every creature the swap moved, both directions — by then the two sets
     # have changed hands, so neither printed seat phrase names them. See

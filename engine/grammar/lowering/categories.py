@@ -372,6 +372,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # lowered. The family is the pick's, not the Plains': what this instruction
     # does is choose.
     "choose_permanents": "attachments",
+    # Scrounge's "target opponent chooses an artifact card in their
+    # graveyard": the pick above one zone over, the same family.
+    "choose_graveyard_card": "attachments",
     "tap_self": "tapping",
     "untap_target_permanent": "tapping",
     # "…**and untap it**" behind a removal from combat (Reconnaissance). The

@@ -15,12 +15,14 @@ from ....linked_exile import link_exiled_card
 from ....models import Permanent
 from ....permanent_cards import (cant_enter_sources, is_permanent_card,
                                  stays_out_of_battlefield)
-from ....oracle_types import (CLAIMABLE_EXILED_CARDS, EXILED_THIS_WAY,
-                              EXILED_THIS_WAY_OBJECTS, OracleInstruction)
+from ....oracle_types import (CHOSEN_GRAVEYARD_CARD, CLAIMABLE_EXILED_CARDS,
+                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+                              OracleInstruction)
 from .... import piles
 from ....pending_choices import ChoiceSpec, PendingChoice
 from ....mana_payment import mana_cost_label
-from ....handlers.zones import GRAVEYARD_PICK_TO_LIBRARY_BOTTOM
+from ....handlers.zones import (GRAVEYARD_PICK_CHOSEN,
+                                GRAVEYARD_PICK_TO_LIBRARY_BOTTOM)
 from ....handlers.returns import FORGOTTEN_PICKS
 
 
@@ -920,6 +922,19 @@ class PileChoicesMixin:
         taken = [owner.graveyard[index] for index in picks]
         if choice.data.get("destination") == GRAVEYARD_PICK_TO_LIBRARY_BOTTOM:
             return self._bottom_graveyard_pick(choice, owner, picks)
+        if choice.data.get("destination") == GRAVEYARD_PICK_CHOSEN:
+            # Scrounge: the pick moves nothing; the card is the record.
+            context = choice.data.get("_context")
+            if context is not None:
+                context.results[CHOSEN_GRAVEYARD_CARD] = taken[0] if taken else None
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{self.players[choice.player_index].name} chose "
+                + (", ".join(card.name for card in taken) or "nothing")
+                + f" in {owner.name}'s graveyard "
+                f"({choice.data.get('card_name', 'an effect')})"
+            )
+            return True
         # As the pile holds them (``Game.put_card_into_exile``), in the order
         # they were picked: what the link and the record below name.
         landed = {

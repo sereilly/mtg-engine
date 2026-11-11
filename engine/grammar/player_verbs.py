@@ -100,6 +100,7 @@ from .effects import (
     parse_player_exiles_cards_from_hand,
     parse_graveyard_top_opponent_chooses,
     parse_player_chooses_permanent,
+    parse_player_chooses_graveyard_card,
     parse_player_looks_at_own_library_top,
     parse_player_reorders_your_library_top,
     parse_player_separates_your_library_top,
@@ -555,6 +556,14 @@ def parse_player_subject_verb(
         revealed = parse_reveal_chosen_hand_cards(stream, source_spec)
         if revealed is not None:
             return revealed
+        # "Target opponent **chooses an artifact card in their graveyard**."
+        # (Scrounge.) The pick of a card out of the chooser's own pile, after
+        # every paragraph that opens with a graveyard pick of its own (Forgotten
+        # Lore, Phyrexian Grimoire) and for their reason: declines without
+        # consuming, where the paragraph below fails the line on the noun.
+        picked_card = parse_player_chooses_graveyard_card(stream, source_spec)
+        if picked_card is not None:
+            return picked_card
         return _parse_name_then_reveal_top(stream, source_spec)
     # "Each opponent sacrifices a creature" (Goremand). The AST node has
     # carried its player since it was written; only the *bare* imperative

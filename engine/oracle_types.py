@@ -935,6 +935,14 @@ BASE_PT_SET_PERMANENTS = "base_pt_set_permanents"
 #: prints the other.
 CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
 
+#: "Target opponent chooses an artifact card in their graveyard. **Put that
+#: card** onto the battlefield under your control." (Scrounge.) The card the
+#: ``choose_graveyard_card`` pick took — by identity, because a card in a
+#: graveyard has no id and two copies there are one ``CardDefinition`` — or
+#: None when the pile held none. Here rather than in a lowering module because
+#: the pick prompt writes it and ``reanimate_bound_card`` reads it.
+CHOSEN_GRAVEYARD_CARD = "chosen_graveyard_card"
+
 #: "Remove target attacking creature you control from combat **and untap it**."
 #: (Reconnaissance.) The permanent the removal took out of combat, recorded
 #: because the step behind it names it with a bare pronoun and nothing else in

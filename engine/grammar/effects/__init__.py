@@ -125,6 +125,7 @@ from .attachments import (
     parse_choose_host_at_random,
     parse_excess_choice_paragraph,
     parse_player_chooses_permanent,
+    parse_player_chooses_graveyard_card,
 )
 from .control_changes import (
     _parse_bid_life_for_control,
@@ -377,6 +378,7 @@ __all__ = [
     "parse_choose_host_at_random",
     "parse_excess_choice_paragraph",
     "parse_player_chooses_permanent",
+    "parse_player_chooses_graveyard_card",
     "_parse_return",
     "_parse_put_source_into_zone",
     "_parse_return_instead_of_untapping",

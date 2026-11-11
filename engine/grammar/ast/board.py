@@ -483,6 +483,22 @@ class ChoosePermanent:
 
 
 @dataclass(frozen=True)
+class ChooseGraveyardCard:
+    """"Target opponent **chooses an artifact card in their graveyard**."
+    (Scrounge.)
+
+    :class:`ChoosePermanent`'s pick one zone over: a card, picked as the effect
+    resolves by the seat the sentence names, out of **that seat's own**
+    graveyard (the printed "their"). Nothing about the card is targeted, so
+    the pick is a record the sentence behind it reads ("Put **that card** onto
+    the battlefield under your control"); a graveyard is public (CR 400.2), so
+    nothing is revealed first.
+    """
+    chooser: PlayerRef
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class PhaseOut:
     """"<subject> phases out." (CR 702.26 — Teferi, Master of Time's −3;
     Teferi, Timeless Voyager's −8 with the can't-phase-in rider.) The subject
