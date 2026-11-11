@@ -269,6 +269,20 @@ def deliberating():
         _DELIBERATION.reset(token)
 
 
+@contextmanager
+def deliberating_apart():
+    """A deliberation of its own inside whatever one is open: for a question
+    asked of **another table** — a scratch copy a chooser sets up to ask
+    about (``ai_imprint.free_cast_worth``) — whose readings must not be
+    handed the open one's, which are keyed by seat and not by table
+    (:func:`_untouched`)."""
+    token = _DELIBERATION.set({})
+    try:
+        yield
+    finally:
+        _DELIBERATION.reset(token)
+
+
 def _settle_scratch(game) -> None:
     """Empty the stack of a scratch copy, answering what each object asks —
     and check state-based actions (CR 704.3) once it is empty: a creature
@@ -1350,6 +1364,7 @@ __all__ = [
     "blocks_still_to_come",
     "combat_is_still_to_come",
     "combats_planned",
+    "deliberating_apart",
     "forget_damage_history",
     "untap_for_the_next_turn",
     "has_a_creature_to_fight_with",

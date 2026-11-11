@@ -1583,4 +1583,70 @@ def test_w2g2_aether_vial_stops_past_every_card_of_its_own(set_pool):
         set_pool, 4, ["Forest"], ["Craw Wurm", "Forest", "Forest"],
     ) == 5
 
+
+def _w2g2_mirror_table(set_pool, hand):
+    """Panoptic Mirror and five Mountains on seat 0's side, *hand* (LEA
+    names) in its hand, a Grizzly Bears and a Forest across the table;
+    costs enforced, nobody asked, seat 0's main phase."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    alice = _W2G2PlayerState(
+        name="Alice", hand=[lea[name] for name in hand], library=[lea["Mountain"]] * 8,
+    )
+    bob = _W2G2PlayerState(name="Bob", library=[lea["Forest"]] * 8)
+    game = _W2G2Game(players=[alice, bob])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    _w2g2_settle(game)
+    for seat, name in ((0, None), (1, "Grizzly Bears"), (1, "Forest")):
+        card = dst["Panoptic Mirror"] if name is None else lea[name]
+        permanent = _W2G2Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        permanent.metadata["summoning_sickness_turn"] = -99
+    for _ in range(5):
+        land = _W2G2Permanent(card=lea["Mountain"])
+        game._put_permanent_onto_battlefield(0, land, None)
+    game._sync_control()
+    return game, alice, bob
+
+
+def test_w2g2_panoptic_mirror_imprints_the_card_worth_most_and_casts_it_each_upkeep(set_pool):
+    """"Imprint — {X}, {T}: You may exile an instant or sorcery card with
+    mana value X from your hand. / At the beginning of your upkeep, you may
+    copy a card exiled with this artifact. If you do, you may cast the copy
+    without paying its mana cost." W1G3: the AI never imprinted — a
+    rehearsal read to the end of the turn saw only the card leave the hand.
+
+    Priced as the card kept and a free cast of it every upkeep, the Mirror
+    takes the Lightning Bolt (its free cast kills the Bears) over the Stone
+    Rain (a land): the cast chooser holds the Bolt for it and casts the Stone
+    Rain, the activation chooser imprints at X = 1, and the next upkeep's
+    copy of the Bolt is cast."""
+    from engine.ai_abilities import choose_activation_action
+    from engine.ai_actions import cast_announcement
+    from engine.ai_payment import tap_planned_lands
+    from engine.ai_policy import activate_chosen_ability, choose_cast_action
+    from engine.linked_exile import cards_still_exiled_with
+
+    game, alice, bob = _w2g2_mirror_table(set_pool, ["Lightning Bolt", "Stone Rain"])
+    cast = choose_cast_action(game, 0)
+    assert cast is not None and cast.card_name == "Stone Rain"
+    assert game.cast_from_hand(0, "Stone Rain", **cast_announcement(tap_planned_lands(game, 0, cast))).supported
+    _w2g2_settle(game)
+    assert choose_cast_action(game, 0) is None, "the Bolt is held for the imprint"
+    action = choose_activation_action(game, 0)
+    assert action is not None and action.permanent_name == "Panoptic Mirror"
+    assert action.x_value == 1
+    assert activate_chosen_ability(game, 0, action).supported
+    _w2g2_settle(game)
+    mirror = next(p for p in game.controlled_by(0) if p.card.name == "Panoptic Mirror")
+    assert [card.name for card, _owner in cards_still_exiled_with(game, mirror)] == ["Lightning Bolt"]
+    assert [c.name for c in alice.hand] == []
+    game.start_turn(1)
+    _w2g2_settle(game)
+    game.start_turn(0)
+    _w2g2_settle(game)
+    assert any("cast a copy of Lightning Bolt" in line for line in game.log)
+    assert "Grizzly Bears" in [c.name for c in bob.graveyard]
+
 # ==== end W2G2 ======================================================
