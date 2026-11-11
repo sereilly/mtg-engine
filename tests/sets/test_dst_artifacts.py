@@ -289,6 +289,118 @@ def test_w1g2_surestrike_trident_first_strike_and_power_to_a_player(set_pool):
     assert not ogre.has_keyword("first strike")
     assert _w1g2_equipped(trident) is None
 
+
+# --- the drive list: Darksteel Equipment supported on arrival -------------
+
+
+def _w1g2_attack(game, attacker, *, blocks=None):
+    """*attacker* attacks seat 1 alone; *blocks* maps blockers to it."""
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    slot = game.battlefield_index_of(attacker)
+    ok, why = game.declare_attackers(0, [slot], defending_player_index=1)
+    assert ok, why
+    game.advance_combat_phase()
+    return slot
+
+
+def test_w1g2_skullclamp_kills_a_one_toughness_creature_and_draws_two(set_pool):
+    """"Equipped creature gets +1/-1. Whenever equipped creature dies, draw two
+    cards." On a 1/1 the -1 kills it (CR 704.5f) and the trigger draws two;
+    on a 2/2 it is a 3/1."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    clamp = _w1g2_put(game, dst["Skullclamp"], 0)
+    elves = _w1g2_put(game, lea["Llanowar Elves"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    hand = len(game.players[0].hand)
+    game.activate_permanent_ability(
+        0, clamp.card.name, permanent_index=game.battlefield_index_of(clamp),
+        target_permanent_ids=[elves.permanent_id],
+    )
+    _w1g2_settle(game)
+    assert elves not in game.controlled_by(0)
+    assert len(game.players[0].hand) == hand + 2
+    _w1g2_equip(game, 0, clamp, bears)
+    assert (bears.effective_power, bears.effective_toughness) == (3, 1)
+
+
+def test_w1g2_specters_shroud_discards_on_combat_damage(set_pool):
+    """"Equipped creature gets +1/+0. Whenever equipped creature deals combat
+    damage to a player, that player discards a card." """
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    shroud = _w1g2_put(game, dst["Specter's Shroud"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    game.players[1].hand = [lea["Island"]]
+    _w1g2_equip(game, 0, shroud, bears)
+    _w1g2_declare_attack(game, 0)
+    _w1g2_drive_combat(game)
+    assert game.players[1].life == 17
+    assert game.players[1].hand == [] and [c.name for c in game.players[1].graveyard] == ["Island"]
+
+
+def test_w1g2_the_swords_protection_and_combat_triggers(set_pool):
+    """Sword of Fire and Ice: +2/+2, protection from red and from blue (a Bolt
+    and an Unsummon can't target it, a Terror can), and on combat damage 2
+    damage to any target and a card. Sword of Light and Shadow: protection
+    from white and from black, 3 life and a creature card back."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    fire = _w1g2_put(game, dst["Sword of Fire and Ice"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    _w1g2_equip(game, 0, fire, bears)
+    assert (bears.effective_power, bears.effective_toughness) == (4, 4)
+    game.players[1].hand = [lea["Lightning Bolt"], lea["Unsummon"]]
+    game.active_player_index = 1
+    for name in ("Lightning Bolt", "Unsummon"):
+        assert not game.cast_from_hand(1, name, target_permanent_ids=[bears.permanent_id]).supported
+    hand = len(game.players[0].hand)
+    _w1g2_declare_attack(game, 0)
+    _w1g2_drive_combat(game)
+    assert game.players[1].life == 20 - 4 - 2
+    assert len(game.players[0].hand) == hand + 1
+
+    game = _w1g2_table(set_pool)
+    light = _w1g2_put(game, dst["Sword of Light and Shadow"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    game.players[0].graveyard = [lea["Hill Giant"]]
+    _w1g2_equip(game, 0, light, bears)
+    game.players[1].hand = [lea["Terror"], lea["Swords to Plowshares"]]
+    game.active_player_index = 1
+    for name in ("Terror", "Swords to Plowshares"):
+        assert not game.cast_from_hand(1, name, target_permanent_ids=[bears.permanent_id]).supported
+    _w1g2_declare_attack(game, 0)
+    _w1g2_drive_combat(game)
+    assert game.players[1].life == 16
+    assert game.players[0].life == 23
+    assert [c.name for c in game.players[0].hand][-1:] == ["Hill Giant"]
+
+
+def test_w1g2_vulshok_morningstar_and_nemesis_mask(set_pool):
+    """Vulshok Morningstar: +2/+2. Nemesis Mask: "All creatures able to block
+    equipped creature do so" — a declaration leaving an able blocker out is
+    illegal (CR 509.1c), the one with both is accepted."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    star = _w1g2_put(game, dst["Vulshok Morningstar"], 0)
+    mask = _w1g2_put(game, dst["Nemesis Mask"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    wall = _w1g2_put(game, lea["Wall of Stone"], 1)
+    giant = _w1g2_put(game, lea["Hill Giant"], 1)
+    _w1g2_equip(game, 0, star, bears)
+    assert (bears.effective_power, bears.effective_toughness) == (4, 4)
+    _w1g2_equip(game, 0, mask, bears)
+    slot = _w1g2_attack(game, bears)
+    ok, _ = game.declare_blockers(1, {})
+    assert not ok
+    ok, _ = game.declare_blockers(1, {game.battlefield_index_of(wall): slot})
+    assert not ok
+    ok, why = game.declare_blockers(1, {
+        game.battlefield_index_of(wall): slot, game.battlefield_index_of(giant): slot,
+    })
+    assert ok, why
+
 # ==== end W1G2 ======================================================
 
 

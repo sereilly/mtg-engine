@@ -1066,6 +1066,12 @@ class CastTargetValidationMixin:
                 described = primary.payload
 
             def _legal_pump_target(p) -> bool:
+                # "Regenerate target **artifact**": regeneration's own floor,
+                # the printed card type (``regeneration_target_legal``).
+                if primary.kind == "grant_regeneration_to_target_creature":
+                    from ...handlers.regeneration import regeneration_target_legal
+
+                    return regeneration_target_legal(p, described)
                 if not creature_floor_holds(p, described):
                     return False
                 # Righteousness only targets a creature that is currently blocking.

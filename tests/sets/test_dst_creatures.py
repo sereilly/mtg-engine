@@ -101,6 +101,83 @@ def test_w1g2_leonin_shikari_equips_at_instant_speed(set_pool):
     assert "sorcery" in str(refused).lower()
     assert _w1g2_equipped(star) is None
 
+
+def _w1g2_equip_it(game, seat, equipment, creature):
+    result = _w1g2_activate(game, seat, equipment, target_permanent_ids=[creature.permanent_id])
+    assert result.supported, result
+    _w1g2_settle(game)
+    assert _w1g2_equipped(equipment) is creature
+
+
+def test_w1g2_auriok_glaivemaster_only_while_equipped(set_pool):
+    """"As long as this creature is equipped, it gets +1/+1 and has first
+    strike." 1/1 bare; with a Morningstar 4/4 (its +2/+2 and its own +1/+1)
+    and first strike; moved off, 1/1 again."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    glaive = _w1g2_put(game, dst["Auriok Glaivemaster"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    star = _w1g2_put(game, dst["Vulshok Morningstar"], 0)
+    assert (glaive.effective_power, glaive.effective_toughness) == (1, 1)
+    assert not glaive.has_keyword("first strike")
+    _w1g2_equip_it(game, 0, star, glaive)
+    assert (glaive.effective_power, glaive.effective_toughness) == (4, 4)
+    assert glaive.has_keyword("first strike")
+    _w1g2_equip_it(game, 0, star, bears)
+    assert (glaive.effective_power, glaive.effective_toughness) == (1, 1)
+    assert not glaive.has_keyword("first strike")
+
+
+def test_w1g2_steelshaper_apprentice_finds_an_equipment(set_pool):
+    """"{W}, {T}, Return this creature to its owner's hand: Search your library
+    for an Equipment card, reveal that card, put it into your hand, then
+    shuffle." The cost returns it; the search takes the Equipment only."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    game.players[0].library = [lea["Forest"], dst["Vulshok Morningstar"], lea["Forest"]]
+    apprentice = _w1g2_put(game, dst["Steelshaper Apprentice"], 0)
+    result = _w1g2_activate(game, 0, apprentice)
+    assert result.supported, result
+    _w1g2_settle(game)
+    names = [card.name for card in game.players[0].hand]
+    assert "Steelshaper Apprentice" in names and "Vulshok Morningstar" in names
+    assert [card.name for card in game.players[0].library] == ["Forest", "Forest"]
+
+
+def test_w1g2_slobad_saves_an_artifact_and_pteron_ghost_regenerates_one(set_pool):
+    """Slobad: "Sacrifice an artifact: Target artifact gains indestructible
+    until end of turn." Pteron Ghost: "Sacrifice this creature: Regenerate
+    target artifact." — a *noncreature* artifact included (CR 701.19a): the
+    picker used to hold "target artifact" to artifact creatures."""
+    dst, lea, mrd = set_pool("DST"), set_pool("LEA"), set_pool("MRD")
+    game = _w1g2_table(set_pool)
+    slobad = _w1g2_put(game, dst["Slobad, Goblin Tinkerer"], 0)
+    fodder = _w1g2_put(game, mrd["Ornithopter"], 0)
+    star = _w1g2_put(game, dst["Vulshok Morningstar"], 0)
+    result = _w1g2_activate(
+        game, 0, slobad, target_permanent_ids=[star.permanent_id],
+        cost_permanent_ids=[fodder.permanent_id],
+    )
+    assert result.supported, result
+    _w1g2_settle(game)
+    assert fodder not in game.controlled_by(0)
+    assert star.has_keyword("indestructible")
+
+    game = _w1g2_table(set_pool)
+    ghost = _w1g2_put(game, dst["Pteron Ghost"], 0)
+    star = _w1g2_put(game, dst["Vulshok Morningstar"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    refused = _w1g2_activate(game, 0, ghost, target_permanent_ids=[bears.permanent_id])
+    assert not refused.supported and ghost in game.controlled_by(0)
+    result = _w1g2_activate(game, 0, ghost, target_permanent_ids=[star.permanent_id])
+    assert result.supported, result
+    _w1g2_settle(game)
+    assert ghost not in game.controlled_by(0)
+    game.players[0].hand = [lea["Shatter"]]
+    assert game.cast_from_hand(0, "Shatter", target_permanent_ids=[star.permanent_id]).supported
+    _w1g2_settle(game)
+    assert star in game.controlled_by(0) and star.tapped
+
 # ==== end W1G2 ======================================================
 
 
