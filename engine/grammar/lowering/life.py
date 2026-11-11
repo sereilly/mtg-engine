@@ -70,6 +70,7 @@ from ._events import (
     _DEFENDING_PLAYER_EVENTS,
     _EVENT_QUANTITIES,
     _EVENT_SUBJECT_CONTROLLERS,
+    _LIFE_GAINED_EVENTS,
     LOOP_BOUND_OBJECT,
     SWEPT_CONTROLLER_SEATS,
     _EVENT_SUBJECT_PLAYERS,
@@ -79,12 +80,6 @@ from ._events import (
     _back_reference_payload,
     damage_trigger_names_damaged_end,
 )
-
-
-#: The events whose firing is a **life gain** and that freeze how much
-#: (``_EVENT_QUANTITIES``' ``life_gained``): "whenever you gain life" (Vito)
-#: and "whenever a player gains life" (False Cure's delayed ability).
-_LIFE_GAINED_EVENTS = frozenset({"you_gain_life", "player_gains_life"})
 
 
 #: The recipients "loses <a fraction of> their life" has one answer per seat

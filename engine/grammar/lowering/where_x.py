@@ -41,13 +41,8 @@ from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
                        count_filter_on_targeted_seat, counted_definition_spec)
 from ._amounts import _mentions_x, _stamp_x_from_count
 from ._events import (CAST_SPELL_EVENTS, _EVENT_QUANTITIES, _EVENT_SUBJECT_PLAYERS,
-                      EVENT_SUBJECT_PLAYER)
+                      _LIFE_GAINED_EVENTS, EVENT_SUBJECT_PLAYER)
 from ._record_definitions import lower_record_definition
-
-
-#: The events whose firing is a life gain and that freeze how much — the
-#: bound "the amount of life you gained" reads (``_EVENT_QUANTITIES``).
-_LIFE_GAINED_EVENTS = frozenset({"you_gain_life", "player_gains_life"})
 
 
 def _lower_chosen_x_ceiling(
