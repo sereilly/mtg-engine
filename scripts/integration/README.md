@@ -31,6 +31,7 @@ export ROUND=ons
 | `run_and_wait.sh <log> <cmd...>` / `--wait <log>` | any run over ~3 min | the command detached, its exit code the log's last line and `<log>.exit`; a bounded wait (`RUN_WAIT`, 170 s) that exits with the command's code, or 75 "still running" with the resume command |
 | `regen.sh <label>` | after any merge | regenerate every tracker (never `--accept`) and commit |
 | `dups.py <files>` | each merge | a name defined twice in one scope (merge shadowing) |
+| `extract_reports.py <out> <transcript|dir> --groups <agents.json>` | each report, the day it lands | every subagent's hand-back report out of the session transcript (a subagent cannot write a report file), one `<group>.md` each; names the groups still owed |
 | `dup_ideas.py <base>` | after a wave | a new name defined in two modules (one idea, two homes) |
 | `missing_names.py <files>` | each merge | a name loaded but never defined or imported |
 | `merge_blocks.py <branch>` | conflicts | append-append conflicts in per-set test files, by bytes |
