@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| DST *(measured)* | 165 | 285 | 70.2% | 65.3% | 45.3% | 109 |
+| DST *(measured)* | 165 | 285 | 71.2% | 67.7% | 47.7% | 115 |
 | **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -69,9 +69,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 926 | 483 | expected a subject |  |
+| 925 | 482 | expected a subject |  |
 | 197 | 101 | unrecognized effect verb |  |
-| 142 | 75 | unconsumed text |  |
+| 141 | 74 | unconsumed text |  |
 | 74 | 55 | granted ability in quotes | phase 3 (quoted abilities) |
 | 42 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -88,9 +88,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 4 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 3 | 1 | 'that land' names a land no earlier step of this effect chose |  |
 | 3 | 1 | expected 'of' |  |
-| 3 | 2 | expected 'the number of' in a where-clause |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 2 | expected 'a' |  |
 | 2 | 2 | expected a keyword ability |  |
@@ -1546,6 +1546,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: This artifact deals 1 damage to target creature. That creature attacks this turn if able.`
 - **Bulwark**
   - `At the beginning of your upkeep, this enchantment deals X damage to target opponent, where X is the number of cards in your hand minus the number of cards in that player's hand.`
+- **Burden of Greed**
+  - `Target player loses 1 life for each tapped artifact they control.`
 - **Burgeoning**
   - `Whenever an opponent plays a land, you may put a land card from your hand onto the battlefield.`
 - **Buried Alive**
@@ -2755,6 +2757,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Darksteel Reactor**
   - `At the beginning of your upkeep, you may put a charge counter on this artifact.`
+  - `When this artifact has twenty or more charge counters on it, you win the game.`
 - **Darkwater Catacombs**
   - `{1}, {T}: Add {U}{B}.`
 - **Darkwater Egg**
@@ -2823,6 +2826,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target nonblack creature. It can't be regenerated. Its controller loses 2 life.`
 - **Death Charmer**
   - `Whenever this creature deals combat damage to a creature, that creature's controller loses 2 life unless they pay {2}.`
+- **Death Cloud**
+  - `Each player loses X life, discards X cards, sacrifices X creatures of their choice, then sacrifices X lands of their choice.`
 - **Death Grasp**
   - `Death Grasp deals X damage to any target. You gain X life.`
 - **Death Match**
@@ -3778,6 +3783,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Target creature loses flying until end of turn.`
 - **Emerald Dragonfly**
   - `{G}{G}: This creature gains first strike until end of turn.`
+- **Emissary of Despair**
+  - `Whenever this creature deals combat damage to a player, that player loses 1 life for each artifact they control.`
+- **Emissary of Hope**
+  - `Whenever this creature deals combat damage to a player, you gain 1 life for each artifact that player controls.`
 - **Emmessi Tome**
   - `{5}, {T}: Draw two cards, then discard a card.`
 - **Emperor Crocodile**
@@ -6858,6 +6867,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
   - `Whenever you're dealt damage, sacrifice that many nontoken permanents. If you can't, you lose the game.`
   - `When this enchantment is put into a graveyard from the battlefield, you lose the game.`
+- **Lich's Tomb**
+  - `Whenever you lose life, sacrifice a permanent for each 1 life you lost. (Damage causes loss of life.)`
 - **Lichenthrope**
   - `At the beginning of your upkeep, remove a -1/-1 counter from this creature.`
 - **Liege of the Axe**
@@ -13777,6 +13788,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}: Draw a card. Any player may activate this ability but only during their draw step.`
 - **Well of Life**
   - `At the beginning of your end step, if you control no untapped lands, you gain 2 life.`
+- **Well of Lost Dreams**
+  - `Whenever you gain life, you may pay {X}, where X is less than or equal to the amount of life you gained. If you do, draw X cards.`
 - **Wellspring**
   - `When this Aura enters, gain control of enchanted land until end of turn.`
   - `At the beginning of your upkeep, untap enchanted land. You gain control of that land until end of turn.`

@@ -25,12 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**6 unclaimed sentence(s) across 6 supported card(s).**
+**5 unclaimed sentence(s) across 5 supported card(s).**
 
 - **Aether Vial**
   - `{t}: you may put a creature card with mana value equal to the number of charge counters on this artifact from your hand onto the battlefield`
-- **Darksteel Reactor**
-  - `when this artifact has twenty or more charge counters on it, you win the game`
 - **Panoptic Mirror**
   - `at the beginning of your upkeep, you may copy a card exiled with this artifact. if you do, you may cast the copy without paying its mana cost`
 - **Serum Powder**
