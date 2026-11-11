@@ -356,6 +356,7 @@ class SpellChoicesMixin:
             ]
             if wanted:
                 preferred = self._dearest_permanents_first(options, preferred)
+                preferred = self._priced_damage_first(choice, options, preferred)
             live = preferred + [position for position in live if position not in preferred]
         if not live or not self._resolve_retarget_choice(choice, live[0]):
             self._record_retarget_choice(choice, None)
@@ -390,6 +391,34 @@ class SpellChoicesMixin:
         for index, position in zip(slots, ranked):
             out[index] = position
         return out
+
+    def _priced_damage_first(self, choice: PendingChoice, options, positions: list) -> list:
+        """*positions* with a face and a creature priced against each other
+        where the re-aimed object deals a fixed amount of damage to its one
+        target (``ai_target_sides.damage_dealt_to_its_target``): the most
+        that damage is worth first (``damage_target_worth`` — the life it
+        takes from a face, a creature it destroys), stable. The face kept its
+        slot ahead of every creature, so Willbender turned face up against a
+        Lightning Bolt aimed at its controller's Grizzly Bears sent the Bolt
+        at the opponent's face beside the opponent's Hill Giant it kills.
+        Unchanged for any other effect."""
+        from ....ai_target_sides import damage_dealt_to_its_target, damage_target_worth
+
+        item = getattr(choice.data.get("_context"), "stack_target", None)
+        amount = damage_dealt_to_its_target(item) if item is not None else None
+        if not amount:
+            return positions
+
+        def worth(position: int) -> float:
+            option = options[position]
+            if option.get("kind") == "player":
+                return damage_target_worth(self, option.get("seat"), None, amount)
+            if option.get("kind") == "permanent":
+                permanent = self.permanent_by_id(option.get("permanent_id"))
+                return damage_target_worth(self, None, permanent, amount) if permanent else 0.0
+            return 0.0
+
+        return sorted(positions, key=lambda position: -worth(position))
 
     def _retarget_option_seat(self, option: dict) -> "int | None":
         """Whose a retarget candidate is: a face's seat, a permanent's
