@@ -983,12 +983,19 @@ class GameEndingMixin:
             attached_to = perm.metadata.get("attached_to")
             if attached_to is None:
                 return True
+            # CR 303.4d: "An Aura that's also a creature can't enchant
+            # anything" — an Aura Mycosynth Lattice made an artifact and March
+            # of the Machines then animated (the Lattice's 2009-10-01 ruling).
+            if perm.is_creature:
+                return True
             return not self.is_on_battlefield(attached_to)
 
         def _on_destroy_5m(perm: Permanent, died: bool) -> None:
             reason = (
                 "unattached aura"
                 if perm.metadata.get("attached_to") is None
+                else "an Aura that is a creature enchants nothing (303.4d)"
+                if perm.is_creature
                 else "enchanted object left battlefield"
             )
             self.log.append(

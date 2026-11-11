@@ -594,6 +594,9 @@ def global_static_type_effect(
     unanswered choice is the card doing something much larger than it says.
     """
     card_types = ["creature"] if static.adds_creature_type else []
+    # "All permanents are **artifacts** in addition to their other types."
+    # (Mycosynth Lattice.) CR 205.1b's addition, the printed card type.
+    card_types.extend(static.adds_card_types)
     subtypes = list(static.adds_subtypes)
     replaced: frozenset[str] = frozenset()
     if static.sets_creature_type:

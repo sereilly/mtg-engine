@@ -3,7 +3,7 @@
 CR 105 asks the question of every object, and CR 613.1e answers it for a
 permanent through the layer system. A card in a hand, a graveyard, a library or
 the exile has no layer stack of its own, so this engine reads its printed
-colours — which is right for every card in the pool but one.
+colours — which is right for every card in the pool but two.
 
 "Nonland permanents you control are white. **The same is true for spells you
 control and nonland cards you own that aren't on the battlefield.**" (Celestial
@@ -11,6 +11,11 @@ Dawn.) The second sentence is what makes an off-battlefield colour a real
 question: with the Dawn out, the Swamp-turned-Plains in play is white *and* so
 is the Dark Ritual still in hand, which is what lets it be cast at all under the
 Dawn's own spending restriction.
+
+"All cards that aren't on the battlefield, spells, and permanents are
+colorless." (Mycosynth Lattice.) The second card, and the wider sentence: every
+player's spells and every card in every zone, land cards too, so it needs no
+seat to answer (:func:`every_zone_color_override`).
 
 **One reader**, which is the whole point of the module -- and since the ULG
 round it answers for a permanent too (:func:`object_colors`), by handing that
@@ -37,6 +42,7 @@ a colour override applied to the wrong seat's cards is the card backwards.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from functools import lru_cache
 
 #: The printed colour word as the symbol the rest of the engine spells a colour
 #: with. A third copy of this map would be a third chance to disagree, so the
@@ -78,6 +84,14 @@ def color_override_for_seat(game, seat) -> tuple[str, ...] | None:
     admitting it here would recolour a hand on the strength of a sentence about
     the battlefield.
     """
+    found = _seat_override(game, seat)
+    return None if found is None else found[1]
+
+
+def _seat_override(game, seat) -> tuple[int, tuple[str, ...]] | None:
+    """:func:`color_override_for_seat`'s answer beside its source's timestamp
+    (CR 613.7a), which :func:`card_colors` orders it against an every-zone
+    static by."""
     index = _seat_index(game, seat)
     if index is None:
         return None
@@ -95,20 +109,73 @@ def color_override_for_seat(game, seat) -> tuple[str, ...] | None:
             continue
         if not static.extends_to_spells_and_cards:
             continue
-        symbols = tuple(
-            _COLOR_WORD_SYMBOLS[word]
-            for word in static.sets_colors
-            if word in _COLOR_WORD_SYMBOLS
-        )
-        # Completeness rather than truth, for the reason ``sets_colors`` is
-        # ``None`` when a static says nothing about colour: ``()`` is
-        # CR 105.2c's colourless and a real answer, so "did anything survive
-        # the map?" is the wrong question -- a printed word this map could not
-        # read would fall through to the *printed* colours, which is a hand
-        # recoloured by half a sentence.
-        if len(symbols) == len(static.sets_colors):
-            return symbols
+        symbols = _symbols_of(static.sets_colors)
+        if symbols is not None:
+            return int(getattr(permanent, "timestamp", 0) or 0), symbols
     return None
+
+
+def _symbols_of(words) -> tuple[str, ...] | None:
+    """A static's colour words as symbols, or None when one is not a colour.
+
+    Completeness rather than truth, for the reason ``sets_colors`` is
+    ``None`` when a static says nothing about colour: ``()`` is CR 105.2c's
+    colourless and a real answer, so "did anything survive the map?" is the
+    wrong question -- a printed word this map could not read would fall
+    through to the *printed* colours, which is a hand recoloured by half a
+    sentence.
+    """
+    symbols = tuple(
+        _COLOR_WORD_SYMBOLS[word] for word in words if word in _COLOR_WORD_SYMBOLS
+    )
+    return symbols if len(symbols) == len(words) else None
+
+
+def every_zone_color_override(game) -> tuple[str, ...] | None:
+    """The colours **every** spell and every card off the battlefield is set
+    to, whoever owns it, or None (CR 613.1e over CR 109.1's objects).
+
+    "All cards that aren't on the battlefield, spells, and permanents are
+    colorless." (Mycosynth Lattice.) The sentence names no seat, so it is
+    read off every battlefield, and it names "all cards", so a land card is
+    reached too. Derived on every call for :func:`color_override_for_seat`'s
+    reason.
+    """
+    found = _every_zone_override(game)
+    return None if found is None else found[1]
+
+
+def _every_zone_override(game) -> tuple[int, tuple[str, ...]] | None:
+    """:func:`every_zone_color_override` beside its source's timestamp. Of
+    several such statics the newest sets the colours (CR 613.7a, CR 105.3)."""
+    if game is None or not hasattr(game, "all_permanents"):
+        return None
+    answer: tuple[int, tuple[str, ...]] | None = None
+    for permanent in game.all_permanents():
+        symbols = _every_zone_colors(
+            getattr(permanent.card_through_layer_3, "oracle_text", "") or ""
+        )
+        if symbols is None:
+            continue
+        stamp = int(getattr(permanent, "timestamp", 0) or 0)
+        if answer is None or stamp >= answer[0]:
+            answer = (stamp, symbols)
+    return answer
+
+
+@lru_cache(maxsize=None)
+def _every_zone_colors(oracle_text: str) -> tuple[str, ...] | None:
+    """The colours *oracle_text*'s every-zone static sets, or None. Kept per
+    text: the answer is the text's, and every colour read off a card asks it
+    of every permanent."""
+    if "aren't on the battlefield" not in oracle_text.lower():
+        return None
+    from .global_statics import global_static_for
+
+    static = global_static_for(oracle_text)
+    if static is None or not static.colors_every_zone or static.sets_colors is None:
+        return None
+    return _symbols_of(static.sets_colors)
 
 
 def card_colors(game=None, card=None, seat=None) -> tuple[str, ...]:
@@ -119,17 +186,27 @@ def card_colors(game=None, card=None, seat=None) -> tuple[str, ...]:
     module existed — so a site that has not been taught the seat keeps exactly
     the behaviour it had rather than guessing.
 
-    A **land card is never recoloured**: the sentence says "nonland cards", and
-    a land in a hand is one whatever the battlefield has done to the lands
-    already on it.
+    A **land card is not recoloured by a seat's static**: Celestial Dawn's
+    sentence says "nonland cards", and a land in a hand is one whatever the
+    battlefield has done to the lands already on it.
+
+    **An every-zone static needs no seat** (Mycosynth Lattice, "All cards that
+    aren't on the battlefield, spells, and permanents are colorless"): it
+    reaches every player's cards and spells, lands among them, so a caller
+    holding a game and no seat is answered by it all the same. Where a seat's
+    static and an every-zone one both reach a card, the newer source wins
+    (CR 613.7a): each *sets* the colours (CR 105.3).
     """
     printed = tuple(getattr(card, "colors", ()) or ())
     if card is None:
         return printed
-    if "land" in (getattr(card, "type_line", "") or "").lower():
+    candidates = [_every_zone_override(game)]
+    if "land" not in (getattr(card, "type_line", "") or "").lower():
+        candidates.append(_seat_override(game, seat))
+    found = [candidate for candidate in candidates if candidate is not None]
+    if not found:
         return printed
-    override = color_override_for_seat(game, seat)
-    return override if override is not None else printed
+    return max(found, key=lambda candidate: candidate[0])[1]
 
 
 def _names_the_spell(item, card) -> bool:
@@ -343,6 +420,7 @@ def of_each_color(game, permanents) -> bool:
 
 __all__ = [
     "ALL_COLORS", "card_colors", "color_override_for_seat", "colors_among",
+    "every_zone_color_override",
     "colors_among_described",
     "is_multicolored", "judging_targets_of", "object_colors", "of_each_color",
     "share_a_color",
