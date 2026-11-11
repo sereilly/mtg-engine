@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| DST *(measured)* | 165 | 285 | 77.9% | 76.5% | 54.4% | 127 |
+| DST *(measured)* | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -69,9 +69,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 913 | 470 | expected a subject |  |
-| 195 | 99 | unrecognized effect verb |  |
-| 138 | 71 | unconsumed text |  |
+| 912 | 469 | expected a subject |  |
+| 193 | 97 | unrecognized effect verb |  |
+| 137 | 70 | unconsumed text |  |
 | 74 | 55 | granted ability in quotes | phase 3 (quoted abilities) |
 | 42 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -92,8 +92,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'a' |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -755,6 +755,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Auriok Bladewarden**
   - `{T}: Target creature gets +X/+X until end of turn, where X is this creature's power.`
 - **Auriok Siege Sled**
+  - `{1}: Target artifact creature blocks this creature this turn if able.`
   - `{1}: Target artifact creature can't block this creature this turn.`
 - **Auriok Steelshaper**
   - `As long as this creature is equipped, each creature you control that's a Soldier or a Knight gets +1/+1.`
@@ -3605,6 +3606,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}, {T}: Destroy target green creature.`
   - `{B}{B}, {T}: Destroy target green creature.`
   - `{B}{B}, {T}: Destroy target green creature.`
+- **Eater of Days**
+  - `When this creature enters, you skip your next two turns.`
 - **Eater of the Dead**
   - `{0}: If this creature is tapped, exile target creature card from a graveyard and untap this creature.`
 - **Ebon Praetor**
@@ -4806,6 +4809,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Gauntlets of Chaos**
   - `{5}, Sacrifice this artifact: Exchange control of target artifact, creature, or land you control and target permanent an opponent controls that shares one of those types with it. If those permanents are exchanged this way, destroy all Auras attached to them.`
   - `{5}, Sacrifice this artifact: Exchange control of target artifact, creature, or land you control and target permanent an opponent controls that shares one of those types with it. If those permanents are exchanged this way, destroy all Auras attached to them.`
+- **Gemini Engine**
+  - `Whenever this creature attacks, create a colorless Construct artifact creature token named Twin that's attacking. Its power is equal to this creature's power and its toughness is equal to this creature's toughness. Sacrifice the token at end of combat.`
 - **Gempalm Avenger**
   - `When you cycle this card, Soldier creatures get +1/+1 and gain first strike until end of turn.`
 - **Gempalm Incinerator**
@@ -4824,6 +4829,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to target creature you control instead.`
 - **Genesis**
   - `At the beginning of your upkeep, if this creature is in your graveyard, you may pay {2}{G}. If you do, return target creature card from your graveyard to your hand.`
+- **Genesis Chamber**
+  - `Whenever a nontoken creature enters, if this artifact is untapped, that creature's controller creates a 1/1 colorless Myr artifact creature token.`
 - **Geothermal Crevice**
   - `{T}: Add {R}.`
   - `{T}, Sacrifice this land: Add {B}{G}.`
@@ -9286,6 +9293,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Purgatory**
   - `Whenever a nontoken creature is put into your graveyard from the battlefield, exile that card.`
   - `At the beginning of your upkeep, you may pay {4} and 2 life. If you do, return a card exiled with this enchantment to the battlefield.`
+- **Purge**
+  - `Destroy target artifact creature or black creature. It can't be regenerated.`
 - **Purging Scythe**
   - `At the beginning of your upkeep, this artifact deals 2 damage to the creature with the least toughness. If two or more creatures are tied for least toughness, you choose one of them.`
 - **Purify**
@@ -10526,6 +10535,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may return target instant card from your graveyard to your hand.`
 - **Scroll Rack**
   - `{1}, {T}: Exile any number of cards from your hand face down. Put that many cards from the top of your library into your hand. Then look at the exiled cards and put them on top of your library in any order.`
+- **Scrounge**
+  - `Target opponent chooses an artifact card in their graveyard. Put that card onto the battlefield under your control.`
 - **Scrying Glass**
   - `{3}, {T}: Choose a number greater than 0 and a color. Target opponent reveals their hand. If that opponent reveals exactly the chosen number of cards of the chosen color, you draw a card.`
 - **Scythe of the Wretched**
@@ -12008,6 +12019,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice this artifact: Draw a card.`
 - **Sunder**
   - `Return all lands to their owners' hands.`
+- **Sundering Titan**
+  - `When this creature enters or leaves the battlefield, choose a land of each basic land type, then destroy those lands.`
 - **Sunfire Balm**
   - `Prevent the next 4 damage that would be dealt to any target this turn.`
   - `When you cycle this card, you may prevent the next 1 damage that would be dealt to any target this turn.`
@@ -12256,6 +12269,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
+- **Tears of Rage**
+  - `Attacking creatures you control get +X/+0 until end of turn, where X is the number of attacking creatures. Sacrifice those creatures at the beginning of the next end step.`
 - **Tectonic Break**
   - `Each player sacrifices X lands of their choice.`
 - **Tectonic Instability**
@@ -12526,6 +12541,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thornwood Falls**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {G} or {U}.`
+- **Thought Dissector**
+  - `{X}, {T}: Target opponent reveals cards from the top of their library until an artifact card or X cards are revealed, whichever comes first. If an artifact card is revealed this way, put it onto the battlefield under your control and sacrifice this artifact. Put the rest of the revealed cards into that player's graveyard.`
 - **Thought Lash**
   - `When a player doesn't pay this enchantment's cumulative upkeep, that player exiles all cards from their library.`
   - `Exile the top card of your library: Prevent the next 1 damage that would be dealt to you this turn.`
