@@ -126,8 +126,10 @@ def test_an_unread_enchant_noun_refuses_every_host_rather_than_admitting_all():
     bear = Permanent(card=_mk_creature_card("Bear", 2, 2))
 
     assert permanent_matches_enchant_noun(bear, "creature")
-    assert not permanent_matches_enchant_noun(bear, "equipment")
-    assert not permanent_matches_enchant_noun(bear, "artifact or equipment")
+    # "Equipment" was the unread noun here until Darksteel's Carry Away read
+    # it; "Vehicle" is one nobody reads.
+    assert not permanent_matches_enchant_noun(bear, "vehicle")
+    assert not permanent_matches_enchant_noun(bear, "artifact or vehicle")
 
 
 def test_an_aura_printing_an_unread_noun_is_unsupported_and_says_which_line():
@@ -141,10 +143,10 @@ def test_an_aura_printing_an_unread_noun_is_unsupported_and_says_which_line():
     aura = replace(
         template,
         type_line="Enchantment — Aura",
-        oracle_text="Enchant Equipment\nEnchanted Equipment can't be equipped.",
+        oracle_text="Enchant Vehicle\nEnchanted Vehicle can't be crewed.",
     )
 
     program = compile_card_oracle(aura)
 
     assert not program.supported
-    assert "enchant equipment" in (program.reason or "").lower()
+    assert "enchant vehicle" in (program.reason or "").lower()
