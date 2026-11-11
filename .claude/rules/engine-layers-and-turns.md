@@ -131,7 +131,9 @@ and you can open this file directly whenever its subject is yours.
     `find_permanent_by_id` / `permanent_id_of`. `.battlefield.index()` /
     `.remove()` are banned; positional subscripting is ratcheted per module.
     The wire carries `id` and resolves it once at the top of `web/actions.py`
-    (a stale id is a 404). The combat declarations and assignments too:
+    (a stale id is a 404), and a target's id is handed to the engine as the
+    id (`web/action_helpers.wire_target_keywords`). The combat declarations
+    and assignments too:
     `web.actions.COMBAT_ID_FIELDS` turns `attacker_ids`,
     `blocker_pairs_by_id`, `attacker_damage_by_id`, … into the engine's
     slot-keyed combat maps, each id checked against the battlefield its

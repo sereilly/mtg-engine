@@ -200,5 +200,17 @@ and you can open this file directly whenever its subject is yours.
   every resolution context re-derives it from the ids
   (`bare_announcements.resolving_slots`). A graveyard target is its stamp
   (`target_graveyard_card`, None or a list, `check_graveyard_stamps`), read
-  through `handlers/_targets.chosen_graveyard_slots`. The API keyword still
-  takes a slot (SET_PLAYBOOK's Known gaps).
+  through `handlers/_targets.chosen_graveyard_slots`. The API's target
+  keywords are each zone's own (`engine/target_keywords.py`): a permanent by
+  id (`target_permanent_ids`), a graveyard card by its place in the pile
+  (`target_graveyard_indices`), an ante card by its place
+  (`target_ante_index`, carried to Darkpact's handler as
+  `StackItem.choices["ante_index"]`); `announced_slot` derives the slot the
+  gates read once, at the entry point, and refuses a keyword for the wrong
+  zone. The AI's actions carry the keywords (`ai_actions.target_keywords`
+  turns a chooser's slot into them as the action is built), and the wire's
+  target reaches the engine through `web/action_helpers.wire_target_keywords`.
+  `target_permanent_index` is accepted only as the tests' adapter, and no
+  call in `engine/`, `web/` or `scripts/` passes it
+  (`tests/engine/test_kg5_ids_api_keywords.py`); the gates' own slot reads
+  are SET_PLAYBOOK's Known gaps.

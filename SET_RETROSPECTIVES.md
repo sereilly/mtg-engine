@@ -1960,14 +1960,29 @@ is short; the reports saved as they land; a web test seeds its own RNG;
 carry the round's seams; ROADMAP drops eight drained clauses.
 
 *Known gaps:*
-- **Drained:** seventeen of twenty-one, and wave 2's own finds.
+- **Drained:** seventeen of twenty-one, the role-refs cast default (`ids`),
+  and wave 2's own finds.
 - **Rewritten:** `effect_order`'s measured default; CR 400.4a's split counted
   search; the AI leftovers (kg5's AI groups' measured-and-left, Mirrodin's
-  folded in).
+  folded in); the slot keyword (`ids`: the gates' derived slot, the client's
+  cast bodies, the tests' adapter).
 - **Added:** prevention leftovers; a payable Alliances toll after Land
   Equilibrium, with Worms and Mox Diamond beside it; a replaced land play's
   watchers (a ruling to ask); three windows the web leaves a person unasked;
   three mana readers; a roles copy's targets; Mishra's War Machine's damage;
   a copy's name in the handlers; a seeded web session's RNG.
 
-<!-- kg5 integrator: ids outcome and the full gate -->
+*`ids`, alone and last on the merged tree*, gave each zone its own target
+keyword at the API — a permanent by id, a graveyard card by its place, an
+ante card by its place — on every entry point, in the AI's actions, on the
+wire and in the activation client (driven in a browser), and drained the
+role-refs cast default (Raise Dead named by role returns that card). On the
+way it found that all 63 activated abilities targeting a graveyard card also
+named the permanent in the same-numbered battlefield slot (Grave Robbers
+sacrificed Skulking Ghost), and that Darkpact always exchanged the first ante
+card. It stopped, measured, at the gates' derived slot and their 31 arity
+checks, the client's cast bodies, and 1,236 test calls kept on the old
+keyword as an adapter (the 220 graveyard calls converted); no compiled
+program and no seeded game moved.
+
+<!-- kg5 integrator: the full gate -->

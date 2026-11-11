@@ -1248,34 +1248,43 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   alone, and a non-combat dealing can have several sources now. *Clears:* a
   prevention round.
 
-- **The API still announces a battlefield target by slot, and three zones
-  share that keyword.** kg4's `ids` drained the holders: on every holder the
-  slot channel is None or a list (`check_target_slots`, read through
-  `target_slots` / `single_slot` / `first_slot`); a graveyard target is its
-  stamp (`check_graveyard_stamps`, `chosen_graveyard_slots`); a stack object
-  names its permanents by id alone after the push, and every resolution
-  context re-derives its slots from the ids. Left — the keyword every entry
-  point takes:
-  - (a) `cast_spell` / `cast_from_hand` / `queue_from_hand` /
-    `activate_permanent_ability` and the card and graveyard activations, the
-    AI actions (`CastAction`, `ActivationAction`, foreign activations; the
-    `ai_casts` / `ai_abilities` / `ai_policy` choosers), the announcement
-    gates (`cast_target_validation`, `legality_cast_gates`,
-    `legality_abilities`, `activation_charges`, `casting`) and
-    `bare_announcements.announced_fields` take `target_permanent_index` in
-    either arity (35 `isinstance` checks, all at API level). The keyword
-    also carries a **graveyard slot** for a graveyard target and an **ante
-    slot** for Darkpact (`exchange_ante_with_top_library`; its spec is
-    `"kind": "none"`), so `target_permanent_ids` needs graveyard and ante
-    keywords of their own first.
-  - (b) `web/schemas.py`'s `target_permanent_index` request field and seven
-    `web/static/app.js` bodies; `web/actions.py` translates ids to a slot at
-    the top of `do_action`, and `action_helpers`, `action_debug`,
-    `action_turn`, `action_prompt_board` and `debug_actions` read the slot.
-  - (c) The tests: 1,753 uses in 351 files. A static codemod cannot convert
-    them (a slot's zone depends on the card's spec); a runtime helper, or
-    (a)'s zone keywords first.
-  *Clears:* a round of its own, (a) then (b) then (c).
+- **The announcement gates still read a battlefield target by slot, and the
+  tests still announce one.** Since kg5 each zone has its own target keyword
+  at the API (`engine/target_keywords.py`: `target_permanent_ids`,
+  `target_graveyard_indices`, `target_ante_index`); the AI's actions and the
+  wire announce by them, and `announced_slot` derives the slot once, at the
+  entry point (`tests/engine/test_kg5_ids_api_keywords.py`). Left, each
+  measured by kg5 `ids`:
+  - (a) The gates take and read that derived slot —
+    `cast_target_validation`, `legality_cast_gates`, `legality_abilities`,
+    `activation_charges`, `activation_checks`, `cast_announcement`,
+    `pool_payment._resolved_cast_x` and `bare_announcements.names_an_object`
+    / `announced_fields` — with their 31 `isinstance` arity checks, which go
+    once the tests' adapter (c) does. The AI choosers work in picker slots
+    and convert only at the action (`ai_casts._announced_candidate`,
+    `ai_abilities._activation_candidate`,
+    `ai_cast_gates._aimed_under_target_requirements`,
+    `ai_foreign_activations`), and `divided_targets`' `(seat, slot)` entries
+    are a second slot channel.
+  - (b) The client's cast bodies still send a slot: `resolvePendingCastTarget`'s
+    cast body sends `permanent_index`, and the several-target senders send
+    graveyard picks as slots; the activation bodies fall back to the slot
+    when the state names no id; the prompt answers `resolve_optional_trigger`
+    (`web/action_turn`) and `opponent_damage_choose`
+    (`web/action_prompt_board`) take a seat and slot when no id is given.
+    The server reads each old field in the card's zone
+    (`web/action_helpers.wire_target_keywords`), so these are accepted
+    fields, not wrong ones.
+  - (c) 1,236 test calls in 234 files still pass `target_permanent_index`,
+    which every entry point accepts as the tests' adapter
+    (`scratch/kg5/ids/tests_census_after.txt`; the most in
+    `test_lea_enchantments.py`, `test_legends_instants.py`,
+    `test_arabian_nights_cards.py`, `test_batch05.py`, `test_mir_instants.py`).
+    1,206 name a seat beside the slot, so each becomes
+    `target_permanent_ids=[game.permanent_at(seat, slot).permanent_id]` (or a
+    `tests/helpers.py` helper); the 136 that name their card by a non-literal
+    need it read at runtime. The graveyard calls are converted.
+  *Clears:* a round of its own, (c) then (a); (b) in any client round.
 
 - **A payable Alliances toll is charged after Land Equilibrium, so its
   controller is never offered paying first.** Since kg5 an entry asks CR
@@ -1508,12 +1517,6 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   tap that asks whether the damage was dealt (the Minion's 2008-10-01 ruling:
   damage all prevented, no tap). *Clears:* the round that takes the fused
   upkeep kinds.
-
-- **`queue_from_hand(target_role_refs=…)` is overridden by the default target
-  for a lone graveyard role** (`mixins/stack/casting.py`, `names_an_object`
-  is handed None for role refs), so a cast naming its graveyard card by role
-  gets the default. The client sends the index channel, which is right.
-  *Clears:* any casting round.
 
 - **A copy's name in the effect handlers' sentences** (CR 707.2). Since kg5
   a permanent is named by its name (`effective_card.name`) on the wire
