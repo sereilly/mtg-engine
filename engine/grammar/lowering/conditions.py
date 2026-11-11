@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY, REVEALED_HAND_CARDS
+from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY, REVEALED_HAND_CARDS,
+                             TARGET_PLAYER_OR_CONTROLLER)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (count_filter_on_frozen_seat, count_spec,
@@ -49,6 +50,8 @@ from ._events import (ATTACHED_PERMANENT_CONTROLLER, CAST_SPELL_EVENTS,
                       names_attached_permanent)
 from ._color_conditions import lower_color_condition
 from ._record_conditions import lower_record_condition
+from ._record_keys import (ANNOUNCED_PLAYER_OR_PLANESWALKER_TARGET,
+                           ANNOUNCED_PLAYER_TARGET)
 
 #: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
 #: therefore which half of the resolution context answers a question about it.
@@ -102,7 +105,9 @@ def announces_target_pair(instructions) -> bool:
     )
 
 
-def _condition_seat(condition, player, event, what: str) -> str:
+def _condition_seat(
+    condition, player, event, what: str, produced: frozenset[str] = frozenset(),
+) -> str:
     """Which seat a condition's player reference names, as a payload word.
 
     "…**if that player** controls a Plains" (Spiritual Sanctuary) was the card
@@ -113,20 +118,34 @@ def _condition_seat(condition, player, event, what: str) -> str:
     Silent in both directions and invisible from the card.
 
     So the referent is resolved **here**, where the firing event is known, and
-    a trigger that froze no seat refuses the clause rather than guessing. Three
+    a trigger that froze no seat refuses the clause rather than guessing — unless
+    the effect itself announced one (*produced*'s markers). Three
     conditions ask it now — a board count, a zone count and a life total — and
     one reader is what keeps them from disagreeing about a pronoun.
     """
     kind = player.kind
     if kind != "that_player":
         return kind
-    if event not in _EVENT_SUBJECT_PLAYERS:
-        raise LoweringError(
-            f"'that player' names no seat under this trigger, so this {what} "
-            "cannot be asked",
-            node=condition,
-        )
-    return EVENT_SUBJECT_PLAYER
+    if event in _EVENT_SUBJECT_PLAYERS:
+        return EVENT_SUBJECT_PLAYER
+    # "Target player reveals three cards … **Then if that player** has more
+    # cards in hand than you, …" (Pulse of the Dross; Pulse of the Forge's
+    # "that player or that planeswalker's controller", one referent,
+    # ``seats.parse_player_ref``.) No event froze a seat, and a step of this
+    # effect announced one (``_record_keys``' markers): the pronoun is that
+    # target. Two announcements name two seats and the words neither.
+    announced = {
+        ANNOUNCED_PLAYER_TARGET: "target_player",
+        ANNOUNCED_PLAYER_OR_PLANESWALKER_TARGET: TARGET_PLAYER_OR_CONTROLLER,
+    }
+    named = [word for marker, word in announced.items() if marker in produced]
+    if len(named) == 1:
+        return named[0]
+    raise LoweringError(
+        f"'that player' names no seat under this trigger, so this {what} "
+        "cannot be asked",
+        node=condition,
+    )
 
 
 #: The events that freeze the object "the same name" is compared against.
@@ -469,7 +488,9 @@ def _lower_condition(
                 "op": comparison.op,
                 "count": 0,
             }
-        who = _condition_seat(condition, condition.who, event, "board count")
+        who = _condition_seat(
+            condition, condition.who, event, "board count", produced
+        )
         # "Choose a creature type. If you control more creatures **of that
         # type** than each other player, …" (Peer Pressure.) The word the step
         # in front recorded (CR 608.2d), lifted off the filter and named by its
@@ -710,7 +731,9 @@ def _lower_condition(
             )
         return {
             "kind": "zone_card_count",
-            "player": _condition_seat(condition, condition.player, event, "zone count"),
+            "player": _condition_seat(
+                condition, condition.player, event, "zone count", produced
+            ),
             "zone": condition.zone,
             "op": condition.comparison.op,
             "value": bound.value,
@@ -773,7 +796,9 @@ def _lower_condition(
             }
         return {
             "kind": "player_life",
-            "player": _condition_seat(condition, condition.player, event, "life gate"),
+            "player": _condition_seat(
+                condition, condition.player, event, "life gate", produced
+            ),
             "op": condition.comparison.op,
             "value": bound.value,
         }

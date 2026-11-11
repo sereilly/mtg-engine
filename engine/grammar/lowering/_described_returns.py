@@ -38,7 +38,8 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import (CHOSEN_CREATURE_TYPES_THIS_WAY,
-                             CHOSEN_THIS_WAY_OBJECTS, OracleInstruction)
+                             CHOSEN_THIS_WAY_OBJECTS, LAST_TARGET_NAME,
+                             OracleInstruction)
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -410,6 +411,28 @@ def lower_described_return(
         if node.entering_tapped or node.under_control_of or node.repetitions:
             raise LoweringError("the sweep bounce reads no rider", node=node)
         filt = subject.filter
+        # "Return target nonland permanent **and all other permanents with the
+        # same name as that permanent** to their owners' hands." (Echoing
+        # Truth.) Wake of Destruction's arrangement on the bounce: "that
+        # permanent" is the target the step in front returned, which froze its
+        # name (``LAST_TARGET_NAME``), and "other" excepts that target by id —
+        # not the ability's source, which a spell does not have. Both ride
+        # beside the filter, where ``recorded_name_test`` answers them. With no
+        # such step in this effect the words name nothing, and an unanswered
+        # "same name" read as no narrowing returns the table.
+        recorded_name: dict[str, object] = {}
+        if filt.name_from_event:
+            if LAST_TARGET_NAME not in produced:
+                raise LoweringError(
+                    "'the same name as that permanent' names a target no step "
+                    "of this effect returned", node=node,
+                )
+            recorded_name["name_from_record"] = LAST_TARGET_NAME
+            if filt.other_than_source:
+                recorded_name["other_than_target"] = True
+            filt = dataclasses.replace(
+                filt, name_from_event=False, other_than_source=False,
+            )
         attached_referent: str | None = None
         # "…all white Auras you own **attached to it**" (Word of Undoing). A
         # relation rather than a characteristic, so it rides beside the filter
@@ -511,7 +534,9 @@ def lower_described_return(
                 "\"to your hand\" is not \"to its owner's hand\" unless the "
                 "phrase says you own it", node=node,
             )
-        bounce_payload: dict[str, object] = {"filter": swept, **color_from}
+        bounce_payload: dict[str, object] = {
+            "filter": swept, **color_from, **recorded_name,
+        }
         if attached_referent is not None:
             # Beside the filter, never inside it: the handler resolves the
             # referent and compares hosts by identity, and a key inside the

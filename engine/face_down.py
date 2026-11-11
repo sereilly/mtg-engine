@@ -168,6 +168,17 @@ def is_face_down(permanent) -> bool:
     return is_face_down_card(getattr(permanent, "card", None))
 
 
+def permanent_name(permanent) -> "str | None":
+    """The name CR 201.2a compares for *permanent*: its effective card's
+    (CR 707.2 — a Clone of Grizzly Bears is named Grizzly Bears), and **None
+    for a face-down one**, which has no name (CR 708.2a) and so has the same
+    name as nothing, another face-down permanent included. The blank card's
+    display label (:data:`FACE_DOWN_NAME`) is never a name to compare."""
+    if is_face_down(permanent):
+        return None
+    return permanent.effective_card.name or None
+
+
 def hidden_card_of(permanent) -> "CardDefinition | None":
     """What a face-down *permanent* (or stack object) is, for the one seat
     CR 708.5 lets look at it — its controller — and for the rules that turn it
@@ -832,6 +843,7 @@ __all__ = [
     "morph_cost_text",
     "morph_mana",
     "morph_x_symbols",
+    "permanent_name",
     "reveal_departing",
     "revealed_as_it_moves",
     "turn_face_down",

@@ -1335,6 +1335,50 @@ def _comparison_holds(comparison: dict | None, actual: int) -> bool:
     return False
 
 
+#: The two keys a sweep carries beside its filter for "<target> **and all
+#: other <things> with the same name as that <thing>**" (Wake of Destruction,
+#: the Echoing cycle): the scratchpad key the step in front froze the target's
+#: name under (``oracle_types.LAST_TARGET_NAME``), and the exclusion of that
+#: target itself. Neither is a key ``subject_matches`` answers — the matcher
+#: never holds the resolution — so each sweep lifts them out and asks
+#: :func:`recorded_name_test`.
+RECORDED_NAME_KEYS = ("name_from_record", "other_than_target")
+
+
+def recorded_name_test(payload: dict, context) -> "Callable | bool | None":
+    """The test "…and all other <things> with the same name as that <thing>"
+    puts on a sweep, or None when *payload* reads no recorded name.
+
+    False — the sweep reaches nothing — when the record holds no name: the
+    target left before the step in front could freeze one (CR 608.2b), or it
+    was face down and had none (CR 708.2a; 201.2a: an object with no name has
+    the same name as nothing). A dropped narrowing on a sweep is not a card
+    that does less, it is one that takes the board.
+
+    "**Other**" is the target by id (CR 400.7), read off the announcement:
+    a regenerated or indestructible target is still on the battlefield when
+    the sweep runs, and a pumped one certainly is, and the sentence reaches it
+    once.
+    """
+    key = payload.get("name_from_record")
+    if key is None:
+        return None
+    name = context.results.get(str(key))
+    if not name:
+        return False
+    excluded = (
+        _late.game_types.single_chosen_id(context.target_permanent_id)
+        if payload.get("other_than_target") else None
+    )
+
+    def holds(perm) -> bool:
+        if excluded is not None and perm.permanent_id == excluded:
+            return False
+        return _late.face_down.permanent_name(perm) == name
+
+    return holds
+
+
 def seats_controlling(game, seats, described) -> list:
     """*seats*, narrowed to the ones controlling something *described* names.
 

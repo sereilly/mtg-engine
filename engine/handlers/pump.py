@@ -19,13 +19,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..destruction_events import mark_delayed_destruction
+from ..face_down import permanent_name
 from ..models import Permanent
+from ..oracle_types import LAST_TARGET_NAME
 from ..pt import add_pt_modifier, pt_change_text
 from ..source_tapped_effects import record_while_tapped
 from ..keywords import grant_keyword
 from ._amounts import resolve_amount, count_from_payload
 from ._common import apply_temp_pt_boost
-from ._filters import permanent_matches_filter
+from ._filters import permanent_matches_filter, recorded_name_test
 from ._targets import (block_pair_permanents, attached_host,
                        defending_player_seat, resolve_target_permanent,
                        resolve_target_permanents, resolve_target_slots,
@@ -247,6 +249,11 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         game, context, predicate=_eligible, fallback_players=(target, caster)
     )
     if target_perm is not None:
+        # "…and all other creatures with the same name as **that creature**"
+        # (Echoing Courage): the name the sweep behind this step compares
+        # against, read as the spell resolves (CR 608.2h) — None for a
+        # face-down creature, which has no name (CR 708.2a).
+        context.results[LAST_TARGET_NAME] = permanent_name(target_perm)
         if counted_from_target:
             # The deferred count, now that the object both pronouns name is in
             # hand. Re-derived here rather than earlier, so a target that has
@@ -563,6 +570,14 @@ def global_buff_affected(
     # over the same printed phrase use. With no seat to answer it the word
     # refuses, so the sweep reaches nobody rather than everybody.
     scoped_to = instruction.payload.get("controller")
+    # "Target creature and all other creatures **with the same name as that
+    # creature**" (Echoing Courage): the pumped target's name, that target
+    # excepted (``recorded_name_test``). No name, no sweep — the target was
+    # face down, and a face-down creature shares a name with nothing.
+    same_name = recorded_name_test(instruction.payload, context)
+    if same_name is False:
+        game.log.append(f"{card.name}: no name to match")
+        return None
     targeted_seat = (
         game.players.index(context.target)
         if context.target is not None and context.target in game.players
@@ -587,6 +602,8 @@ def global_buff_affected(
             ):
                 continue
             if exclude_self is not None and perm is exclude_self:
+                continue
+            if same_name is not None and not same_name(perm):
                 continue
             # Army of Allah: only creatures attacking at resolution are buffed.
             if attacking_only and not perm.attacking:

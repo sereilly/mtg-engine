@@ -1306,6 +1306,23 @@ LAST_TARGET_OWNER = "last_target_owner"
 #: controller key already beside it.
 LAST_TARGET_NAME = "last_target_name"
 
+#: The condition seat word for "**that player or that planeswalker's
+#: controller**" behind "target player or planeswalker" (Pulse of the Forge):
+#: the chosen player, or the controller of the chosen planeswalker — never the
+#: seat a spell that chose a permanent defaults ``context.target`` to.
+#: Written by ``grammar/lowering/conditions._condition_seat``, answered by
+#: ``handlers/_conditions._condition_player``.
+TARGET_PLAYER_OR_CONTROLLER = "target_player_or_controller"
+
+#: The resolving spell's record that **its own effect sent its card to its
+#: owner's hand** — "Then if …, return Pulse of the Fields to its owner's
+#: hand" (the Pulse cycle). Written into the spell's scratchpad by
+#: ``return_source_card_to_owners_hand`` and read by the resolution's last
+#: step (``_resolve_card``'s ``finish``), which is where CR 608.2n's card
+#: goes. A copy's scratchpad is read by nobody: off the stack it ceases to
+#: exist (CR 707.10a).
+SPELL_RETURNED_TO_HAND = "spell_returned_to_hand"
+
 #: The ``deal_damage`` recipient meaning "the controller of the last <noun
 #: phrase> that dealt damage to you this turn" (Suffocation). A seat nobody
 #: chose and no event froze: it is read at resolution out of

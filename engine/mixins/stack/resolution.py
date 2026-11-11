@@ -36,6 +36,7 @@ from ...game_types import (OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
+from ...oracle_types import SPELL_RETURNED_TO_HAND
 from ...modal_triggers import modal_trigger_modes
 from ...prevention.shields import carry_spell_shields_onto_permanent
 from ...resumption import run_resumable
@@ -106,7 +107,7 @@ class StackResolutionMixin:
     def _bin_spell_card(
         self, owner, card: CardDefinition, *, exile_instead: bool, verb: str,
         hand_instead: bool = False, exile_is_final: bool = False,
-        chooser_index: int | None = None,
+        chooser_index: int | None = None, returned_to_hand: bool = False,
     ) -> None:
         """Where a spell's card goes as it leaves the stack (CR 608.2n): the
         owner's graveyard, unless the cast carried the "if that spell would be
@@ -162,6 +163,15 @@ class StackResolutionMixin:
         # …and a face-down spell is revealed as it leaves for anywhere but the
         # battlefield (CR 708.9) — the card that lands is the one it hid.
         leaving = whole_card(revealed_as_it_moves(self, card))
+        # *returned_to_hand*: the spell's own effect sent it there (the Pulse
+        # cycle, ``Game.return_resolving_spell_to_hand``). No graveyard trip, so
+        # nothing replacing one contends; only a final exile outranks it.
+        if returned_to_hand and not (exile_instead and exile_is_final):
+            if self.put_card_into_hand(owner, leaving):
+                self.log.append(f"{card.name} {verb} and returned to its owner's hand")
+            else:
+                self.log.append(f"{card.name} {verb}")
+            return
         if hand_instead and not (exile_instead and exile_is_final):
             self._bin_bought_back_spell(
                 owner, card, leaving, rider=exile_instead, verb=verb,
@@ -1602,7 +1612,7 @@ class StackResolutionMixin:
                     )
                     if not 0 <= seat < len(self.players):
                         seat = target_idx
-                    self._apply_spell_text(
+                    contexts_run.append(self._apply_spell_text(
                         caster,
                         self.players[seat],
                         card,
@@ -1621,11 +1631,11 @@ class StackResolutionMixin:
                         # …and the card in a graveyard the mode named, on the
                         # mode's own channel (an entwined Betrayal of Flesh).
                         target_graveyard_card=mode.target_graveyard_card,
-                    )
+                    ))
 
                 run_resumable(self, chosen_modes, apply_mode)
                 return
-            self._apply_spell_text(
+            contexts_run.append(self._apply_spell_text(
                 caster,
                 target,
                 card,
@@ -1642,8 +1652,10 @@ class StackResolutionMixin:
                 choices=choices,
                 trigger_context=trigger_context,
                 target_graveyard_card=target_graveyard_card,
-            )
+            ))
 
+        # The contexts the spell's text ran in, for ``finish`` to read.
+        contexts_run: list = []
         # ``finish`` may run twice: once at the end of the resolution, and — if
         # a prompt this resolution armed was still queued then — again from
         # ``_release_stack_item`` when the last answer lands. The hook and the
@@ -1722,6 +1734,11 @@ class StackResolutionMixin:
                 # the same move, and the spell's controller chooses (CR 616.1).
                 exile_is_final=bool(leaves_to_exile or first_pass["ends_turn"]),
                 chooser_index=caster_index,
+                # …and the Pulse cycle's own return (SPELL_RETURNED_TO_HAND).
+                returned_to_hand=any(
+                    ran is not None and ran.results.get(SPELL_RETURNED_TO_HAND)
+                    for ran in contexts_run
+                ),
             )
 
         # CR 608.2n puts the card into the graveyard as the *last* part of

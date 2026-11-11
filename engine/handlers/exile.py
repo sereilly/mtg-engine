@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..exiled_records import record_exiled_card
-from ..face_down import revealed_as_it_moves
+from ..face_down import permanent_name, revealed_as_it_moves
 from ..faces import whole_card
 from ..game_types import first_target_id
 from ..linked_exile import link_exiled_card
@@ -538,8 +538,9 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # the toughness's reason above: the search runs after this step and by then
     # the permanent is a card in exile, which CR 400.7 makes a new object no
     # board read can find. Through ``effective_card`` (CR 707.2) so a Clone of
-    # Grizzly Bears strips Grizzly Bears rather than the copy's printed face.
-    context.results[LAST_TARGET_NAME] = perm.effective_card.name
+    # Grizzly Bears strips Grizzly Bears rather than the copy's printed face —
+    # and a face-down creature has no name to strip by (CR 708.2a, 201.2a).
+    context.results[LAST_TARGET_NAME] = permanent_name(perm)
     game.remove_from_battlefield(perm)
     if owner_index is None:
         owner_index = controller_index if controller_index is not None else 0
@@ -1224,7 +1225,9 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
             game, perm, narrowings, observer=observer, source=source_permanent
         ):
             return False
-        if event_name is not None and perm.effective_card.name != event_name:
+        # CR 201.2a through ``permanent_name``: a face-down token has no name
+        # (CR 708.2a) and shares one with nothing.
+        if event_name is not None and permanent_name(perm) != event_name:
             return False
         if payload.get("colored_only") and not perm.effective_colors:
             return False

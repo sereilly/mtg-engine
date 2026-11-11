@@ -338,19 +338,22 @@ def lower_destroy_sweep(
                 filt, carried_separately=frozenset({"name_from_event"}),
             )
             # "all **other** lands" — other than the land this sentence
-            # already destroyed, which by the time the sweep runs is a card
-            # in a graveyard and on nobody's battlefield. Popped rather than
-            # dropped, for the trigger branch's reason: the noun parser
-            # wrote it as `exclude_self`, where "self" is the *ability's
-            # source*, and a sorcery has none — left on the payload it would
-            # be a narrowing the sweep silently ignores.
-            recorded.pop("exclude_self", None)
+            # already destroyed. Not `exclude_self` as the noun parser wrote
+            # it: "self" is the *ability's source*, and a sorcery has none.
+            # The land the sentence chose is the target, excepted by id
+            # (``other_than_target``) — and it can still be on the
+            # battlefield, regenerated or indestructible, which is exactly
+            # when a second destruction of it would be a sweep reaching it
+            # twice.
+            other_than_target = bool(recorded.pop("exclude_self", None))
             recorded.pop("name_from_event", None)
             if untestable_filter_keys(recorded):
                 raise LoweringError(
                     "no sweep handler for this narrowing", node=node
                 )
             recorded["name_from_record"] = LAST_TARGET_NAME
+            if other_than_target:
+                recorded["other_than_target"] = True
             if node.no_regen:
                 recorded["bypass_regeneration"] = True
             return (

@@ -841,7 +841,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Esteemed Speaker.) The bounce records the mana value of what it returned,
     # because by the time the life gain runs the permanent is gone — reading it
     # off the battlefield would find nothing and gain nothing.
-    "bounce_target_creature": "returned_mana_value",
+    # "Target creature and all other creatures with the same name as **that
+    # creature** get -2/-2 until end of turn." (Echoing Decay, Echoing
+    # Courage.) The name of the creature it pumped, for the sweep behind it.
+    "pump_target_creature_until_eot": LAST_TARGET_NAME,
+    "bounce_target_creature": (
+        "returned_mana_value",
+        # …and what it was called (Echoing Truth: "…and all other permanents
+        # with the same name as that permanent"), for the destroy row's
+        # reason below: the sweep behind it compares against a permanent this
+        # step has already sent to a hand.
+        LAST_TARGET_NAME,
+    ),
     # "Destroy enchanted land **and this Aura deals 2 damage to that land's
     # controller**." (Orcish Mine.) See
     # ``oracle_types.ATTACHED_PERMANENT_CONTROLLER``.

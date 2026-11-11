@@ -24,13 +24,16 @@ from typing import TYPE_CHECKING
 from ..announced_creature_type import (GRAVEYARD_ANNOUNCED_CREATURE_TYPE,
                                        announced_word,
                                        with_announced_creature_type)
+from ..face_down import permanent_name
 from ..game_types import first_target_id, single_slot, target_slots
 from ..models import Permanent
-from ..oracle_types import named_no_target
+from ..oracle_types import (LAST_TARGET_NAME, SPELL_RETURNED_TO_HAND,
+                            named_no_target)
 from ..search_filters import card_has_type
 from ._amounts import resolve_amount
 from ._common import return_permanent_to_owners_hand
-from ._filters import excluded_graveyard_slot, graveyard_card_matches
+from ._filters import (excluded_graveyard_slot, graveyard_card_matches,
+                       recorded_name_test)
 from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
                        chosen_graveyard_slots, frozen_that_player_seat,
                        resolve_role_permanent, resolve_target_permanent,
@@ -526,6 +529,16 @@ def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction
     if instruction.payload.get("from") == "battlefield":
         game.log.append(f"{card.name} was no longer on the battlefield")
         return True, "resolved"
+    # "Then if an opponent has more life than you, **return Pulse of the Fields
+    # to its owner's hand**." (The Pulse cycle.) The source is the *spell* that
+    # is resolving — a spell's context is the one that carries its words
+    # (``text_card``) — and its card is on the stack, in no zone this could
+    # scan. CR 608.2n's last step is the one that moves it, so the destination
+    # is written into the spell's own scratchpad for that step, the way a spell
+    # that exiles itself hands its exile over (``exile_resolving_spell``).
+    if source is None and context.text_card is not None:
+        context.results[SPELL_RETURNED_TO_HAND] = True
+        return True, "resolved"
     for player in game.players:
         for index, held in enumerate(player.graveyard):
             if held is card:
@@ -705,6 +718,11 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         if perm is None:
             game.log.append(f"{context.card.name}: nothing was returned")
             return True, "resolved"
+        # "…and all other permanents with the same name as **that permanent**"
+        # (Echoing Truth): the name, frozen one line before the permanent goes
+        # to a hand, where CR 400.7 makes it a new object (CR 608.2h). None
+        # for a face-down one, which has no name (CR 708.2a).
+        context.results[LAST_TARGET_NAME] = permanent_name(perm)
         owner = return_permanent_to_owners_hand(game, perm, context.caster)
         # "…you gain life equal to that creature's mana value" (Niambi). Read
         # here, while the permanent is still in hand, because the next step of
@@ -724,6 +742,8 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     # reads of one choice are free to disagree: the life could be gained for a
     # creature other than the one returned.
     returned = resolve_target_permanent(game, context, player=target)
+    if returned is not None:
+        context.results[LAST_TARGET_NAME] = permanent_name(returned)
     bounced = game._bounce_target_creature(returned)
     if bounced and returned is not None:
         context.results["returned_mana_value"] = _mana_value_of(returned)
@@ -872,6 +892,13 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
     # same player; None where nothing froze one, which the matcher answers by
     # refusing the words rather than by widening the sweep to the table.
     that_player = frozen_that_player_seat(game, context)
+    # "…and all other permanents **with the same name as that permanent**"
+    # (Echoing Truth): the name the bounce in front froze, and that target
+    # excepted — see ``recorded_name_test``. No name, no sweep.
+    same_name = recorded_name_test(instruction.payload, context)
+    if same_name is False:
+        game.log.append(f"{context.card.name}: no name to match")
+        return True, "resolved"
     matched = [
         perm for perm in game.all_permanents()
         if subject_matches(
@@ -879,6 +906,7 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
             that_player=that_player,
         )
         and (host_id is None or _was_attached_to(perm, host_id))
+        and (same_name is None or same_name(perm))
     ]
     returned: list[str] = []
     # One event (CR 603.10a, ``Game.leaving_together``): "return all creatures"
