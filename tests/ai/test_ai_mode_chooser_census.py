@@ -1409,6 +1409,13 @@ UNBUILDABLE = {
     # "Regenerate each creature you control": no creature of the caster's,
     # and a shield with nothing coming measures nothing anyway.
     ("Wail of the Nim", 0): "it has nothing to act on on any census board",
+    # Darksteel's (W1G6). "Until end of turn, whenever a creature is dealt
+    # damage, destroy it" / "…whenever a creature dies, that creature's
+    # controller loses life equal to its toughness": each creates a delayed
+    # ability (CR 603.7) and changes nothing until damage or a death comes,
+    # which no one-bait census board holds — a Fog's case, one CR over.
+    ("Shriveling Rot", 0): "it has nothing to act on on any census board",
+    ("Shriveling Rot", 1): "it has nothing to act on on any census board",
 }
 
 #: Modes with a board on which **nothing is cast**, each with why: the mode's
@@ -1514,6 +1521,12 @@ SHADOWED = {
     # their library" takes the opposing hand away; seven cards each way
     # measures even.
     ("Temporal Cascade", 1): ([0], "the opposing hand shuffled away against seven cards drawn by each seat"),
+    # Darksteel's (W1G6), on the caster's own combat (its printed window):
+    # double strike on the unblocked attacker is its damage again now (1.75);
+    # "untap all creatures you control … an additional combat phase"
+    # measures 0.0 — the rehearsal runs a combat step out to the end step and
+    # fights no additional combat.
+    ("Savage Beating", 1): ([0], "double strike is the attacker's damage again now; the extra combat is fought by no reading"),
 }
 
 #: Boards on which the cast the policy made measures **less** than some

@@ -286,6 +286,37 @@ def test_w1g6_shriveling_rot_entwined_destroys_and_then_charges(set_pool):
     assert not game.is_on_battlefield(wall)
     assert [player.life for player in game.players] == [20, 12]
 
+
+def test_w1g6_savage_beating_only_in_its_casters_combat(set_pool):
+    """Drive list. "Cast this spell only during combat on your turn." Refused
+    in the main phase and in the opponent's combat — the clause used to be
+    read as the bare "during combat" it begins with, lifting the seat — and
+    cast in the caster's own: double strike on the attacker (2 + 2 damage),
+    and entwined, an additional combat phase after this one."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g6_table(set_pool, opponent_hand=[dst["Savage Beating"]])
+    _w1g6_put(game, 0, lea["Grizzly Bears"])
+    _w1g6_put(game, 1, lea["Hill Giant"])
+    _w1g6_declare_attack(game, 0)
+    refused = game.cast_from_hand(1, "Savage Beating", mode_choices=[{"index": 0}])
+    assert not refused.supported
+    assert "on your turn" in refused.details
+
+    game = _w1g6_table(set_pool, hand=[dst["Savage Beating"]])
+    assert not game.cast_from_hand(0, "Savage Beating", mode_choices=[{"index": 0}]).supported
+    bear = _w1g6_put(game, 0, lea["Grizzly Bears"])
+    _w1g6_declare_attack(game, 0)
+    result = game.cast_from_hand(
+        0, "Savage Beating", optional_cost_payments={"{1}{R}": 1},
+        mode_choices=[{"index": 0}, {"index": 1}],
+    )
+    assert result.supported, result.details
+    _w1g6_settle(game)
+    _w1g6_drive_combat(game)
+    assert game.players[1].life == 16
+    assert not bear.tapped
+    assert game.current_turn_phase == "combat", "the additional combat phase"
+
 # ==== end W1G6 ======================================================
 
 

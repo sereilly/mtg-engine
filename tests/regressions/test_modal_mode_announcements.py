@@ -395,10 +395,13 @@ def _census_subtype_bait(card) -> list:
     ]
 
 
-def _census_board(card, *, combat: bool) -> Game:
+def _census_board(card, *, combat: bool, own_combat: bool = False) -> Game:
     """A mirrored zoo — the same bait on both sides, so a scan that ignored
     the announcement has somewhere wrong to land. *combat*: seat 1 is
-    attacking seat 0 with two of its creatures."""
+    attacking seat 0 with two of its creatures. *own_combat*: seat 0 is
+    attacking seat 1 with the same two — the board for a spell whose printed
+    window is its caster's combat (Savage Beating: "Cast this spell only
+    during combat on your turn", CR 601.3; ``_census_window_board``)."""
     bait = _census_bait() + _census_subtype_bait(card)
     game = _w2g2_table(
         [card],
@@ -412,12 +415,28 @@ def _census_board(card, *, combat: bool) -> Game:
         aura = Permanent(card=_CENSUS_AURA)
         game._put_permanent_onto_battlefield(seat, aura, seat)
         attach_aura(aura, next(iter(game.controlled_by(seat))))
-    if combat:
+    if combat or own_combat:
         game.advance_combat_phase()
         game.advance_combat_phase()
         assert game.current_step == "declare_attackers", game.current_step
-        game.declare_attackers(1, [2, 3], defending_player_index=0)
+        attacker = 0 if own_combat else 1
+        game.declare_attackers(attacker, [2, 3], defending_player_index=1 - attacker)
     return game
+
+
+def _census_window_board(card) -> Game:
+    """The main-phase board, or — when the card prints a casting window that
+    board is outside (CR 601.3) and its caster's own combat is inside — that
+    combat. A window the census never reaches is a mode refused for its
+    timing rather than for anything its sentence names."""
+    from engine.cast_restrictions import check_cast_timing
+
+    game = _census_board(card, combat=False)
+    text = (card.oracle_text or "").lower()
+    if check_cast_timing(game, 0, text) is None:
+        return game
+    fought = _census_board(card, combat=False, own_combat=True)
+    return fought if check_cast_timing(fought, 0, text) is None else game
 
 
 def _census_oracle(game, card, spec, instruction) -> set:
@@ -544,7 +563,7 @@ def test_w2g2_every_mode_is_held_to_its_own_targets(name):
     for index, mode, spec, instruction in _census_modes(card):
         tag = f"[{index}] {mode.label[:44]!r}"
         if spec is None or spec.get("kind") == "none":
-            game = _census_board(card, combat=False)
+            game = _census_window_board(card)
             result = _census_cast(game, card, index)
             if not result.supported:
                 problems.append(f"{tag}: targets nothing and was refused: {result.details}")
