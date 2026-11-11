@@ -105,10 +105,11 @@ class SpellCastingMixin:
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
-        # each one's own targets: a list of dicts shaped like ``ChosenMode``'s
-        # fields (``index`` plus optional ``target_player_index`` /
-        # ``target_permanent_index`` / ``target_stack_index``). None or one entry
-        # behaves exactly as ``mode_index`` alone always has.
+        # each one's own targets: a list of dicts (``index`` plus optional
+        # ``target_player_index`` / ``target_permanent_ids`` /
+        # ``target_graveyard_indices`` / ``target_stack_index``, each zone its
+        # own keyword as the cast's are). None or one entry behaves exactly as
+        # ``mode_index`` alone always has.
         mode_choices: list[dict] | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,
@@ -309,10 +310,11 @@ class SpellCastingMixin:
         target_stack_index: int | None = None,
         mode_index: int | None = None,
         # "Choose one **or more** —" (Sublime Epiphany). Every chosen mode, with
-        # each one's own targets: a list of dicts shaped like ``ChosenMode``'s
-        # fields (``index`` plus optional ``target_player_index`` /
-        # ``target_permanent_index`` / ``target_stack_index``). None or one entry
-        # behaves exactly as ``mode_index`` alone always has.
+        # each one's own targets: a list of dicts (``index`` plus optional
+        # ``target_player_index`` / ``target_permanent_ids`` /
+        # ``target_graveyard_indices`` / ``target_stack_index``, each zone its
+        # own keyword as the cast's are). None or one entry behaves exactly as
+        # ``mode_index`` alone always has.
         mode_choices: list[dict] | None = None,
         old_color: str | None = None,
         divided_targets: list[tuple[int, int | None]] | None = None,

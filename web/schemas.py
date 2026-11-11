@@ -421,15 +421,20 @@ class GameActionRequest(BaseModel):
     card_name: str | None = None
     permanent_name: str | None = None
     permanent_index: int | None = Field(default=None, ge=0)
+    # The **old** target slot field, accepted for one more round: the client's
+    # activation bodies send `target_permanent_id` / `target_graveyard_indices`
+    # now (``zoneTargetFields``), and the server reads this slot in the zone
+    # the card names its target in (``action_helpers.wire_target_keywords``).
     target_permanent_index: int | None = Field(default=None, ge=0)
     # --- stable permanent identity (CR 400.7) -------------------------------
     # The same addresses by ``Permanent.permanent_id`` — the ``id`` the
     # state payload puts on every battlefield card. An index is a *slot*, and a
     # request is written against a board the client last saw one poll ago: if
     # anything left the battlefield in between, every later slot shifted and the
-    # index now names a different permanent. These are resolved to indices once,
-    # at the top of ``web.actions.do_action``, so nothing downstream has to know
-    # which spelling the client used.
+    # index now names a different permanent. These are checked once, at the
+    # top of ``web.actions.do_action`` (a stale one is a 404): a source's is
+    # resolved there to the index the handlers speak, and a target's is handed
+    # to the engine as the id itself (``engine/target_keywords``).
     #
     # An id wins over the index beside it, and an id that no longer resolves is
     # an error rather than a silent fallback — falling back to the index would
@@ -468,9 +473,11 @@ class GameActionRequest(BaseModel):
     # every roles ability whose slots are all permanents.
     target_role_refs: list[TargetRoleRef] | None = Field(default=None)
     source_permanent_id: int | None = Field(default=None, ge=1)
-    # Fireball and other "divided among any number of targets" spells: the list
-    # of battlefield indices (on target_seat) the damage is split among. Takes
-    # precedence over the single permanent_index when present.
+    # The old several-target slot list (on target_seat), accepted for one more
+    # round beside `target_permanent_ids` and read in the spell's zone
+    # (``action_helpers.wire_target_keywords``): a graveyard pick's places, or
+    # the permanents standing in those slots. Takes precedence over the single
+    # permanent_index when present.
     target_permanent_indices: list[int] | None = Field(default=None)
     # Cross-seat divided targets (Fireball / Volcanic Eruption): any mix of
     # permanents and player faces on both sides. Each entry names a seat and,
