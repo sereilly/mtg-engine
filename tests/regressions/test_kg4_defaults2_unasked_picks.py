@@ -31,6 +31,7 @@ from engine import Game, PlayerState
 from engine.ai_prompt_picks import mana_breadth, permanent_pick_side, recorded_pick_side
 from engine.ai_prompt_readers import discard_spares_a_penalty
 from engine.ai_standing import permanent_worth
+from engine.ai_targets import aura_kills_its_host
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units
 from engine.game_types import OracleExecutionContext
@@ -226,12 +227,30 @@ def test_demonic_hordes_opponent_takes_the_dual_land(catalog_by_name):
     assert _names(p.card for p in game.controlled_by(0)) == ["Demonic Hordes", "Plains"]
 
 
-def _expected_pick(game, chooser: int, side: str, live: list):
+def _expected_pick(game, chooser: int, side: str, live: list, *, source=None, payload=None):
+    """The candidate a seat nobody asks should pick: somebody else's dearest
+    where the step works against it (or the chooser's own cheapest), the
+    chooser's own dearest where it works for it.
+
+    **And a harmful Aura's host, the one it kills.** Where the pick is the
+    host its own source Aura returns onto (``legal_host_for_source``:
+    Screams from Within, "When enchanted creature dies, return this card from
+    your graveyard to the battlefield") and that Aura's static -X/-X leaves
+    one of the other side's candidates at 0 toughness (CR 704.5f;
+    ``ai_targets.aura_kills_its_host``, the grant the layers apply), that
+    host is the pick, the dearest such first. On this census's board the two
+    readings part on Screams: the dearest is a Craw Wurm, 22.8, which -1/-1
+    makes 2.5 poorer; a Llanowar Elves, 7.5, dies — and Screams returns again
+    onto the Wurm, 10.0 off the opponent's standing against 2.5."""
     def worth(perm):
         return (permanent_worth(perm), mana_breadth(game, perm))
 
     own = [perm for perm in live if game.controller_index_of(perm) == chooser]
     other = [perm for perm in live if game.controller_index_of(perm) != chooser]
+    if side == "opponent" and source is not None and (payload or {}).get("legal_host_for_source"):
+        killed = [perm for perm in other if aura_kills_its_host(source, perm)]
+        if killed:
+            return max(killed, key=worth)
     if side == "opponent":
         return max(other, key=worth) if other else min(own, key=worth)
     return max(own, key=worth) if own else min(other, key=worth)
@@ -295,7 +314,7 @@ def test_every_permanent_pick_follows_the_side_its_step_works_for(catalog_by_nam
             )
             game.auto_resolve_pending_choices()
             picked = game.permanent_by_id(context.results.get(payload["result_key"]))
-            expected = _expected_pick(game, 0, side, live)
+            expected = _expected_pick(game, 0, side, live, source=unit, payload=payload)
             examined.append(unit.name)
             if picked is not expected:
                 wrong.append((unit.name, side, getattr(getattr(picked, "card", None), "name", None),

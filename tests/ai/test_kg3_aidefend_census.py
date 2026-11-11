@@ -125,8 +125,13 @@ _DECLINES = {
 def flash_census(cards, catalog):
     """Per creature castable at instant speed by its own text: the paying
     board (an invented vanilla it kills and survives: power = its toughness
-    - 1, toughness = its power) and the flier board (the same with flying,
-    which none of them can block)."""
+    - 1, toughness = its power) and the flier board (the same with flying).
+
+    Whether the creature **could block** the flier is the engine's answer,
+    asked of it on the battlefield beside the attacker
+    (``Game._can_block_attacker``, CR 509.1b) — never assumed: a creature
+    with reach can (CR 702.17b, Tangle Spider), and this read "none of them
+    can" until Darksteel shipped one."""
     rows = {}
     for card in compilation_units(catalog):
         if card.primary_type != "creature" or not casts_at_instant_speed(card):
@@ -138,6 +143,8 @@ def flash_census(cards, catalog):
         attacker = _mk_creature_card("Census Attacker", max(0, toughness - 1), max(1, power))
         flier = replace(attacker, oracle_text="Flying", keywords=("Flying",))
         row = {}
+        probe, _report, placed = _table(cards, ([(flier, False)], [(card, False)]))
+        could_block = probe._can_block_attacker(placed[card.name], placed[flier.name])
         for label, aimed in (("pays", attacker), ("flier", flier)):
             game, report, _placed = _table(
                 cards, ([(aimed, False)], _lands(cards, _cost_symbols(card.mana_cost))),
@@ -152,6 +159,7 @@ def flash_census(cards, catalog):
                 ),
                 "raised": dict(report.rehearsals_raised),
             }
+        row["flier"]["could_block"] = could_block
         rows[card.name] = row
     return rows
 
@@ -173,9 +181,14 @@ def test_every_flash_creature_ambushes_where_a_block_pays(flash_census):
 
 
 def test_no_flash_creature_is_cast_before_a_block_it_cannot_make(flash_census):
-    """Against a flier none of them can block, casting before the blocks adds
-    no block: nothing is cast there (the end step is where such a body goes)."""
-    cast = sorted(name for name, row in flash_census.items() if row["flier"]["before_blocks"])
+    """Against a flier it cannot block (the engine's block legality, CR
+    509.1b), casting before the blocks adds no block: nothing is cast there
+    (the end step is where such a body goes). One that can — reach, CR
+    702.17b — is a block the cast makes, and is the paying board's question.
+    The floor: the flier board examined creatures that cannot block it."""
+    unable = {name for name, row in flash_census.items() if not row["flier"]["could_block"]}
+    assert len(unable) >= 15, sorted(unable)
+    cast = sorted(name for name in unable if flash_census[name]["flier"]["before_blocks"])
     assert cast == [], cast
 
 
@@ -264,8 +277,16 @@ def ability_census(cards, catalog):
 #: (``ai_scratch_copy._rehearsal_seed``, read off what every seat can count since
 #: kg4) and won; the board's flip, on the seed ``_table`` fixes, lost. The AI
 #: weighs a flip on one sample of it, not on its odds.
+#:
+#: Wirefly Hive (DST) is the same flip: "{3}, {T}: Flip a coin. If you win the
+#: flip, create a 2/2 colorless Insect artifact creature token with flying
+#: named Wirefly. If you lose the flip, destroy all permanents named Wirefly."
+#: Traced at its promotion (each flip marked by ``ai_rehearsal.rehearsing``):
+#: the rehearsal's two readings (as it stands, and through the fight) both
+#: won, the board's one flip lost — "Wirefly Hive: lost the coin flip", no
+#: token, no block — exactly Bottle's three flips.
 _COIN = "a coin flip: the rehearsal's sample won it, the board's flip lost it"
-_ADDED_NOTHING = {"Bottle of Suleiman": _COIN}
+_ADDED_NOTHING = {"Bottle of Suleiman": _COIN, "Wirefly Hive": _COIN}
 
 
 def test_every_ability_activated_before_the_blocks_adds_a_block(ability_census):
