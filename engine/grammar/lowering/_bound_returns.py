@@ -137,6 +137,76 @@ def _returns_its_own_source(
 _DEPARTING_HOST_EVENT = "attached_creature_leaves_battlefield"
 
 
+#: The departures of an Aura's host that CR 113.6m names as the exception to
+#: "functions only in that zone": "…unless its trigger condition … specifies
+#: … if the object is an Aura, that the object it enchants leaves the
+#: battlefield." Under these an Aura's "return this card from your graveyard"
+#: functions on the battlefield, where it was as its host left.
+_AURA_HOST_DEPARTURES = frozenset({
+    "attached_creature_dies", _DEPARTING_HOST_EVENT,
+})
+
+
+def _lower_aura_returns_after_its_host(
+    node: ast.ReturnToZone, event: str | None
+) -> "tuple[OracleInstruction, ...] | None":
+    """"When enchanted creature dies, **return this card from your graveyard
+    to the battlefield**." (Screams from Within.) — or None when the sentence
+    is not an Aura's own return behind its host's departure.
+
+    CR 113.6m's Aura exception: the trigger condition names the enchanted
+    object leaving, so the ability functions on the battlefield — it triggers
+    as the host dies, from the Aura still attached (CR 603.10a), and by
+    resolution CR 704.5m has put the card in the graveyard it returns from. So
+    no ``functions_from`` is stamped (stamped, the battlefield scan never
+    collected it and the card never once came back).
+
+    Traveling Plague's two steps with the controller as the chooser: CR 303.4f
+    has the Aura's controller-to-be choose what it enchants as it enters
+    (``choose_permanent`` over the Aura's own enchant ability) — the ruling
+    (2005-08-01): "you choose the creature that Screams from Within enchants
+    … If there's nothing at all that Screams from Within can enchant, it
+    remains in your graveyard" (CR 303.4g, the ``if``). "Your graveyard" is
+    the controller's only (the 2004-12-01 ruling: a stolen Screams' ability
+    does nothing, its card being in its owner's), which
+    ``from_controller_graveyard`` says to the handler. A rider refuses.
+    """
+    owner = node.from_zone.owner
+    if not (
+        event in _AURA_HOST_DEPARTURES
+        and owner is not None and owner.kind == "you"
+        and (node.actor is None or node.actor.kind == "you")
+        and node.to.name == "battlefield" and node.to.owner is None
+    ):
+        return None
+    if (
+        node.entering_tapped or node.entering_counters or node.under_control_of
+        or node.attached_to or node.losing_subtypes or node.losing_abilities
+        or node.gaining_abilities or node.exile_on_leave
+    ):
+        raise LoweringError(
+            "an Aura's return behind its host carries no rider", node=node
+        )
+    choose = OracleInstruction("choose_permanent", "", {
+        "filter": {},
+        "result_key": _ATTACH_HOST_KEY,
+        "prompt": "Choose a permanent.",
+        "chooser": "you",
+        "optional": False,
+        "legal_host_for_source": True,
+    })
+    put = OracleInstruction("return_source_card_to_battlefield", "", {
+        "attached_to": _ATTACH_HOST_KEY, "from_controller_graveyard": True,
+    })
+    return (OracleInstruction("sequence", "", {"steps": (
+        choose,
+        OracleInstruction("if_then", "", {
+            "condition": {"kind": "it_happened", "key": _ATTACH_HOST_KEY},
+            "then": (put,), "else": (),
+        }),
+    )}),)
+
+
 def _lower_host_controller_returns_aura(
     node: ast.ReturnToZone, event: str | None
 ) -> "tuple[OracleInstruction, ...] | None":
@@ -835,6 +905,9 @@ def lower_untargeted_return(
         rehosted = _lower_host_controller_returns_aura(node, event)
         if rehosted is not None:
             return rehosted
+        after_host = _lower_aura_returns_after_its_host(node, event)
+        if after_host is not None:
+            return after_host
         if node.from_zone.owner is None or node.from_zone.owner.kind != "you":
             raise LoweringError(
                 "a card returns itself from its owner's graveyard", node=node

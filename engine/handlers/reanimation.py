@@ -930,10 +930,16 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
             return True, "resolved"
         game.remove_from_battlefield(source)
     else:
+        # "…from **your** graveyard" (Screams from Within): the controller's
+        # pile alone (its 2004-12-01 ruling).
+        piles = (
+            [game.players[seat]] if instruction.payload.get("from_controller_graveyard")
+            else game.players
+        )
         found = next(
             (
                 (player, index)
-                for player in game.players
+                for player in piles
                 for index, held in enumerate(player.graveyard)
                 if held is card
             ),
