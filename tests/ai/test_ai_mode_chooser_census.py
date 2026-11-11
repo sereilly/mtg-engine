@@ -1416,6 +1416,14 @@ UNBUILDABLE = {
     # which no one-bait census board holds — a Fog's case, one CR over.
     ("Shriveling Rot", 0): "it has nothing to act on on any census board",
     ("Shriveling Rot", 1): "it has nothing to act on on any census board",
+    # "Look at the top five cards of target opponent's library / of your
+    # library, then put them back in any order." (Second Sight, DST.)
+    # Trickery Charm's bullet twice over: a census library is ten Forests, so
+    # the order put back is the order taken, and what the look is for is the
+    # draws to come, which no census board holds. Driven on a real library in
+    # its own game instead (DST W1G3's drive: the five reordered as chosen).
+    ("Second Sight", 0): "it has nothing to act on on any census board",
+    ("Second Sight", 1): "it has nothing to act on on any census board",
 }
 
 #: Modes with a board on which **nothing is cast**, each with why: the mode's

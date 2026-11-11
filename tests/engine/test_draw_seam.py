@@ -15,11 +15,12 @@ drew past an armed Lamp. The counter guard beside this one was written to stop
 that shape spreading (round 31) and cites this debt by name; this is the debt
 being paid.
 
-Three calls remain and all three are **pregame**: CR 103.4's opening hand and
-the two mulligan redraws. Nothing is on any battlefield then, so there is no
-permanent for a CR 614 replacement to come from — routing them through the seam
-would announce a draw event to an empty board, which is not more correct, only
-more machinery.
+Four calls remain and all four are **pregame**: CR 103.4's opening hand, the
+two mulligan redraws, and CR 103.5b's exchange "any time you could mulligan"
+(Serum Powder's "exile all the cards from your hand, then draw that many").
+Nothing is on any battlefield then, so there is no permanent for a CR 614
+replacement to come from — routing them through the seam would announce a draw
+event to an empty board, which is not more correct, only more machinery.
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ ALLOWED = {
     "mixins/turn_management.py:deal_opening_hands",
     "mixins/turn_management.py:take_mulligan",
     "mixins/turn_management.py:pregame_mulligan_draw",
+    "mixins/turn_management.py:pregame_hand_exchange",
 }
 
 

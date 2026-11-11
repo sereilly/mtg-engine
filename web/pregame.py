@@ -35,7 +35,9 @@ CR 103.5c's free first mulligan in a multiplayer or Brawl game.
 
 from __future__ import annotations
 
-from engine.ai_mulligan import keeps_opening_hand, opening_hand_bottom
+from engine.ai_mulligan import (keeps_opening_hand, opening_hand_bottom,
+                                take_hand_exchanges)
+from engine.mulligan_exchanges import exchange_sources
 
 from .session_store import Session
 
@@ -87,6 +89,7 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
             info["is_my_turn"] = True
             info["mulligans_taken"] = players[viewer_seat].mulligans_taken
             info.update(_keep_terms(session, viewer_seat))
+            info["hand_exchange"] = _hand_exchange_offer(session, viewer_seat)
         else:
             pending = [
                 i
@@ -106,7 +109,9 @@ def _build_pregame_info(session: Session, viewer_seat: int | None) -> dict | Non
         info["mulligans_taken"] = session.game.players[offer].mulligans_taken if offer is not None else 0
         if offer is not None:
             info.update(_keep_terms(session, offer))
-        if not info["is_my_turn"]:
+        if info["is_my_turn"]:
+            info["hand_exchange"] = _hand_exchange_offer(session, offer)
+        else:
             info["waiting_for"] = offer_name
 
     elif phase == "bottom_select":
@@ -145,8 +150,27 @@ def _keep_terms(session: Session, seat: int) -> dict:
     ``mulligans_taken`` for both until the kg3 round, so a three-seat table's
     first mulligan said it would cost a card."""
     return {
-        "bottom_owed": session.game.mulligan_effective_count(seat),
+        "bottom_owed": session.game.mulligan_bottom_owed(seat),
         "may_mulligan": _may_take_mulligan(session, seat),
+    }
+
+
+def _hand_exchange_offer(session: Session, seat: int) -> dict | None:
+    """CR 103.5b's third answer to the keep-or-mulligan offer, where *seat*'s
+    hand holds a card granting one ("any time you could mulligan … exile all
+    the cards from your hand, then draw that many", Serum Powder): the hand
+    slots of the cards that grant it, and how many cards the
+    ``mulligan_exchange`` action must name to go to the bottom first
+    (``bottom_owed`` — the exchange pays the mulligan's bottom before it
+    exiles, and never with every granting card). None where no card grants
+    it. **Served to that seat alone**: the slots say where a card sits in a
+    hidden hand (CR 400.2)."""
+    sources = exchange_sources(session.game, seat)
+    if not sources:
+        return None
+    return {
+        "source_indices": sources,
+        "bottom_owed": session.game.mulligan_bottom_owed(seat),
     }
 
 
@@ -230,11 +254,21 @@ def _pregame_declare_mulligan(session: Session, seat: int) -> None:
     _pregame_advance(session)
 
 
+def _pregame_hand_exchange(session: Session, seat: int, bottom) -> bool:
+    """*seat* takes CR 103.5b's exchange in its declaration (Serum Powder):
+    the cards *bottom* names go to the bottom first, the rest of the hand is
+    exiled and as many drawn (``Game.pregame_hand_exchange``). The seat has
+    not declared: it is offered keep-or-mulligan again with the new hand, so
+    nothing here advances the round. False when the engine refused it."""
+    return session.game.pregame_hand_exchange(seat, list(bottom or ()))
+
+
 def _pregame_keep_player(session: Session, seat: int) -> None:
     session.mulligan_kept_seats.add(seat)
     # CR 103.5: as many cards as mulligans taken — less the free first one
-    # CR 103.5c gives a multiplayer or Brawl game, which this reads as owed.
-    owed = session.game.mulligan_effective_count(seat)
+    # CR 103.5c gives a multiplayer or Brawl game, which this reads as owed,
+    # and less what an exchange already bottomed (CR 103.5b).
+    owed = session.game.mulligan_bottom_owed(seat)
     if session.simultaneous_mulligan:
         # Bottom selection runs per-seat and concurrently: this seat picks its
         # bottom cards while the others may still be deciding keep/mulligan.
@@ -260,7 +294,9 @@ def _pregame_ai_decides(session: Session, seat: int) -> None:
     person's keep takes, which asks it for its bottom cards if it owes any —
     when ``ai_mulligan.keeps_opening_hand`` says so, else a mulligan, taken
     with the round's others. (It says keep once no further mulligan may be
-    taken, CR 103.5's hand of zero cards.)"""
+    taken, CR 103.5's hand of zero cards.) Any exchange "any time you could
+    mulligan" it takes comes first (CR 103.5b, ``ai_mulligan``)."""
+    take_hand_exchanges(session.game, seat)
     if keeps_opening_hand(session.game, seat):
         _pregame_keep_player(session, seat)
     else:

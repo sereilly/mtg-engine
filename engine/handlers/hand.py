@@ -289,6 +289,32 @@ def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     ]
 
 
+def resolve_source_counted_mana_value(filt: dict, source) -> dict:
+    """*filt* with "with mana value equal to the number of <kind> counters on
+    this artifact" (Aether Vial) turned into an exact ``mana_value`` bound.
+
+    The count is the source's, read as this is asked: its counters now, or as
+    it last existed on the battlefield once it has left — the 2017-11-17
+    ruling ("use its last known number of charge counters"); a permanent that
+    left keeps the counters it carried on the object the ability holds. A card
+    with {X} in its cost is asked at its printed mana value (X is 0, the same
+    ruling; CR 202.3e). No source, or a bound already printed beside it,
+    leaves the key in place, and ``_card_matches_filter`` refuses every card:
+    nothing is offered rather than the whole hand. Public because the AI's
+    activation policy asks the same question (``ai_abilities``).
+    """
+    from ..named_counters import counters_on
+    from ..subject_filters import SOURCE_COUNTED_MANA_VALUE
+
+    kind = filt.get(SOURCE_COUNTED_MANA_VALUE)
+    if not kind or source is None or filt.get("mana_value"):
+        return filt
+    resolved = dict(filt)
+    resolved.pop(SOURCE_COUNTED_MANA_VALUE, None)
+    resolved["mana_value"] = {"op": "eq", "value": counters_on(source, str(kind))}
+    return resolved
+
+
 @effect_handler("put_chosen_card_from_hand_onto_battlefield")
 def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…put **a** permanent card from their hand onto the battlefield."
@@ -333,13 +359,24 @@ def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleIn
     # its last known information (CR 608.2h). No record leaves the key in place,
     # and ``_card_matches_filter`` then refuses every card: nothing is offered
     # rather than the whole hand.
-    from ..subject_filters import SOURCE_RESOLVED_CARD_KEYS
+    from ..subject_filters import SOURCE_COUNTED_MANA_VALUE, SOURCE_RESOLVED_CARD_KEYS
 
     described = payload.get("card_filter") or {}
     if any(described.get(key) for key in SOURCE_RESOLVED_CARD_KEYS):
         payload = {
             **payload,
             "card_filter": _resolve_chosen_subtype(
+                dict(described), context.source_permanent
+            ),
+        }
+    # "…with mana value equal to the number of charge counters on this
+    # artifact" (Aether Vial): the count read off the source now and frozen
+    # onto the payload for the reason above.
+    described = payload.get("card_filter") or {}
+    if SOURCE_COUNTED_MANA_VALUE in described:
+        payload = {
+            **payload,
+            "card_filter": resolve_source_counted_mana_value(
                 dict(described), context.source_permanent
             ),
         }

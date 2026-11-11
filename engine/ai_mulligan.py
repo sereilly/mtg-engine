@@ -270,16 +270,68 @@ def keeps_opening_hand(game: "Game", seat: int) -> bool:
         return True  # CR 103.5: no mulligan past a hand of zero cards
     return keeps(
         game.players[seat].hand,
-        game.mulligan_effective_count(seat),
+        game.mulligan_bottom_owed(seat),
         land_share=deck_land_share(game, seat),
     )
+
+
+def exchanges_opening_hand(game: "Game", seat: int) -> bool:
+    """Whether the AI at *seat* takes an exchange "any time you could
+    mulligan" (CR 103.5b, Serum Powder) — exile the hand, draw that many —
+    before it declares.
+
+    For a hand it would not keep, and always in preference to the mulligan:
+    the exchange is the same fresh look at the library without the card a
+    mulligan costs, and the seat then declares again with the new hand
+    (another Powder in it may exchange again). A hand it keeps is kept. The
+    bottom the exchange owes first is chosen as a keep chooses it
+    (:func:`exchange_bottom`), and it never bottoms the card that grants
+    the exchange.
+    """
+    from .mulligan_exchanges import exchange_sources
+
+    if not exchange_sources(game, seat) or keeps_opening_hand(game, seat):
+        return False
+    return exchange_bottom(game, seat) is not None
+
+
+def exchange_bottom(game: "Game", seat: int) -> "list[int] | None":
+    """The cards *seat* bottoms as it exchanges — what it owes, chosen as a
+    keep chooses them (:func:`bottom_choice`) out of the hand less one card
+    that grants the exchange, which stays to make it — or None when the hand
+    cannot pay the bottom and keep that card."""
+    from .mulligan_exchanges import exchange_sources
+
+    sources = exchange_sources(game, seat)
+    if not sources:
+        return None
+    owed = game.mulligan_bottom_owed(seat)
+    hand = game.players[seat].hand
+    others = [index for index in range(len(hand)) if index != sources[0]]
+    if len(others) < owed:
+        return None
+    picked = bottom_choice(
+        [hand[index] for index in others], owed, land_share=deck_land_share(game, seat)
+    )
+    return [others[index] for index in picked]
+
+
+def take_hand_exchanges(game: "Game", seat: int) -> int:
+    """Every exchange the AI at *seat* takes before declaring (CR 103.5b),
+    as many as its hands keep asking for; returns how many."""
+    taken = 0
+    while exchanges_opening_hand(game, seat):
+        if not game.pregame_hand_exchange(seat, exchange_bottom(game, seat) or ()):
+            break
+        taken += 1
+    return taken
 
 
 def opening_hand_bottom(game: "Game", seat: int, count: int | None = None) -> list[int]:
     """Indices into *seat*'s hand of the cards it puts on the bottom as it
     keeps: *count* of them, by default what its mulligans owe."""
     if count is None:
-        count = game.mulligan_effective_count(seat)
+        count = game.mulligan_bottom_owed(seat)
     return bottom_choice(
         game.players[seat].hand, count, land_share=deck_land_share(game, seat)
     )
@@ -306,6 +358,10 @@ def take_opening_mulligans(
     while undecided:
         mulliganing = []
         for seat in undecided:
+            if seat in deciders:
+                # CR 103.5b: an exchange "any time you could mulligan" is
+                # made before the declaration it precedes.
+                take_hand_exchanges(game, seat)
             if seat in deciders and not keeps_opening_hand(game, seat):
                 mulliganing.append(seat)
             else:

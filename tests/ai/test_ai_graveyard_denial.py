@@ -165,6 +165,11 @@ def chooses_whose_graveyard(spell) -> bool:
         steps.extend(announced_mode_instructions(program, index))
     for instruction in steps:
         if instruction.kind in GRAVEYARD_DENIAL_KINDS:
+            # "Exile target creature card from **your** graveyard" (Death-Mask
+            # Duplicant): the pile is printed, not chosen, so there is no
+            # denial to make — the caster's own card is the only legal one.
+            if (instruction.payload or {}).get("graveyard_owner") == "you":
+                continue
             return True
         if (
             instruction.kind == "exile_cards_from_graveyard"

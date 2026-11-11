@@ -194,6 +194,11 @@ ActionKind = Literal[
     "mulligan_keep",
     "mulligan_bottom_select",
     "mulligan_bottom_confirm",
+    # CR 103.5b's exchange "any time you could mulligan" (Serum Powder), in
+    # the declaring seat's keep-or-mulligan offer (``hand_exchange``):
+    # ``hand_indices`` names the cards to put on the bottom first, exactly
+    # the offer's ``bottom_owed`` of them ([] when none is owed).
+    "mulligan_exchange",
 ]
 
 

@@ -1305,6 +1305,11 @@ class PlayerState:
     lost: bool = False
     drew_from_empty: bool = False
     mulligans_taken: int = 0
+    #: Cards the current mulligan has already put on the bottom before the
+    #: keep — an exchange "any time you could mulligan" (CR 103.5b, Serum
+    #: Powder) bottoms what is owed first (``Game.mulligan_bottom_owed``).
+    #: Pregame bookkeeping: zero from the keep on, so it never moves in play.
+    mulligan_bottom_paid: int = 0
     poison_counters: int = 0
     damage_taken_this_turn: int = 0
     # The artifact-sourced share of it (Reverse Polarity). Counted as the

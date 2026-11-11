@@ -127,6 +127,63 @@ class TurnManagementMixin:
         )
         return max(0, player.mulligans_taken - (1 if free else 0))
 
+    def mulligan_bottom_owed(self, player_index: int) -> int:
+        """How many cards *player_index* still puts on the bottom as it keeps:
+        :meth:`mulligan_effective_count`, less any its last mulligan already
+        put there — an exchange made "any time you could mulligan" (CR 103.5b,
+        Serum Powder) bottoms what is owed first, CR 103.5's order
+        (:meth:`pregame_hand_exchange`)."""
+        player = self.players[player_index]
+        return max(0, self.mulligan_effective_count(player_index) - player.mulligan_bottom_paid)
+
+    def pregame_hand_exchange(self, player_index: int, bottom_indices=()) -> bool:
+        """CR 103.5b: "Any time you could mulligan and this card is in your
+        hand, you may exile all the cards from your hand, then draw that many
+        cards." (Serum Powder; ``engine/mulligan_exchanges.py``.)
+
+        Asked in a declaration, before the seat declares (it declares after).
+        The cards its mulligans still owe the bottom go there first — CR
+        103.5's order, the bottom being part of taking the mulligan — chosen
+        by *bottom_indices* (exactly that many hand slots), and the keep then
+        owes nothing more (:meth:`mulligan_bottom_owed`). Then every card left
+        in the hand is exiled (face up, for the rest of the game: the
+        2017-11-17 ruling) and as many are drawn — a pregame draw, off the
+        replacement seam for the reason the opening hand is
+        (``tests/engine/test_draw_seam.py``). False, and nothing moved, when
+        no card in the hand grants it or the bottom choice is not the count
+        owed.
+        """
+        from ..mulligan_exchanges import exchange_sources
+
+        player = self.players[player_index]
+        sources = exchange_sources(self, player_index)
+        owed = self.mulligan_bottom_owed(player_index)
+        picked = list(dict.fromkeys(bottom_indices or ()))
+        # A card bottomed is not "in your hand": a bottom taking every card
+        # that grants the exchange leaves nothing to make it with.
+        remaining = [index for index in sources if index not in picked]
+        if (
+            not remaining
+            or len(picked) != owed
+            or any(not 0 <= index < len(player.hand) for index in picked)
+        ):
+            return False
+        source_name = player.hand[remaining[0]].name
+        if picked:
+            self.put_mulligan_cards_on_bottom(player_index, picked)
+            player.mulligan_bottom_paid += len(picked)
+        exiled = list(player.hand)
+        for card in exiled:
+            self.take_card_from_hand(player_index, card)
+            self.put_card_into_exile(player, card)
+        drawn = player.draw(len(exiled))
+        self.log.append(
+            f"{player.name} exiled the {len(exiled)} card(s) in their hand "
+            f"({', '.join(card.name for card in exiled)}) and drew {drawn} "
+            f"({source_name})"
+        )
+        return True
+
     def take_mulligan(
         self,
         player_index: int,
@@ -158,6 +215,9 @@ class TurnManagementMixin:
         random.shuffle(player.library)
 
         player.mulligans_taken += 1
+        # A new mulligan owes its own bottom (CR 103.5); what an exchange
+        # bottomed for the last one is spent.
+        player.mulligan_bottom_paid = 0
         n = self.mulligan_effective_count(player_index)
 
         # Draw a new hand of starting hand size (7).
@@ -171,6 +231,8 @@ class TurnManagementMixin:
         cards_to_bottom = self.put_mulligan_cards_on_bottom(
             player_index, sorted(set(bottom_card_indices), reverse=True)
         )
+        # This flow bottoms as it draws, so its keep owes nothing more.
+        player.mulligan_bottom_paid = len(cards_to_bottom)
 
         self.log.append(
             f"{player.name} took mulligan #{player.mulligans_taken}, drew 7, put {len(cards_to_bottom)}"
@@ -232,6 +294,8 @@ class TurnManagementMixin:
         """
         player = self.players[player_index]
         player.cards_drawn_this_turn = []
+        # Spent: the keep is the last thing the bottom was owed for.
+        player.mulligan_bottom_paid = 0
         self.draws_announced_this_turn.pop(player_index, None)
         self.second_draw_fired_this_turn.discard(player_index)
         suffix = (
@@ -256,6 +320,9 @@ class TurnManagementMixin:
         player.hand.clear()
         random.shuffle(player.library)
         player.mulligans_taken += 1
+        # A new mulligan owes its own bottom (CR 103.5); what an exchange
+        # bottomed for the last one is spent.
+        player.mulligan_bottom_paid = 0
         player.draw(7)
         self.log.append(
             f"{player.name} took mulligan #{player.mulligans_taken}, redrew 7 cards"

@@ -778,6 +778,11 @@ def _lower_cast_copy_of_exiled_card(
                 "nothing here was cast", node=node,
             )
         return (OracleInstruction("cast_copy_of_exiled_card", "", {"other": True}),)
+    if node.chosen:
+        # "…you may copy **a card exiled with this artifact**" (Panoptic
+        # Mirror): one copy, of the exiled card the controller chooses
+        # (CR 607.3) — the handler's offers are one choice, not one each.
+        return (OracleInstruction("cast_copy_of_exiled_card", "", {"chosen": True}),)
     return (OracleInstruction("cast_copy_of_exiled_card", "", {}),)
 
 

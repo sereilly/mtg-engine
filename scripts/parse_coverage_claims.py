@@ -49,6 +49,7 @@ from engine.combat_assignment import defender_assigns_line  # noqa: E402
 from engine.cycling import cycling_ban_line  # noqa: E402
 from engine.counter_conditions import (uncounterable_class_line,  # noqa: E402
                                        uncounterable_line)
+from engine.mulligan_exchanges import mulligan_exchange_line  # noqa: E402
 from engine.resolution_overrides import resolution_override_sentence  # noqa: E402
 from engine.special_actions import (permanent_special_action_sentence,  # noqa: E402
                                     special_action_line)
@@ -328,6 +329,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # moment. Its own channel, asking the reader that answers it.
     ("counter_conditions.py (uncounterable spell class)",
      lambda s: uncounterable_class_line(s) is not None),
+    # "Any time you could mulligan and this card is in your hand, you may
+    # exile all the cards from your hand, then draw that many cards." (Serum
+    # Powder.) CR 103.5b's action in a mulligan declaration, carried out by
+    # `Game.pregame_hand_exchange` off the card in the hand, so it carries no
+    # instruction. Asked of the reader that offers it.
+    ("mulligan_exchanges.py (CR 103.5b hand exchange)", mulligan_exchange_line),
     # The *other* board half of CR 601.3a — "Creature spells can't be cast."
     # (Aether Storm.) Not a gate the casting card prints about itself but a
     # prohibition a permanent imposes on every player, enforced by

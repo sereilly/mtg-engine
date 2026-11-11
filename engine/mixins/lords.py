@@ -28,6 +28,7 @@ from ..keywords import (LINE_DERIVED_KEYWORDS, add_derived_ability_line,
                         add_derived_grant, add_derived_removal,
                         clear_derived_grants, keyword_ability_name)
 from ..land_animation import LAND_ANIMATIONS_REACHING
+from ..linked_exile_keywords import LINKED_EXILE_FAMILY, linked_exile_landwalks
 from ..layer_bridge import QUALIFIED_BUFFS
 from ..lord_buffs import LORD_BUFF_KIND, LordBuff, lord_buff_from_payload
 from ..handlers._targets import attached_host
@@ -514,6 +515,13 @@ class LordBuffsMixin:
                 # rebuild, so the line is gone with the condition (CR 611.3a)
                 # and there is nothing to undo.
                 cs_lines = cs.payload.get("ability_lines") or ()
+                # "…this creature has landwalk" while a card exiled with it
+                # has landwalk (Death-Mask Duplicant): the landwalk abilities
+                # those cards print, read now (``linked_exile_keywords``).
+                if cs.payload.get(LINKED_EXILE_FAMILY) == "landwalk":
+                    cs_keywords = (
+                        *cs_keywords, *linked_exile_landwalks(self, cs_perm),
+                    )
                 if not (cs_keywords or cs_lines):
                     continue
                 if not conditional_static_holds(

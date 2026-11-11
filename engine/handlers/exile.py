@@ -714,6 +714,11 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     """
     card = context.card
     owner = context.target if context.target is not None else context.caster
+    # "…from **your** graveyard" (Death-Mask Duplicant): the caster's pile and
+    # no other, whatever seat an announcement carried.
+    own_pile = instruction.payload.get("graveyard_owner") == "you"
+    if own_pile:
+        owner = context.caster
     # **Last-known information is frozen at the fire site** (CR 608.2h, ROADMAP
     # idiom #6). "If it was a creature card" is asked after the card has left
     # the graveyard, so the answer is recorded here, as the card is taken, not
@@ -724,9 +729,21 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     if not (isinstance(index, int) and 0 <= index < len(owner.graveyard)):
         # Honour the choice, else take the first legal one — the same fallback
         # pick_target_permanent uses, so a stale choice does not fizzle an
-        # effect the rest of the engine is not written to fizzle.
-        owner = next((player for player in game.players if player.graveyard), owner)
-        index = 0 if owner.graveyard else None
+        # effect the rest of the engine is not written to fizzle. A scoped
+        # pile falls back inside itself, to a card of the printed type.
+        if own_pile:
+            index = next(
+                (
+                    slot for slot, held in enumerate(owner.graveyard)
+                    if graveyard_card_matches(
+                        instruction.payload, held, game=game, owner=owner,
+                    )
+                ),
+                None,
+            )
+        else:
+            owner = next((player for player in game.players if player.graveyard), owner)
+            index = 0 if owner.graveyard else None
     if index is None:
         game.log.append(f"{card.name}: no card in any graveyard to exile")
         return True, "resolved"
