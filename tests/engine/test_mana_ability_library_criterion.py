@@ -11,7 +11,7 @@
 The last clause arrived in the September 2026 edition. The engine first met it
 as a Scryfall ruling (Millikin, 2026-08-05) while the rules file in the repo
 was April's, and held it to the one cost that ruling named. ``engine/
-mana_payment.is_mana_ability`` asks the whole of it now, and asks the effect
+mana_abilities.is_mana_ability`` asks the whole of it now, and asks the effect
 half **fail-closed**: a zone-moving step beside an add-mana step is presumed to
 move a library card unless it has been read and does not
 (``LIBRARY_SAFE_ZONE_KINDS``).
@@ -27,13 +27,13 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from engine import mana_payment
+from engine import mana_abilities
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
 from engine.grammar.lowering.categories import INSTRUCTION_CATEGORIES
-from engine.mana_payment import (LIBRARY_MOVING_COSTS, LIBRARY_SAFE_ZONE_KINDS,
-                                 MANA_PRODUCING_KINDS, _every_nested_step,
-                                 is_mana_ability, steps_carried_out_now)
+from engine.mana_abilities import (LIBRARY_MOVING_COSTS, LIBRARY_SAFE_ZONE_KINDS,
+                                   MANA_PRODUCING_KINDS, _every_nested_step,
+                                   is_mana_ability, steps_carried_out_now)
 from engine.oracle import compile_card_oracle
 
 #: Every zone-moving step that rides beside an add-mana step in the pool, and
@@ -120,7 +120,7 @@ def test_the_abilities_the_fourth_criterion_excludes_are_the_ones_that_were_read
         verdicts[(name, index)] = is_mana_ability(ability)
         if any(getattr(ability.cost, field, 0) for field in LIBRARY_MOVING_COSTS):
             by_cost.add(name)
-        elif getattr(ability.cost, "loyalty", None) is None and mana_payment.moves_a_library_card(
+        elif getattr(ability.cost, "loyalty", None) is None and mana_abilities.moves_a_library_card(
             ability.instruction
         ):
             by_effect.add(name)
@@ -146,11 +146,11 @@ def test_the_criterion_is_what_decides_these(monkeypatch):
     rows = {name: ability for name, index, ability in _mana_producing_abilities() if index == 0}
 
     zones = frozenset(kind for kind, cat in INSTRUCTION_CATEGORIES.items() if cat == "zones")
-    monkeypatch.setattr(mana_payment, "LIBRARY_SAFE_ZONE_KINDS", zones)
+    monkeypatch.setattr(mana_abilities, "LIBRARY_SAFE_ZONE_KINDS", zones)
     assert is_mana_ability(rows["Chromatic Sphere"]) and is_mana_ability(rows["Darkwater Egg"])
     assert not is_mana_ability(rows["Millikin"]), "its cost mills: the cost half still answers"
 
-    monkeypatch.setattr(mana_payment, "LIBRARY_SAFE_ZONE_KINDS", frozenset())
+    monkeypatch.setattr(mana_abilities, "LIBRARY_SAFE_ZONE_KINDS", frozenset())
     assert not is_mana_ability(rows["Gemstone Mine"])
     assert not is_mana_ability(rows["Undiscovered Paradise"])
     assert not is_mana_ability(rows["Metalworker"])

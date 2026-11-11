@@ -94,7 +94,8 @@ from typing import TYPE_CHECKING
 from .activation_zones import HAND
 from .face_down import face_up_morph_cost, hidden_card, is_face_down, morph_cost
 from .faces import castable_faces
-from .mana_payment import PaymentWants, is_mana_ability, mana_cost_x_as_zero
+from .mana_abilities import is_mana_ability
+from .mana_payment import PaymentWants, mana_cost_x_as_zero
 from .models import Permanent
 from .oracle import compile_card_oracle
 from .targeting import usable_activated_abilities

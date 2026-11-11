@@ -9,7 +9,7 @@ the tap seam (``land_mana_tap_refusal``) asked two of its rows by hand and the
 rest not at all. A basic land has no compiled ability for a row to read, which
 is why: its mana ability is CR 305.6's intrinsic "{T}: Add [symbol]", which
 no text carries. The seam now hands the table that ability
-(``mana_payment.INTRINSIC_LAND_MANA_ABILITY``), or the land's own free one, or
+(``mana_abilities.INTRINSIC_LAND_MANA_ABILITY``), or the land's own free one, or
 the one the player chose by index.
 
 This is the census, **one scenario per row of the table**, each asked of a

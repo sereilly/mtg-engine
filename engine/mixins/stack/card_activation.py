@@ -25,7 +25,7 @@ from ...cycling import is_cycling_ability
 from ...events import emit
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
 from ...targeting import usable_activated_abilities
-from ...mana_payment import is_mana_ability
+from ...mana_abilities import is_mana_ability
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
                            SimulationResult, StackItem, as_target_ids,
                            as_target_slots)

@@ -444,7 +444,7 @@ def test_w1g8_flametongue_kavu_must_shoot_something(set_pool):
 
 # --- W1G5: lands and mana ---
 from engine import Game as _W1G5Game, PlayerState as _W1G5PlayerState
-from engine.mana_payment import is_mana_ability as _w1g5_is_mana_ability
+from engine.mana_abilities import is_mana_ability as _w1g5_is_mana_ability
 from engine.models import Permanent as _W1G5Permanent
 from engine.oracle import compile_card_oracle as _w1g5_compile
 from tests.helpers import resolve_stack as _w1g5_resolve_stack

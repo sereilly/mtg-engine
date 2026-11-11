@@ -126,7 +126,7 @@ def derived_productions(card) -> tuple[DerivedProduction, ...]:
     is still one, and so the narrowing a phrase prints is the grammar's
     reading of it rather than a second one made here.
     """
-    from .mana_payment import _every_nested_step
+    from .mana_abilities import _every_nested_step
     from .oracle import compile_card_oracle
 
     found: list[DerivedProduction] = []
@@ -145,7 +145,7 @@ def _stated_symbols(card) -> set[str]:
     """The symbols *card*'s mana abilities name outright — every add-mana step
     that is not itself a "could produce" clause."""
     from .ai_valuation import mana_ability_symbols
-    from .mana_payment import _every_nested_step, is_mana_ability
+    from .mana_abilities import _every_nested_step, is_mana_ability
     from .oracle import compile_card_oracle
 
     stated: set[str] = set()
@@ -173,7 +173,7 @@ def _color_choice_amongs(card) -> tuple[dict, ...]:
     clause: it reads permanents' *colours*, never another land's production,
     so it takes no part in the fixpoint and is answered outright.
     """
-    from .mana_payment import _every_nested_step, is_mana_ability
+    from .mana_abilities import _every_nested_step, is_mana_ability
     from .oracle import compile_card_oracle
 
     found: list[dict] = []
@@ -430,7 +430,7 @@ def ability_colors_on_offer(game, permanent, instruction) -> "tuple[str, ...] | 
 
     The seat is the permanent's controller, through the control seam (CR 109.5).
     """
-    from .mana_payment import _every_nested_step
+    from .mana_abilities import _every_nested_step
 
     seat = game.controller_index_of(permanent)
     if seat is None or instruction is None:

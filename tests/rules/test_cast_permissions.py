@@ -509,7 +509,7 @@ def test_602_5_a_per_seat_activation_prohibition_spares_mana_abilities():
     """CR 602.5: "a player can't begin to activate an ability that's prohibited
     from being activated" — with CR 605.1a's mana ability as the exception.
 
-    Asked of ``mana_payment.is_mana_ability``, the reader Faith's Fetters'
+    Asked of ``mana_abilities.is_mana_ability``, the reader Faith's Fetters'
     identical exception already uses, rather than of a second opinion about
     which abilities make mana. The two readings are not the same: the
     same-named function in ``ai_valuation`` answers False for a mana ability

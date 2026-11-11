@@ -24,7 +24,8 @@ from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
 from engine.face_down import cast_timing_card
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
-from engine.mana_payment import is_mana_ability, taps_for_payment
+from engine.mana_abilities import is_mana_ability
+from engine.mana_payment import taps_for_payment
 from engine.mixins.land_mana_taps import is_tap_alone_mana_ability
 from engine.oracle import compile_card_oracle
 from engine.target_keywords import BATTLEFIELD, ability_target_zone

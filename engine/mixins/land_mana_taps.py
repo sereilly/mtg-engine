@@ -25,7 +25,7 @@ from __future__ import annotations
 import dataclasses
 
 from ..keywords import abilities_lost_at
-from ..mana_payment import answer_color_choices
+from ..mana_abilities import answer_color_choices
 from ..mana_could_produce import NAMED_MANA_TYPE, named_mana_type
 from ..game_types import OracleExecutionContext
 from ..oracle import compile_card_oracle
@@ -64,7 +64,7 @@ def is_tap_alone_mana_ability(ability) -> bool:
     """
     from ..activation_restrictions import (prints_activation_restriction,
                                            restrictions_askable_mid_payment)
-    from ..mana_payment import carries_an_offer, is_mana_ability
+    from ..mana_abilities import carries_an_offer, is_mana_ability
 
     instruction = getattr(ability, "instruction", None)
     if instruction is None or not getattr(ability, "supported", False):
@@ -154,7 +154,8 @@ class LandManaTapsMixin:
         stood here returned in front of.
         """
         from ..activation_restrictions import prints_activation_restriction
-        from ..mana_payment import is_mana_ability, land_text_is_run
+        from ..mana_abilities import is_mana_ability
+        from ..mana_payment import land_text_is_run
 
         if not land_text_is_run(land):
             # A land none of whose text compiles (Rhystic Cave, until PCY
@@ -404,7 +405,7 @@ class LandManaTapsMixin:
         Asked of the ability the tap would activate (CR 605: each mana ability
         is its own): the one *ability_index* names, else the land's own free
         mana ability, else CR 305.6's intrinsic one
-        (``mana_payment.INTRINSIC_LAND_MANA_ABILITY``), which is what a basic
+        (``mana_abilities.INTRINSIC_LAND_MANA_ABILITY``), which is what a basic
         land and a land read off its summary are tapping. An index that names
         no tap-alone mana ability has nothing to ask; the seam refuses it for
         that reason instead. Pure, like the table.
@@ -419,7 +420,7 @@ class LandManaTapsMixin:
         )
 
     def _land_tap_ability(self, land, ability_index: int | None):
-        from ..mana_payment import INTRINSIC_LAND_MANA_ABILITY
+        from ..mana_abilities import INTRINSIC_LAND_MANA_ABILITY
 
         if ability_index is not None:
             usable = self.usable_abilities_of(land)
@@ -482,7 +483,7 @@ class LandManaTapsMixin:
         ``Permanent.card_through_layer_3``: what it prints, copies (CR 707.2)
         or was rewritten to say (CR 612), before any layer-6 grant."""
         from ..land_types import lost_abilities_to_type_change
-        from ..mana_payment import is_mana_ability
+        from ..mana_abilities import is_mana_ability
 
         if lost_abilities_to_type_change(land):
             return False
@@ -754,7 +755,7 @@ class LandManaTapsMixin:
                 # …and to the "Choose a color" step of a two-sentence spelling
                 # ("Choose a color. Add one mana of that color."), which the
                 # outer injection cannot reach — CR 605.3b, one helper for both
-                # inline sites (``mana_payment.answer_color_choices``).
+                # inline sites (``mana_abilities.answer_color_choices``).
                 instruction = answer_color_choices(instruction, asked_color)
                 self._execute_oracle_instruction(
                     instruction,

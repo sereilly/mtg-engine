@@ -150,7 +150,7 @@ def _misses_its_untap_anyway(permanent, instruction) -> bool:
         return True
     if instruction is None:
         return False
-    from .mana_payment import _every_nested_step
+    from .mana_abilities import _every_nested_step
 
     untap_counters = _untap_blocking_counters(permanent)
     for step in (instruction, *_every_nested_step(instruction)):
@@ -201,7 +201,7 @@ def _ability_harm(game, permanent, instruction) -> int:
     """What running the mana ability *instruction* costs beyond its mana."""
     if instruction is None:
         return 0
-    from .mana_payment import _every_nested_step
+    from .mana_abilities import _every_nested_step
 
     harm = 0
     untap_counters = _untap_blocking_counters(permanent)
@@ -262,7 +262,7 @@ def _standing_price(game, permanent, seat: int, watched: bool = True) -> "tuple[
 def _counters_put_on_it(instruction) -> list:
     """The counter words a tap trigger puts on the permanent tapped — "put a
     wind counter on **it**" (Freyalise's Winds), the event's own subject."""
-    from .mana_payment import _every_nested_step
+    from .mana_abilities import _every_nested_step
 
     return [
         str((step.payload or {}).get("counter") or "")
@@ -306,7 +306,7 @@ def _land_tap_trigger_harm(game, land, seat: int) -> int:
 
 def _trigger_harm(game, instruction, controller: int, tapper: int, source, tapped) -> int:
     """What a trigger fired by the tap costs the tapping player."""
-    from .mana_payment import _every_nested_step
+    from .mana_abilities import _every_nested_step
 
     harm = 0
     attached = getattr(source, "metadata", {}).get("attached_to") is tapped

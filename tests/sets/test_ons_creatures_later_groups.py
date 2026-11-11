@@ -938,7 +938,7 @@ def test_w1g6_graxiplon_counts_no_face_down_creature_toward_a_group(set_pool):
 import dataclasses as _w1g7_dataclasses
 
 from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
-from engine.mana_payment import is_mana_ability as _w1g7_is_mana_ability
+from engine.mana_abilities import is_mana_ability as _w1g7_is_mana_ability
 from engine.models import Permanent as _w1g7_Permanent
 from engine.oracle import compile_card_oracle as _w1g7_compile
 from engine.type_changes import gain_types as _w1g7_gain_types

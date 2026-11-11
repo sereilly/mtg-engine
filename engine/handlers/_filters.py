@@ -1226,7 +1226,7 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # a Forest handed Maze of Ith's ability stops untapping and a Strip Mine
     # that has lost its abilities starts.
     if payload.get("with_nonmana_activated_ability"):
-        from ..mana_payment import has_nonmana_activated_ability
+        from ..mana_abilities import has_nonmana_activated_ability
 
         if not has_nonmana_activated_ability(perm.effective_card):
             return False

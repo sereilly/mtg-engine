@@ -105,8 +105,8 @@ def _priced_mana_source(
     import dataclasses
 
     from .activation_restrictions import prints_activation_restriction
-    from .mana_payment import carries_an_offer
-    from .mana_payment import is_mana_ability as is_cr_mana_ability
+    from .mana_abilities import carries_an_offer
+    from .mana_abilities import is_mana_ability as is_cr_mana_ability
     from .mixins.land_mana_taps import is_tap_alone_mana_ability
     from .spell_prohibitions import permanent_activations_forbidden
 
@@ -283,7 +283,7 @@ def _nonland_mana_source(
     """
     from .activation_restrictions import prints_activation_restriction
     from .mana_could_produce import ability_colors_on_offer
-    from .mana_payment import carries_an_offer
+    from .mana_abilities import carries_an_offer
     from .mixins.land_mana_taps import is_tap_alone_mana_ability
     from .spell_prohibitions import permanent_activations_forbidden
 
@@ -371,7 +371,7 @@ def _with_other_free_abilities(game, seat, permanent, usable, first):
     option per source is what this shape can say.
     """
     from .activation_restrictions import prints_activation_restriction
-    from .mana_payment import carries_an_offer
+    from .mana_abilities import carries_an_offer
     from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     if first.amount != 1 or first.run:

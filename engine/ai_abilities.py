@@ -205,10 +205,10 @@ def _abilities_weighed(game: Game, permanent) -> list:
 
     For a land, **every ability that is not a mana ability**, each by its
     index — CR 605.1a asked of the engine's own predicate
-    (``mana_payment.is_mana_ability``), which reads a painland's "Add {W} or
+    (``mana_abilities.is_mana_ability``), which reads a painland's "Add {W} or
     {U}. This land deals 1 damage to you." as the mana ability it is.
     """
-    from .mana_payment import is_mana_ability as is_cr_mana_ability
+    from .mana_abilities import is_mana_ability as is_cr_mana_ability
 
     usable = game.usable_abilities_of(permanent)
     later = [

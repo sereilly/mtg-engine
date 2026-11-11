@@ -36,7 +36,7 @@ from engine.ai_policy import choose_land_drop as _w1g5_choose_land_drop
 from engine.ai_simulator import run_ai_simulation as _w1g5_run_ai_simulation
 from engine.card_loader import manifest_set_path as _w1g5_manifest_set_path
 from engine.land_types import change_land_type as _w1g5_change_land_type
-from engine.mana_payment import is_mana_ability as _w1g5_is_mana_ability
+from engine.mana_abilities import is_mana_ability as _w1g5_is_mana_ability
 from engine.mana_payment import plan_payment as _w1g5_plan_payment
 from engine.mana_payment import untapped_mana_lands as _w1g5_payment_lands
 from engine.models import Permanent as _W1G5Permanent

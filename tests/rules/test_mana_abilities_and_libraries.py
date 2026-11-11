@@ -26,7 +26,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.mana_payment import is_mana_ability
+from engine.mana_abilities import is_mana_ability
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import _mk_card
