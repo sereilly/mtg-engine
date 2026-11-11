@@ -354,7 +354,11 @@ def _parse_one_shot_event(stream: TokenStream, word: str) -> ast.TriggerEvent | 
     if stream.at_kind(SELF) or stream.at_word("this"):
         stream.advance()
         if not stream.at_kind(SELF):
-            stream.accept_word("creature", "artifact", "enchantment", "land", "aura")
+            # "When **this Equipment** enters, …" (Spellbinder): the subtype
+            # as the card's own noun, as ``readers._SELF_NOUNS`` reads it.
+            stream.accept_word(
+                "creature", "artifact", "enchantment", "land", "aura", "equipment",
+            )
         if stream.accept_word("enters"):
             stream.accept_phrase("the", "battlefield")
             # "When this creature **enters or dies**, …" (Goblin Marshal,
