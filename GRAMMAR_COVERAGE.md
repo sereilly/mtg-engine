@@ -56,7 +56,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8ED | 342 | 399 | 95.7% | 95.7% | 64.9% | 245 |
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| DST *(measured)* | 165 | 285 | 75.4% | 73.7% | 52.6% | 123 |
+| DST *(measured)* | 165 | 285 | 77.5% | 76.1% | 54.0% | 127 |
 | **All (shipped)** | **9283** | **13779** | **89.9%** | **89.4%** | **62.2%** | **7275** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -69,15 +69,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 915 | 472 | expected a subject |  |
-| 196 | 100 | unrecognized effect verb |  |
-| 141 | 74 | unconsumed text |  |
+| 913 | 470 | expected a subject |  |
+| 195 | 99 | unrecognized effect verb |  |
+| 139 | 72 | unconsumed text |  |
 | 74 | 55 | granted ability in quotes | phase 3 (quoted abilities) |
 | 42 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 24 | 20 | expected 'unless defending player controls' |  |
 | 23 | 17 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 8 | 2 | no lowering for RawEffect |  |
+| 7 | 1 | no lowering for RawEffect |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -1728,6 +1728,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks or blocks, any player may exile three cards from their graveyard. If a player does, this creature assigns no combat damage this turn.`
 - **Carrionette**
   - `{2}{B}{B}: Exile this card and target creature unless that creature's controller pays {2}. Activate only if this card is in your graveyard.`
+- **Carry Away**
+  - `When this Aura enters, unattach enchanted Equipment.`
 - **Cartographer**
   - `When this creature enters, you may return target land card from your graveyard to your hand.`
   - `When this creature enters, you may return target land card from your graveyard to your hand.`
@@ -7964,6 +7966,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Murderous Betrayal**
   - `{B}{B}, Pay half your life, rounded up: Destroy target nonblack creature. It can't be regenerated.`
   - `{B}{B}, Pay half your life, rounded up: Destroy target nonblack creature. It can't be regenerated.`
+- **Murderous Spoils**
+  - `Destroy target nonblack creature. It can't be regenerated. You gain control of all Equipment that were attached to it. (This effect lasts indefinitely.)`
 - **Murk Dwellers**
   - `Whenever this creature attacks and isn't blocked, it gets +2/+0 until end of combat.`
   - `Whenever this creature attacks and isn't blocked, it gets +2/+0 until end of combat.`
@@ -10867,6 +10871,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Creatures you control get +0/+2 until end of turn.`
   - `Creatures you control get +0/+2 until end of turn.`
   - `Creatures you control get +0/+2 until end of turn.`
+- **Shield of Kaldra**
+  - `Equipment named Sword of Kaldra, Shield of Kaldra, and Helm of Kaldra have indestructible.`
 - **Shield of the Ages**
   - `{2}: Prevent the next 1 damage that would be dealt to you this turn.`
 - **Shieldmage Advocate**
@@ -13102,6 +13108,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target creature card with mana value 3 or less from your graveyard to the battlefield.`
 - **Unerring Sling**
   - `{3}, {T}, Tap an untapped creature you control: This artifact deals damage equal to the tapped creature's power to target attacking or blocking creature with flying.`
+- **Unforge**
+  - `Destroy target Equipment. If that Equipment was attached to a creature, Unforge deals 2 damage to that creature.`
 - **Unfulfilled Desires**
   - `{1}, Pay 1 life: Draw a card, then discard a card.`
 - **Unhinge**
