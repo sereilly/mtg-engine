@@ -207,3 +207,25 @@ def test_a_graveyard_card_has_no_permanent_id(pool):
     assert not result.supported
     assert "has no permanent id" in result.details
     assert [c.name for c in p0.graveyard] == GRAVEYARD
+
+
+def test_a_graveyard_target_names_no_permanent_in_the_same_numbered_slot(pool):
+    """Grave Robbers aimed at the opposing pile's second card. The activation
+    path stamped an id off the slot as though it were a battlefield slot, so
+    the permanent second on that player's battlefield rode the stack object as
+    a target too — and Skulking Ghost, which is sacrificed when it "becomes
+    the target of a spell or ability", died to an ability that never named
+    it. Through the old keyword (the tests' adapter) and the new one alike."""
+    for announcement in ({"target_permanent_index": 1}, {"target_graveyard_indices": [1]}):
+        game, p0, p1 = _game(
+            pool, mine=["Grave Robbers"], theirs=["Hill Giant", "Skulking Ghost"],
+            their_graveyard=["Ornithopter", "Sol Ring"],
+        )
+
+        result = game.activate_permanent_ability(
+            0, "Grave Robbers", target_player_index=1, **announcement,
+        )
+
+        assert result.supported, result.details
+        assert [p.card.name for p in p1.battlefield] == ["Hill Giant", "Skulking Ghost"]
+        assert [c.name for c in p1.exile] == ["Sol Ring"]

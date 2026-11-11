@@ -46,7 +46,7 @@ from ...game_types import (as_graveyard_stamps, as_target_ids,
 from ...handlers._chosen import CHOSEN_ABILITY
 from ...oracle import OracleInstruction
 from ...refusals import noting, refuse, take_back_refused_attempt
-from ...target_keywords import ability_target_zone, announced_slot
+from ...target_keywords import BATTLEFIELD, ability_target_zone, announced_slot
 
 
 class AbilityActivationMixin:
@@ -413,8 +413,9 @@ class AbilityActivationMixin:
         # (``engine/target_keywords``) and turned **here**, before anything
         # below reads a target field, into the slot the gates read beside the
         # ids — the seat counted into first of all.
+        target_zone = ability_target_zone(ability)
         target_player_index, target_permanent_index, keyword_refusal = announced_slot(
-            self, ability_target_zone(ability), name=permanent.card.name,
+            self, target_zone, name=permanent.card.name,
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
             target_permanent_ids=None if target_role_refs else target_permanent_ids,
@@ -439,7 +440,17 @@ class AbilityActivationMixin:
         # the source itself, in the case that ships. A caller that already sends
         # ids (the whole web layer does, which is why no game ever showed this)
         # is left exactly as it was.
-        if target_permanent_ids is None and isinstance(target_permanent_index, int):
+        #
+        # **Only a battlefield slot.** A graveyard target's slot counts into a
+        # pile and has its own stamp; read here as a battlefield slot it named
+        # whatever permanent stood at the same number on the target seat's
+        # board, and that permanent rode the stack object as a target too
+        # (Grave Robbers aimed at a graveyard's second card "targeted" the
+        # second permanent on that player's battlefield).
+        if (
+            target_permanent_ids is None and isinstance(target_permanent_index, int)
+            and target_zone == BATTLEFIELD
+        ):
             stable = self.permanent_at(target_player, target_permanent_index)
             if stable is not None:
                 target_permanent_ids = [stable.permanent_id]
