@@ -603,6 +603,19 @@ class ActivationPaymentMixin:
                 f"{name}: no {filter_head_noun(cost.sacrifice_also_filter)} "
                 "available to sacrifice"
             )
+        # "{T}, **Unattach Heartseeker**: …" CR 118.3: the Equipment that
+        # granted the ability must still be on the battlefield and attached to
+        # this permanent, or there is nothing to unattach.
+        if cost.unattach_granter_id is not None:
+            granter = self.permanent_by_id(cost.unattach_granter_id)
+            if (
+                granter is None or not self.is_on_battlefield(granter)
+                or granter.metadata.get("attached_to") is not permanent
+            ):
+                return (
+                    f"{name}: the Equipment its cost unattaches is not "
+                    "attached to it"
+                )
         if cost.tap_attached:
             host = permanent.metadata.get("attached_to")
             if host is None or not self.is_on_battlefield(host) or host.tapped:

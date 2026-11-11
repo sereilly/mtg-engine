@@ -159,6 +159,136 @@ def test_w1g2_shield_of_kaldra_makes_the_named_equipment_indestructible(set_pool
     _w1g2_settle(game)
     assert not sword.has_keyword("indestructible")
 
+
+def _w1g2_granted(game, host):
+    """The host's compiled activated abilities (its effective card's)."""
+    from engine.oracle import compile_card_oracle
+
+    return compile_card_oracle(host.effective_card).activated_abilities
+
+
+def _w1g2_use(game, seat, host, *, queue=False, **kwargs):
+    """Activate *host*'s granted ability (its only one)."""
+    activate = game.queue_permanent_ability if queue else game.activate_permanent_ability
+    return activate(
+        seat, host.card.name, permanent_index=game.battlefield_index_of(host),
+        ability_index=0, **kwargs,
+    )
+
+
+def test_w1g2_heartseeker_grants_destroy_and_unattaches_as_its_cost(set_pool):
+    """'Equipped creature gets +2/+1 and has "{T}, Unattach Heartseeker:
+    Destroy target creature."' The ability is the creature's (2004-12-01: the
+    equipped creature's controller activates it, and it can target a creature
+    with protection from artifacts); "Unattach Heartseeker" moves the
+    Equipment off and leaves it on the battlefield (CR 701.3d) as the cost is
+    paid, so the +2/+1 is gone before the ability resolves — and the ability,
+    once activated, resolves however the Equipment moves after (CR 113.7a)."""
+    from engine.targeting import derive_activation_spec
+
+    dst, mrd, lea = set_pool("DST"), set_pool("MRD"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    heart = _w1g2_put(game, dst["Heartseeker"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    ogre = _w1g2_put(game, lea["Gray Ogre"], 0)
+    chosen = _w1g2_put(game, mrd["Tel-Jilad Chosen"], 1)
+    assert _w1g2_granted(game, bears) == ()
+    _w1g2_equip(game, 0, heart, bears)
+    assert (bears.effective_power, bears.effective_toughness) == (4, 3)
+    (granted,) = _w1g2_granted(game, bears)
+    assert granted.cost.requires_tap
+    assert granted.cost.unattach_granter_id == heart.permanent_id
+    assert derive_activation_spec(granted) == {"kind": "creature"}
+
+    result = _w1g2_use(game, 0, bears, queue=True, target_permanent_ids=[chosen.permanent_id])
+    assert result.supported, result
+    # The cost is paid: tapped, unattached, the bonus gone, Heartseeker still here.
+    assert bears.tapped
+    assert _w1g2_equipped(heart) is None
+    assert heart in game.controlled_by(0)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    assert _w1g2_granted(game, bears) == ()
+    # In response the Heartseeker goes onto the Ogre; the ability still resolves.
+    from engine.equipment import attach_equipment
+
+    attach_equipment(game, heart, ogre)
+    _w1g2_settle(game)
+    assert chosen not in game.controlled_by(1)
+    assert "Grizzly Bears destroyed Tel-Jilad Chosen" in game.log
+    assert (ogre.effective_power, ogre.effective_toughness) == (4, 3)
+
+
+def test_w1g2_heartseeker_on_an_artifact_creature_cannot_target_protection(set_pool):
+    """The ruling's parenthesis: an *artifact* creature's ability is a source
+    a creature with protection from artifacts can't be targeted by
+    (CR 702.16b) — refused before any cost is paid."""
+    dst, mrd, lea = set_pool("DST"), set_pool("MRD"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    heart = _w1g2_put(game, dst["Heartseeker"], 0)
+    golem = _w1g2_put(game, lea["Obsianus Golem"], 0)
+    chosen = _w1g2_put(game, mrd["Tel-Jilad Chosen"], 1)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 1)
+    _w1g2_equip(game, 0, heart, golem)
+    refused = _w1g2_use(game, 0, golem, target_permanent_ids=[chosen.permanent_id])
+    assert not refused.supported
+    assert _w1g2_equipped(heart) is golem and not golem.tapped
+    result = _w1g2_use(game, 0, golem, target_permanent_ids=[bears.permanent_id])
+    assert result.supported, result
+    _w1g2_settle(game)
+    assert bears not in game.controlled_by(1)
+    assert _w1g2_equipped(heart) is None
+
+
+def test_w1g2_leonin_bola_taps_a_creature_whoever_controls_the_bola(set_pool):
+    """'Equipped creature has "{T}, Unattach Leonin Bola: Tap target
+    creature."' 2004-12-01: "It doesn't matter who controls Leonin Bola" —
+    the opponent takes the Bola, the Bears still has the ability, and its cost
+    unattaches the opponent's Equipment. A summoning-sick host cannot pay {T}
+    (CR 602.5a)."""
+    from engine.control import change_control
+
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    bola = _w1g2_put(game, dst["Leonin Bola"], 0)
+    bears = _w1g2_put(game, lea["Grizzly Bears"], 0)
+    fresh = _w1g2_put(game, lea["Gray Ogre"], 0, sick=True)
+    angel = _w1g2_put(game, lea["Serra Angel"], 1)
+    _w1g2_equip(game, 0, bola, fresh)
+    refused = _w1g2_use(game, 0, fresh, target_permanent_ids=[angel.permanent_id])
+    assert not refused.supported
+    assert _w1g2_equipped(bola) is fresh and not angel.tapped
+
+    _w1g2_equip(game, 0, bola, bears)
+    change_control(bola, 1, source=angel)
+    game._sync_control()
+    _w1g2_settle(game)
+    assert bola in game.controlled_by(1) and _w1g2_equipped(bola) is bears
+    result = _w1g2_use(game, 0, bears, target_permanent_ids=[angel.permanent_id])
+    assert result.supported, result
+    _w1g2_settle(game)
+    assert angel.tapped and bears.tapped
+    assert _w1g2_equipped(bola) is None and bola in game.controlled_by(1)
+    assert _w1g2_granted(game, bears) == ()
+
+
+def test_w1g2_surestrike_trident_first_strike_and_power_to_a_player(set_pool):
+    """'Equipped creature has first strike and "{T}, Unattach Surestrike
+    Trident: This creature deals damage equal to its power to target player or
+    planeswalker."' Both halves of the one line; the damage is the creature's
+    power as the ability resolves, and the creature is its source."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g2_table(set_pool)
+    trident = _w1g2_put(game, dst["Surestrike Trident"], 0)
+    ogre = _w1g2_put(game, lea["Gray Ogre"], 0)
+    _w1g2_equip(game, 0, trident, ogre)
+    assert ogre.has_keyword("first strike")
+    result = _w1g2_use(game, 0, ogre, target_player_index=1)
+    assert result.supported, result
+    _w1g2_settle(game)
+    assert game.players[1].life == 18
+    assert not ogre.has_keyword("first strike")
+    assert _w1g2_equipped(trident) is None
+
 # ==== end W1G2 ======================================================
 
 

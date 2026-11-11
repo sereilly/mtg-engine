@@ -457,6 +457,15 @@ class ActivatedAbilityCost:
     #: life or {2}") and is folded into the price beside :attr:`mana`; these
     #: replace :attr:`mana` whole. Last for ``mill_cards``' stated reason.
     mana_alternatives: tuple[dict[str, int], ...] = ()
+    #: "{T}, **Unattach Heartseeker**: Destroy target creature." The ability
+    #: an Equipment grants in quotes (Heartseeker, Leonin Bola, Surestrike
+    #: Trident): CR 701.3d's unattach of the Equipment that granted it, as a
+    #: cost. The granter's ``permanent_id``, which ``bind_granter`` wrote into
+    #: the quote in place of its name (CR 201.5a); None is "no such cost".
+    #: CR 118.3: payable only while that Equipment is on the battlefield and
+    #: attached to the permanent whose ability this is. Last for
+    #: ``mill_cards``' stated reason.
+    unattach_granter_id: int | None = None
 
     @property
     def is_loyalty(self) -> bool:

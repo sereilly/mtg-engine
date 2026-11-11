@@ -179,6 +179,21 @@ class TapAttachedCost:
 
 
 @dataclass(frozen=True)
+class UnattachGranterCost:
+    """"{T}, **Unattach Heartseeker**: Destroy target creature." The ability
+    Heartseeker grants the creature it equips (Leonin Bola, Surestrike Trident
+    print the same cost): CR 701.3d's unattach, performed as a cost, on the
+    Equipment that granted the ability.
+
+    No card prints the relation: ``granted_abilities.bind_granter`` writes
+    "the permanent with id N that granted this ability" in place of the
+    granter's name as the quote is folded onto its host (CR 201.5a), so the
+    id is the whole cost: nothing is picked and no filter is carried.
+    """
+    permanent_id: int
+
+
+@dataclass(frozen=True)
 class PayAttachedManaCost:
     """"Pay enchanted creature's mana cost" (Merseine).
 
@@ -512,5 +527,5 @@ Cost = Union[
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
     PutHandCardOnLibraryCost, PutGraveyardCardsOnLibraryBottomCost, MillCost,
     RemoveCounterCost, PayAttachedManaCost,
-    ReturnSelfToHandCost
+    ReturnSelfToHandCost, UnattachGranterCost
 ]

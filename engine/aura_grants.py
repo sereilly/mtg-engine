@@ -392,9 +392,19 @@ def aura_conditional_grant_holds(permanent, state: str) -> bool:
 #: +2/+0, and granted **nothing**: the claim came from the P/T row of
 #: ``_TEMPLATES``, which is checked first and says "and optional granted
 #: keyword or ability" without asking whether anything grants one.
-_QUOTED_ABILITY_GRANT = re.compile(
-    rf'^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has "(?P<ability>[^"]+)"$'
-)
+#:
+#: …and the keyword run in front of the quote: "Equipped creature has **first
+#: strike and** "{T}, Unattach Surestrike Trident: …"" (Surestrike Trident),
+#: the same line in two layer-6 channels. The run is captured as ``keywords``
+#: and granted by :func:`aura_keyword_grants`, which reads it off this same
+#: match, so the keyword cannot be claimed without the quote nor the quote
+#: folded without the keyword.
+_QUOTED_ABILITY_GRANT = _LazyPattern(lambda: re.compile(
+    rf'^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has '
+    rf'(?:(?P<keywords>(?:{_keyword_alternation()})'
+    rf'(?:(?:, and |, | and )(?:{_keyword_alternation()}))*),? and )?'
+    rf'"(?P<ability>[^"]+)"$'
+))
 
 
 @lru_cache(maxsize=None)
@@ -684,6 +694,16 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
             # :func:`aura_combat_restriction` off the same line, exactly as
             # Consecrate Land's compound below splits between two readers.
             grants.extend(_keyword_list(compound.group("keyword")))
+        elif (
+            (quoted := _QUOTED_ABILITY_GRANT.match(line)) is not None
+            and quoted.group("keywords")
+        ):
+            # "…has first strike and "{T}, Unattach …"" (Surestrike Trident):
+            # the keyword half of the quoted grant's own match. Whether the
+            # quote is readable is the claim's question (``aura_effect_claim``
+            # asks it before any row), so the two halves stand or fall
+            # together there.
+            grants.extend(_keyword_list(quoted.group("keywords")))
         elif _COMPOUND_INDESTRUCTIBLE.match(line):
             # Consecrate Land prints one line carrying two effects. Its trailing
             # clause is claimed separately as a restriction, so matching only
