@@ -239,3 +239,72 @@ def test_drive_combat_names_the_declaration_it_waits_on(set_pool):
 
     with pytest.raises(ValueError, match="not a combat step"):
         drive_combat(game, through="end")
+
+
+def _giant_blocked_twice(set_pool, **table) -> tuple[Game, list[Permanent]]:
+    """Hill Giant (3/3) attacking, blocked by Grizzly Bears and Llanowar
+    Elves: CR 510.1c's division is owed, and the engine holds the combat
+    damage step for it whoever sits at the table."""
+    game = _table(set_pool, **table)
+    giant = _put(game, 0, set_pool("LEA")["Hill Giant"])
+    bears = _put(game, 1, set_pool("LEA")["Grizzly Bears"])
+    elves = _put(game, 1, set_pool("LEA")["Llanowar Elves"])
+    declare_attack(game, 0, blocks={0: 0, 1: 0})
+    return game, [giant, bears, elves]
+
+
+def test_drive_combat_deals_a_double_block_nobody_is_asked(set_pool):
+    """W1G2's stop: at a table with no interactive seat the drive raised on an
+    attacker blocked by two creatures, naming an assignment "an interactive
+    seat makes" that no seat there could make. A seat nobody asks has an
+    answer, and every driver in the engine gives the same one
+    (``resolve_all_combat_damage`` with ``choose_combat_damage_announcement``
+    — the simulator's driver, the web AI seat, the engine's auto-resolve). The
+    drive now gives it too: a twin board answered by that call by hand ends
+    the same, and combat is over."""
+    from engine.ai_combat import choose_combat_damage_announcement
+
+    game, creatures = _giant_blocked_twice(set_pool)
+    drive_combat(game)
+    assert game.current_turn_phase == "postcombat_main"
+    assert game.combat_attackers == {}, "CR 511.3: combat is over"
+
+    twin, twins = _giant_blocked_twice(set_pool)
+    twin.advance_combat_phase(allow_damage_skip=False)
+    assert twin.current_step == "combat_damage" and not twin.combat_damage_resolved, (
+        "the rig must reproduce the hold: the step waits on the division"
+    )
+    ok, why = twin.resolve_all_combat_damage(
+        twin.active_player_index, **choose_combat_damage_announcement(twin)
+    )
+    assert ok, why
+    settle(twin)
+
+    def graveyards(g):
+        return [sorted(card.name for card in player.graveyard) for player in g.players]
+
+    assert graveyards(game) == graveyards(twin)
+    assert [game.is_on_battlefield(c) for c in creatures] == [
+        twin.is_on_battlefield(c) for c in twins
+    ]
+    assert "Grizzly Bears" in graveyards(game)[1], "the division reached a blocker"
+
+
+@pytest.mark.parametrize("interactive", [(0,), (1,)], ids=["attacker", "defender"])
+def test_drive_combat_leaves_a_persons_division_to_the_test(set_pool, interactive):
+    """With a person anywhere in the combat the division is the test's to
+    make, as a declaration is: the drive stops in the combat damage step and
+    names it, and the test's own ``resolve_combat_damage`` finishes it."""
+    game, (giant, bears, elves) = _giant_blocked_twice(set_pool, interactive=interactive)
+    with pytest.raises(AssertionError, match="combat damage assignment"):
+        drive_combat(game)
+    assert game.current_step == "combat_damage" and not game.combat_damage_resolved
+    giant_slot = game.battlefield_index_of(giant)
+    ok, why = game.resolve_combat_damage(
+        0, attacker_damage={giant_slot: {
+            game.battlefield_index_of(bears): 1, game.battlefield_index_of(elves): 2,
+        }},
+    )
+    assert ok, why
+    drive_combat(game)
+    assert game.is_on_battlefield(bears) and not game.is_on_battlefield(elves)

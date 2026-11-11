@@ -633,13 +633,57 @@ def _combat_waits_on(game) -> str:
         )
     if step == "combat_damage" and not game.combat_damage_resolved:
         return (
-            "a combat damage assignment an interactive seat makes (CR 510.1c-d, "
-            f"702.19b; trample asks {game.trample_assignments_to_ask()}): "
+            "a combat damage assignment a seat a person is asked may owe "
+            f"(CR 510.1c-d, 702.19b, 702.22j; seats {sorted(_combat_seats(game))}, "
+            f"trample asks {game.trample_assignments_to_ask()}): "
             "game.resolve_combat_damage(seat, attacker_damage=...)"
         )
     if game.step_held_open():
         return f"the step held open on {game.waiting_prompt()!r}"
     return "nothing this helper can name"
+
+
+def _combat_seats(game) -> set[int]:
+    """The active player and every seat this combat attacks — the seats a
+    combat damage announcement can be owed by (the attacker's division,
+    CR 510.1c; a blocker's among several attackers, 510.1d; a defending
+    player's under banding, 702.22j)."""
+    return {game.active_player_index, *game.combat_attackers.values()}
+
+
+def _deal_combat_damage_nobody_is_asked(game) -> bool:
+    """Deal the combat damage step's default announcement where nobody in the
+    combat is a seat a person is asked, as the engine's own drivers do; True
+    when it moved the step.
+
+    The step holds for a division whoever sits there
+    (``Game._needs_manual_damage_assignment``: an attacker blocked by two or
+    more creatures, a band, a blocker on two attackers), and every place that
+    supplies a seat nobody asks — the simulator's driver
+    (``ai_combat.run_ai_combat_phase``), the web layer's AI seat, the
+    engine's own auto-resolve when nothing is held — answers it with
+    ``resolve_all_combat_damage(active, **choose_combat_damage_announcement)``.
+    So does this, and only there: which seat a person sits at owes which part
+    is the web layer's question (``web/combat_prompts``), and a drive with a
+    person anywhere in the combat still stops and names the assignment, which
+    stays the test's to make.
+    """
+    if (
+        game.current_turn_phase != "combat"
+        or game.current_step != "combat_damage"
+        or game.combat_damage_resolved
+        or game.resume_stack
+        or game.waiting_prompt() is not None
+        or any(game.asks_a_person(seat) for seat in _combat_seats(game))
+    ):
+        return False
+    from engine.ai_combat import choose_combat_damage_announcement
+
+    ok, why = game.resolve_all_combat_damage(
+        game.active_player_index, **choose_combat_damage_announcement(game)
+    )
+    assert ok, f"the default combat damage announcement was refused: {why}"
+    return True
 
 
 def drive_combat(
@@ -675,10 +719,15 @@ def drive_combat(
     still owed in the postcombat main phase.
 
     The stepping is the engine's (``advance_combat_phase``); this only decides
-    when to stop. The declarations stay the test's: a step waiting on attackers,
-    blockers or a damage assignment raises naming what it waits on. Returns the
-    prompt it stopped at under ``defaults=False`` (see :func:`settle`), else
-    None; stops quietly once the game is over (CR 104.1).
+    when to stop. The declarations stay the test's: a step waiting on attackers
+    or blockers raises naming what it waits on. A **combat damage division**
+    (an attacker blocked by two creatures, CR 510.1c) is a declaration only
+    where a person is asked: with *defaults* and nobody in the combat a seat a
+    person is asked, it is dealt the way every seat nobody asks deals it
+    (:func:`_deal_combat_damage_nobody_is_asked`), and otherwise the drive
+    raises naming it. Returns the prompt it stopped at under
+    ``defaults=False`` (see :func:`settle`), else None; stops quietly once
+    the game is over (CR 104.1).
     """
     steps = list(game._phase_steps("combat"))
     if through not in steps:
@@ -727,6 +776,8 @@ def drive_combat(
             game.combat_damage_resolved, len(game.stack), len(game.log),
         )
         if after == before and not any(True for _ in _owed_prompts(game)):
+            if defaults and _deal_combat_damage_nobody_is_asked(game):
+                continue
             raise AssertionError(
                 f"combat stopped in {game.current_step} waiting on "
                 f"{_combat_waits_on(game)}"
