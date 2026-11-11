@@ -208,6 +208,84 @@ def test_w1g6_hallow_follows_a_creature_spell_onto_the_battlefield(set_pool):
     assert game.is_on_battlefield(giant) and giant.damage_marked == 0
     assert [player.life for player in game.players] == [24, 20]
 
+
+def test_w1g6_shriveling_rot_first_mode_destroys_each_creature_dealt_damage(set_pool):
+    """"Until end of turn, whenever a creature is dealt damage, destroy it."
+    A Lightning Bolt on a Wall of Stone (0/8) destroys it; then a Grizzly
+    Bears blocked by a Hill Giant: the Bears die of their damage and the Giant
+    is destroyed for the 2 it took. The ability is gone with the turn: next
+    turn a damaged creature survives."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g6_table(set_pool, hand=[dst["Shriveling Rot"], lea["Lightning Bolt"]])
+    bear = _w1g6_put(game, 0, lea["Grizzly Bears"])
+    wall = _w1g6_put(game, 1, lea["Wall of Stone"])
+    giant = _w1g6_put(game, 1, lea["Hill Giant"])
+    result = game.cast_from_hand(0, "Shriveling Rot", mode_choices=[{"index": 0}])
+    assert result.supported, result.details
+    _w1g6_settle(game)
+    assert game.cast_from_hand(0, "Lightning Bolt", target_permanent_ids=[wall.permanent_id]).supported
+    _w1g6_settle(game)
+    assert not game.is_on_battlefield(wall)
+    _w1g6_declare_attack(game, 0, blocks={0: 0})
+    _w1g6_drive_combat(game)
+    assert not game.is_on_battlefield(bear) and not game.is_on_battlefield(giant)
+    assert sorted(card.name for card in game.players[1].graveyard) == [
+        "Hill Giant", "Wall of Stone",
+    ]
+
+    game = _w1g6_table(set_pool, hand=[dst["Shriveling Rot"]])
+    survivor = _w1g6_put(game, 1, lea["Wall of Stone"])
+    assert game.cast_from_hand(0, "Shriveling Rot", mode_choices=[{"index": 0}]).supported
+    _w1g6_settle(game)
+    game.resolve_cleanup_step(0)
+    assert not game.delayed_triggers
+    game.start_turn(1)
+    game._settle()
+    game.players[1].hand.append(lea["Lightning Bolt"])
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[survivor.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert game.is_on_battlefield(survivor) and survivor.damage_marked == 3
+
+
+def test_w1g6_shriveling_rot_second_mode_charges_the_dead_creatures_toughness(set_pool):
+    """"Until end of turn, whenever a creature dies, that creature's
+    controller loses life equal to its toughness." The toughness is the
+    creature's last-known one (CR 603.10a, 608.2h): a Hill Giant killed by a Bolt costs
+    Bob 3."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g6_table(set_pool, hand=[dst["Shriveling Rot"], lea["Lightning Bolt"]])
+    giant = _w1g6_put(game, 1, lea["Hill Giant"])
+    assert game.cast_from_hand(0, "Shriveling Rot", mode_choices=[{"index": 1}]).supported
+    _w1g6_settle(game)
+    assert game.cast_from_hand(0, "Lightning Bolt", target_permanent_ids=[giant.permanent_id]).supported
+    _w1g6_settle(game)
+    assert not game.is_on_battlefield(giant)
+    assert [player.life for player in game.players] == [20, 17]
+
+
+def test_w1g6_shriveling_rot_entwined_destroys_and_then_charges(set_pool):
+    """Entwined (CR 702.42): both abilities are created. A Bolt on a Wall of
+    Stone destroys it through the first, and its death costs Bob its
+    toughness of 8 through the second."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _w1g6_table(set_pool, hand=[dst["Shriveling Rot"], lea["Lightning Bolt"]])
+    wall = _w1g6_put(game, 1, lea["Wall of Stone"])
+    result = game.cast_from_hand(
+        0, "Shriveling Rot", optional_cost_payments={"{2}{B}": 1},
+        mode_choices=[{"index": 0}, {"index": 1}],
+    )
+    assert result.supported, result.details
+    _w1g6_settle(game)
+    assert sorted(entry.event for entry in game.delayed_triggers) == [
+        "creature_dealt_damage", "creature_dies",
+    ]
+    assert game.cast_from_hand(0, "Lightning Bolt", target_permanent_ids=[wall.permanent_id]).supported
+    _w1g6_settle(game)
+    assert not game.is_on_battlefield(wall)
+    assert [player.life for player in game.players] == [20, 12]
+
 # ==== end W1G6 ======================================================
 
 

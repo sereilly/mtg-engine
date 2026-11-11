@@ -1102,7 +1102,13 @@ class DeathsMixin:
                 if trig.condition.kind != "creature_dies" or trig.instruction is None:
                     continue
                 instr = trig.instruction
-                if instr.kind == "target_gains_life":
+                if (
+                    instr.kind == "target_gains_life"
+                    # A gain of the dead creature's own number ("…equal to its
+                    # toughness") reads the frozen context below, which this
+                    # rebuilt one would drop (``lowering/_deaths``).
+                    and "amount_from_trigger" not in instr.payload
+                ):
                     # Legacy shape: the optional cost lives in the card's
                     # text rather than the instruction, so it has to be
                     # re-read here and passed along as context.
@@ -1135,3 +1141,11 @@ class DeathsMixin:
                     trigger_context=dict(died_context),
                 ))
         self._enqueue_triggered_batch(events)
+        # "Until end of turn, whenever a creature dies, …" (Shriveling Rot.)
+        # The delayed twin of the board-wide condition above (CR 603.7), which
+        # belongs to no permanent and so is reached by no scan — announced here
+        # with the same frozen context. No subject: the permanent is gone, and
+        # the opener admits only the bare "a creature" this scan is about.
+        fire_delayed_triggers(
+            self, "creature_dies", trigger_context=dict(died_context),
+        )

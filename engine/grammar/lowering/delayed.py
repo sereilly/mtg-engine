@@ -45,7 +45,8 @@ from ...oracle_types import CHOSEN_TARGET_PERMANENTS, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._delays import bind_announced_subjects, end_step_action_on_made_permanent
-from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
+from ._events import (_EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
+                      _RECORDED_PERMANENTS,
                       _PERMANENTS_MADE_BY_THIS_EFFECT,
                       CHOSEN_PLAYER, CREATED_TOKEN, CREATED_TOKENS,
                       binds_block_pair,
@@ -262,6 +263,10 @@ def _lower_create_delayed_trigger(
     if (
         CHOSEN_PLAYER in produced
         and node.event not in _EVENT_SUBJECT_PLAYERS
+        # "…whenever a creature dies, **that creature's controller** loses
+        # life …" (Shriveling Rot.) The seat the event froze for the object
+        # it was about, not one this effect chose.
+        and node.event not in _EVENT_SUBJECT_CONTROLLERS
         and _names_a_chosen_player(node.effect)
     ):
         payload["binds_player"] = True
@@ -472,6 +477,7 @@ def _lower_create_delayed_trigger(
         says_that_player=(
             about_a_step
             and node.event not in _EVENT_SUBJECT_PLAYERS
+            and node.event not in _EVENT_SUBJECT_CONTROLLERS
             and _names_a_chosen_player(node.effect)
         ),
         creator_froze_a_player=creating_event in _EVENT_SUBJECT_PLAYERS,
