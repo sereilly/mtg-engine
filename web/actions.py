@@ -855,9 +855,11 @@ def _owes_a_mana_payment(game, seat: int) -> bool:
     """Whether *seat* owes an open prompt that its own mana abilities answer.
 
     Read off the registry (``ChoiceSpec.also_answers``), which is where each
-    kind says what besides its confirm answers it — ``mana_payment`` and
-    ``optional_pay`` today, and whichever kind next says a seat pays it by
-    tapping. A list of kinds here would be the second copy.
+    kind says what besides its confirm answers it — ``mana_payment``,
+    ``optional_pay`` and ``pay_any_amount`` today (Well of Lost Dreams' {X},
+    paid with a Sol Ring tapped while it is owed), and whichever kind next
+    says a seat pays it by tapping. A list of kinds here would be the second
+    copy.
     """
     return any(
         choice.player_index == seat

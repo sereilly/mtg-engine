@@ -94,6 +94,19 @@ def _accept_bottom_instead_rider(
     return tuple(colors), True
 
 
+def _counted_kind_label(kind: str, count) -> str:
+    """One option of a choice between counter kinds, said with its count:
+    "a +1/+1 counter", "two charge counters" — or "that many charge
+    counters" where the count is a back-reference (Dismantle)."""
+    if isinstance(count, ast.Fixed):
+        if count.value == 1:
+            return f"a {kind} counter"
+        return f"{count.value} {kind} counters"
+    if isinstance(count, ast.ThatMuch):
+        return f"that many {kind} counters"
+    return f"{kind} counters"
+
+
 def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     """``put [up to] N <counter> counter(s) on <subject> [for each …]`` — and
     the object-moving "put" family, tried first because its object is a noun
@@ -486,7 +499,10 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         options = tuple(
             ast.PutCounter(subject, kind, count, up_to) for kind in alternatives
         )
-        labels = tuple(f"a {kind} counter" for kind in alternatives)
+        # The label says the count the placement prints: "put **that many**
+        # +1/+1 counters or charge counters" (Dismantle) offered "a +1/+1
+        # counter" and "a charge counter" while placing that many.
+        labels = tuple(_counted_kind_label(kind, count) for kind in alternatives)
         if _parse_for_each(stream) is not None or _parse_for_each_this_way(stream) is not None:
             raise stream.error(
                 "a choice of counter kinds is not placed per member of a set"

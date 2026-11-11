@@ -146,6 +146,10 @@ _AURA_HOST_DEPARTURES = frozenset({
     "attached_creature_dies", _DEPARTING_HOST_EVENT,
 })
 
+#: The question an Aura returning without being cast asks (CR 303.4f: its
+#: controller-to-be chooses what it enchants as it enters; nothing targets).
+_AURA_HOST_PROMPT = "Choose what this Aura enchants as it returns to the battlefield."
+
 
 def _lower_aura_returns_after_its_host(
     node: ast.ReturnToZone, event: str | None
@@ -190,7 +194,10 @@ def _lower_aura_returns_after_its_host(
     choose = OracleInstruction("choose_permanent", "", {
         "filter": {},
         "result_key": _ATTACH_HOST_KEY,
-        "prompt": "Choose a permanent.",
+        # What the person is choosing, since no noun is printed: the prompt
+        # read "Choose a permanent." over a list of the creatures the Aura
+        # could enchant (Screams from Within, clicked at Darksteel's wave 2).
+        "prompt": _AURA_HOST_PROMPT,
         "chooser": "you",
         "optional": False,
         "legal_host_for_source": True,
@@ -256,7 +263,7 @@ def _lower_host_controller_returns_aura(
         # ability, which ``legal_host_for_source`` asks.
         "filter": {},
         "result_key": _ATTACH_HOST_KEY,
-        "prompt": "Choose a permanent.",
+        "prompt": _AURA_HOST_PROMPT,
         "chooser": "event_subject_controller",
         "optional": False,
         "legal_host_for_source": True,

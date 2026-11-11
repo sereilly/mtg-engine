@@ -297,3 +297,50 @@ def test_w2g2_screams_from_within_returns_onto_the_creature_it_kills(set_pool):
     assert (bears.effective_power, bears.effective_toughness) == (1, 1)
 
 # ==== end W2G2 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# Screams from Within's return as the person choosing its host reads it:
+# the prompt said "Choose a permanent." over a list of creatures.
+from engine import Game as _W2G1Game
+from engine.models import Permanent as _W2G1Permanent
+from engine.models import PlayerState as _W2G1PlayerState
+
+from tests.helpers import settle as _w2g1_settle
+
+
+def test_w2g1_screams_from_within_asks_what_it_will_enchant(set_pool):
+    """CR 303.4f: an Aura put onto the battlefield other than by resolving
+    as an Aura spell is attached to what its controller chooses as it enters.
+    The question says so; the creature named is the one it enchants."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    alice = _W2G1PlayerState(name="Alice", hand=[dst["Screams from Within"]],
+                             library=[lea["Swamp"]] * 8)
+    bob = _W2G1PlayerState(name="Bob", library=[lea["Forest"]] * 8)
+    game = _W2G1Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.active_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    board = []
+    for seat, name in ((1, "Llanowar Elves"), (1, "Hill Giant")):
+        permanent = _W2G1Permanent(card=lea[name])
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        permanent.metadata["summoning_sickness_turn"] = -99
+        board.append(permanent)
+    game._sync_control()
+    elves, giant = board
+    assert game.cast_from_hand(
+        0, "Screams from Within", target_permanent_ids=[elves.permanent_id],
+    ).supported
+    owed = _w2g1_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "permanent_choice"
+    assert owed.data["prompt"] == (
+        "Choose what this Aura enchants as it returns to the battlefield."
+    )
+    assert game.confirm_permanent_choice(0, giant.permanent_id)
+    _w2g1_settle(game)
+    assert (giant.effective_power, giant.effective_toughness) == (2, 2)
+
+# ==== end W2G1 ======================================================

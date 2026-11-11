@@ -161,8 +161,20 @@ return {title: q("promptTitle").textContent, body: q("promptBody").textContent};
 """
 
 
+#: What the offer reads besides the pregame info since Darksteel's wave 2: the
+#: hand it counts ("Your hand has N cards") and the Serum Powder pick it may
+#: be showing instead (``mulliganExchangePick``, none here).
+_OFFER_PRELUDE = _PRELUDE + r"""
+var currentState = {players: [{hand: [{}, {}, {}, {}, {}, {}, {}]}]};
+var mulliganExchangePick = null;
+"""
+
+
 def _render_offer(info: dict) -> dict:
-    return run_app_js(["applyMulliganPrompt"], _OFFER_BODY, {"info": info}, prelude=_PRELUDE)
+    return run_app_js(
+        ["applyMulliganPrompt", "mulliganViewerHand"], _OFFER_BODY, {"info": info},
+        prelude=_OFFER_PRELUDE,
+    )
 
 
 @needs_node

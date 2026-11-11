@@ -442,8 +442,20 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
     """Every eligible permanent, so the board can list and highlight them."""
     choice = choices[0]
     state = ctx.game._sacrifice_prompt(choice)
+    # What is being sacrificed, where the filter is one card type or subtype
+    # and nothing else: Death Cloud's two rounds ("sacrifices X creatures …,
+    # then sacrifices X lands") both read "Choose 2 permanent(s)". A filter
+    # saying more keeps the generic word — a noun that drops a narrowing
+    # would describe more than the highlighted candidates.
+    described = choice.data.get("filter") or {}
+    noun = (
+        {"noun": _keep_slot_noun(described)}
+        if described and set(described) <= {"type_filter", "subtype_filter"}
+        else {}
+    )
     return {
         "player_seat": choice.player_index,
+        **noun,
         "count": state["count"],
         # Whether the count is owed or offered. "Sacrifice any number of
         # untapped Forests" (Wood Elemental) is answered by any subset, none
@@ -1033,10 +1045,23 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
         (None, None),
     )
     name = choice.data.get("card_name", "the exiled card")
+    # "…you may copy **a** card exiled with this artifact" (Panoptic Mirror):
+    # with two imprinted, the offers are queued card by card and the first
+    # taken is the one copy (``copy_casts.arm_copy_cast``'s ``one_of``). A
+    # person picks the second card by declining the first, so the offer names
+    # the cards still to come — without it nothing says a decline is not the
+    # end of the choice.
+    one_of = choice.data.get("_one_of")
+    then_offers = [
+        other.data.get("card_name", "")
+        for other in choices[1:]
+        if one_of is not None and other.data.get("_one_of") is one_of
+    ]
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "source_name": choice.data.get("source_name", ""),
+        **({"then_offers": then_offers} if then_offers else {}),
         "exile_seat": where[0],
         "exile_index": where[1],
         "prompt": (

@@ -21,6 +21,7 @@ from engine.entry_choices import chosen_as_entered
 from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.game_types import single_slot, target_ids, target_slots
+from engine.granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
 from engine.legality import activation_target_obligation
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
@@ -46,6 +47,7 @@ from .offers import (
     ability_price, ability_x_payable, cast_mana_offer, cast_x_payable,
     text_change_offer,
 )
+from .prompt_values import restricted_mana_words
 from .runtime import CARD_BY_NAME
 from .seats import _player_has_lost
 
@@ -332,6 +334,41 @@ def _text_change_replacements(perm: Permanent) -> list[dict]:
     return changed_words(perm)
 
 
+#: "…unattach **the permanent with id 7 that granted this ability**: …" — the
+#: words ``granted_abilities.bind_granter`` writes for a granter's name once its
+#: quoted ability is the host's own text (CR 201.5a: the name means that one
+#: object), spelled from the engine's own constants.
+_GRANTER_REFERENCE = re.compile(
+    r"\b" + r"\s+".join(GRANTER_PHRASE_HEAD) + r"\s+(\d+)\s+"
+    + r"\s+".join(GRANTER_PHRASE_TAIL) + r"\b",
+    re.IGNORECASE,
+)
+
+
+def _granter_names(game: Game, text: str) -> str:
+    """*text* with each bound granter reference said as the granter's name.
+
+    The binding is how the engine tells two Heartseekers on one creature
+    apart, and it reached the player verbatim: the host's ability menu and its
+    preview read "{t}, unattach the permanent with id 7 that granted this
+    ability: destroy target creature." The printed card says the name, and the
+    id is the engine's handle, never a player's — so the payload says the name
+    of the permanent with that id (the line count, which ability indices
+    follow, is unchanged). A granter no longer on the battlefield is said as
+    the relation without its id.
+    """
+    if not text or "granted this ability" not in text.lower():
+        return text
+
+    def name(match: re.Match) -> str:
+        granter = game.permanent_by_id(int(match.group(1)))
+        if granter is None:
+            return "the permanent that granted this ability"
+        return granter.effective_card.name
+
+    return _GRANTER_REFERENCE.sub(name, text)
+
+
 def _serialize_permanent(perm: Permanent, game: Game) -> dict:
     image_uri, large_image_uri, art_crop = _card_image_uris(perm.card)
     # A Clone keeps its own art — the physical card is a Clone. A token that is
@@ -437,8 +474,9 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "base_toughness": _printed_stat(perm.effective_card, "toughness"),
         "mana_cost": perm.effective_card.mana_cost,
         # A copy (Clone / Vesuvan Doppelganger) shows — and the UI activates —
-        # the copied card's abilities, so its text is the effective text.
-        "oracle_text": perm.effective_card.oracle_text,
+        # the copied card's abilities, so its text is the effective text, with
+        # a granted ability's granter said by name (``_granter_names``).
+        "oracle_text": _granter_names(game, perm.effective_card.oracle_text),
         # Word-level edits from a text-changing spell (Sleight of Mind / Magical
         # Hack) so the UI can strike the old word and show the new word in gold.
         "text_changes": _text_change_replacements(perm),
@@ -539,9 +577,10 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # showed the player nothing.
         # …the ones it still has: a lord older than a "loses all abilities"
         # effect on this permanent grants it nothing (CR 613.7).
-        "granted_abilities": list(
-            derived_ability_lines(perm, after=abilities_lost_at(perm))
-        ),
+        "granted_abilities": [
+            _granter_names(game, line)
+            for line in derived_ability_lines(perm, after=abilities_lost_at(perm))
+        ],
         # Why this permanent has **no** activated ability to offer although
         # its text prints some — "loses all abilities", or a land whose type
         # was set (CR 305.7) — or None. The client builds its ability menu
@@ -983,7 +1022,7 @@ def _serialize_permanent_summary(perm: Permanent, game: Game) -> dict:
     summary = _serialize_card_summary(perm.card)
     summary.update({
         "type": displayed_type_line(perm),
-        "oracle_text": perm.effective_card.oracle_text,
+        "oracle_text": _granter_names(game, perm.effective_card.oracle_text),
         "colors": sorted(game._effective_colors(perm)),
         # CR 707.2: a copiable value (see ``_serialize_permanent``).
         "mana_cost": perm.effective_card.mana_cost,
@@ -1689,6 +1728,15 @@ def _serialize_player(
         "creature_only_mana": {sym: n for sym, n in player.creature_only_mana.items() if n > 0},
         "restricted_mana": {
             key: {sym: n for sym, n in bucket.items() if n > 0}
+            for key, bucket in (player.restricted_mana or {}).items()
+            if any(n > 0 for n in bucket.values())
+        },
+        # What each of those buckets may be spent on, as the card says it, for
+        # the chip's label: the client's own table named two of the eight
+        # restrictions and called the rest "spent on certain spells" — an
+        # artifact-ability bucket (Vedalken Engineer) included.
+        "restricted_mana_words": {
+            key: restricted_mana_words(key)
             for key, bucket in (player.restricted_mana or {}).items()
             if any(n > 0 for n in bucket.values())
         },

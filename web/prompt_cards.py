@@ -1301,14 +1301,29 @@ def _graveyard_exile_pick(ctx: PromptContext, choices: list) -> dict:
     printed exile, ``"library_bottom"`` for Gurzigost's "put two cards from
     your graveyard on the bottom of your library" — the same question with
     another verb, which the client has to say out loud rather than calling
-    every pick an exile.
+    every pick an exile; ``"chosen"`` for Scrounge's "target opponent chooses
+    an artifact card in their graveyard", which moves nothing (the card is
+    the record the next sentence reads).
     """
     choice = choices[0]
     owner_seat = int(choice.data["owner_index"])
     owner = ctx.game.players[owner_seat]
+    # Whose spell asks, when it is another seat's: "**Target opponent**
+    # chooses an artifact card in their graveyard" (Scrounge) is owed by the
+    # opponent of its caster, and a dialog naming only the card leaves the
+    # person answering it guessing whose it is.
+    caster = getattr(choice.data.get("_context"), "caster", None)
+    caster_seat = (
+        next((seat for seat, p in enumerate(ctx.game.players) if p is caster), None)
+        if caster is not None else None
+    )
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
+        **(
+            {"caster_name": caster.name}
+            if caster_seat is not None and caster_seat != choice.player_index else {}
+        ),
         "destination": choice.data.get("destination") or "exile",
         "owner_seat": owner_seat,
         "owner_name": owner.name,

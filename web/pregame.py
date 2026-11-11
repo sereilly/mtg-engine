@@ -148,9 +148,16 @@ def _keep_terms(session: Session, seat: int) -> dict:
     player has taken a mulligan", less CR 103.5c's free first one at a
     multiplayer or Brawl table), and ``may_mulligan``. The client read
     ``mulligans_taken`` for both until the kg3 round, so a three-seat table's
-    first mulligan said it would cost a card."""
+    first mulligan said it would cost a card.
+
+    ``bottom_paid`` is what an exchange "any time you could mulligan" already
+    put on the bottom for this hand (CR 103.5b, Serum Powder — the bottom
+    comes first, ``Game.pregame_hand_exchange``), so the offer can tell a
+    bottom paid from a mulligan that was free: the client read ``bottom_owed``
+    falling to zero after an exchange as CR 103.5c's free first mulligan."""
     return {
         "bottom_owed": session.game.mulligan_bottom_owed(seat),
+        "bottom_paid": int(session.game.players[seat].mulligan_bottom_paid or 0),
         "may_mulligan": _may_take_mulligan(session, seat),
     }
 

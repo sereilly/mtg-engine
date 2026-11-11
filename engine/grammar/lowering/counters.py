@@ -712,9 +712,19 @@ def _lower_put_counter(
                     # game ends up asking one player about another's creatures.
                     "controlled_by": "chooser",
                     "filter": described,
+                    # The count as placed: "that many" where a record
+                    # froze it (Dismantle), the printed number otherwise.
                     "prompt": (
                         f"Choose {'an' if noun[:1] in 'aeiou' else 'a'} {noun} "
-                        f"to put a {node.counter} counter on."
+                        f"to put "
+                        + (
+                            f"that many {node.counter} counters"
+                            if recorded is not None
+                            else f"{node.count.value} {node.counter} counters"
+                            if node.count.value != 1
+                            else f"a {node.counter} counter"
+                        )
+                        + " on."
                     ),
                     **preference,
                 },

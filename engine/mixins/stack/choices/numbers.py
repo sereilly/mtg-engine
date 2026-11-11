@@ -759,6 +759,13 @@ PAY_ANY_AMOUNT_SPEC = ChoiceSpec(
     action="pay_any_amount_confirm",
     prompt_key="pay_any_amount",
     blocked_detail="say how much mana you pay before other actions",
+    # The amount is paid in mana, and the renderer offers what the pool and
+    # the untapped lands cover (``payment_lands``) — "a land left out … is
+    # theirs to tap before they answer", and so is every other mana source: a
+    # mana ability may be activated "whenever a rule or effect asks for a mana
+    # payment" (CR 605.3a). Without this a person owing Well of Lost Dreams'
+    # {X} clicked Sol Ring and was told to say how much they pay first.
+    also_answers=("tap", "activate"),
     # Every seat is offered at once and the sentence behind the offer reads all
     # of their answers, so the board must not move under any of them (CR 608.2).
     blocks_every_seat=True,
