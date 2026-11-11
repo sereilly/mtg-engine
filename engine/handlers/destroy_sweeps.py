@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..face_down import permanent_name
 from ..game_types import single_chosen_id
 from ..static_bonuses import singular_land_type
 from ..models import Permanent
@@ -25,6 +26,7 @@ from ..object_colors import share_a_color
 from ..oracle_types import (EVENT_SUBJECT_LAST_KNOWN, OracleInstruction,
                             PER_OBJECT_SEAT_RECORDS)
 from ._chosen import SHARES_CREATURE_TYPE_WITH, resolve_shared_creature_type
+from ._filters import RECORDED_NAME_KEYS, recorded_name_test
 from ._targets import frozen_that_player_seat
 from .registry import effect_handler
 
@@ -246,8 +248,9 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             # …and the same comparison against a name this *resolution* wrote
             # down (Wake of Destruction), for the reason its two neighbours are
             # lifted out: `subject_matches` is handed a permanent, a seat and a
-            # source, and never the scratchpad.
-            "name_from_record",
+            # source, and never the scratchpad — with the target it excepts
+            # ("all **other** lands"), by id (``recorded_name_test``).
+            *RECORDED_NAME_KEYS,
             # "…**of the creature type of your choice**" (Extinction). A word an
             # earlier step of this same resolution wrote, resolved just below
             # into the ordinary ``subtype_filter`` every matcher already reads.
@@ -428,19 +431,16 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # two names live in different places — one in the trigger's frozen context,
     # one in the resolution's scratchpad — and a handler that guessed between
     # them would sweep the board whenever it guessed wrong.
-    name_record = instruction.payload.get("name_from_record")
-    if name_record is not None:
-        event_name = str(context.results.get(name_record) or "").strip() or None
-        if event_name is None:
-            # The destroy in front chose nothing (its target had left,
-            # CR 608.2b), so there is no name for the sweep to compare against
-            # and nothing it may take. Ending here for the trigger branch's
-            # reason: a dropped narrowing on a sweep destroys every land on the
-            # table.
-            game.log.append(
-                f"{context.card.name}: nothing was destroyed, so no name to match"
-            )
-            return True, "resolved"
+    same_name = recorded_name_test(instruction.payload, context)
+    if same_name is False:
+        # The destroy in front chose nothing (its target had left,
+        # CR 608.2b), or chose a face-down permanent, which has no name
+        # (CR 708.2a) — either way no name for the sweep to compare against
+        # and nothing it may take. Ending here for the trigger branch's
+        # reason: a dropped narrowing on a sweep destroys every land on the
+        # table.
+        game.log.append(f"{context.card.name}: no name to match")
+        return True, "resolved"
     if instruction.payload.get("name_from_event"):
         tctx = context.trigger_context or {}
         event_name = tctx.get("event_subject_name")
@@ -593,7 +593,10 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             targeted_player=targeted_seat,
         )
         and (host is None or perm.metadata.get("attached_to") is host)
-        and (event_name is None or perm.effective_card.name == event_name)
+        # CR 201.2a through ``permanent_name``: a face-down permanent has no
+        # name and shares one with nothing (CR 708.2a).
+        and (event_name is None or permanent_name(perm) == event_name)
+        and (same_name is None or same_name(perm))
         and (event_subject_id is None or perm.permanent_id != event_subject_id)
         and (
             shared_colors is None

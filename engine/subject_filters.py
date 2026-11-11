@@ -1468,10 +1468,17 @@ def subject_matches(
     # permanent", not "another permanent you control", so every battlefield is
     # searched. By identity, because a permanent is not another permanent
     # (CR 109.2) and comparing by value would make a lone copy match itself.
+    #
+    # A face-down permanent has no name (CR 708.2a) and so the same name as
+    # nothing, another face-down permanent included (CR 201.2a) — read through
+    # ``permanent_name``, never off the blank card's display label, which two
+    # face-down creatures would share.
     if described.get("shares_name_with_another"):
-        name = obj.effective_card.name
-        if not any(
-            other is not obj and other.effective_card.name == name
+        from .face_down import permanent_name
+
+        name = permanent_name(obj)
+        if name is None or not any(
+            other is not obj and permanent_name(other) == name
             for other in game.all_permanents()
         ):
             return False

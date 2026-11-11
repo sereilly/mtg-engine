@@ -32,7 +32,7 @@ of a cut belongs on the floor rather than in one of the two families.
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import LAST_TARGET_NAME, OracleInstruction
 from ...subject_filters import (observer_source_filter,
                                 unimplemented_filter_keywords,
                                 untestable_filter_keys)
@@ -499,6 +499,33 @@ def _lower_pump(
         filt = node.subject.filter
         if filt.card_types != ("creature",):
             raise LoweringError("global buff on a non-creature scope", node=node)
+        # "Target creature **and all other creatures with the same name as
+        # that creature** get +2/+2 until end of turn." (Echoing Courage,
+        # Echoing Decay.) Wake of Destruction's arrangement on the pump:
+        # "that creature" is the target the step in front pumped, which froze
+        # its name (``LAST_TARGET_NAME``), and "other" excepts that target by
+        # id — it is still on the battlefield, and the printed sentence gives
+        # it the boost once. Both ride beside the filter, answered by
+        # ``recorded_name_test``. With no such step the words name nothing,
+        # and an unanswered "same name" is a buff to every creature.
+        recorded_name: dict[str, object] = {}
+        if filt.name_from_event:
+            if LAST_TARGET_NAME not in produced:
+                raise LoweringError(
+                    "'the same name as that creature' names a target no step "
+                    "of this effect chose", node=node,
+                )
+            if node.duration.kind == "while_source_tapped":
+                raise LoweringError(
+                    "a continuous buff cannot read a name this resolution "
+                    "recorded", node=node,
+                )
+            recorded_name["name_from_record"] = LAST_TARGET_NAME
+            if filt.other_than_source:
+                recorded_name["other_than_target"] = True
+            filt = dataclasses.replace(
+                filt, name_from_event=False, other_than_source=False,
+            )
         # "Choose a creature type. All creatures **of that type** get -1/-1
         # until end of turn." (Outbreak.) "That type" is the word the sentence
         # in front of this one recorded (CR 608.2d), taken off the filter and
@@ -727,6 +754,7 @@ def _lower_pump(
                     node=node,
                 )
             payload.update(bound_type)
+        payload.update(recorded_name)
         if node.duration.kind == "while_source_tapped":
             # "All creatures get +2/+2 **for as long as this artifact remains
             # tapped**." (Thran Weaponry.) The global twin of

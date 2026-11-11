@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from ..dexterity import flip_lands_on
 from ..game_types import single_slot, target_ids
+from ..face_down import permanent_name
 from ..models import Permanent, PlayerState
 from ..destruction_events import (begin_destruction_hold,
                                   end_destruction_hold,
@@ -358,8 +359,10 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         # against a permanent this step is about to destroy, so the name is
         # frozen here beside the two seats and for their reason — CR 608.2h,
         # last-known information. ``effective_card`` for CR 707.2: a Clone of a
-        # land is a land with that land's name and goes with the rest of them.
-        context.results[LAST_TARGET_NAME] = victim.effective_card.name
+        # land is a land with that land's name and goes with the rest of them;
+        # a face-down permanent has no name and takes nothing with it
+        # (CR 708.2a, 201.2a: ``permanent_name``).
+        context.results[LAST_TARGET_NAME] = permanent_name(victim)
         if seat is not None:
             context.results[LAST_TARGET_CONTROLLER] = seat
             # The same seat under the per-object key, so a sentence counting

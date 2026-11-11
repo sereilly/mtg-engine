@@ -257,11 +257,15 @@ def evaluate_state_condition(
             )
             if target is None:
                 return False
-            target_name = target.effective_card.name
+            # CR 201.2a through ``permanent_name``: a face-down permanent has
+            # no name (CR 708.2a), so it shares one with nothing.
+            from ..face_down import permanent_name
+
+            target_name = permanent_name(target)
             nontoken = bool(payload.get("nontoken"))
             return bool(target_name) and any(
                 other is not target
-                and other.effective_card.name == target_name
+                and permanent_name(other) == target_name
                 and not (nontoken and other.metadata.get("is_token"))
                 for other in game.all_permanents()
             )
@@ -566,9 +570,15 @@ def evaluate_state_condition(
             # nothing. The name is read off the *effective* card, so a Clone
             # counts under the name it copied (CR 707.2), which is also the name
             # printed on the board a player is looking at.
+            # A face-down permanent has no name and shares one with nothing
+            # (CR 708.2a, 201.2a): it is in no group (``permanent_name``).
+            from ..face_down import permanent_name
+
             by_name: dict = {}
             for permanent in matched:
-                name = permanent.effective_card.name
+                name = permanent_name(permanent)
+                if name is None:
+                    continue
                 by_name[name] = by_name.get(name, 0) + 1
             count = max(by_name.values(), default=0)
         else:

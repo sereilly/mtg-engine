@@ -48,8 +48,9 @@ from tests.helpers import settle as _w1g4_settle
 
 
 def _w1g4_card(set_pool, name):
-    """A card by name: Darksteel first, then Alpha, Odyssey and Mirrodin."""
-    for code in ("DST", "LEA", "ODY", "MRD"):
+    """A card by name: Darksteel first, then Alpha, Odyssey, Mirrodin and
+    Antiquities."""
+    for code in ("DST", "LEA", "ODY", "MRD", "ATQ"):
         pool = set_pool(code)
         if name in pool:
             return pool[name]
@@ -173,6 +174,27 @@ def test_w1g4_a_flashed_back_pulse_is_exiled_rather_than_returned(set_pool):
     _w1g4_settle(game)
     assert [p.card.name for p in game.controlled_by(0)] == ["Beast Token"]
     assert _w1g4_where(game, "Pulse of the Tangle") == ["0.exile"]
+
+def test_w1g4_echoing_ruin_reaches_a_regenerated_target_once(set_pool):
+    """Drive list (supported on arrival, and wrong): "Destroy target artifact
+    and all other artifacts with the same name as that artifact." The
+    targeted Clay Statue spends its one regeneration shield and stays; it is
+    not one of "all **other** artifacts", so the sweep does not destroy it a
+    second time — it took the other Statue only. Before the sweep excepted
+    its target, the shielded Statue died anyway."""
+    game, _mine, theirs = _w1g4_table(
+        set_pool, ["Echoing Ruin"], theirs=["Clay Statue", "Clay Statue", "Ornithopter"],
+    )
+    shielded, other, thopter = theirs
+    shielded.regeneration_shield = 1
+    assert game.cast_from_hand(
+        0, "Echoing Ruin", target_permanent_ids=[shielded.permanent_id],
+    ).supported
+    _w1g4_settle(game)
+    assert game.is_on_battlefield(shielded) and shielded.tapped
+    assert not game.is_on_battlefield(other)
+    assert game.is_on_battlefield(thopter)
+    assert [c.name for c in game.players[1].graveyard] == ["Clay Statue"]
 
 # ==== end W1G4 ======================================================
 

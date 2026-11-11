@@ -191,6 +191,140 @@ def test_w1g4_pulse_of_the_grid_returns_when_the_opponent_holds_more(set_pool):
     _w1g4_settle(game)
     assert _w1g4_where(game, "Pulse of the Grid") == ["0.graveyard"]
 
+def _w1g4_creatures(game, seat):
+    """Seat *seat*'s creatures as ``(name, power, toughness)``, sorted."""
+    return sorted(
+        (p.card.name, p.effective_power, p.effective_toughness)
+        for p in game.controlled_by(seat) if p.is_creature
+    )
+
+
+def test_w1g4_echoing_truth_returns_every_permanent_sharing_the_targets_name(set_pool):
+    """"Return target nonland permanent and all other permanents with the same
+    name as that permanent to their owners' hands." Both sides' Grizzly Bears
+    go to their owners' hands; the Ornithopter beside them stays."""
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Echoing Truth"], mine=["Grizzly Bears", "Ornithopter"],
+        theirs=["Grizzly Bears", "Grizzly Bears"],
+    )
+    assert game.cast_from_hand(
+        0, "Echoing Truth", target_permanent_ids=[theirs[0].permanent_id],
+    ).supported
+    _w1g4_settle(game)
+    assert _w1g4_creatures(game, 0) == [("Ornithopter", 0, 2)]
+    assert _w1g4_creatures(game, 1) == []
+    assert [c.name for c in game.players[0].hand] == ["Grizzly Bears"]
+    assert [c.name for c in game.players[1].hand] == ["Grizzly Bears", "Grizzly Bears"]
+
+
+def test_w1g4_echoing_truth_on_a_token_takes_every_token_named_alike(set_pool):
+    """A token's name is its subtypes plus "Token" (the card's 2022-06-10
+    ruling on Echoing Courage, CR 111.4): two Beast Tokens share a name, and
+    both leave — a token in a hand ceases to exist (CR 704.5d)."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, ["Echoing Truth", "Pulse of the Tangle", "Pulse of the Tangle"],
+        mine=["Ornithopter"],
+    )
+    for _ in range(2):
+        game.cast_from_hand(0, "Pulse of the Tangle")
+        _w1g4_settle(game)
+    beasts = [p for p in game.controlled_by(0) if p.card.name == "Beast Token"]
+    assert len(beasts) == 2
+    game.cast_from_hand(0, "Echoing Truth", target_permanent_ids=[beasts[0].permanent_id])
+    _w1g4_settle(game)
+    assert _w1g4_creatures(game, 0) == [("Ornithopter", 0, 2)]
+    assert [c.name for c in game.players[0].hand] == []
+
+
+def test_w1g4_echoing_courage_pumps_each_namesake_once(set_pool):
+    """Every Grizzly Bears gets +2/+2 — the target once, not again as one of
+    "all other creatures" — and the Ornithopter gets nothing."""
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Echoing Courage"],
+        mine=["Grizzly Bears", "Grizzly Bears", "Ornithopter"], theirs=["Grizzly Bears"],
+    )
+    assert game.cast_from_hand(
+        0, "Echoing Courage", target_permanent_ids=[mine[0].permanent_id],
+    ).supported
+    _w1g4_settle(game)
+    assert _w1g4_creatures(game, 0) == [
+        ("Grizzly Bears", 4, 4), ("Grizzly Bears", 4, 4), ("Ornithopter", 0, 2),
+    ]
+    assert _w1g4_creatures(game, 1) == [("Grizzly Bears", 4, 4)]
+
+
+def test_w1g4_echoing_courage_reaches_a_namesake_with_protection(set_pool):
+    """The 2018-03-16 ruling: "Echoing Courage has only one target. Other
+    creatures with that name are not targeted … a creature with protection
+    from green will still get +2/+2." A Bears under Green Ward cannot be the
+    target, and is pumped anyway as the target's namesake."""
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Green Ward", "Echoing Courage", "Echoing Courage"],
+        mine=["Grizzly Bears"], theirs=["Grizzly Bears"],
+    )
+    assert game.cast_from_hand(
+        0, "Green Ward", target_permanent_ids=[theirs[0].permanent_id],
+    ).supported
+    _w1g4_settle(game)
+    refused = game.cast_from_hand(
+        0, "Echoing Courage", target_permanent_ids=[theirs[0].permanent_id],
+    )
+    assert not refused.supported
+    assert game.cast_from_hand(
+        0, "Echoing Courage", target_permanent_ids=[mine[0].permanent_id],
+    ).supported
+    _w1g4_settle(game)
+    assert _w1g4_creatures(game, 0) == [("Grizzly Bears", 4, 4)]
+    assert _w1g4_creatures(game, 1) == [("Grizzly Bears", 4, 4)]
+
+
+def test_w1g4_echoing_courage_with_its_target_gone_pumps_nobody(set_pool):
+    """The 2018-03-16 ruling: "If the target creature is an illegal target by
+    the time Echoing Courage tries to resolve, the spell doesn't resolve. No
+    creatures get +2/+2." The target leaves in response; its namesake stays
+    2/2."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, ["Echoing Courage"], mine=["Grizzly Bears", "Grizzly Bears"],
+    )
+    assert game.queue_from_hand(
+        0, "Echoing Courage", target_permanent_ids=[mine[0].permanent_id],
+    ).supported
+    game.remove_from_battlefield(mine[0])
+    _w1g4_settle(game)
+    assert _w1g4_creatures(game, 0) == [("Grizzly Bears", 2, 2)]
+    assert any("every target is illegal" in line for line in game.log)
+
+
+def test_w1g4_echoing_decay_kills_every_two_toughness_namesake(set_pool):
+    """-2/-2 to the target and to every other Grizzly Bears: all of them die
+    to the state-based check (CR 704.5f); the Ornithopter (0/2, a different
+    name) is untouched."""
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Echoing Decay"], mine=["Grizzly Bears"],
+        theirs=["Grizzly Bears", "Ornithopter"],
+    )
+    assert game.cast_from_hand(
+        0, "Echoing Decay", target_permanent_ids=[theirs[0].permanent_id],
+    ).supported
+    _w1g4_settle(game)
+    assert _w1g4_creatures(game, 0) == []
+    assert _w1g4_creatures(game, 1) == [("Ornithopter", 0, 2)]
+    # The spell is binned as it resolves (CR 608.2n), the Bears after it.
+    assert [c.name for c in game.players[0].graveyard] == ["Echoing Decay", "Grizzly Bears"]
+
+
+def test_w1g4_echoing_calm_destroys_the_enchantment_and_its_namesakes(set_pool):
+    """Drive list (supported on arrival). Two Crusades go, the Bad Moon
+    beside them stays."""
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Echoing Calm"], mine=["Crusade"], theirs=["Crusade", "Bad Moon"],
+    )
+    assert game.cast_from_hand(
+        0, "Echoing Calm", target_permanent_ids=[theirs[0].permanent_id],
+    ).supported
+    _w1g4_settle(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Bad Moon"]
+
 # ==== end W1G4 ======================================================
 
 
