@@ -135,11 +135,12 @@ def test_w1g1_dismantle_asks_which_counter_and_which_artifact(set_pool):
     game.cast_from_hand(0, "Dismantle", target_permanent_ids=[bruiser.permanent_id])
     owed = _w1g1_settle(game, defaults=False)
     assert owed is not None and owed.kind == "mode_choice"
-    assert owed.data["labels"] == ["a +1/+1 counter", "a charge counter"]
+    # Said with the count it places (Darksteel's wave 2, W2G1): "that many".
+    assert owed.data["labels"] == ["that many +1/+1 counters", "that many charge counters"]
     game.resolve_pending_choice("mode_choice", 0, mode_index=1)
     owed = _w1g1_settle(game, defaults=False)
     assert owed is not None and owed.kind == "permanent_choice"
-    assert owed.data["prompt"] == "Choose an artifact to put a charge counter on."
+    assert owed.data["prompt"] == "Choose an artifact to put that many charge counters on."
     game.confirm_permanent_choice(0, pit.permanent_id)
     _w1g1_settle(game)
 
@@ -654,3 +655,50 @@ def test_w1g9_scrounge_finds_no_artifact_and_does_nothing(set_pool):
     assert alice.battlefield == [] and [c.name for c in bob.graveyard] == ["Grizzly Bears"]
 
 # ==== end W1G9 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# Dismantle's choice of kind, as the person reading it is told it: the
+# label and the artifact prompt say the count placed (they read "a +1/+1
+# counter" while four went on).
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from engine.named_counters import add_counters as _w2g1_add_counters
+from engine.named_counters import counters_on as _w2g1_counters_on
+from tests.helpers import settle as _w2g1_settle
+
+
+def test_w2g1_dismantle_offers_that_many_counters_and_places_that_many(set_pool):
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name=f"P{seat}", library=[lea["Island"]] * 10,
+                         hand=[dst["Dismantle"]] if seat == 0 else [])
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    _w2g1_settle(game)
+    placed = []
+    for seat, card in ((0, lea["Sol Ring"]), (1, dst["Arcbound Worker"])):
+        permanent = _W2G1Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        placed.append(permanent)
+    _w2g1_settle(game)
+    ring, worker = placed
+    _w2g1_add_counters(worker, "+1/+1", 3)
+    held = _w2g1_counters_on(worker, "+1/+1")
+    assert held == 4, "modular 1 and three more"
+    game.cast_from_hand(0, "Dismantle", target_permanent_ids=[worker.permanent_id])
+    owed = _w2g1_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "mode_choice"
+    assert owed.data["labels"] == ["that many +1/+1 counters", "that many charge counters"]
+    game.resolve_pending_choice("mode_choice", 0, mode_index=0)
+    owed = _w2g1_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "permanent_choice"
+    assert owed.data["prompt"] == "Choose an artifact to put that many +1/+1 counters on."
+    game.confirm_permanent_choice(0, ring.permanent_id)
+    _w2g1_settle(game)
+    assert _w2g1_counters_on(ring, "+1/+1") == held
+
+# ==== end W2G1 ======================================================
