@@ -44,6 +44,7 @@ def test_the_pay_x_offer_stops_at_the_printed_ceiling(set_pool):
     offer = _prompts(game, 0)["pay_any_amount"]
     assert offer["pays_x"] is True
     assert offer["maximum"] == 1 and offer["options"] == [0, 1]
+    assert offer["ceiling"] == 1
 
 
 def test_the_board_still_bounds_an_offer_under_a_higher_ceiling(set_pool):
@@ -52,4 +53,14 @@ def test_the_board_still_bounds_an_offer_under_a_higher_ceiling(set_pool):
         "pay_any_amount", 0, card_name="Well of Lost Dreams", pays_x=True,
         maximum=6, _results={},
     )
-    assert _prompts(game, 0)["pay_any_amount"]["options"] == [0, 1, 2]
+    offer = _prompts(game, 0)["pay_any_amount"]
+    assert offer["options"] == [0, 1, 2] and offer["ceiling"] == 6
+
+
+def test_an_offer_with_no_printed_ceiling_carries_none(set_pool):
+    game = _table(set_pool, lands=2)
+    game.arm_pending_choice(
+        "pay_any_amount", 0, card_name="Hollow Specter", pays_x=True, _results={},
+    )
+    offer = _prompts(game, 0)["pay_any_amount"]
+    assert "ceiling" not in offer and offer["options"] == [0, 1, 2]

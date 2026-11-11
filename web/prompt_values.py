@@ -562,6 +562,11 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
         # player may pay any amount of mana" (Liege of the Hollows): one
         # answer, two printed sentences, and the panel says the one printed.
         **({"pays_x": True} if choice.data.get("pays_x") else {}),
+        # The printed ceiling itself, when the card has one (Well of Lost
+        # Dreams: "X is less than or equal to the amount of life you
+        # gained"), so a panel can say why the buttons stop where they do;
+        # ``maximum`` above is already held under it.
+        **({"ceiling": ceiling} if isinstance(ceiling, int) else {}),
     }
 
 
