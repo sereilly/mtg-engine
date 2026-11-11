@@ -84,6 +84,12 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   still greps for the names of the functions it adds a caller to, because a
   caller census lists callers by name (Onslaught's
   `test_aura_host_protection` was red for four links after a branch added one).
+  Nor does it name a census reached through a seat's choice or a
+  trigger-condition kind rather than an import or a registry: Darksteel's
+  W1G3 shipped a red in the AI's graveyard-denial census it never ran, and
+  the conditional-grants and upkeep-window censuses surfaced only in the
+  rehearsal (each now in `surprises.txt`). A brief says to grep `tests/` for
+  the card names and the functions a change reaches.
   The full suite is the integrator's,
   one at a time: `-n 8` when the machine is yours, `-n 4` while agents run.
   The runner caps any `-n` at what free memory holds (`tests/memory_guard.py`
@@ -130,7 +136,13 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   **Save each group's final report verbatim the day it lands**
   (`scratch/<round>/reports/<group>.md`), beside the merge notes: Phase 6 is
   briefed from both, and kg5's had to be recovered from the session
-  transcript for it.
+  transcript for it. **A subagent cannot write a report file** (the file
+  tool refuses one; Darksteel's nine were each briefed to and refused), so
+  the hand-back in the session transcript is the only copy: a brief asks
+  for the report as the final message, and `extract_reports.py
+  <scratch>/reports <transcript-dir> --groups agents.json` writes each as
+  `<group>.md` — a resumed agent's follow-up as `<group>.2.md`, never over
+  it — and names the groups still owed.
 - **Commit as each item lands, and before any long run on a commit.** An
   expired session stops every agent at once, and the ones with commits resume
   cheaply. Work in an exported tree or left uncommitted is invisible to a merge
@@ -211,6 +223,13 @@ And when writing one:
   two types) was meant, and the printed subject said so. Rulings come from
   `bulk_rulings.py CODE <out>` (Scryfall's bulk file, one download; the
   per-card fetch is rate-limited).
+- **List the base's known reds in every brief, and ask for both
+  differentials before the first edit** (`oracle_diff snapshot` and
+  `sim_fingerprint snapshot`). Darksteel's wave-1 groups built base worktrees
+  to tell their reds from the base's, and three rebuilt a base fingerprint
+  from an export because the brief asked only for the first snapshot. The
+  same paragraph says **never `sed -i` a source file** — in Git Bash it
+  rewrites CRLF as LF (three Darksteel groups) — beside the heredoc warning.
 - **Put the test helpers in the common brief**, not in a mid-wave
   broadcast. A test reads the board after `tests.helpers.settle(game)` —
   every owed prompt answered (its default, or `answers={kind: fn}`), the
@@ -346,8 +365,11 @@ And when writing one:
 - **Two branches may share one meeting**: stage and commit the first link
   with its scans (oracle_diff, dups, missing and import names), stage the
   second on it, and run the meeting at the top. A red is bisected onto the
-  lower link in seconds. Mirrodin batched four pairs; none needed the
-  bisect.
+  lower link in seconds. Mirrodin batched four pairs, Darksteel three
+  pairs and two triples; none needed the bisect. A follow-up commit on a
+  branch already merged (a rehearsal red sent back to its group) is staged
+  under an alias, since its link name is taken: `git branch <round>/fu3
+  <round>/w1g3`, then `chain_stage.sh fu3 <tip>`.
 - **Name the `full`-marked structural guards in every group brief**
   (`tests/engine/test_face_blind_guards.py`, `test_grammar_layering.py`,
   `test_cast_prohibition_readers.py`): an agent's quick-pass `tests/engine` never
@@ -538,7 +560,7 @@ on at least one resolution.
 ### Per-set test files
 
 - **Open the set's per-set test files on `main` before the fan-out, one marked
-  section per group** (`open_test_files.py CODE <group>…`), each group's imports
+  section per group** (`open_test_files.py CODE <group>… [--later TYPES]`), each group's imports
   at the top of its own section. Every per-set conflict is then two appends and
   the union is mechanical. A group's tests in `tests/rules/` go in a file of its
   own.
@@ -560,7 +582,9 @@ on at least one resolution.
   meeting, mid-wave (Scourge's creatures file, nine sections, 2,601 lines at
   the seventh merge): when more than five groups open a section in one type's
   file, open its `_later_groups` sibling on the base and split the sections
-  between the two before the fan-out.
+  between the two before the fan-out (`open_test_files.py --later
+  creatures,artifacts`: the first half of the groups in the file, the rest in
+  its sibling — Darksteel's nine groups).
 
 ### Module splits
 
@@ -643,7 +667,13 @@ on at least one resolution.
 - **An ordered table stays whole even past the runway** (the prompt registry,
   the first-match-wins trigger table): a table whose order is behaviour does
   not scatter across modules. Dump a table or registry before and after — the
-  entries in order, each function by its code — and compare.
+  entries in order, each function by its code — and compare. **What makes
+  such a table long is often not its rows**: Darksteel's
+  `whenever_triggers.py` sat in the band at 1,807 lines, 78% of them the
+  rows' rationale. The notes moved to `engine/whenever_trigger_notes.py` in
+  the table's own order (a guard holds each note to one row), the rows
+  byte-identical and the table's dump equal, and the module fell to 526 —
+  a table in the band is measured for that before it is called unsplittable.
 - **A method over the runway on its own is cut into its rule's steps by
   script**: each step a run of the method's top-level statements copied
   verbatim into a helper, the run replaced by generated glue (the call, inputs
