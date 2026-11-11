@@ -20,10 +20,15 @@ logged as put onto the battlefield and never announced as played. And
 from the same ``then``, so a land an effect put onto the battlefield — Untamed
 Wilds, Planar Birth — fired nothing.
 
-What watches the *play* stays with an entry that happened: CR 603.2g ("an
-event that's prevented or replaced won't trigger anything") — Horn of Greed
-draws nothing for the Lake that went to the graveyard, and Fastbond's "if it
-wasn't the first land you played this turn" reads the count it spent.
+What watches the *play* sees a play whose entry was replaced: the replacement
+changed where the Lake went, not whether its player took CR 116.2a's special
+action (CR 614.6: "a modified event occurs instead, which may in turn trigger
+abilities"), and it is the same play CR 305.2a counted. Horn of Greed draws
+for the Lake that went to the graveyard, Fastbond's "if it wasn't the first
+land you played this turn" deals its damage for it, City of Traitors and Juju
+Bubble are sacrificed — and "whenever a land enters" (Ankh of Mishra), which
+watches the entry, stays unasked. Round kg5 had read CR 603.2g as "no entry,
+no play" and left it a known gap for the owner's ruling, which went this way.
 """
 
 from __future__ import annotations
@@ -114,22 +119,63 @@ def test_a_played_land_land_equilibrium_sacrifices_was_played_and_entered():
     assert not _play(game, "Forest").supported
 
 
-def test_the_play_triggers_follow_the_entry_and_fastbond_reads_the_count():
-    game = _game(hand=["Lake of the Dead", "Forest"], mine=["Fastbond", "Horn of Greed"])
+def test_a_land_play_whose_entry_is_replaced_is_still_a_play():
+    game = _game(hand=["Lake of the Dead", "Forest"], mine=["Fastbond", "Horn of Greed"],
+                 theirs=["Ankh of Mishra"])
     life, hand = game.players[0].life, len(game.players[0].hand)
     _play(game, "Lake of the Dead")
     settle(game)
-    # No entry, no play announced (CR 603.2g): no card drawn, no damage.
-    assert (game.players[0].life, len(game.players[0].hand)) == (life, hand - 1)
+    assert _where(game, "Lake of the Dead") == ["P0.graveyard"]
+    # The play happened (CR 116.2a, 614.6): Horn of Greed drew the Lake's
+    # place back. It was the first land played this turn, so Fastbond deals
+    # nothing — and the Lake never entered, so Ankh of Mishra, which watches
+    # the entry, deals nothing either.
+    assert (game.players[0].life, len(game.players[0].hand)) == (life, hand)
+    assert not any("Ankh of Mishra" in line for line in game.log)
     assert game.lands_played_this_turn.get(0) == 1
     forest = _play(game, "Forest")
     settle(game)
     assert forest.supported, forest.details
-    # The Forest is the second land played this turn: Fastbond deals 1, and
-    # Horn of Greed draws for it.
-    assert game.players[0].life == life - 1
-    assert len(game.players[0].hand) == hand - 1
+    # The Forest is the second land played this turn: Fastbond deals 1, Horn
+    # of Greed draws for it, and it entered, so Ankh of Mishra deals 2.
+    assert game.players[0].life == life - 1 - 2
+    assert len(game.players[0].hand) == hand
     assert any(line == "Fastbond dealt 1 damage to P0" for line in game.log)
+
+
+def test_fastbond_deals_its_damage_for_a_second_land_whose_entry_is_replaced():
+    game = _game(hand=["Forest", "Lake of the Dead"], mine=["Fastbond", "Horn of Greed"])
+    life, hand = game.players[0].life, len(game.players[0].hand)
+    assert _play(game, "Forest").supported
+    settle(game)
+    assert game.players[0].life == life
+    _play(game, "Lake of the Dead")
+    settle(game)
+    assert _where(game, "Lake of the Dead") == ["P0.graveyard"]
+    # The Lake was the second land played this turn, and played it was.
+    assert game.lands_played_this_turn.get(0) == 2
+    assert game.players[0].life == life - 1
+    assert sum(1 for line in game.log if line == "Fastbond dealt 1 damage to P0") == 1
+    # Two plays, two draws: the hand is back where it started.
+    assert len(game.players[0].hand) == hand
+
+
+def test_a_replaced_land_play_is_another_land_played_and_a_card_played():
+    """City of Traitors' "when you play **another** land" compares the play's
+    permanent id with its own, and a permanent whose entry was replaced was
+    stamped one as it was built; Juju Bubble's "when you play a card" is the
+    same play (CR 701.18b)."""
+    game = _game(hand=["Lake of the Dead"], mine=["City of Traitors"])
+    bubble = Permanent(card=_POOL["Juju Bubble"])
+    game._put_permanent_onto_battlefield(0, bubble, None)
+    settle(game)
+    assert _where(game, "City of Traitors") == ["battlefield"]
+    assert _where(game, "Juju Bubble") == ["battlefield"]
+    _play(game, "Lake of the Dead")
+    settle(game)
+    assert _where(game, "Lake of the Dead") == ["P0.graveyard"]
+    assert _where(game, "City of Traitors") == ["P0.graveyard"], game.log
+    assert _where(game, "Juju Bubble") == ["P0.graveyard"], game.log
 
 
 def test_an_answered_contention_counts_the_play_once():
@@ -137,9 +183,10 @@ def test_an_answered_contention_counts_the_play_once():
     Equilibrium against the Lake's unpaid toll); the drop is spent as the play
     is made, and the answer's re-run of the entry does not spend it again."""
     game = _game(
-        hand=["Lake of the Dead", "Forest"], mine=["Forest", "Forest"],
+        hand=["Lake of the Dead", "Forest"], mine=["Forest", "Forest", "Horn of Greed"],
         theirs=["Land Equilibrium", "Forest"], interactive=True,
     )
+    hand = len(game.players[0].hand)
     _play(game, "Lake of the Dead")
     owed = [c for c in game.pending_choices if c.kind == "effect_order"]
     assert len(owed) == 1
@@ -148,6 +195,9 @@ def test_an_answered_contention_counts_the_play_once():
     settle(game)
     assert game.lands_played_this_turn.get(0) == 1
     assert _where(game, "Lake of the Dead") == ["P0.graveyard"]
+    # …and the play is announced once, after the answer: one draw.
+    assert any("Horn of Greed" in line for line in game.log), game.log
+    assert len(game.players[0].hand) == hand
     assert not _play(game, "Forest").supported
 
 

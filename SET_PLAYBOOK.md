@@ -1335,19 +1335,6 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   runs; `replacements/permanents._resolve_entry_discard_toll`, the base too).
   *Clears:* an entry-seam round.
 
-- **Whether a replaced land play is a play to what watches it is the
-  engine's reading, not a ruling.** A Lake of the Dead played with no Swamp
-  goes to the graveyard instead of entering; since kg5 the play spends the
-  land drop as the special action is taken (`resolution._resolve_card`: CR
-  305.2a counts the lands played, 116.2a), and Horn of Greed and Fastbond's
-  damage do not trigger, because a land play is the put (CR 701.18a) and a
-  replaced event triggers nothing (CR 603.2g); Fastbond's next land counts
-  the replaced one. Their rulings (2004-10-04) part a play from a put by an
-  effect and say nothing of a replaced play, and the other reading — the
-  play happened, so "whenever a player plays a land" triggers — is the same
-  rules read for the drop. *Clears:* the owner's ruling, then
-  `resolution._resolve_card`'s watchers if it goes the other way.
-
 - **The web leaves a person unasked in three windows** (kg5 `webturn2` and
   `cleanup`; every step the AI's turn arrives at with objects on the stack
   goes round since kg5, `game_flow._ai_answers_over_the_stack`).

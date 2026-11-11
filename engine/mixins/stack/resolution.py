@@ -1305,9 +1305,82 @@ class StackResolutionMixin:
             # reads the right owner too.
             if owner_seat != caster_index:
                 permanent.metadata["owner_player_index"] = owner_seat
+            # What watches a land **play** (CR 116.2a's special action), as
+            # against its entry: Fastbond's rider, "whenever a player plays a
+            # land" (Horn of Greed), "when you play a card" (Juju Bubble).
+            # ``arrived`` runs it whether the entry happened or a replacement
+            # took it away — see the branch there for why.
+            def announce_land_play() -> None:
+                if self.enforce_mana_costs:
+                    if self.lands_played_this_turn.get(caster_index, 0) > 1:
+                        # "…if it wasn't the first land you played this turn,
+                        # ~ deals N damage to you". The rider is read off each
+                        # source's own text alongside the allowance it came
+                        # with, so the sources name themselves in the log
+                        # instead of the engine naming one of them.
+                        sources = [
+                            (source, allowance)
+                            for source, allowance in self._land_play_allowances(caster_index)
+                            if allowance.damage_per_extra_land
+                        ]
+                        if sources:
+                            total = sum(a.damage_per_extra_land for _, a in sources)
+                            names = ", ".join(
+                                dict.fromkeys(source.card.name for source, _ in sources)
+                            )
+                            # Asks CR 616.1e's question (``asks``). The
+                            # rider is a triggered ability by its own text,
+                            # resolved here rather than on the stack, so
+                            # what this land play does next — the "plays a
+                            # land" announcement — happening before the
+                            # answer is the order the rules would give that
+                            # trigger anyway.
+                            self._deal_damage_to_player(
+                                caster, total, asks=True,
+                                then=lambda damage: self.log.append(
+                                    f"{names} dealt {damage} damage to {caster.name}"
+                                ),
+                            )
+                # "Whenever an opponent **plays** a land" (Dirtcowl Wurm).
+                # CR 305.1's special action, announced here because here is
+                # where it happens — "whenever a land enters" (Ankh of
+                # Mishra) is the *entry*, which a land put onto the
+                # battlefield by an effect also makes and this one does
+                # not, and is announced with every entry
+                # (``ZoneFunnelsMixin._announce_entry``).
+                #
+                # ``event_subject_player`` beside ``seat``: the first is the
+                # one key every reader of a printed "**that player**" asks for
+                # (CR 603.10) and the second is what this event's own filter
+                # compares against the observer. Horn of Greed's "that player
+                # draws a card" is a different seat on every land drop, and
+                # nothing on a board records who played one — so the freeze has
+                # to happen here, where it is known.
+                # ``played_permanent_id`` is what "**another** land" (City of
+                # Traitors) is compared against. A land whose entry happened
+                # is on the battlefield and observing by the time this is
+                # announced, so a land whose own trigger watches land drops
+                # would see itself — and the exclusion cannot be answered from
+                # ``card``, because a deck repeats one immutable
+                # ``CardDefinition`` per copy and a second printing of the same
+                # land would read as the first. CR 400.7's id is the identity,
+                # stamped as the permanent is built, so a play whose entry was
+                # replaced carries one too.
+                emit(
+                    self, "land_played", subject=card, seat=caster_index,
+                    event_subject_player=caster_index,
+                    played_permanent_id=permanent.permanent_id,
+                )
+                # "When **you play a card**" (Juju Bubble). CR 701.18b's other
+                # half: a land is played rather than cast, so the cast
+                # announcement never reaches it. Outside the cost-enforcement
+                # branch the drop count below sits in, because a land played
+                # in a game with costs off is still a land played.
+                emit(self, "you_play_card", subject=card, caster_index=caster_index)
+
             # Everything below is what watches a permanent *enter* — the log
             # line, the global buff, its own entry trigger, the Aura's attach,
-            # a land play's bookkeeping — so it is the entry's ``then``: run
+            # a land play's announcement — so it is the entry's ``then``: run
             # once the permanent is on the battlefield, which is at once unless
             # an "as it enters" choice is owed at a table that holds for the
             # answer (CR 614.12a, ``engine/entry_awaiting.py``), and then at
@@ -1333,6 +1406,27 @@ class StackResolutionMixin:
                 # as "it never entered", its play went unannounced and its log
                 # line unwritten.
                 if not entry_happened(permanent):
+                    if primary_type == "land":
+                        # **A land play whose entry was replaced was still
+                        # played.** A Lake of the Dead whose Swamp nobody can
+                        # sacrifice goes to the graveyard instead of entering
+                        # (CR 614.6), and what the replacement changed is
+                        # where the land went, not whether its player took
+                        # CR 116.2a's special action: "a modified event occurs
+                        # instead, which may in turn trigger abilities", and
+                        # the modified event is still the play — as a discard
+                        # madness exiles is still a discard (CR 702.35a). It is
+                        # the same play CR 305.2a counted as one of "the lands
+                        # they have already played this turn" below, which is
+                        # the verb Horn of Greed and Fastbond print. Reading
+                        # CR 603.2g as "no entry, no play" would also make a
+                        # Lotus Vale whose toll was paid — an entry replaced by
+                        # "sacrifice … If you do, put it onto the battlefield",
+                        # a put, CR 305.4 — never played at all.
+                        #
+                        # The entry's own watchers ("whenever a land enters",
+                        # Ankh of Mishra) are the entry's, and stay unasked.
+                        announce_land_play()
                     return
                 self.log.append(f"{caster.name} put {card.name} onto battlefield")
                 self._apply_global_buff(caster, card)
@@ -1429,72 +1523,7 @@ class StackResolutionMixin:
                     return
                 self._refresh_dynamic_creatures()
                 if primary_type == "land":
-                    if self.enforce_mana_costs:
-                        if self.lands_played_this_turn.get(caster_index, 0) > 1:
-                            # "…if it wasn't the first land you played this turn,
-                            # ~ deals N damage to you". The rider is read off each
-                            # source's own text alongside the allowance it came
-                            # with, so the sources name themselves in the log
-                            # instead of the engine naming one of them.
-                            sources = [
-                                (permanent, allowance)
-                                for permanent, allowance in self._land_play_allowances(caster_index)
-                                if allowance.damage_per_extra_land
-                            ]
-                            if sources:
-                                total = sum(a.damage_per_extra_land for _, a in sources)
-                                names = ", ".join(
-                                    dict.fromkeys(permanent.card.name for permanent, _ in sources)
-                                )
-                                # Asks CR 616.1e's question (``asks``). The
-                                # rider is a triggered ability by its own text,
-                                # resolved here rather than on the stack, so
-                                # what this land play does next — the entry, the
-                                # "plays a land" announcement — happening before
-                                # the answer is the order the rules would give
-                                # that trigger anyway.
-                                self._deal_damage_to_player(
-                                    caster, total, asks=True,
-                                    then=lambda damage: self.log.append(
-                                        f"{names} dealt {damage} damage to {caster.name}"
-                                    ),
-                                )
-                    # "Whenever an opponent **plays** a land" (Dirtcowl Wurm).
-                    # CR 305.1's special action, announced here because here is
-                    # where it happens — "whenever a land enters" (Ankh of
-                    # Mishra) is the *entry*, which a land put onto the
-                    # battlefield by an effect also makes and this one does
-                    # not, and is announced with every entry
-                    # (``ZoneFunnelsMixin._announce_entry``).
-                    #
-                    # ``event_subject_player`` beside ``seat``: the first is the
-                    # one key every reader of a printed "**that player**" asks for
-                    # (CR 603.10) and the second is what this event's own filter
-                    # compares against the observer. Horn of Greed's "that player
-                    # draws a card" is a different seat on every land drop, and
-                    # nothing on a board records who played one — so the freeze has
-                    # to happen here, where it is known.
-                    # ``played_permanent_id`` is what "**another** land" (City of
-                    # Traitors) is compared against. The entry above has already
-                    # happened, so a land whose own trigger watches land drops is
-                    # on the battlefield and observing by the time this is
-                    # announced — and the exclusion cannot be answered from
-                    # ``card``, because a deck repeats one immutable
-                    # ``CardDefinition`` per copy and a second printing of the same
-                    # land would read as the first. CR 400.7's id is the identity.
-                    emit(
-                        self, "land_played", subject=card, seat=caster_index,
-                        event_subject_player=caster_index,
-                        played_permanent_id=permanent.permanent_id,
-                    )
-                    # "When **you play a card**" (Juju Bubble). CR 701.18b's other
-                    # half: a land is played rather than cast, so the cast
-                    # announcement never reaches it. Beside the play's own
-                    # announcement rather than beside the `lands_played_this_turn` bump below,
-                    # because that bump is inside the cost-enforcement branch and
-                    # a land played in a game with costs off is still a land
-                    # played.
-                    emit(self, "you_play_card", subject=card, caster_index=caster_index)
+                    announce_land_play()
             if primary_type == "land" and self.enforce_mana_costs:
                 # **The land drop is spent by the play, whatever its entry
                 # does** (CR 305.2a counts "the number of lands they have
@@ -1509,10 +1538,9 @@ class StackResolutionMixin:
                 #
                 # What watches the *play* — "whenever a player plays a land"
                 # (Horn of Greed), Fastbond's "if it wasn't the first land" —
-                # stays with the entry in ``arrived``: CR 603.2g, "an event
-                # that's prevented or replaced won't trigger anything", and a
-                # land play is the land being put onto the battlefield (CR
-                # 701.18a). Fastbond's next one reads this count.
+                # is announced from ``arrived`` for the same play, entered or
+                # replaced (``announce_land_play``), after the entry has done
+                # what it does; Fastbond's rider reads this count.
                 self.lands_played_this_turn[caster_index] = (
                     self.lands_played_this_turn.get(caster_index, 0) + 1
                 )
