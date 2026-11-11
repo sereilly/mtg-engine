@@ -160,6 +160,25 @@ _KEYWORD_GRANT_AND_RESTRICTION = _LazyPattern(lambda: re.compile(
     rf"and (?P<restriction>can't .+)$"
 ))
 
+#: "Equipped creature **can't be blocked and has shroud**." (Whispersilk
+#: Cloak.) The same compound printed the other way round — restriction first,
+#: keyword run last — with the same three groups, so every reader asks
+#: :func:`keyword_grant_and_restriction` and neither half learns the order.
+_RESTRICTION_AND_KEYWORD_GRANT = _LazyPattern(lambda: re.compile(
+    rf"^{_ATTACHED} (?P<noun>{_NOUN}) (?P<restriction>can't .+?) and has "
+    rf"(?P<keyword>(?:{_keyword_alternation()})"
+    rf"(?:(?:, and |, | and )(?:{_keyword_alternation()}))*)$"
+))
+
+
+def keyword_grant_and_restriction(normalized: str):
+    """The match of a keyword-and-restriction compound line in either order
+    (groups ``noun``, ``keyword``, ``restriction``), or None."""
+    return (
+        _KEYWORD_GRANT_AND_RESTRICTION.match(normalized)
+        or _RESTRICTION_AND_KEYWORD_GRANT.match(normalized)
+    )
+
 
 #: "Enchanted creature gets +1/+1 **and can't be blocked except by creatures
 #: with flying**." (Treetop Bracers.) The P/T twin of the keyword compound
@@ -186,7 +205,7 @@ def _compound_restriction_clause(normalized: str):
     shape this file's other comments record removing.
     """
     match = (
-        _KEYWORD_GRANT_AND_RESTRICTION.match(normalized)
+        keyword_grant_and_restriction(normalized)
         or _PT_GRANT_AND_RESTRICTION.match(normalized)
     )
     if match is None:

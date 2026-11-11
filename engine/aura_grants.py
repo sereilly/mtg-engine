@@ -26,9 +26,9 @@ from . import fast_paths
 from .late_modules import LateModules
 from .aura_attachment import auras_attached_to
 from .aura_restrictions import (
-    _KEYWORD_GRANT_AND_RESTRICTION,
     aura_restrictions,
     aura_combat_restriction,
+    keyword_grant_and_restriction,
 )
 from .aura_vocabulary import (
     _NOUN,
@@ -663,7 +663,7 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         if match is not None:
             grants.extend(_keyword_list(match.group("keyword")))
         elif (
-            (compound := _KEYWORD_GRANT_AND_RESTRICTION.match(line)) is not None
+            (compound := keyword_grant_and_restriction(line)) is not None
             # …and only when the restriction half **has** a reader. The
             # pattern's own note says a tail the table cannot read "leaves the
             # whole line unmatched", and nothing made that true: "has flying
