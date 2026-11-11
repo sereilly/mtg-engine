@@ -503,6 +503,19 @@ def _accept_damaged_this_way_no_regen(stream: TokenStream) -> bool:
         _parse_duration(stream)
         return True
     stream.reset(mark)
+    # "**Creatures** dealt damage this way can't be regenerated this turn."
+    # (Flamebreak.) The plural behind a sweep, which damages a set — the same
+    # rider about the same noun, and the same closed set of one word for the
+    # reason above. Whether a sweep can carry it is the lowering's question
+    # (``lowering/damage._RIDER_READING_KINDS``), which refuses where none does.
+    if (
+        stream.accept_word("creatures")
+        and stream.accept_phrase("dealt", "damage", "this", "way")
+        and stream.accept_phrase("can't", "be", "regenerated")
+    ):
+        _parse_duration(stream)
+        return True
+    stream.reset(mark)
     return False
 
 

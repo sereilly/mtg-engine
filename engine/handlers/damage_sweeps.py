@@ -39,6 +39,7 @@ from ..dexterity import flip_lands_on
 from ..game_types import single_chosen_id
 from ..models import Permanent
 from ..named_counters import counters_on
+from ..regeneration import CANT_BE_REGENERATED
 from ._amounts import resolve_amount
 from ._common import apply_damage_to_creature, damage_dealer
 from ._targets import defending_player_seat
@@ -113,6 +114,7 @@ def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruct
         done=lambda: game.log.append(
             f"{card.name} dealt {amount} damage to each creature and each player"
         ),
+        no_regen=bool(instruction.payload.get("no_regen")),
     )
     return True, "resolved"
 
@@ -126,6 +128,7 @@ def _has_flying(perm: Permanent) -> bool:
 
 def _mass_damage_players_and_creatures(
     game: Game, source, damage: int, creature_predicate, done=None,
+    *, no_regen: bool = False,
 ) -> None:
     """Earthquake/Hurricane sweep: damage every player, then every creature
     passing the predicate, then destroy the lethally damaged as one SBA batch.
@@ -145,7 +148,14 @@ def _mass_damage_players_and_creatures(
     creatures, then the next player and theirs. The creatures are the ones
     the predicate names as the sweep begins (Earthquake's ruling: "whether or
     not a creature is without flying is only checked on resolution"); they
-    were read off the board after the players had been dealt to."""
+    were read off the board after the players had been dealt to.
+
+    *no_regen* is the printed "Creatures dealt damage this way can't be
+    regenerated this turn" (Flamebreak; CR 701.19c), stamped on each creature
+    the sweep **actually dealt damage to** — inside its event, as the damage is
+    dealt, so before the state-based check that would destroy it. A creature
+    whose damage was all prevented was not dealt damage this way (CR 615.1)
+    and may still be regenerated."""
     creatures = [
         perm for perm in game.all_permanents()
         if perm.is_creature and creature_predicate(perm)
@@ -154,11 +164,23 @@ def _mass_damage_players_and_creatures(
     def hit(item) -> None:
         if isinstance(item, Permanent):
             if game.is_on_battlefield(item):
-                apply_damage_to_creature(game, item, damage, source, asks=True)
+                apply_damage_to_creature(
+                    game, item, damage, source, asks=True,
+                    then=(lambda dealt, perm=item: _ban_regeneration(perm, dealt))
+                    if no_regen else None,
+                )
             return
         game._deal_damage_to_player(item, damage, source=source, asks=True)
 
     _sweep(game, [*game.players, *creatures], hit, done, source=source)
+
+
+def _ban_regeneration(perm: Permanent, dealt: int) -> None:
+    """CR 701.19c's rider on a creature a sweep dealt *dealt* damage to — the
+    same metadata mark ``handlers/damage.deal_damage`` stamps for one target,
+    swept with the turn's other marks at cleanup."""
+    if dealt > 0 and perm.is_creature:
+        perm.metadata[CANT_BE_REGENERATED] = True
 
 
 @effect_handler("earthquake_damage")
@@ -171,6 +193,7 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
             f"{card.name} dealt {damage} earthquake damage to each non-flying "
             "creature and each player"
         ),
+        no_regen=bool(instruction.payload.get("no_regen")),
     )
     return True, "resolved"
 
@@ -185,6 +208,7 @@ def hurricane_damage(game: Game, instruction: OracleInstruction, context: Oracle
             f"{card.name} dealt {damage} hurricane damage to each flying "
             "creature and each player"
         ),
+        no_regen=bool(instruction.payload.get("no_regen")),
     )
     return True, "resolved"
 

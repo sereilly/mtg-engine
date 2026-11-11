@@ -348,6 +348,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # other's.
      r"|a source (?P<damager_controller>you(?= control )|an opponent(?= controls ))"
      r" controls?"
+     # "…**other than this artifact**" (Talon of Pain): the source excluded by
+     # identity, a marker `event_filters` tests.
+     r"(?P<damager_other_than_self> other than this (?:creature|artifact|enchantment|land|permanent))?"
      # "Whenever **a source** deals damage to this creature" (Crag Saurian).
      # The damager narrowed by nothing at all — CR 120.7's word covers a spell,
      # an ability and a permanent alike, and no `ObjectFilter` can name the
