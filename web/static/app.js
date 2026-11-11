@@ -7044,8 +7044,11 @@ function applyManaColorChoicePrompt(info) {
 
   const amount = Number(info.amount || 0);
   q("promptTitle").textContent = "Choose a Color";
+  // A restricted mana (Vedalken Engineer, CR 106.6) says so as it is made:
+  // the server sends the card's sentence (`spend_only_words`).
   q("promptBody").textContent =
-    `${info.card_name || "An ability"}: add ${amount} mana of any one color.`;
+    `${info.card_name || "An ability"}: add ${amount} mana of any one color.` +
+    (info.spend_only ? ` ${info.spend_only_words || "This mana can be spent only on what its source names."}` : "");
   steps.innerHTML =
     `<div class="prompt-choice-row">` +
     (info.colors || [])
@@ -7577,12 +7580,22 @@ function applyPayAnyAmountPrompt(info) {
   title.textContent = paysX ? "Choose X" : "Pay how much mana?";
   // Through the symbol renderer (which escapes the rest), so "{X}" reads as
   // the mana symbol the card prints.
+  // A printed ceiling (Well of Lost Dreams: "where X is less than or equal to
+  // the amount of life you gained", `ceiling`) is said as the card's limit,
+  // and the pool and lands only where they stop the buttons short of it —
+  // this said "your pool and untapped lands cover up to 3" when the 3 was
+  // the life gained.
+  const hasCeiling = Number.isInteger(info.ceiling);
+  const ceiling = hasCeiling ? Number(info.ceiling) : null;
+  const limitWords = hasCeiling
+    ? `${paysX ? "X" : "The amount"} can be at most ${ceiling} (${cardName || "the card"}'s limit).` +
+      (Number(info.maximum) < ceiling ? ` Your pool and untapped lands cover up to ${info.maximum}.` : "")
+    : `Your pool and untapped lands cover up to ${info.maximum}.`;
   setSymbolsHtml(
     body,
     (paysX
       ? `${cardName}: you may pay {X}. Choose X — 0 pays nothing. `
-      : `${cardName}: you may pay any amount of mana. `) +
-    `Your pool and untapped lands cover up to ${info.maximum}.`,
+      : `${cardName}: you may pay any amount of mana. `) + limitWords,
   );
   const buttons = info.options
     .map(
@@ -11718,20 +11731,47 @@ function applyMulliganPrompt(info) {
     // and in any Brawl game. Whether another may be taken is `may_mulligan`
     // (CR 103.5's hand of zero cards, counted the same way).
     const owed = Number(info.bottom_owed || 0);
+    // What an exchange already bottomed for this hand (Serum Powder after a
+    // mulligan, CR 103.5b): owed and paid together are what the mulligans
+    // cost, so a paid bottom is never read as CR 103.5c's free mulligan.
+    const paid = Number(info.bottom_paid || 0);
     const owedWords = owed > 0
       ? `put ${owed} card${owed !== 1 ? "s" : ""} on the bottom`
+      : paid > 0
+      ? `put no more cards on the bottom — the exchange already put ${paid} there`
       : "put no cards on the bottom";
-    const freeNote = taken > owed ? " — your first mulligan is free" : "";
+    const freeNote = taken > owed + paid ? " — your first mulligan is free" : "";
+    // The hand as it is: an exchange made after a mulligan has already put
+    // its bottom cards there (CR 103.5b, `hand_exchange` below), so "7" was
+    // only ever true of the first offer.
+    const handCount = mulliganViewerHand().length;
+    // Serum Powder (CR 103.5b): "Any time you could mulligan and this card is
+    // in your hand, you may exile all the cards from your hand, then draw
+    // that many cards" — a third answer to this offer, served to the seat
+    // declaring alone (`hand_exchange`). After it the seat still declares.
+    const exchange = info.hand_exchange || null;
+    if (!exchange) mulliganExchangePick = null;
+    if (exchange && mulliganExchangePick) {
+      applyMulliganExchangePick(info, exchange);
+      return;
+    }
     title.textContent = taken > 0 ? `Mulligan (×${taken})` : "Keep or Mulligan?";
     body.textContent = taken > 0
       ? `You have taken ${taken} mulligan${taken > 1 ? "s" : ""}. Keep this hand (you'll ${owedWords}${freeNote}), or take another mulligan?`
       : "Do you want to keep your opening hand or take a mulligan?";
+    const exchangeButton = exchange
+      ? `<button type="button" class="prompt-choice-btn" id="mulliganExchangeBtn">${escapeHtml(mulliganExchangeLabel(exchange))}</button>`
+      : "";
+    const exchangeNote = exchange
+      ? `<div style="margin-top:6px">${escapeHtml(mulliganExchangeNote(exchange))}</div>`
+      : "";
     steps.innerHTML = `
-      <div>Your hand has 7 cards. If you keep, you will ${owedWords}.</div>
+      <div>Your hand has ${handCount} card${handCount !== 1 ? "s" : ""}. If you keep, you will ${owedWords}.</div>
       <div class="prompt-choice-row" style="margin-top:6px">
         <button type="button" class="prompt-choice-btn" id="mulliganKeepBtn">Keep Hand</button>
         ${info.may_mulligan ? '<button type="button" class="prompt-choice-btn" id="mulliganTakeBtn">Take Mulligan</button>' : ""}
-      </div>`;
+        ${exchangeButton}
+      </div>${exchangeNote}`;
     document.getElementById("mulliganKeepBtn").addEventListener("click", () =>
       sendAction({ seat, action: "mulligan_keep" })
     );
@@ -11740,6 +11780,20 @@ function applyMulliganPrompt(info) {
       takeBtn.addEventListener("click", () =>
         sendAction({ seat, action: "mulligan_take" })
       );
+    }
+    const exchangeBtn = document.getElementById("mulliganExchangeBtn");
+    if (exchangeBtn) {
+      exchangeBtn.addEventListener("click", async () => {
+        // Nothing owed: the exchange is the whole answer. Something owed: the
+        // bottom is chosen first, in hand, before anything is sent (the
+        // server refuses any other count).
+        if (Number(exchange.bottom_owed || 0) > 0) {
+          mulliganExchangePick = { owed: Number(exchange.bottom_owed), picked: [] };
+          refreshPromptSelection();
+          return;
+        }
+        await sendMulliganExchange([]);
+      });
     }
   } else {
     // Simultaneous mode: waiting_for may name several still-deciding players.
@@ -11751,6 +11805,109 @@ function applyMulliganPrompt(info) {
       : `${escapeHtml(waitingFor)} is deciding whether to mulligan.`;
     steps.innerHTML = `<div>Waiting for ${escapeHtml(waitingFor)}...</div>`;
   }
+}
+
+// The exchange's bottom pick (Serum Powder after a mulligan): which hand slots
+// go to the bottom before the rest of the hand is exiled. Held here, not on
+// the server, because nothing is sent until the pick is whole — the action
+// takes all of it at once (`mulligan_exchange`'s `hand_indices`). Null when no
+// pick is open; cleared whenever the offer stops carrying an exchange.
+let mulliganExchangePick = null;
+
+function mulliganViewerHand(state = currentState) {
+  const me = state && seat !== null ? (state.players || [])[seat] : null;
+  return Array.isArray(me?.hand) ? me.hand : [];
+}
+
+// The card the exchange is made with, by name: the first granting slot.
+function mulliganExchangeSourceName(exchange) {
+  const hand = mulliganViewerHand();
+  const at = (exchange?.source_indices || [])[0];
+  return normalizeCardName(hand[at]) || "Serum Powder";
+}
+
+// What the button does, in the card's words: the whole hand is exiled and as
+// many cards drawn — fewer than the hand by the cards the mulligans owe the
+// bottom, which go there first.
+function mulliganExchangeLabel(exchange) {
+  const drawn = Math.max(0, mulliganViewerHand().length - Number(exchange?.bottom_owed || 0));
+  return `${mulliganExchangeSourceName(exchange)}: Exile Hand, Draw ${drawn}`;
+}
+
+function mulliganExchangeNote(exchange) {
+  const owed = Number(exchange?.bottom_owed || 0);
+  const name = mulliganExchangeSourceName(exchange);
+  const first = owed > 0
+    ? `you first choose the ${owed} card${owed !== 1 ? "s" : ""} your mulligans put on the bottom, then `
+    : "";
+  return `${name}: ${first}every card in your hand is exiled for the rest of the game and you draw that many. ` +
+    "You then choose again whether to keep or mulligan.";
+}
+
+async function sendMulliganExchange(bottom) {
+  mulliganExchangePick = null;
+  try {
+    await sendAction({ seat, action: "mulligan_exchange", hand_indices: bottom });
+  } catch (e) {
+    updateActionHint(e.message, true);
+  }
+}
+
+// A hand card clicked while the exchange's bottom pick is open.
+function toggleMulliganExchangeSelection(handIndex) {
+  const pick = mulliganExchangePick;
+  if (!pick) return;
+  const at = pick.picked.indexOf(handIndex);
+  if (at >= 0) pick.picked.splice(at, 1);
+  else if (pick.picked.length < pick.owed) pick.picked.push(handIndex);
+  refreshPromptSelection();
+}
+
+// Whether the hand is the exchange's bottom picker right now.
+function mulliganExchangePickOpen(state = currentState) {
+  const info = getPregameInfo(state);
+  return !!(mulliganExchangePick && info?.phase === "mulligan" && info.is_my_turn && info.hand_exchange);
+}
+
+function applyMulliganExchangePick(info, exchange) {
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const pick = mulliganExchangePick;
+  const owed = pick.owed;
+  const chosen = pick.picked.length;
+  const name = mulliganExchangeSourceName(exchange);
+  // A card put on the bottom is no longer in your hand, so a bottom holding
+  // every granting card leaves nothing to make the exchange with — the
+  // server refuses it, and so does this button.
+  const sources = (exchange.source_indices || []).map(Number);
+  const keepsASource = sources.some((idx) => !pick.picked.includes(idx));
+  title.textContent = `${name}: Bottom ${owed} First`;
+  body.textContent =
+    `Your mulligans owe ${owed} card${owed !== 1 ? "s" : ""} on the bottom of your library. ` +
+    `Click ${owed === 1 ? "the card" : `the ${owed} cards`} in your hand to put there, then the rest of your hand ` +
+    `is exiled and you draw that many. Keep a ${name} in your hand to make the exchange with.`;
+  steps.innerHTML =
+    `<div>Selected: ${chosen} / ${owed}</div>` +
+    (chosen === owed && !keepsASource
+      ? `<div>That puts every ${escapeHtml(name)} on the bottom — keep one in your hand.</div>`
+      : "") +
+    `<div class="prompt-choice-row" style="margin-top:6px">` +
+    `<button type="button" class="prompt-choice-btn" id="mulliganExchangeBackBtn">Back to Keep or Mulligan</button>` +
+    `</div>`;
+  // The shared Cancel button is the pending cast's (its listener clears a
+  // cast), so the way back is a button of this prompt's own.
+  cancelBtn.classList.add("hidden");
+  okBtn.classList.remove("hidden");
+  okBtn.textContent = `Exile the Rest & Draw (${chosen}/${owed})`;
+  okBtn.disabled = chosen !== owed || !keepsASource;
+  okBtn.onclick = okBtn.disabled ? null : () => sendMulliganExchange(pick.picked.slice());
+  document.getElementById("mulliganExchangeBackBtn").addEventListener("click", () => {
+    mulliganExchangePick = null;
+    refreshPromptSelection();
+  });
 }
 
 function applyMulliganBottomPrompt(info) {
@@ -12711,6 +12868,21 @@ function renderRevealedHandPickModal(info) {
 // library"), which this dialog called an exile — the title, the sentence and
 // the button — while the server put the cards on the library's bottom.
 function graveyardPickWords(info) {
+  // Scrounge: "Target opponent chooses an artifact card in their graveyard.
+  // Put that card onto the battlefield under your control." The pick moves
+  // nothing — the card is the record the next sentence reads — so it is a
+  // choice, and this dialog called it an exile.
+  if (info?.destination === "chosen") {
+    const whose = info.owner_seat === seat ? "Your" : `${info.owner_name || "That Player"}'s`;
+    return {
+      title: `Choose a Card in ${whose} Graveyard`,
+      verb: "choose",
+      button: "Choose",
+      buttonTail: "",
+      none: "Choose nothing",
+      chosen: true,
+    };
+  }
   if (info?.destination === "library_bottom") {
     const whose = info.owner_seat === seat ? "your" : `${info.owner_name || "that player"}'s`;
     return {
@@ -12746,9 +12918,17 @@ function renderGraveyardExileModal(info) {
   if (title) title.textContent = words.title;
   const subtitle = document.getElementById("graveyardExileSubtitle");
   if (subtitle) {
-    subtitle.textContent =
-      `${info.card_name || "Choose"}: choose ${info.up_to ? "up to " : ""}${cap} ` +
-      `card(s) from ${info.owner_name || "that player"}'s graveyard to ${words.verb}, then Confirm.`;
+    // A choice owed to the opponent of whoever cast the spell (Scrounge) says
+    // whose spell asks it and that nothing moves yet: the spell's next
+    // sentence says what becomes of the card.
+    const pile = info.owner_seat === seat ? "your" : `${info.owner_name || "that player"}'s`;
+    const whose = info.caster_name ? `${info.caster_name}'s ` : "";
+    subtitle.textContent = words.chosen
+      ? `${whose}${info.card_name || "An effect"}: choose ${info.up_to ? "up to " : ""}${cap} ` +
+        `card${cap === 1 ? "" : "s"} in ${pile} graveyard, then Confirm. Nothing moves yet — ` +
+        `${info.card_name || "the effect"} says what happens to the card you choose.`
+      : `${info.card_name || "Choose"}: choose ${info.up_to ? "up to " : ""}${cap} ` +
+        `card(s) from ${info.owner_name || "that player"}'s graveyard to ${words.verb}, then Confirm.`;
   }
   const grid = document.getElementById("graveyardExileGrid");
   const confirmBtn = document.getElementById("graveyardExileConfirmBtn");
@@ -13043,13 +13223,24 @@ function renderKeepPermanentsModal(info) {
   // `fate` and the modal says so. Absent is the sentence this modal was built
   // for: the picks stay and the rest is sacrificed.
   const returning = info.fate === "return_chosen_to_hand";
-  const pickLabel = returning ? "return" : "keep";
+  // Sundering Titan: "choose a land of each basic land type, then destroy
+  // those lands." What is picked is what goes, and the choice reaches every
+  // battlefield (`every_battlefield`: each candidate carries its `seat`), so
+  // the tiles are grouped by whose they are.
+  const destroying = info.fate === "destroy_chosen";
+  const everywhere = !!info.every_battlefield;
+  const pickLabel = returning ? "return" : destroying ? "destroy" : "keep";
   const title = document.getElementById("keepPermanentsTitle");
-  if (title) title.textContent = returning ? "Return Permanents" : "Keep Permanents";
+  if (title) {
+    title.textContent = returning ? "Return Permanents" : destroying ? "Destroy Permanents" : "Keep Permanents";
+  }
   if (subtitle) {
     subtitle.textContent = returning
       ? `${info.card_name}: return ${slots || "permanents"} — choose ${howMany}.${shared} ` +
         `They go to their owners' hands; everything else stays.`
+      : destroying
+      ? `${info.card_name}: choose ${slots || "permanents"} ${everywhere ? "on any battlefield, yours or an opponent's" : "you control"} — ` +
+        `choose ${howMany}.${shared} The ones you choose are destroyed; everything else stays.`
       : `${info.card_name}: keep ${slots || "permanents"} — choose ${howMany}.${shared} ` +
         `Everything else you control that it names is sacrificed.`;
   }
@@ -13075,17 +13266,33 @@ function renderKeepPermanentsModal(info) {
     }
   };
   if (list) {
-    list.innerHTML = (info.candidates || [])
-      .map((entry) => {
-        const selectedClass = keepPermanentsSelected.has(entry.id) ? " selected" : "";
-        // What this permanent may be chosen as — "Island / Forest" on a
-        // Tropical Island — shown only where the slots are told apart by more
-        // than one noun, so Limited Resources' tiles read as they did.
-        const fills = (entry.fills || []).map((slotIndex) => (slotList[slotIndex] || {}).type).filter(Boolean);
-        const standsFor = slotList.length > 1 && fills.length ? ` as ${fills.join(" / ")}` : "";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}">${candidatePermanentTileFace(entry, entry.name)}<div class="library-card-choice-name">${pickLabel}${escapeHtml(standsFor)}</div></div>`;
-      })
-      .join("") || `<div class="modal-empty-note">Nothing to ${pickLabel}.</div>`;
+    const tile = (entry) => {
+      const selectedClass = keepPermanentsSelected.has(entry.id) ? " selected" : "";
+      // What this permanent may be chosen as — "Island / Forest" on a
+      // Tropical Island — shown only where the slots are told apart by more
+      // than one noun, so Limited Resources' tiles read as they did.
+      const fills = (entry.fills || []).map((slotIndex) => (slotList[slotIndex] || {}).type).filter(Boolean);
+      const standsFor = slotList.length > 1 && fills.length ? ` as ${fills.join(" / ")}` : "";
+      const label = `${entry.name}: ${pickLabel}${standsFor}`;
+      return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}">${candidatePermanentTileFace(entry, entry.name)}<div class="library-card-choice-name">${escapeHtml(everywhere ? label : `${pickLabel}${standsFor}`)}</div></div>`;
+    };
+    const candidates = info.candidates || [];
+    let html;
+    if (everywhere) {
+      // One group per battlefield, the chooser's first.
+      const seats = [...new Set(candidates.map((entry) => Number(entry.seat)))]
+        .sort((a, b) => (a === seat ? -1 : b === seat ? 1 : a - b));
+      html = seats
+        .map((owner) => {
+          const name = owner === seat ? "Your battlefield" : `${currentState?.players?.[owner]?.name || "Opponent"}'s battlefield`;
+          const tiles = candidates.filter((entry) => Number(entry.seat) === owner).map(tile).join("");
+          return `<div class="library-card-choice-group" style="grid-column:1/-1;font-weight:600;margin-top:4px">${escapeHtml(name)}</div>${tiles}`;
+        })
+        .join("");
+    } else {
+      html = candidates.map(tile).join("");
+    }
+    list.innerHTML = html || `<div class="modal-empty-note">Nothing to ${pickLabel}.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
       el.addEventListener("click", () => {
         const id = Number(el.dataset.id);
@@ -22634,6 +22841,7 @@ function createCardElement(card, options = {}) {
     discardSelectable = false,
     handToLibrarySelectable = false,
     balanceHandSelectable = false,
+    mulliganExchangeSelectable = false,
     selected = false,
     targetSeat = null,
     zoneKind = "",
@@ -22679,7 +22887,7 @@ function createCardElement(card, options = {}) {
   if (tapped) cardEl.classList.add("tapped");
   if (hidden) cardEl.classList.add("card-hidden");
   if (interactive) cardEl.classList.add("clickable");
-  if (cleanupSelectable || mulliganBottomSelectable || discardSelectable || handToLibrarySelectable || balanceHandSelectable)
+  if (cleanupSelectable || mulliganBottomSelectable || discardSelectable || handToLibrarySelectable || balanceHandSelectable || mulliganExchangeSelectable)
     cardEl.classList.add("cleanup-selectable", "clickable");
   if (selected) cardEl.classList.add("selected-card");
   if (playable && !selected) cardEl.classList.add("playable");
@@ -22878,7 +23086,7 @@ function createCardElement(card, options = {}) {
   }
 
   if (
-    (castOnClick || mulliganBottomSelectable || discardSelectable || handToLibrarySelectable || balanceHandSelectable) &&
+    (castOnClick || mulliganBottomSelectable || discardSelectable || handToLibrarySelectable || balanceHandSelectable || mulliganExchangeSelectable) &&
     typeof card === "object"
   ) {
     cardEl.classList.add("clickable");
@@ -22937,6 +23145,11 @@ function createCardElement(card, options = {}) {
 
         if (balanceHandSelectable) {
           toggleBalanceHandSelection(handIndex);
+          return;
+        }
+
+        if (mulliganExchangeSelectable) {
+          toggleMulliganExchangeSelection(handIndex);
           return;
         }
 
@@ -23794,9 +24007,17 @@ const RESTRICTED_MANA_LABELS = {
     "instants/sorceries only",
     "This mana can only be used to cast an instant or sorcery spell.",
   ],
+  artifact: ["artifact spells only", "Spend this mana only to cast artifact spells."],
+  cumulative_upkeep: ["cumulative upkeep only", "Spend this mana only to pay cumulative upkeep costs."],
+  artifact_ability: ["artifact abilities only", "Spend this mana only to activate abilities of artifacts."],
+  artifact_or_artifact_ability: [
+    "artifacts only",
+    "Spend this mana only to cast artifact spells or activate abilities of artifacts.",
+  ],
+  not_cast: ["not for spells", "This mana can't be spent to cast spells."],
 };
 
-function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = null) {
+function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = null, restrictedWords = null) {
   const container = q(containerId);
   container.innerHTML = "";
   const pool = manaPool || {};
@@ -23851,10 +24072,13 @@ function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = 
       ? { creature: restrictedPools }
       : restrictedPools || {};
   for (const [key, restricted] of Object.entries(buckets)) {
-    const [badge, title] = RESTRICTED_MANA_LABELS[key] || [
+    // The words are the server's (`restricted_mana_words`, the card's own
+    // sentence) wherever it sent them; the table above is the badge.
+    const [badge, fallbackTitle] = RESTRICTED_MANA_LABELS[key] || [
       "restricted",
       "This mana can only be spent on certain spells.",
     ];
+    const title = (restrictedWords || {})[key] || fallbackTitle;
     for (const symbol of MANA_ORDER) {
       const count = Number((restricted || {})[symbol] || 0);
       if (count <= 0) continue;
@@ -26155,7 +26379,7 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
     q(`ffaLife_${idx}`)?.classList.toggle("targeting-valid", isTargetable);
     // Corner opponents' floating mana, mirroring the classic #oppMana column:
     // only non-zero orbs render (CSS), and the row hides entirely while empty.
-    renderMana(`ffaMana_${idx}`, p.mana_pool, idx, p.restricted_mana);
+    renderMana(`ffaMana_${idx}`, p.mana_pool, idx, p.restricted_mana, p.restricted_mana_words);
     const manaTotal = Object.values(p.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0)
       + Object.values(p.restricted_mana || {}).reduce((sum, b) => sum + Object.values(b || {}).reduce((t, n) => t + Number(n || 0), 0), 0);
     q(`ffaMana_${idx}`)?.classList.toggle("hidden", manaTotal === 0 && !debugAddManaMode);
@@ -26237,6 +26461,8 @@ function renderBoard(state) {
   }
   const mulliganBottomInfo = pregameInfo?.phase === "bottom_select" && pregameInfo.is_my_turn ? pregameInfo : null;
   const requiresMulliganBottomSelection = !!mulliganBottomInfo;
+  // Serum Powder's bottom-first pick (applyMulliganExchangePick).
+  const requiresMulliganExchangeSelection = mulliganExchangePickOpen(state);
   // Balance's discard half: its permanents are picked on the board, its cards to
   // discard by clicking them in hand (the same picker as every other discard).
   const balanceSelectInfo = getBalanceSelectInfo(state);
@@ -26280,7 +26506,10 @@ function renderBoard(state) {
     discardSelectable: requiresDiscardSelection,
     handToLibrarySelectable: requiresHandToLibrarySelection,
     balanceHandSelectable: requiresBalanceHandSelection,
-    selectedHandIndices: requiresDiscardSelection
+    mulliganExchangeSelectable: requiresMulliganExchangeSelection,
+    selectedHandIndices: requiresMulliganExchangeSelection
+      ? mulliganExchangePick.picked
+      : requiresDiscardSelection
       ? discardSelection
       : requiresHandToLibrarySelection
       ? handToLibrarySelection
@@ -26405,15 +26634,15 @@ function renderBoard(state) {
   renderZoneCards("oppCommandCards", opp.command_zone || []);
   renderFfaZoneSections(state, viewerSeat, oppSeat);
 
-  renderMana("selfMana", me.mana_pool, seat, me.restricted_mana);
-  renderMana("oppMana", opp.mana_pool, oppSeat, opp.restricted_mana);
+  renderMana("selfMana", me.mana_pool, seat, me.restricted_mana, me.restricted_mana_words);
+  renderMana("oppMana", opp.mana_pool, oppSeat, opp.restricted_mana, opp.restricted_mana_words);
   // FFA hides the stage-right #oppMana column (CSS) — the classic opponent's
   // pool shows inline in their top-left header pill instead, like the corner
   // seats' rows, so every pool sits next to its owner.
   const oppManaHeader = q("oppManaHeader");
   if (oppManaHeader) {
     if (playerCount > 2) {
-      renderMana("oppManaHeader", opp.mana_pool, oppSeat, opp.restricted_mana);
+      renderMana("oppManaHeader", opp.mana_pool, oppSeat, opp.restricted_mana, opp.restricted_mana_words);
       const oppManaTotal = Object.values(opp.mana_pool || {}).reduce((sum, n) => sum + Number(n || 0), 0)
         + Object.values(opp.restricted_mana || {}).reduce((sum, b) => sum + Object.values(b || {}).reduce((t, n) => t + Number(n || 0), 0), 0);
       oppManaHeader.classList.toggle("hidden", oppManaTotal === 0 && !debugAddManaMode);

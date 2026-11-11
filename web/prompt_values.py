@@ -19,6 +19,7 @@ from engine.grammar.vocabulary import CREATURE_TYPES, LAND_TYPES
 from engine.mana_payment import mana_cost_label
 from engine.pending_choices import public_data
 from engine.provoke import PROVOKE_REMINDER, is_provoke
+from engine.restricted_mana import PARAMETER
 from engine.text_changes import spell_text_card
 
 from .prompt_registry import PromptContext, prompt_renderer
@@ -481,13 +482,50 @@ def _mana_color_choice(ctx: PromptContext, choices: list) -> dict:
     showing a colour the answer path would refuse is the drift idiom 9 is about.
     """
     data = choices[0].data
+    spend_only = data.get("spend_only")
     return {
         "player_index": choices[0].player_index,
         "card_name": data.get("card_name", ""),
         "amount": int(data.get("amount", 0) or 0),
         "colors": [str(c).upper() for c in (data.get("colors") or ())],
         "default_color": data.get("default_color"),
+        # "Spend this mana only to cast artifact spells or activate abilities
+        # of artifacts." (Vedalken Engineer, CR 106.6.) The restriction rides
+        # the prompt (``handlers/mana``), so the person choosing the colour is
+        # told the mana is restricted — the key, and the sentence it stands for.
+        **(
+            {"spend_only": spend_only, "spend_only_words": restricted_mana_words(spend_only)}
+            if spend_only else {}
+        ),
     }
+
+
+#: What each "spend this mana only to…" restriction (``engine/restricted_mana``'s
+#: keys, CR 106.6) says, as the card prints it — for the colour prompt above
+#: and the pool's restricted chips (``serialization``). Keyed by the engine's
+#: own keys; ``tests/ui/test_dst_w2g1_client_words.py`` fails a key the engine
+#: produces that this cannot say.
+RESTRICTED_MANA_WORDS = {
+    "creature": "Spend this mana only to cast creature spells.",
+    "instant_or_sorcery": "Spend this mana only to cast an instant or sorcery spell.",
+    "artifact": "Spend this mana only to cast artifact spells.",
+    "cumulative_upkeep": "Spend this mana only to pay cumulative upkeep costs.",
+    "artifact_ability": "Spend this mana only to activate abilities of artifacts.",
+    "artifact_or_artifact_ability": (
+        "Spend this mana only to cast artifact spells or activate abilities of artifacts."
+    ),
+    "not_cast": "This mana can't be spent to cast spells.",
+    "last_card_exiled_with_source": "Spend this mana only to cast the last card exiled with its source.",
+}
+
+
+def restricted_mana_words(key) -> str:
+    """The sentence a restriction key stands for. A key carrying a parameter
+    (Ice Cauldron's card, after ``restricted_mana.PARAMETER``) names it."""
+    name, _, parameter = str(key or "").partition(PARAMETER)
+    if name == "last_card_exiled_with_source" and parameter:
+        return f"Spend this mana only to cast {parameter}."
+    return RESTRICTED_MANA_WORDS.get(name, "This mana can be spent only on what its source names.")
 
 
 @prompt_renderer("draw_up_to")
