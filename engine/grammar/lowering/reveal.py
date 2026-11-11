@@ -128,17 +128,47 @@ def _lower_reveal_until(
     # battlefield": the run stops on a Kindred instant of the type too, which
     # CR 400.4a leaves where it is — on top of the library, the rest gone
     # where the card sends them — and the handler says so (``permanent_cards``).
-    return (
-        OracleInstruction(
-            "reveal_until_match", "",
-            {
-                "whose": node.whose,
-                "filter": {**described, **bound_type},
-                "destination": node.destination,
-                "rest": node.rest,
-            },
-        ),
-    )
+    payload: dict[str, object] = {
+        "whose": node.whose,
+        "filter": {**described, **bound_type},
+        "destination": node.destination,
+        "rest": node.rest,
+    }
+    # Thought Dissector's run: an announced opponent's library, a second stop,
+    # the find under the effect's controller, and the source sacrificed once
+    # a card was found. Written only where printed, so every other run's
+    # payload is byte-identical; each honoured by the handler or refused here.
+    if node.whose in _ANNOUNCED_REVEALERS:
+        payload["whose"] = "target"
+        payload["targets"] = dict(_ANNOUNCED_REVEALERS[node.whose])
+    if node.limit is not None:
+        limit = _amount_payload(node.limit)
+        if not (limit == "x" or isinstance(limit, int)):
+            raise LoweringError(
+                "the reveal's second stop is a printed number or X", node=node,
+            )
+        payload["limit"] = limit
+    if node.under_your_control:
+        if node.destination != "battlefield":
+            raise LoweringError(
+                "only a find put onto the battlefield is put under your control",
+                node=node,
+            )
+        payload["under_your_control"] = True
+    if node.sacrifice_source:
+        payload["sacrifice_source_on_find"] = True
+    return (OracleInstruction("reveal_until_match", "", payload),)
+
+
+#: The printed revealer words that are announced targets (CR 601.2c), and the
+#: picker each means — ``attachments._ANNOUNCED_CHOOSERS``' two rows, for the
+#: reveal (Thought Dissector).
+_ANNOUNCED_REVEALERS: dict[str, dict] = {
+    "target_player": {"quantifier": "target", "kind": "player"},
+    "target_opponent": {
+        "quantifier": "target", "kind": "player", "opponents_only": True,
+    },
+}
 
 
 def _lower_put_revealed_cards_on_bottom(

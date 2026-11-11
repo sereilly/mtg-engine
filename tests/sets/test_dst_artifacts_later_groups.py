@@ -311,4 +311,75 @@ def test_w1g9_gemini_engines_twin_copies_the_engines_pt_once(set_pool):
     assert engine.effective_power == 7
     assert (twin.effective_power, twin.effective_toughness) == (5, 6)
 
+
+
+def _w1g9_dissector_table(set_pool, library_names):
+    lea = set_pool("LEA")
+    game, alice, bob = _w1g9_table(
+        set_pool, opponent_library=[lea[name] for name in library_names],
+    )
+    dissector = _w1g9_put(game, 0, set_pool("DST")["Thought Dissector"])
+    return game, alice, bob, dissector
+
+
+def test_w1g9_thought_dissector_takes_the_first_artifact_within_x_cards(set_pool):
+    """"{X}, {T}: Target opponent reveals cards from the top of their library
+    until an artifact card or X cards are revealed, whichever comes first. If
+    an artifact card is revealed this way, put it onto the battlefield under
+    your control and sacrifice this artifact. Put the rest of the revealed
+    cards into that player's graveyard." X=3: two creatures, then Sol Ring —
+    the Ring is Alice's to control and Bob's to own, the creatures are milled,
+    and the Dissector is sacrificed."""
+    game, alice, bob, dissector = _w1g9_dissector_table(
+        set_pool, ["Grizzly Bears", "Llanowar Elves", "Sol Ring", "Forest"],
+    )
+    from engine.targeting import derive_activation_spec as _spec
+
+    ability = _w1g9_compile(dissector.card).activated_abilities[0]
+    assert _spec(ability) == {"kind": "player", "opponents_only": True}
+    assert not game.activate_permanent_ability(
+        0, "Thought Dissector", target_player_index=0, x_value=3,
+    ).supported, "an opponent only"
+    result = game.activate_permanent_ability(
+        0, "Thought Dissector", target_player_index=1, x_value=3,
+    )
+    assert result.supported, result.details
+    _w1g9_settle(game)
+    assert _w1g9_names(alice) == ["Sol Ring"]
+    assert game.owner_index_of(alice.battlefield[0]) == 1
+    assert [c.name for c in bob.graveyard] == ["Grizzly Bears", "Llanowar Elves"]
+    assert [c.name for c in bob.library] == ["Forest"]
+    assert [c.name for c in alice.graveyard] == ["Thought Dissector"]
+
+
+def test_w1g9_thought_dissector_stops_after_x_cards_with_no_artifact(set_pool):
+    """X=2 runs out first: both creatures go to Bob's graveyard, the Sol Ring
+    beneath them stays on top of his library, and nothing is sacrificed."""
+    game, alice, bob, dissector = _w1g9_dissector_table(
+        set_pool, ["Grizzly Bears", "Llanowar Elves", "Sol Ring", "Forest"],
+    )
+    assert game.activate_permanent_ability(
+        0, "Thought Dissector", target_player_index=1, x_value=2,
+    ).supported
+    _w1g9_settle(game)
+    assert _w1g9_names(alice) == ["Thought Dissector"]
+    assert [c.name for c in bob.graveyard] == ["Grizzly Bears", "Llanowar Elves"]
+    assert [c.name for c in bob.library] == ["Sol Ring", "Forest"]
+
+
+def test_w1g9_thought_dissector_gone_in_response_still_delivers_the_artifact(set_pool):
+    """The ruling (2004-12-01): "You put the artifact card onto the battlefield
+    even if Thought Dissector has already left the battlefield and you can't
+    sacrifice it." Sacrificed with the ability on the stack, the Dissector is
+    gone, and the Ring still arrives."""
+    game, alice, bob, dissector = _w1g9_dissector_table(set_pool, ["Sol Ring"])
+    assert game.queue_permanent_ability(
+        0, "Thought Dissector", target_player_index=1, x_value=1,
+    ).supported
+    assert game.stack, "the ability waits on the stack"
+    game.sacrifice_permanent(dissector)
+    _w1g9_settle(game)
+    assert _w1g9_names(alice) == ["Sol Ring"]
+    assert [c.name for c in alice.graveyard] == ["Thought Dissector"]
+
 # ==== end W1G9 ======================================================

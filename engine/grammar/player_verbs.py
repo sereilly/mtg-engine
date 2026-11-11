@@ -90,6 +90,7 @@ from .effects import (
     accept_subject_reveals_counted_top_sorted,
     accept_subject_reveals_top_caster_picks,
     accept_subject_reveals_top_of_library,
+    accept_subject_reveals_until_or_count,
     _parse_simultaneous_untap_and_tap,
     _parse_skip_step,
     parse_chooses_skipped_step_or_phase,
@@ -372,6 +373,12 @@ def parse_player_subject_verb(
         top = accept_subject_reveals_top_of_library(stream, source_spec)
         if top is not None:
             return top
+        # "**Target opponent** reveals cards from the top of their library
+        # until an artifact card or X cards are revealed, whichever comes
+        # first. …" (Thought Dissector.) Declines without consuming.
+        until = accept_subject_reveals_until_or_count(stream, source_spec)
+        if until is not None:
+            return until
     # "**Each player** returns all creature cards from their graveyard to
     # the battlefield." (All Hallow's Eve.) The return production with a
     # printed subject: only the bare imperative ("Return target creature

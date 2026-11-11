@@ -882,6 +882,16 @@ class RevealUntil:
     filter: ObjectFilter
     destination: str = "battlefield"
     rest: str = "shuffle_into_library"
+    #: "…until an artifact card **or X cards** are revealed, whichever comes
+    #: first." (Thought Dissector.) The second stop: the run ends after this
+    #: many cards with no match among them. None is the unbounded run.
+    limit: "Amount | None" = None
+    #: "…put it onto the battlefield **under your control**" — the effect's
+    #: controller rather than the library's owner (CR 108.3 keeps the owner).
+    under_your_control: bool = False
+    #: "…**and sacrifice this artifact**" — the source, only when a card was
+    #: found and only if it is still there (the card's ruling, 2004-12-01).
+    sacrifice_source: bool = False
 
 
 @dataclass(frozen=True)
