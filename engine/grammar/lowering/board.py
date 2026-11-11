@@ -37,7 +37,8 @@ anything but a sacrifice or a regeneration.
 
 import dataclasses
 
-from ...oracle_types import (BUFFED_THIS_WAY_PERMANENTS, KEEP_FATES,
+from ...oracle_types import (BUFFED_THIS_WAY_PERMANENTS, DESTROY_CHOSEN,
+                             KEEP_FATES,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from ...subject_filters import object_only_filter
@@ -773,6 +774,11 @@ def _lower_keep_chosen_sacrifice_rest(
                 f"no keep prompt performs {node.fate!r}", node=node
             )
         payload["fate"] = node.fate
+        if node.fate == DESTROY_CHOSEN and node.pool.controller is None:
+            # Sundering Titan's "a land": no controller printed, so the lands
+            # of every battlefield (its ruling: "If the only land of a certain
+            # type is one you control, you must choose it").
+            payload["every_battlefield"] = True
     kept = OracleInstruction("keep_chosen_sacrifice_rest", "", payload)
     if not node.discard_same_way:
         return (kept,)

@@ -1394,7 +1394,13 @@ BIDDING_WINNER = "bidding_winner"
 #: the prompt's: a fate admitted with no performer would be a card that asks
 #: every seat a question and then moves nothing.
 RETURN_CHOSEN_TO_HAND = "return_chosen_to_hand"
-KEEP_FATES = frozenset({RETURN_CHOSEN_TO_HAND})
+#: "…choose a land of each basic land type, **then destroy those lands**."
+#: (Sundering Titan.) The chosen half destroyed, together (CR 701.8). A pool
+#: that prints no controller is every battlefield's (the prompt's
+#: ``every_battlefield``), which only a fate that moves the chosen may ask:
+#: a seat cannot sacrifice what it does not control (CR 701.21a).
+DESTROY_CHOSEN = "destroy_chosen"
+KEEP_FATES = frozenset({RETURN_CHOSEN_TO_HAND, DESTROY_CHOSEN})
 
 
 #: The permanent "counter target activated ability" records: the source the

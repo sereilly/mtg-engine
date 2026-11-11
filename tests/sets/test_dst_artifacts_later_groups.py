@@ -204,4 +204,67 @@ def test_w1g9_genesis_chamber_tapped_before_resolution_makes_nothing(set_pool):
     assert "Myr Token" not in _w1g9_names(alice)
     assert any("its condition is no longer true" in line for line in game.log)
 
+
+
+def test_w1g9_sundering_titan_destroys_a_land_of_each_basic_type_as_it_enters(set_pool):
+    """"When this creature enters or leaves the battlefield, choose a land of
+    each basic land type, then destroy those lands." A headless controller
+    chooses the other seat's lands first and its own only where no other land
+    has the type (the ruling, 2020-08-07: "If the only land of a certain type
+    is one you control, you must choose it"); Bob's Volcanic Island answers
+    Island and Mountain at once ("If a land has more than one basic land type,
+    it can be chosen more than once"); no Forest anywhere, so none is chosen."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g9_table(set_pool)
+    alice.hand.append(dst["Sundering Titan"])
+    for name in ("Plains", "Swamp", "Mountain"):
+        _w1g9_put(game, 0, lea[name])
+    _w1g9_put(game, 1, lea["Plains"])
+    _w1g9_put(game, 1, set_pool("LEB")["Volcanic Island"])
+    assert game.cast_from_hand(0, "Sundering Titan").supported
+    _w1g9_settle(game)
+    # Bob's Plains, his Volcanic Island for Island and Mountain, Alice's Swamp.
+    assert _w1g9_names(alice) == ["Plains", "Mountain", "Sundering Titan"]
+    assert _w1g9_names(bob) == []
+    assert {"Plains", "Volcanic Island"} == {c.name for c in bob.graveyard}
+
+
+def test_w1g9_sundering_titan_destroys_again_as_it_leaves(set_pool):
+    """The departure half of the same ability (CR 603.1): sacrificed, the
+    Titan's controller chooses again and every chosen land is destroyed."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g9_table(set_pool)
+    titan = _w1g9_put(game, 0, dst["Sundering Titan"])
+    _w1g9_settle(game)  # its entry finds no land to destroy
+    _w1g9_put(game, 0, lea["Island"])
+    _w1g9_put(game, 1, lea["Forest"])
+    _w1g9_put(game, 1, lea["Forest"])
+    game.sacrifice_permanent(titan)
+    _w1g9_settle(game)
+    assert _w1g9_names(alice) == []
+    assert _w1g9_names(bob) == ["Forest"], "one land per type: one Forest of two"
+
+
+def test_w1g9_sundering_titan_asks_an_interactive_controller_across_both_boards(set_pool):
+    """An interactive controller is asked; the candidates are every
+    battlefield's lands, and the answer must leave no type it could answer
+    unanswered — here Alice destroys her own Plains and spares Bob's."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    game, alice, bob = _w1g9_table(set_pool)
+    game.interactive_seats = {0}
+    titan = _w1g9_put(game, 0, dst["Sundering Titan"])
+    _w1g9_settle(game)  # its entry finds no land to destroy
+    mine = _w1g9_put(game, 0, lea["Plains"])
+    theirs = _w1g9_put(game, 1, lea["Plains"])
+    swamp = _w1g9_put(game, 1, lea["Swamp"])
+    game.sacrifice_permanent(titan)
+    owed = _w1g9_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "keep_permanents", owed
+    assert owed.data["fate"] == "destroy_chosen"
+    assert {id(p) for p in game.keep_candidates_of(owed)} == {id(mine), id(theirs), id(swamp)}
+    assert not game.confirm_keep_permanents(0, [mine.permanent_id]), "a Swamp is owed"
+    assert game.confirm_keep_permanents(0, [mine.permanent_id, swamp.permanent_id])
+    _w1g9_settle(game)
+    assert _w1g9_names(alice) == [] and _w1g9_names(bob) == ["Plains"]
+
 # ==== end W1G9 ======================================================
