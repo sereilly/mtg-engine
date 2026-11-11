@@ -162,6 +162,14 @@ class CastAction:
     # Forge Armor), where the victim is weighed by rehearsal
     # (`ai_casts._cast_naming_its_sacrifice`).
     cost_permanent_ids: list[int] | None = None
+    # Which hand cards pay a printed additional discard (CR 601.2b), by
+    # position in the hand the spell is cast from — the cast path's own two
+    # keywords: the first, and the rest ("discard X cards"). None is the engine's default, the first cards
+    # the phrase names in hand order, which every AI cast took until kg5: a
+    # Sickening Dreams paid with the Shivan Dragon in front of three lands.
+    # See `ai_casts._cast_naming_its_discards`.
+    cost_hand_index: int | None = None
+    cost_other_hand_indices: list[int] | None = None
 
 
 @dataclass(frozen=True)
@@ -342,8 +350,11 @@ def cast_announcement(action: CastAction) -> dict:
         # CR 118.9a: which alternative cost, where several apply.
         "alternative_cost_index": action.alternative_cost_index,
         # CR 601.2b: which permanent pays the sacrifice (see
-        # `CastAction.cost_permanent_ids`).
+        # `CastAction.cost_permanent_ids`)…
         "cost_permanent_ids": action.cost_permanent_ids,
+        # …and which hand cards pay the discard (`CastAction.cost_hand_index`).
+        "cost_hand_index": action.cost_hand_index,
+        "cost_other_hand_indices": action.cost_other_hand_indices,
     }
 
 

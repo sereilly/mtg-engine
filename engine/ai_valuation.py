@@ -68,7 +68,7 @@ policies in ``_default_optional_pay``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .models import CardDefinition
 from .oracle import OracleInstruction, compile_card_oracle
@@ -633,20 +633,27 @@ class ManaYield:
     #: "Add one mana of **the chosen color**": the colour the source recorded
     #: as it entered.
     from_chosen_color: bool = False
+    #: "Spend this mana only to cast an instant or sorcery spell" (Vodalian
+    #: Arcanist, CR 106.6): the restriction's bucket key
+    #: (``restricted_mana``), which a payment counts only where
+    #: ``restriction_admits`` the purpose it pays for. None for free mana.
+    spend_only: "str | None" = None
 
 
 #: The payload keys of an add-mana step this module can turn into a
 #: :class:`ManaYield`. An **allow-list**, because the direction that matters is
-#: the one where a key is added later: a step carrying anything else — a
-#: restriction on what the mana may pay for (``spend_only``, CR 106.6), an
+#: the one where a key is added later: a step carrying anything else — an
 #: amount the board decides (``per_each``), a record another activation wrote
 #: (``from_noted``), a split the seat chooses (``combination``) — is mana a
 #: plan cannot count, and counting it anyway is a cast refused for
-#: insufficient mana.
+#: insufficient mana. A restriction on what the mana may pay for
+#: (``spend_only``, CR 106.6) is admitted and carried on the yield
+#: (``ManaYield.spend_only``): a planner counts it against what it pays for,
+#: and every other reader refuses a restricted yield.
 _PLANNABLE_MANA_KEYS = frozenset({
     "pips", "pips_choice", "any_color", "any_color_count", "any_color_from",
     "could_produce_lands", "from_chosen_color", "oracle_text",
-    "colors_of_exiled_card",
+    "colors_of_exiled_card", "spend_only",
 })
 
 
@@ -688,6 +695,20 @@ def planned_mana_yield(instruction: OracleInstruction | None) -> ManaYield | Non
             return None
     payload = adders[0].payload or {}
     if not payload or set(payload) - _PLANNABLE_MANA_KEYS:
+        return None
+    restriction = payload.get("spend_only")
+    if restriction is not None:
+        if not isinstance(restriction, str):
+            return None
+        found = _payload_mana_yield({k: v for k, v in payload.items() if k != "spend_only"})
+        return None if found is None else replace(found, spend_only=restriction)
+    return _payload_mana_yield(payload)
+
+
+def _payload_mana_yield(payload: dict) -> ManaYield | None:
+    """:func:`planned_mana_yield`'s reading of one add-mana payload carrying
+    no restriction."""
+    if not payload:
         return None
     if payload.get("from_chosen_color"):
         return ManaYield(from_chosen_color=True)

@@ -34,10 +34,11 @@ from .combat_permissions import MUST_BE_BLOCKED_BY_ALL_UNTIL_EOT
 from .models import Permanent
 from .ai_combat_triggers import (attack_is_worth_its_trigger, block_is_worth_its_trigger,
                                  expected_attack_damage, turned_on_its_controller)
-from .ai_compelled_blocks import STAYS, compelled_blocks, fight_outcome, survives_destruction
+from .ai_compelled_blocks import (STAYS, compelled_blocks, fight_outcome, gang_block_pumps,
+                                  pumped_combat_damage, pumped_toughness,
+                                  survives_destruction)
 from .ai_standing import life_worth, permanent_worth
 from .ai_scoring import choose_attack_target, _permanent_value
-from .combat_assignment import combat_damage_assigned_by
 from .ai_player_control import plays_for_another
 
 
@@ -940,21 +941,31 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
     (indestructible, or regenerated: ``ai_compelled_blocks.survives_destruction``)
     is not destroyed, nor one the attacker's damage would be prevented on —
     protection from its colour (CR 702.16e), a Circle — as
-    `ai_compelled_blocks.fight_outcome` reads the same fight one on one."""
+    `ai_compelled_blocks.fight_outcome` reads the same fight one on one.
+
+    **Each read after the block's own pumps** (``ai_compelled_blocks.
+    gang_block_pumps``): flanking's -1/-1 lands on every blocker in the gang,
+    so a blocker it leaves with no toughness is lost before any damage
+    (CR 704.5f) whatever the attacker does with its own, and the rest are
+    killed by what is left of them."""
     from itertools import combinations
 
     from .ai_combat import _would_be_prevented
 
-    power = combat_damage_assigned_by(attacker)
+    pumps = gang_block_pumps(game, attacker, members)
+    shrunk = [member for member in members if pumped_toughness(member, pumps) <= 0]
+    power = pumped_combat_damage(attacker, pumps)
     if power <= 0:
-        return []
+        return shrunk
     costs: list[tuple[Permanent, int]] = []
     for member in members:
+        if any(member is gone for gone in shrunk):
+            continue
         if survives_destruction(game, member, dealt_by=(attacker,)) is not None:
             continue
         if _would_be_prevented(game, attacker, member, power):
             continue
-        remaining = max(1, member.effective_toughness - member.damage_marked)
+        remaining = max(1, pumped_toughness(member, pumps) - member.damage_marked)
         costs.append((member, 1 if game._has_keyword(attacker, "deathtouch") else remaining))
     best: list[Permanent] = []
     best_worth = 0.0
@@ -965,7 +976,7 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
             worth = sum(permanent_worth(member, now=False) for member, _cost in chosen)
             if worth > best_worth:
                 best, best_worth = [member for member, _cost in chosen], worth
-    return best
+    return shrunk + best
 
 
 def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bool:
@@ -982,7 +993,14 @@ def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bo
     it makes: so every division its power covers is tried, and the gang
     kills only if none survives it. Read as indestructible, a shielded
     blocker beside a 1/1 "killed" a first-striking 2/2 that knocked the
-    shielded one out of combat and took the 1/1 with it."""
+    shielded one out of combat and took the 1/1 with it.
+
+    **Every creature as the block's own triggers leave it**
+    (``ai_compelled_blocks.gang_block_pumps``, the gang's reading of the pair's
+    ``block_pair_pumps``): a flanker's -1/-1 on each blocker, a Pygmy Troll's
+    +1/+1 once per blocker. Two 2/2s "killed" a flanking 3/3 they could only
+    deal it 2 damage once shrunk, and a 1/1 beside them was counted though it
+    dies before damage (CR 704.5f)."""
     # The attacker's own damage chooser's question (`ai_combat`, which
     # imports this module): a Circle's shield, protection, a Fog.
     from itertools import combinations
@@ -991,6 +1009,11 @@ def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bo
 
     if not members:
         return False
+    pumps = gang_block_pumps(game, attacker, members)
+    if pumped_toughness(attacker, pumps) <= 0:
+        # Its own block's triggers leave it with no toughness: put into its
+        # graveyard before any damage (CR 704.5f), which no shield answers.
+        return True
     if survives_destruction(game, attacker, dealt_by=members) is not None:
         return False
 
@@ -999,11 +1022,13 @@ def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bo
         first = double or game._has_keyword(permanent, "first strike")
         return first, (not first) or double
 
-    remaining = max(1, attacker.effective_toughness - attacker.damage_marked)
+    remaining = max(1, pumped_toughness(attacker, pumps) - attacker.damage_marked)
     # (member, its damage to the attacker, deathtouch, first step, regular step)
     hits = []
     for member in members:
-        amount = combat_damage_assigned_by(member)
+        if pumped_toughness(member, pumps) <= 0:
+            continue
+        amount = pumped_combat_damage(member, pumps)
         if amount <= 0 or _would_be_prevented(game, member, attacker, amount):
             continue
         hits.append((member, amount, game._has_keyword(member, "deathtouch"), *strikes(member)))
@@ -1024,7 +1049,7 @@ def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bo
     attacker_first, _attacker_regular = strikes(attacker)
     if not attacker_first:
         return destroyed_by(())
-    power = combat_damage_assigned_by(attacker)
+    power = pumped_combat_damage(attacker, pumps)
     # What each member costs the attacker to take out of the fight: lethal
     # damage (one point with deathtouch, CR 702.2c), for a member it would
     # destroy or regenerate — never one indestructible, or one its damage
@@ -1037,7 +1062,7 @@ def _gang_kills(game: Game, attacker: Permanent, members: list[Permanent]) -> bo
             continue
         if _would_be_prevented(game, attacker, member, power):
             continue
-        lethal = max(1, member.effective_toughness - member.damage_marked)
+        lethal = max(1, pumped_toughness(member, pumps) - member.damage_marked)
         takeable.append((member, 1 if game._has_keyword(attacker, "deathtouch") else lethal))
     for size in range(len(takeable) + 1):
         for chosen in combinations(takeable, size):

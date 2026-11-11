@@ -20,8 +20,10 @@ Weatherlight ("77 artifact creatures answer 'creature' to a reader asking
 reader was wrong") and the sweep that closed it did not reach
 ``engine/ai_simulator.py``. The population is now 114 and grows with the pool.
 
-Both checks are pinned, not just the broken one: Unsummon's twin was correct
-only because no land creature exists in this pool.
+Both checks are pinned, not just the broken one. Unsummon's twin was thought
+correct because no printed land creature exists in this pool — but a permanent's
+type is the layers' (Living Lands' Forests), which kg5 found false-reporting;
+``test_kg5_ai2_honesty_check_types.py`` holds that half.
 """
 
 from engine.card_loader import load_cards, manifest_set_paths

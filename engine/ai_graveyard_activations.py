@@ -225,12 +225,17 @@ def _returns_its_card_to(ability) -> "str | None":
 
 
 def _discard_pick(game: Game, seat: int, cost) -> "int | None":
-    """The hand position a "Discard a card" cost is paid with: the payable
-    card (`Game._discard_cost_payable`, the printed phrase's) of least mana
-    value, lands first, the earliest of equals — or None for a cost that
-    discards nothing, or one the hand cannot pay. A rehearsal reads a card in
-    hand as a card whatever it is (`ai_standing.CARD_WORTH`), so which one
-    pays is this policy's, and the engine's own default is the first."""
+    """The hand position a "Discard a card" cost is paid with: of the payable
+    cards (`Game._discard_cost_payable`, the printed phrase's), the one the
+    seat least wants to lose — ``ai_prompt_picks.discard_order``, the reading
+    every discard a seat chooses takes: a card whose madness cost the board
+    can pay first (CR 702.35a), then the least ``discard_worth`` (a card with
+    a road back from the graveyard keeps part of its worth), the earliest of
+    equals — or None for a cost that discards nothing, or one the hand cannot
+    pay. A rehearsal reads a card in hand as a card whatever it is
+    (`ai_standing.CARD_WORTH`), so which one pays is this policy's, and the
+    engine's own default is the first. It was the card of least mana value,
+    so a Firebolt went before a spare seventh land."""
     if not cost.discard_cards:
         return None
     hand = game.players[seat].hand
@@ -241,7 +246,9 @@ def _discard_pick(game: Game, seat: int, cost) -> "int | None":
     ]
     if len(positions) < cost.discard_cards:
         return None
-    return min(positions, key=lambda index: (float(hand[index].cmc or 0), index))
+    from .ai_prompt_picks import discard_order
+
+    return discard_order(game, seat, positions, None)[0]
 
 
 def _target_choices(game: Game, seat: int, card, ability) -> list:

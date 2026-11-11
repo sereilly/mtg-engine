@@ -595,7 +595,8 @@ class _PaymentPlanner:
         paying_for: "Permanent | None" = None,
         without: "frozenset[int]" = frozenset(),
     ):
-        from .restricted_mana import ACTIVATE, CAST, PaymentPurpose, spendable_restricted_mana
+        from .restricted_mana import (ACTIVATE, CAST, PaymentPurpose, restriction_admits,
+                                      spendable_restricted_mana)
 
         self.game = game
         self.player = player
@@ -681,6 +682,15 @@ class _PaymentPlanner:
                 continue
             source = _nonland_mana_source(game, self.seat, permanent, may_sacrifice=True)
             if source is None:
+                continue
+            if source.spend_only is not None and not restriction_admits(
+                source.spend_only, purpose,
+            ):
+                # "Spend this mana only to cast an instant or sorcery spell"
+                # (Vodalian Arcanist): counted toward the payment it may
+                # make (CR 106.6) and toward no other — the land half's
+                # reading (`board_payment.land_tap_yields`), and the bucket
+                # the cast's payment spends it from.
                 continue
             options = _nonland_tap_options(source)
             entry = _ManaSource(

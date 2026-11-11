@@ -627,7 +627,8 @@ def test_the_ai_takes_the_maximum_out_of_its_own_graveyard(set_pool):
 
     assert action is not None and action.card_name == "Sanguine Indulgence"
     assert action.target_player_index == 0
-    assert action.target_permanent_index == [0, 2]
+    # The two creature cards, the dearer first (``ai_graveyard_returns``).
+    assert sorted(action.target_permanent_index) == [0, 2]
 
 
 def test_rise_again_still_reanimates_exactly_one(set_pool):

@@ -180,7 +180,7 @@ def _leng_madness(game):
         game.players[0].hand[:] = [_POOL["Arrogant Wurm"]]
         _cast(game, 1, "Hymn to Tourach", target_player_index=0)
 
-    # The Library first offers its "you may", whose default is the top.
+    # The Library first offers its "you may", taken: the top.
     return "Arrogant Wurm", "discard", ["P0.library"], run
 
 
@@ -252,7 +252,15 @@ def test_a_contended_move_is_asked_and_the_answer_finishes_it(label, driver, act
 
     other, *_ = _run(driver, active, interactive=True)
     _answer(other, 1)
-    settle(other)
+    # The Library first, and its "you may" taken: answered as a person
+    # answers it, since a seat nobody asks weighs the card
+    # (``ai_prompt_picks.takes_library_top`` declines it for one madness can
+    # cast).
+    settle(other, answers={
+        "leng_discard": lambda table, choice: table.confirm_leng_discard(
+            choice.player_index, True,
+        ),
+    })
     assert _where(other, name) == alternative, (label, _where(other, name))
     assert not other.effect_order_answers, (label, other.effect_order_answers)
 

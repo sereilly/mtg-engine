@@ -230,6 +230,34 @@ def discard_worth(game, seat: int, card: CardDefinition) -> float:
     return held
 
 
+def takes_library_top(game, seat: int, card: CardDefinition) -> bool:
+    """Whether *seat*, discarding *card* under "If an effect causes you to
+    discard a card, discard it, but you may put it on top of your library
+    instead of into your graveyard" (Library of Leng), puts it on top: the
+    card back as its next draw, in place of the one it would have drawn.
+
+    **One answer for every road a discard takes** — the ``discard`` prompt a
+    seat answers itself (``choices/hand._default_discard``) and the
+    replacement's own offer on a discard it did not choose (a random one, an
+    opponent's pick out of a revealed hand, ``replacements/zone_changes.
+    _leng_discard_default``). The first declined the top always and the
+    second took it always, so a seat kept its Shivan Dragon from Hymn to
+    Tourach and binned it to Mind Rot.
+
+    Taken for a card worth holding (``held_worth`` above nothing) that the
+    graveyard does not keep: declined for one with a road back from there
+    (``graveyard_keeps``: flashback, its own return) or a madness cost the
+    board can pay (CR 702.35a — declined, the discard is offered to madness
+    next, CR 616.1f), and for one the seat would rather not draw again — a
+    spare land. With nothing left to draw it is taken whatever it is: a card
+    on top is a draw that does not lose the game (CR 704.5b)."""
+    if not game.players[seat].library:
+        return True
+    if graveyard_keeps(game, seat, card) or _madness_is_payable(game, seat, card):
+        return False
+    return held_worth(game, seat, card) > 0.0
+
+
 def graveyard_keeps(game, seat: int, card: CardDefinition) -> bool:
     """Whether *card*, in *seat*'s graveyard, is a card *seat* still has —
     the graveyard's road back, read off the program: it can be cast from
@@ -1161,6 +1189,7 @@ __all__ = [
     "reflexive_target_order",
     "result_is_damage_dealt",
     "result_is_damaged",
+    "takes_library_top",
     "text_change_vocabulary_pick",
     "untap_up_to_order",
     "word_of_command_pick",

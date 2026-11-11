@@ -1385,6 +1385,97 @@ def untap_target_order(permanents: list) -> list:
     return sorted((permanent for permanent in permanents if permanent.tapped), key=rank)
 
 
+def shields_its_target(instruction: OracleInstruction | None) -> bool:
+    """Whether every step of *instruction*, wrappers opened, is a shield
+    (``ai_valuation.SHIELD_KINDS``: a regeneration, a prevention) — "When
+    Daru Mender is turned face up, regenerate target creature." A shield is
+    worth what it saves, so where it is aimed is a question of **threat** as
+    well as of seat (:func:`shield_target_order`)."""
+    from .ai_valuation import SHIELD_KINDS
+
+    if instruction is None:
+        return False
+    steps = _effect_steps(instruction)
+    return bool(steps) and all(step.kind in SHIELD_KINDS for step in steps)
+
+
+def shield_target_order(game, chooser: int, permanents: list) -> list:
+    """*permanents* in the order a shield is best aimed for *chooser*: one an
+    object on the stack another seat controls is aimed at first (the
+    Lightning Bolt at the Grizzly Bears the regeneration saves —
+    ``stack_targets.chosen_targets``), then a creature in combat, then the
+    dearest (``ai_standing.permanent_worth``), stable. The first candidate
+    on the wanted side was whichever came first on the battlefield: Daru
+    Mender, turned face up in answer to the Bolt, regenerated itself."""
+    from .ai_standing import permanent_worth
+    from .stack_targets import chosen_targets
+
+    threatened: set = set()
+    for item in getattr(game, "stack", ()) or ():
+        if getattr(item, "caster_index", None) == chooser:
+            continue
+        for target in chosen_targets(game, item) or ():
+            if target.kind == "permanent":
+                threatened.add(target.permanent_id)
+
+    def rank(permanent) -> tuple:
+        fighting = bool(getattr(permanent, "attacking", False) or getattr(permanent, "is_blocking", False))
+        return (
+            permanent.permanent_id not in threatened, not fighting,
+            -permanent_worth(permanent, now=False),
+        )
+
+    return sorted(permanents, key=rank)
+
+
+def damage_dealt_to_its_target(item) -> "int | None":
+    """The fixed damage a spell or ability on the stack deals its one target
+    ("Lightning Bolt deals 3 damage to any target"), or None — several damage
+    steps, an X, a division."""
+    instruction = getattr(item, "ability_instruction", None)
+    if instruction is not None:
+        instructions = (instruction,)
+    elif getattr(item, "card", None) is not None:
+        # The spell as its text now reads (a text change rewrites it, CR 612).
+        from .text_changes import spell_text_card
+
+        instructions = compile_card_oracle(spell_text_card(item)).instructions
+    else:
+        return None
+    amounts = [
+        (step.payload or {}).get("amount")
+        for each in instructions
+        for step in _effect_steps(each)
+        if step.kind == "deal_damage"
+    ]
+    if len(amounts) != 1:
+        return None
+    amount = amounts[0]
+    return amount if isinstance(amount, int) and not isinstance(amount, bool) else None
+
+
+def damage_target_worth(game, seat: "int | None", permanent, amount: int) -> float:
+    """What *amount* damage at one target is worth against whoever takes it:
+    a face, the life it takes (``ai_standing.life_worth``); a creature, its
+    worth where the damage destroys it (lethal, and nothing it has survives
+    destruction — ``ai_compelled_blocks.survives_destruction``) and nothing
+    where it does not — the damage is gone at the cleanup step (CR 514.2)."""
+    from .ai_compelled_blocks import survives_destruction
+    from .ai_standing import life_worth, permanent_worth
+
+    if permanent is None:
+        if seat is None or not 0 <= seat < len(game.players):
+            return 0.0
+        life = game.players[seat].life
+        return life_worth(life) - life_worth(life - amount)
+    if not permanent.is_creature:
+        return 0.0
+    lethal = max(1, permanent.effective_toughness - permanent.damage_marked)
+    if amount >= lethal and survives_destruction(game, permanent) is None:
+        return permanent_worth(permanent, now=False)
+    return 0.0
+
+
 __all__ = [
     "HOST_LOSING_KINDS",
     "UNTAP_TARGET_KINDS",
@@ -1402,6 +1493,10 @@ __all__ = [
     "toll_effect_side",
     "toggles_its_target",
     "untap_target_order",
+    "shield_target_order",
+    "shields_its_target",
+    "damage_dealt_to_its_target",
+    "damage_target_worth",
     "untaps_its_target",
 ]
 

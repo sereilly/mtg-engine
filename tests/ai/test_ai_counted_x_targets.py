@@ -126,11 +126,19 @@ def test_reap_still_names_cards_in_its_casters_own_graveyard(pool):
     action = choose_cast_action(game, ME)
 
     assert action.card_name == "Reap"
-    assert (action.target_player_index, action.target_permanent_index) == (OPP, [0, 1])
+    assert action.target_player_index == OPP
+    # Which two of the caster's cards: the two worth most back
+    # (``ai_graveyard_returns``, kg5), not the pile's first two.
+    from engine.ai_graveyard_returns import ranked_graveyard_slots
+
+    ranked = ranked_graveyard_slots(
+        game, ME, {ME: [0, 1, 2]},
+        compile_card_oracle(pool["Reap"]).instructions,
+    )[ME]
+    assert sorted(action.target_permanent_index) == sorted(ranked[:2])
+    named = sorted(game.players[ME].graveyard[slot].name for slot in ranked[:2])
     assert _cast(game, action).supported
-    assert sorted(card.name for card in game.players[ME].hand) == [
-        "Grizzly Bears", "Hill Giant",
-    ]
+    assert sorted(card.name for card in game.players[ME].hand) == named
 
 
 def test_the_spells_on_this_road_are_the_two_named():

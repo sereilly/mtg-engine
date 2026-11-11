@@ -145,7 +145,10 @@ def _priced_mana_source(
         if prints_activation_restriction(line) or carries_an_offer(ability.instruction):
             return None
         produced = planned_mana_yield(ability.instruction)
-        if produced is None or produced.board_narrowed or produced.from_chosen_color:
+        if (
+            produced is None or produced.board_narrowed or produced.from_chosen_color
+            or produced.spend_only
+        ):
             return None
         if not produced.symbols:
             return None
@@ -192,6 +195,11 @@ class _NonlandManaSource:
     #: land). Empty for every source with one, whose ``ability_index`` is the
     #: whole answer.
     ability_for_symbol: "tuple[tuple[str, int], ...]" = ()
+    #: The restriction on what its mana may pay for (``ManaYield.spend_only``,
+    #: CR 106.6): a payment counts such a source only where
+    #: ``restricted_mana.restriction_admits`` its purpose
+    #: (``ai_payment._PaymentPlanner``). None for free mana.
+    spend_only: "str | None" = None
 
     def ability_for(self, symbol: "str | None") -> int:
         """The ability a tap asked for *symbol* runs."""
@@ -339,6 +347,7 @@ def _nonland_mana_source(
             amount=produced.amount,
             run=dict(produced.run) if produced.run else None,
             sacrifices=not taps_alone,
+            spend_only=produced.spend_only,
         )
         if taps_alone:
             return _with_other_free_abilities(game, seat, permanent, usable, found)
@@ -373,7 +382,10 @@ def _with_other_free_abilities(game, seat, permanent, usable, first):
         if index == first.ability_index or not is_tap_alone_mana_ability(ability):
             continue
         produced = planned_mana_yield(ability.instruction)
-        if produced is None or produced.board_narrowed or produced.from_chosen_color:
+        if (
+            produced is None or produced.board_narrowed or produced.from_chosen_color
+            or produced.spend_only != first.spend_only
+        ):
             continue
         if produced.amount != 1 or produced.run:
             return first
@@ -396,6 +408,7 @@ def _with_other_free_abilities(game, seat, permanent, usable, first):
         symbols=tuple(symbols),
         amount=1,
         ability_for_symbol=tuple(owner.items()),
+        spend_only=first.spend_only,
     )
 
 
@@ -485,7 +498,10 @@ def tap_cost_mana_activations(
         ):
             continue
         produced = planned_mana_yield(ability.instruction)
-        if produced is None or produced.board_narrowed or produced.from_chosen_color:
+        if (
+            produced is None or produced.board_narrowed or produced.from_chosen_color
+            or produced.spend_only
+        ):
             continue
         if not produced.symbols:
             continue

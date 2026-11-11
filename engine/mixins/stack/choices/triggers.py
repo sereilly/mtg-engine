@@ -860,7 +860,22 @@ class TriggerChoicesMixin:
                     choice, pile, slots[:ceiling]
                 )
             if cards:
-                pick = next(
+                # …unless the card is **returned** ("…return target creature
+                # card from your graveyard to the battlefield", Karmic Guide;
+                # "…to your hand", Gravedigger): then the card worth most back
+                # that can arrive there (``ai_graveyard_returns``), in any pile
+                # on offer — the first in the pile was whichever died first,
+                # and could be a card the battlefield cannot take (CR 400.4a).
+                from ....ai_graveyard_returns import (best_graveyard_return,
+                                                      graveyard_return_destination)
+
+                returned_to = graveyard_return_destination(
+                    (getattr(item, "ability_instruction", None),)
+                )
+                pick = (
+                    best_graveyard_return(self, choice.player_index, cards, returned_to)
+                    if returned_to else None
+                ) or next(
                     (target for target in cards if target.get("seat") == standing),
                     cards[0],
                 )
@@ -965,8 +980,25 @@ class TriggerChoicesMixin:
             # (``ai_target_sides.untap_target_order``); where none is, the offer
             # order below, and the price is then declined as buying nothing
             # (``ai_prompt_readers.offered_untap_changes_nothing``).
-            from ....ai_target_sides import untap_target_order, untaps_its_target
+            from ....ai_target_sides import (shield_target_order, shields_its_target,
+                                             untap_target_order, untaps_its_target)
 
+            # "When Daru Mender is turned face up, regenerate target
+            # creature": a shield is worth what it saves — the creature an
+            # opposing object on the stack is aimed at first
+            # (``ai_target_sides.shield_target_order``). The first on the
+            # wanted side was the Mender itself.
+            if wanted and shields_its_target(getattr(item, "ability_instruction", None)):
+                shielded = shield_target_order(self, choice.player_index, [
+                    permanent for target in targets
+                    if target.get("kind") == "permanent" and target.get("seat") in wanted
+                    for permanent in (self.permanent_by_id(target.get("permanent_id")),)
+                    if permanent is not None
+                ])
+                if shielded:
+                    return self._resolve_trigger_target(
+                        choice, permanent_id=shielded[0].permanent_id
+                    )
             if wanted and untaps_its_target(getattr(item, "ability_instruction", None)):
                 tapped = untap_target_order([
                     permanent for target in targets

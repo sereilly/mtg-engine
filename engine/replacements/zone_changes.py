@@ -310,7 +310,8 @@ def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutc
             kind="leng_discard",
             player_index=game.players.index(player),
             options=("top of library", "graveyard"),
-            default_option=0,
+            # What a seat nobody asks takes (``_leng_discard_default``).
+            default_option=_leng_discard_default(game, player, card),
             # What generated it, for the answer's log line; and who caused
             # the discard, which a declined offer's re-ask needs (Dodecapod).
             data={"card": card, "source_names": source_names(
@@ -325,6 +326,18 @@ def _top_of_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutc
             "choose graveyard or top of library"
         )
     return ReplacementOutcome(replaced=True)
+
+
+def _leng_discard_default(game, player, card) -> int:
+    """The stated answer to the Library's "you may" for a seat nobody asks:
+    0, the top, where ``ai_prompt_picks.takes_library_top`` takes it, else 1,
+    the graveyard — the answer that seat's own ``discard`` prompt gives
+    (``choices/hand._default_discard``). It was the top for every card, so a
+    spare land was drawn again in place of a fresh card, while the same
+    seat's chosen discard put a Shivan Dragon in its graveyard."""
+    from ..ai_prompt_picks import takes_library_top
+
+    return 0 if takes_library_top(game, game.players.index(player), card) else 1
 
 
 @replacement_choice("leng_discard")

@@ -76,15 +76,31 @@ def test_a_discard_cost_on_a_permanent_is_not_redirected_either(set_pool):
 
 def test_a_discard_an_effect_causes_is_still_offered_to_the_library(set_pool):
     """Hymn to Tourach's "Target player discards two cards at random" is an
-    effect: the Library still applies (its "you may" taken by default for a
-    seat nobody asks), so both cards go on top of the library."""
+    effect: the Library still applies, offering each card its top. A seat
+    nobody asks answers each as ``ai_prompt_picks.takes_library_top`` does
+    (kg5): the six life of Renewed Faith goes back on top, a Lay Waste with
+    no land of the opponent's to destroy is let go to the graveyard."""
+    from engine.ai_prompt_picks import takes_library_top
+
     game, alice, bob = _leng_table(set_pool, "Lay Waste", "Renewed Faith")
     bob.hand.append(_catalog()["Hymn to Tourach"])
+    kept = {
+        name: takes_library_top(game, 0, _catalog()[name])
+        for name in ("Lay Waste", "Renewed Faith")
+    }
 
     assert game.queue_from_hand(1, "Hymn to Tourach", target_player_index=0).supported
     resolve_stack(game)
     game.auto_resolve_pending_choices()
     game.auto_resolve_pending_replacement_choices()
-    assert alice.hand == [] and alice.graveyard == [], game.log
-    assert {c.name for c in alice.library[:2]} == {"Lay Waste", "Renewed Faith"}
-    assert any("Library of Leng" in line for line in game.log)
+    assert alice.hand == [], game.log
+    assert kept["Renewed Faith"], kept
+    for name, top in kept.items():
+        where = alice.library[:2] if top else alice.graveyard
+        assert name in [c.name for c in where], (name, top, game.log)
+    # Each card was offered: taken, the line names the Library; declined,
+    # the card is put into the graveyard by the Library's own answer.
+    assert any(
+        "on top of their library (Library of Leng)" in line for line in game.log
+    ), game.log
+    assert sum("put discarded" in line for line in game.log) == 2, game.log
