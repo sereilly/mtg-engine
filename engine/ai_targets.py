@@ -344,10 +344,28 @@ def choose_returning_aura_host(game: Game, seat: int, card: CardDefinition, lega
         legal,
         key=lambda host: (
             (game.controller_index_of(host) == seat) == harmful,
+            # …and, on the other side, a host the Aura's own -X/-X kills
+            # first (`aura_kills_its_host`): Screams from Within on a
+            # Llanowar Elves is a creature gone and the Aura back again,
+            # on a Grizzly Bears a 1/1 left standing (DST W1G9).
+            not (harmful and aura_kills_its_host(card, host)),
             copies_worn(host, card),
         ),
     )
     return ranked[0]
+
+
+def aura_kills_its_host(card: CardDefinition, host) -> bool:
+    """Whether *card*'s static P/T grant, attached to *host*, leaves it with
+    0 or less toughness (CR 704.5f) — "Enchanted creature gets -1/-1" on an
+    X/1. Read through the grant the layers apply (``aura_grants.
+    aura_static_pt_grant``) and the host's toughness through them too."""
+    from .aura_grants import aura_static_pt_grant
+
+    grant = aura_static_pt_grant(card.oracle_text or "")
+    if grant is None or grant[1] >= 0 or not host.is_creature:
+        return False
+    return host.effective_toughness + grant[1] <= 0
 
 
 def copies_worn(host, card: CardDefinition) -> int:
@@ -399,9 +417,10 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         target_player_index = caster_index
     elif seat_clause == "opponent" and target_player_index == caster_index:
         target_player_index = choose_attack_target(game, caster_index)
-    # Of the legal hosts, the first that wears no copy of this Aura
+    # Of the legal hosts, one the Aura's own -X/-X kills (`aura_kills_its_host`:
+    # Weakness on an X/1), then the first that wears no copy of this Aura
     # (`copies_worn`, the diminishing value of a second one), then the first.
-    legal: list[tuple[int, int]] = []
+    legal: list[tuple[bool, int, int]] = []
     for permanent_index, permanent in enumerate(game.players[target_player_index].battlefield):
         # The spell's own printed targeting restriction (CR 601.2c). Asked here
         # as well as at the cast, and through the same function: a choice only
@@ -418,13 +437,11 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         if not game._can_be_targeted(permanent, card, caster_index=caster_index):
             continue
         if permanent_matches_enchant_noun(permanent, noun):
-            worn = copies_worn(permanent, card)
-            if worn == 0:
-                return target_player_index, permanent_index
-            legal.append((worn, permanent_index))
+            spares = not (harmful and aura_kills_its_host(card, permanent))
+            legal.append((spares, copies_worn(permanent, card), permanent_index))
     if not legal:
         return None
-    return target_player_index, min(legal)[1]
+    return target_player_index, min(legal)[2]
 
 
 def _host_shrink(card: CardDefinition) -> "tuple[int, dict] | None":

@@ -248,3 +248,52 @@ def test_w1g9_screams_from_within_with_nothing_to_enchant_stays_in_the_graveyard
     assert [c.name for c in alice.graveyard] == ["Screams from Within"]
 
 # ==== end W1G9 ======================================================
+
+
+# ==== W2G2 ==========================================================
+# The AI's policy on Darksteel's cards (wave 2): the host a seat nobody asks
+# returns Screams from Within onto.
+
+from engine import Game as _W2G2Game
+from engine.models import Permanent as _W2G2Permanent
+from engine.models import PlayerState as _W2G2PlayerState
+from tests.helpers import settle as _w2g2_settle
+
+
+def _w2g2_put(game, seat, card):
+    permanent = _W2G2Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def test_w2g2_screams_from_within_returns_onto_the_creature_it_kills(set_pool):
+    """W1G9: a headless controller returned Screams onto an opponent's
+    creature, but onto the Grizzly Bears it shrinks rather than the second
+    Llanowar Elves it kills (the dearer one, first on the board). The
+    returning-Aura pick (``ai_targets.choose_returning_aura_host``) now
+    takes the host its own -1/-1 kills: the Elves die, Screams comes back
+    again, and ends on the Bears."""
+    dst, lea = set_pool("DST"), set_pool("LEA")
+    alice = _W2G2PlayerState(name="Alice", hand=[dst["Screams from Within"]], library=[lea["Swamp"]] * 8)
+    bob = _W2G2PlayerState(name="Bob", library=[lea["Forest"]] * 8)
+    game = _W2G2Game(players=[alice, bob])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = 0
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    bears = _w2g2_put(game, 1, lea["Grizzly Bears"])
+    first = _w2g2_put(game, 1, lea["Llanowar Elves"])
+    second = _w2g2_put(game, 1, lea["Llanowar Elves"])
+    assert game.cast_from_hand(
+        0, "Screams from Within", target_permanent_ids=[first.permanent_id],
+    ).supported
+    _w2g2_settle(game)
+    assert not game.is_on_battlefield(first) and not game.is_on_battlefield(second)
+    assert [c.name for c in bob.graveyard].count("Llanowar Elves") == 2
+    screams = next(p for p in game.all_permanents() if p.card.name == "Screams from Within")
+    assert screams.metadata.get("attached_to") is bears
+    assert (bears.effective_power, bears.effective_toughness) == (1, 1)
+
+# ==== end W2G2 ======================================================
