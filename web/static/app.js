@@ -5937,6 +5937,9 @@ async function submitDiscardSelection(info) {
   discardSelection = [];
   discardToLibrarySelected = false;
   await sendAction({ seat, action: "discard_confirm", discard_indices: indices, to_library: toLibrary });
+  // The last click's "Select 1 more card(s) to discard." stayed up through
+  // whatever the resolution asked next (Death Cloud's sacrifices).
+  updateActionHint(`Discarded ${indices.length} card(s).`);
 }
 
 // A card in hand was clicked while a discard prompt is open: toggle it, and
@@ -6688,9 +6691,13 @@ function applySacrificeSelectPrompt(info) {
   // answer to the first and never to the second.
   const upTo = Boolean(info.up_to);
   title.textContent = `${info.reason || "Sacrifice"} — Choose Sacrifices`;
+  // The server's noun where the filter is one type (`noun`, Death Cloud's
+  // creature round and land round), "permanent" otherwise.
+  const noun = info.noun || "permanent";
+  const nouns = /s$/i.test(noun) ? noun : `${noun}s`;
   body.textContent = upTo
-    ? `Choose any number of permanents to sacrifice (up to ${need}).`
-    : `Choose ${need} permanent(s) to sacrifice.`;
+    ? `Choose any number of ${nouns} to sacrifice (up to ${need}).`
+    : `Choose ${need} ${need === 1 ? noun : nouns} to sacrifice.`;
 
   // Only the count, never the card list — the battlefield is the picker.
   const ready = upTo ? sacrificeSelection.length <= need : sacrificeSelection.length === need;

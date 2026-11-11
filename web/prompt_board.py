@@ -442,8 +442,20 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
     """Every eligible permanent, so the board can list and highlight them."""
     choice = choices[0]
     state = ctx.game._sacrifice_prompt(choice)
+    # What is being sacrificed, where the filter is one card type or subtype
+    # and nothing else: Death Cloud's two rounds ("sacrifices X creatures …,
+    # then sacrifices X lands") both read "Choose 2 permanent(s)". A filter
+    # saying more keeps the generic word — a noun that drops a narrowing
+    # would describe more than the highlighted candidates.
+    described = choice.data.get("filter") or {}
+    noun = (
+        {"noun": _keep_slot_noun(described)}
+        if described and set(described) <= {"type_filter", "subtype_filter"}
+        else {}
+    )
     return {
         "player_seat": choice.player_index,
+        **noun,
         "count": state["count"],
         # Whether the count is owed or offered. "Sacrifice any number of
         # untapped Forests" (Wood Elemental) is answered by any subset, none
