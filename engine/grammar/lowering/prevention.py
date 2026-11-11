@@ -29,6 +29,7 @@ from ._prevented_riders import (
     _alternate_amount,
     _counted_pool_counter_rider,
     _lower_team_shield,
+    _names_a_target_spell,
 )
 from ._common import (
     _REST_OF_TURN,
@@ -216,7 +217,14 @@ def _lower_prevent_damage(
             node=node,
         )
     counter_rider = _counted_pool_counter_rider(node)
-    if counter_rider is None and node.prevented_rider is not None and (
+    if (
+        counter_rider is None and node.prevented_rider is not None
+        # "Prevent all damage target spell would deal this turn. You gain
+        # life equal to the damage prevented this way." (Hallow.) The one
+        # other shape that reads the rider: ``_blankets``' spell shield, which
+        # holds it to the life gain it performs.
+        and not (_names_a_target_spell(node.dealt_by) and node.to is None)
+    ) and (
         node.from_filter != ast.ObjectFilter()
         # A printed number, or the blanket: "Prevent **all** damage … by a
         # source of your choice. Whenever damage from a black or red source is

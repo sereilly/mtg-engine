@@ -185,6 +185,10 @@ COLOR_SHIELD = 500  # Circle of Protection
 #: keeps a consumable from being spent on damage that was never going to be
 #: dealt — the reason stated at the top of this list for every blanket on it.
 SPELL_BLANKET = 13
+#: The same blanket with CR 615.5's life gain behind it (Hallow). Beside it
+#: and behind it: both are free, and CR 616.1e gives the affected player the
+#: choice — this is only the default a non-interactive seat takes.
+SPELL_BLANKET_AND_GAIN_LIFE = 19  # 14-18 are taken in the shared space
 POOL_WITH_COUNTERS = 599
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
 # A permanent's own static prevention, which is never used up by the event —

@@ -31,6 +31,7 @@ from ..shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                        PREVENT_HALF, PREVENT_FROM_COLOR,
                        PREVENT_FROM_SUBJECT, PREVENT_FROM_TARGETING_SOURCE,
                        PREVENT_BY_RESOLVING_OBJECT,
+                       PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE,
                        PREVENT_NEXT_N, PREVENT_NEXT_N_AND_COUNTERS,
                        PREVENT_WHOLE, PREVENT_AND_EXILE,
                        PREVENT_ALL_FROM_CHOSEN_SOURCE,
@@ -41,7 +42,8 @@ from .registry import (
     GENERIC_HALF, GENERIC_REFLECT_SHIELD, GENERIC_SHIELD, GENERIC_TEAM_SHIELD,
     GENERIC_WHOLE, POOL, POOL_WITH_COUNTERS, PROTECTION, SOURCE_CAP,
     SOURCE_EXILE_SHIELD, SOURCE_HALF, SOURCE_REFLECT_SHIELD, SOURCE_SHIELD,
-    SOURCE_TEAM_SHIELD, SOURCE_WHOLE, SPELL_BLANKET, SUBJECT_BLANKET,
+    SOURCE_TEAM_SHIELD, SOURCE_WHOLE, SPELL_BLANKET, SPELL_BLANKET_AND_GAIN_LIFE,
+    SUBJECT_BLANKET,
     TARGETING_BLANKET, Applicability, PreventionOutcome, prevention_effect,
     source_has_type,
 )
@@ -102,7 +104,7 @@ def add_directional_shield(
     perm.metadata[_COMBAT_SHIELD_DIRECTION_KEY] = record
 
 
-def carry_spell_shields_onto_permanent(item, perm) -> bool:
+def carry_spell_shields_onto_permanent(item, perm, game=None) -> bool:
     """CR 400.7c: "Prevention effects that apply to damage from a permanent
     spell on the stack continue to apply to damage from the permanent that
     spell becomes."
@@ -118,13 +120,33 @@ def carry_spell_shields_onto_permanent(item, perm) -> bool:
 
     Returns whether anything was carried. Called by the one road a permanent
     spell takes onto the battlefield (``ResolutionMixin._resolve_card``).
+
+    Hallow's shield (``PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE``) carries
+    its rider with it: the marker has no payee, so it becomes the same kind of
+    shield on the caster's seat, watching no recipient (``any_recipient``, the
+    reach Penance's shield has) and answering to the permanent by identity —
+    the life still goes to the seat that cast Hallow.
     """
+    from ..shields import add_shield
+
     carried = False
     for shield in shields_on(item):
-        if shield.kind != PREVENT_BY_RESOLVING_OBJECT or shield.spent:
+        if shield.spent:
             continue
-        add_directional_shield(perm, COMBAT_SHIELD_BY, combat_only=False)
-        carried = True
+        if shield.kind == PREVENT_BY_RESOLVING_OBJECT:
+            add_directional_shield(perm, COMBAT_SHIELD_BY, combat_only=False)
+            carried = True
+        elif (
+            shield.kind == PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE
+            and game is not None
+            and shield.payee_seat is not None
+        ):
+            add_shield(game.players[shield.payee_seat], Shield(
+                kind=PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE, amount=None,
+                uses=None, source=perm, any_recipient=True,
+                payee_seat=shield.payee_seat, source_name=shield.source_name,
+            ))
+            carried = True
     return carried
 
 
@@ -1485,6 +1507,26 @@ def _prevent_by_resolving_object(game, event: dict) -> PreventionOutcome | None:
     leaves that creature's damage alone.
     """
     return _spend(game, event, PREVENT_BY_RESOLVING_OBJECT)
+
+
+@prevention_effect(
+    SPELL_BLANKET_AND_GAIN_LIFE,
+    applies=_arms(PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE),
+    sources=_granted_by(PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE),
+    label="Prevent the targeted spell's damage this turn and gain that much life",
+)
+def _prevent_by_resolving_object_and_gain_life(game, event: dict) -> PreventionOutcome | None:
+    """Hallow: "Prevent all damage target spell would deal this turn. You gain
+    life equal to the damage prevented this way." Hidden Retreat's blanket with
+    CR 615.5's additional effect after each prevention: the caster
+    (``Shield.payee_seat``) gains what was prevented, whoever it was headed for.
+    Found on the spell while it resolves, and — once a permanent spell has
+    become a permanent (CR 400.7c) — on the caster's seat as a table shield
+    keyed to that permanent (:func:`carry_spell_shields_onto_permanent`)."""
+    return _spend(
+        game, event, PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE,
+        afterward=_gain_prevented_life,
+    )
 
 
 def _log_pool_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:

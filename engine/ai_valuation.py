@@ -996,6 +996,7 @@ DAMAGE_REPLACEMENT_KINDS = frozenset({
     "double_next_damage_from_chosen_source",
     "redirect_chosen_source_damage_between_targets_until_eot",
     "redirect_chosen_source_damage_off_target_until_eot",
+    "redirect_damage_dealt_to_you_onto_target_until_eot",
     "redirect_damage_from_chosen_source_until_eot",
     "redirect_damage_from_target_spell_until_eot",
     "redirect_damage_from_target_until_eot",

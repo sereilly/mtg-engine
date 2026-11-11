@@ -151,6 +151,39 @@ def _counted_pool_counter_rider(node: ast.PreventDamage) -> str | None:
     return rider.counter
 
 
+def _names_a_target_spell(spec) -> bool:
+    """Whether a shield's ``dealt_by`` is a **target spell** — the stack-scoped
+    source ``_blankets``' spell shield reads (Hidden Retreat, Shieldmage Elder,
+    Hallow). One predicate, asked by the central rider refusal in
+    ``prevention`` and by that branch, so the two cannot disagree about which
+    shield is exempt."""
+    return (
+        isinstance(spec, ast.TargetSpec)
+        and spec.quantifier == "target"
+        and spec.filter.zone == "stack"
+    )
+
+
+def spell_shield_rider(node: ast.PreventDamage) -> dict:
+    """The payload CR 615.5's rider adds to the spell shield, or ``{}``.
+
+    "Prevent all damage target spell would deal this turn. **You gain life
+    equal to the damage prevented this way.**" (Hallow.) The shield's
+    interceptor gains its caster the life (``prevention.shields``' spell
+    blanket with a payee); any other rider — a coloured condition, Bone
+    Mask's exile, a repeating window — is one it would drop, so it refuses.
+    """
+    rider = node.prevented_rider
+    if rider is None:
+        return {}
+    if rider.effect != "gain_life" or rider.source_colors or rider.repeating:
+        raise LoweringError(
+            "the spell shield's rider is the unconditional life gain",
+            node=node,
+        )
+    return {"rider": rider.effect}
+
+
 def _lower_team_shield(
     node: ast.PreventDamage,
 ) -> tuple[OracleInstruction, ...]:

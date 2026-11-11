@@ -365,9 +365,14 @@ def _accept_active_voice_shield(
         dealt_by = dataclasses.replace(
             dealt_by, filter=dataclasses.replace(dealt_by.filter, also_spell=True),
         )
+    # "Prevent all damage target spell would deal this turn. **You gain life
+    # equal to the damage prevented this way.**" (Hallow.) CR 615.5's rider,
+    # read by the one reader every shield's rider goes through; which shield
+    # can carry it is the lowering's question, and every other one refuses it.
     return ast.PreventDamage(
         ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only,
         dealt_by=dealt_by,
+        prevented_rider=_parse_prevented_this_way_rider(stream),
     )
 
 

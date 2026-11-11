@@ -283,6 +283,17 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # damage's own source rather than frozen at resolution, so a creature
         # that changes hands sends the damage to whoever controls it then.
         payload["new_recipient"] = "source_controller"
+    elif (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "target"
+        and node.dealt_by is None
+        and not node.from_chosen_source
+    ):
+        # "All combat damage that would be dealt to you this turn is dealt to
+        # **target attacking creature** instead." (Turn the Tables.) No source
+        # named at all, so every source's damage moves, and the taker is the
+        # announced target.
+        return _lower_redirect_onto_target(node, recipient)
     else:
         raise LoweringError(
             "no handler resolves this redirect's new recipient", node=node
@@ -356,6 +367,52 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
             ),
         ) + instructions
     return instructions
+
+
+def _lower_redirect_onto_target(
+    node: ast.RedirectDamage, recipient: ast.TargetSpec,
+) -> tuple[OracleInstruction, ...]:
+    """Turn the Tables: "All combat damage that would be dealt to you this turn
+    is dealt to target attacking creature instead."
+
+    Sivvi's Valor's two ends exchanged: the protected recipient is the
+    caster (CR 109.5's "you"), every source's damage moves — the sentence
+    names none, so the record's ``source`` is None, which is what "all
+    damage" means on a ``DamageRedirect`` — and the taker is the creature the
+    spell announced. "Combat" is the record's own ``combat_only``.
+
+    Refused here, each a way the sentence could mean more than it says: "the
+    next time" (no card prints this shape one-shot, and the record would need
+    CR 615.8's instance); several takers; a narrowing ``subject_matches``
+    cannot test, since the taker is re-checked at resolution (CR 608.2b).
+    """
+    if node.one_shot:
+        raise LoweringError(
+            "a redirect of all damage dealt to you onto a target is not a "
+            "next-time redirect",
+            node=node,
+        )
+    if _names_several_targets(recipient):
+        raise LoweringError(
+            "a redirect onto a target moves the damage onto one creature",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    if node.combat_only:
+        payload["combat_only"] = True
+    _describe_targets(payload, recipient)
+    untestable = untestable_filter_keys(
+        (payload.get("targets") or {}).get("filter") or {}
+    )
+    if untestable:
+        raise LoweringError(
+            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "redirect_damage_dealt_to_you_onto_target_until_eot", "", payload
+        ),
+    )
 
 
 def _lower_redirect_off_target(

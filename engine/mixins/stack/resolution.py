@@ -1224,7 +1224,7 @@ class StackResolutionMixin:
             # so an entry trigger's damage is already covered.
             if self.resolving_items:
                 carry_spell_shields_onto_permanent(
-                    self.resolving_items[-1], permanent
+                    self.resolving_items[-1], permanent, self
                 )
             # "If this creature **was kicked**, it enters with …" / "When this
             # creature enters, **if it was kicked**, …" / "…if this creature
