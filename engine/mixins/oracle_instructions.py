@@ -216,7 +216,10 @@ class OracleInstructionsMixin:
         # moves, compares and names ("shuffle this card into its owner's
         # library", a buyback, the damage source). None is *card* itself.
         text_card: CardDefinition | None = None,
-    ) -> None:
+    ) -> "OracleExecutionContext | None":
+        """Run *card*'s effect; the context it ran in (its scratchpad is what
+        the resolution's last step reads, ``SPELL_RETURNED_TO_HAND``), or None
+        where nothing ran."""
         program_card = card if text_card is None else text_card
         instruction = self._select_executable_instruction(program_card, mode_index)
         if instruction is None:
@@ -284,6 +287,7 @@ class OracleInstructionsMixin:
             ),
         )
         state_machine.run(instruction)
+        return state_machine.context
 
     def _apply_cast_triggers(
         self, caster_index: int, card: CardDefinition, item=None,

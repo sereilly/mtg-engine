@@ -38,6 +38,8 @@ import dataclasses
 from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
+from ._record_keys import (ANNOUNCED_PLAYER_OR_PLANESWALKER_TARGET,
+                           ANNOUNCED_PLAYER_TARGET)
 from ._records import primary_produced, produced_keys
 
 #: The branches of a ``may`` whose records are visible to the steps *after* it.
@@ -408,5 +410,31 @@ def _lower_steps(
                 offer_keys = inner
                 decline_keys = declined - inner
         instructions += lowered
+        produced = produced | _announced_seat_markers(lowered)
         previous = step
     return instructions
+
+
+#: Which marker a step's picker description earns (``_record_keys``).
+_ANNOUNCED_SEAT_MARKERS = {
+    "player": ANNOUNCED_PLAYER_TARGET,
+    "player_or_planeswalker": ANNOUNCED_PLAYER_OR_PLANESWALKER_TARGET,
+}
+
+
+def _announced_seat_markers(lowered: tuple[OracleInstruction, ...]) -> frozenset[str]:
+    """The markers saying a step in *lowered* announced a player target.
+
+    "Target player reveals three cards … **Then if that player** has more
+    cards in hand than you, …" (Pulse of the Dross.) Read off the picker's
+    description, top-level steps only: a target named inside a branch is not
+    a seat every later sentence can lean on.
+    """
+    markers = set()
+    for instruction in lowered:
+        targets = instruction.payload.get("targets")
+        if isinstance(targets, dict):
+            marker = _ANNOUNCED_SEAT_MARKERS.get(targets.get("kind"))
+            if marker is not None:
+                markers.add(marker)
+    return frozenset(markers)

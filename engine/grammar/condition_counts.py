@@ -358,6 +358,19 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 counted, "hand",
                 ast.Comparison("more_than_you", ast.Fixed(margin or 0)),
             )
+        # "Then if **an opponent has more life than you**, return Pulse of the
+        # Fields to its owner's hand." (Pulse of the Fields, Pulse of the
+        # Forge.) The same comparison over a life total instead of a hand: the
+        # same op, the same margin reader and the same seat gate, onto the node
+        # "has 5 or less life" already reaches — a life total measured against
+        # the asker's own rather than against a printed number.
+        if (
+            counted.kind not in ("you", "any_player")
+            and stream.accept_phrase("more", "life", "than", "you")
+        ):
+            return ast.PlayerLifeIs(
+                counted, ast.Comparison("more_than_you", ast.Fixed(margin or 0)),
+            )
         stream.reset(lead_mark)
         comparison = _parse_count_bound(stream)
         if stream.accept_word("life"):

@@ -33,6 +33,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..faces import has_name
+from ..game_types import single_chosen_id
+from ..oracle_types import TARGET_PLAYER_OR_CONTROLLER
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
 from ._filters import permanent_matches_filter, permanent_state_holds
@@ -175,6 +177,18 @@ def _condition_player(game: Game, context: OracleExecutionContext, whose):
     word = str(whose or "you")
     if word == "you":
         return context.caster
+    if word == TARGET_PLAYER_OR_CONTROLLER:
+        # "…if **that player or that planeswalker's controller** has more life
+        # than you" (Pulse of the Forge): the chosen planeswalker's controller,
+        # read now through the control seam, and else the chosen player. Not
+        # ``context.target`` alone: a spell that chose a permanent carries the
+        # caster's default opponent there, which is nobody's choice.
+        chosen = single_chosen_id(context.target_permanent_id)
+        if chosen is None:
+            return context.target
+        permanent = game.permanent_by_id(chosen)
+        seat = game.controller_index_of(permanent) if permanent is not None else None
+        return game.players[seat] if seat is not None else None
     if word == "event_subject_player":
         seat = (context.trigger_context or {}).get("event_subject_player")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -480,6 +494,11 @@ def evaluate_state_condition(
             # players the spell never named. No shipped card prints a counted
             # one; this keeps the seat honest for the first that does.
             players = [context.target] if context.target in game.players else []
+        if who == TARGET_PLAYER_OR_CONTROLLER:
+            # The same narrowing for the seat "that player or that
+            # planeswalker's controller" names (`_condition_player`).
+            named = _condition_player(game, context, who)
+            players = [named] if named is not None else []
         if who == "defending_player":
             # "…if **defending player** controls no black nontoken permanents"
             # (Spectral Bears). The seat combat named (CR 506.2), through the
@@ -605,6 +624,11 @@ def evaluate_state_condition(
                 # lands are not the target's. No announced opponent holds for
                 # nobody.
                 rivals = [p for p in rivals if p is context.target]
+            elif who in ("target_player", TARGET_PLAYER_OR_CONTROLLER):
+                # …and every other single named seat, for that reason: the
+                # seat ``players`` already holds (a "that player" the effect
+                # announced, `lowering/conditions._condition_seat`).
+                rivals = [p for p in rivals if p in players]
             return any(
                 sum(
                     1
@@ -828,6 +852,13 @@ def evaluate_state_condition(
             return most_life_seat(game) is not None
 
         def life_holds(player) -> bool:
+            if str(payload.get("op", "")) == "more_than_you":
+                # "Then if an opponent has **more life than you**" (Pulse of
+                # the Fields). The zone count's ``more_than_you`` above over a
+                # life total: the bound is the asker's own, read now like the
+                # asked seat's, and the bare "more" (0) is a lead of one.
+                lead = max(1, int(payload.get("value") or 0))
+                return int(player.life) - int(context.caster.life) >= lead
             return _compare_count(
                 int(player.life), str(payload.get("op", "")), payload.get("value")
             )

@@ -26,7 +26,7 @@ from ..announced_creature_type import (GRAVEYARD_ANNOUNCED_CREATURE_TYPE,
                                        with_announced_creature_type)
 from ..game_types import first_target_id, single_slot, target_slots
 from ..models import Permanent
-from ..oracle_types import named_no_target
+from ..oracle_types import SPELL_RETURNED_TO_HAND, named_no_target
 from ..search_filters import card_has_type
 from ._amounts import resolve_amount
 from ._common import return_permanent_to_owners_hand
@@ -525,6 +525,16 @@ def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction
         return True, "resolved"
     if instruction.payload.get("from") == "battlefield":
         game.log.append(f"{card.name} was no longer on the battlefield")
+        return True, "resolved"
+    # "Then if an opponent has more life than you, **return Pulse of the Fields
+    # to its owner's hand**." (The Pulse cycle.) The source is the *spell* that
+    # is resolving — a spell's context is the one that carries its words
+    # (``text_card``) — and its card is on the stack, in no zone this could
+    # scan. CR 608.2n's last step is the one that moves it, so the destination
+    # is written into the spell's own scratchpad for that step, the way a spell
+    # that exiles itself hands its exile over (``exile_resolving_spell``).
+    if source is None and context.text_card is not None:
+        context.results[SPELL_RETURNED_TO_HAND] = True
         return True, "resolved"
     for player in game.players:
         for index, held in enumerate(player.graveyard):

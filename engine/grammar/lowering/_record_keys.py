@@ -104,6 +104,18 @@ LOOP_BOUND_PLAYER = "loop_bound_player"
 #: anything.
 LOOP_BOUND_TARGET = "loop_bound_target"
 
+#: The markers ``sequences._lower_steps`` adds to *produced* once a step of the
+#: effect has **announced a player target** (CR 115.1), read off that step's
+#: picker description — the honest test ``where_x._names_a_player_target``
+#: states. "Target player reveals three cards … **Then if that player** has
+#: more cards in hand than you, …" (Pulse of the Dross): with no trigger to
+#: freeze a seat, "that player" is the one the effect itself chose. Markers
+#: for :data:`LOOP_BOUND_PLAYER`'s reason: nothing is recorded under them. The
+#: second is "target player **or planeswalker**" (Pulse of the Forge), whose
+#: seat is the player, or that planeswalker's controller.
+ANNOUNCED_PLAYER_TARGET = "announced_player_target"
+ANNOUNCED_PLAYER_OR_PLANESWALKER_TARGET = "announced_player_or_planeswalker_target"
+
 #: The same marker for a loop over **objects** rather than seats: added to
 #: *produced* while lowering the body of "for each <noun> destroyed / exiled /
 #: tapped / chosen this way", where ``handlers/control_flow.for_each`` binds
