@@ -1074,9 +1074,10 @@ def aura_land_animation(oracle_text: str) -> MappingProxyType | None:
 #: "You control enchanted **artifact creature**." (Domineer.) The same sentence
 #: over the two-word noun its enchant clause names; the noun says nothing the
 #: attachment has not already settled, so it is admitted here alone rather than
-#: added to ``_NOUN``, which every Aura template in the family reads.
+#: added to ``_NOUN``, which every Aura template in the family reads. "You
+#: control enchanted **Equipment**." (Carry Away) is admitted the same way.
 _ATTACHED_CONTROL_CHANGE = re.compile(
-    rf"^you control {_ATTACHED} (?:artifact creature|{_NOUN})$"
+    rf"^you control {_ATTACHED} (?:artifact creature|equipment|{_NOUN})$"
 )
 
 

@@ -360,6 +360,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # over a described set, the same family.
     "attach_all_to_source": "attachments",
     "unattach_all_from_target": "attachments",
+    "unattach_attached_permanent": "attachments",
     # "…to **another permanent of that type**" (Enchantment Alteration): the
     # permanent the controller picks as the spell resolves, recorded for the
     # attach behind it. The same category, so GRAMMAR_CATEGORIES is unchanged —

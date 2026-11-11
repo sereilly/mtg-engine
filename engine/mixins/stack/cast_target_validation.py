@@ -71,6 +71,9 @@ _ENCHANT_TARGET_MATCHERS = {
     "land": lambda perm: perm.has_type("land"),
     "enchantment": lambda perm: perm.has_type("enchantment"),
     "wall": lambda perm: perm.has_type("wall"),
+    # "Enchant **Equipment**" (Carry Away): the artifact subtype (CR 301.5),
+    # through layer 4 like the Wall row above it.
+    "equipment": lambda perm: perm.has_type("equipment"),
     # "Enchant **permanent**" (Faith's Fetters). Everything on the battlefield
     # is one (CR 110.1), so the answer is yes — written out rather than left to
     # the fallback below, which says yes for a noun nobody has read.

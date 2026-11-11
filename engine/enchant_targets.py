@@ -61,8 +61,10 @@ _ENCHANT_LAND_SUBTYPES: tuple[str, ...] = tuple(
 #: is "The enchanted permanent must be both an artifact and a creature". Listed
 #: first so the alternation tries it before its prefix "artifact"; the whole-
 #: line anchor would backtrack to it anyway, but first is the honest order.
+#: "Enchant **Equipment**" (Carry Away) is an artifact subtype standing as the
+#: noun, the way "Wall" is a creature type: any permanent with the subtype.
 _ENCHANT_NOUNS = ("artifact creature", "creature", "land", "artifact",
-                  "enchantment", "wall", "permanent") + _ENCHANT_LAND_SUBTYPES
+                  "enchantment", "equipment", "wall", "permanent") + _ENCHANT_LAND_SUBTYPES
 #: A printed **negated** noun ("Enchant non-Wall creature", Aggression). The
 #: exclusion is enforced by `mixins/stack/cast_target_validation.aura_enchant_noun`, which
 #: reads the whole printed subject; what the picker needs from it is the head
@@ -352,6 +354,11 @@ _ENCHANT_NOUN_TO_SPEC: dict[str, dict] = {
     "land": {"kind": "land"},
     "artifact": {"kind": "artifact"},
     "enchantment": {"kind": "permanent", "enchant_enchantment": True},
+    # "Enchant **Equipment**" (Carry Away). The artifact picker narrowed by the
+    # subtype through ``filter`` (``subject_matches``, CR 613 layer 4) — the
+    # same ``has_type`` question the gate's row asks, so a permanent that
+    # loses the subtype stops being offered and stops being a legal host.
+    "equipment": {"kind": "artifact", "filter": {"subtype_filter": "equipment"}},
     # "Enchant permanent" (Faith's Fetters). The widest noun there is, so the
     # general picker with no narrowing at all - and the one enchant clause
     # whose spec needs no flag, because there is nothing to exclude.
