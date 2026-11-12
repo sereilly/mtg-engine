@@ -75,6 +75,8 @@ from .phases import (
     BeginningPhaseMixin,
     UntapStepMixin,
     UpkeepStepMixin,
+    UpkeepPaymentMixin,
+    UpkeepPromptsMixin,
     DrawStepMixin,
     PrecombatMainPhaseMixin,
     CombatPhaseMixin,
@@ -105,6 +107,10 @@ class Game(
     BeginningPhaseMixin,
     UntapStepMixin,
     UpkeepStepMixin,
+    # Split out of UpkeepStepMixin and composed immediately after it: paying
+    # an upkeep cost, and what the step asks a seat before it resolves.
+    UpkeepPaymentMixin,
+    UpkeepPromptsMixin,
     DrawStepMixin,
     PrecombatMainPhaseMixin,
     CombatPhaseMixin,

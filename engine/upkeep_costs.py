@@ -1,6 +1,6 @@
 """The cost half of a pay-or-consequence upkeep obligation.
 
-Every prompt in ``engine/phases/upkeep_step.py`` — cumulative upkeep, Cyclone's
+Every prompt in ``engine/phases/upkeep_prompts.py`` — cumulative upkeep, Cyclone's
 longhand of it, Erosion's "unless you pay {U}", Nafs Asp's payment before the
 draw step — asks one player for one cost and does something to them if they
 decline. :class:`UpkeepCost` is that cost, and it is a leaf module rather than

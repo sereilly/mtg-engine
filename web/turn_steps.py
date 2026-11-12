@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from engine.ai_graveyard_activations import graveyard_abilities
 from engine.hand_size import maximum_hand_size
-from engine.phases.upkeep_step import upkeep_prompt_key
+from engine.phases.upkeep_prompts import upkeep_prompt_key
 from engine.upkeep_costs import cost_from_payload
 
 from .session_store import Session

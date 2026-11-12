@@ -5552,7 +5552,7 @@ function applyUntapPrompt(untapInfo) {
 }
 
 // The address an upkeep prompt is filed under, mirroring the server's one
-// reader, `upkeep_prompt_key` in engine/phases/upkeep_step.py: a permanent id
+// reader, `upkeep_prompt_key` in engine/phases/upkeep_prompts.py: a permanent id
 // when the subject is on the battlefield, "<card name>#<ordinal>" when it is a
 // card in a graveyard or an obligation record (Nether Shadow, Nafs Asp), and
 // the bare name only when the prompt carries neither — which then means every

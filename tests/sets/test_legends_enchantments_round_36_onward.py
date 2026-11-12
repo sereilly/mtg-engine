@@ -397,7 +397,7 @@ def test_sylvan_library_puts_back_one_copy_not_every_copy(set_pool, catalog_by_n
     object*. ``put_iterated_card_on_library`` removed the chosen card with
     ``[c for c in player.hand if c is not card]``, an identity test that is
     right about which object and wrong about how many: it removed all of them
-    and then put exactly one back. ``engine/phases/upkeep_step.py`` documents
+    and then put exactly one back. ``engine/phases/upkeep_prompts.py`` documents
     the same class found in a graveyard (Nether Shadow: five cards in, four
     out); this is the hand's copy of it, and ``Game.take_card_from_hand`` is
     now the one way to do it.

@@ -24,7 +24,7 @@ rather than with the card, and that is not scaffolding. A graveyard holds
 ``CardDefinition`` objects and ``load_cards`` dedupes by ``oracle_id``, so two
 copies of one card in one graveyard are the **same Python object** — a caller
 handed only the card cannot say which copy satisfied the clause, and an identity
-filter over the list removes both. ``phases/upkeep_step._graveyard_return_candidates``
+filter over the list removes both. ``phases/upkeep_prompts._graveyard_return_candidates``
 carries the same index for the same reason, and documents the five cards that
 went missing before it did.
 

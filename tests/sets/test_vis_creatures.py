@@ -629,7 +629,7 @@ def test_brood_of_cockroaches_returns_itself_at_the_next_end_step(set_pool):
     was missing, since the delayed ability behind it already compiled. Two copies
     of the card sit in the graveyard so the return has to take exactly one: a
     hand and a graveyard both hold the same immutable definition per copy, which
-    is the identity bug `engine/phases/upkeep_step.py` records about a graveyard.
+    is the identity bug `engine/phases/upkeep_prompts.py` records about a graveyard.
     """
     brood = set_pool("VIS")["Brood of Cockroaches"]
     game = _W1G4Game(players=[
