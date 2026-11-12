@@ -52,7 +52,7 @@ Do not edit by hand — re-run the script instead.
 | 38 | Eighth Edition | 8ED | 2003-07-28 | 342 | 0 | Complete (342/342 supported) |
 | 39 | Mirrodin | MRD | 2003-10-02 | 291 | 269 | Complete (291/291 supported) |
 | 40 | Darksteel | DST | 2004-02-06 | 165 | 162 | Complete (165/165 supported) |
-| 41 | Fifth Dawn | 5DN | 2004-06-04 | 165 | 162 | Measured (144/165 supported, not shipped) |
+| 41 | Fifth Dawn | 5DN | 2004-06-04 | 165 | 162 | Measured (150/165 supported, not shipped) |
 | 42 | Champions of Kamigawa | CHK | 2004-10-01 | 291 | 283 | Not Implemented |
 | 43 | Betrayers of Kamigawa | BOK | 2005-02-04 | 165 | 159 | Not Implemented |
 | 44 | Saviors of Kamigawa | SOK | 2005-06-03 | 165 | 165 | Not Implemented |

@@ -10,25 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **6574**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **691**
-
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**1 unclaimed sentence(s) across 1 supported card(s).**
-
-- **Possessed Portal**
-  - `if a player would draw a card, that player skips that draw instead`
+- With deletion-probe findings (ignored words): **690**
 
 ## Acknowledged simplifications
 
@@ -641,7 +623,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Strength of Night | `creatures you control get +1/+1 until end of turn. if this spell was k` | spell |
 | Stromgald Spy | `you may have defending player play with their hand revealed for as lon` | have |
 | Subterranean Spirit | `this creature deals 1 damage to each creature without flying` | each |
-| Suffocation | `suffocation deals 4 damage to the controller of the last red instant o` | spell |
 | Suleiman's Legacy | `destroy all djinns and efreets. they can't be regenerated` | all |
 | Sunder | `return all lands to their owners' hands` | all |
 | Suppress | `target player exiles all cards from their hand face down. at the begin` | all |

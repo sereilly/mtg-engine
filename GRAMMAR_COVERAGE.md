@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| 5DN *(measured)* | 165 | 273 | 79.9% | 78.4% | 53.5% | 128 |
+| 5DN *(measured)* | 165 | 273 | 81.7% | 80.6% | 54.6% | 131 |
 | **All (shipped)** | **9448** | **14064** | **89.7%** | **89.2%** | **62.1%** | **7410** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -70,9 +70,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 944 | 480 | expected a subject |  |
+| 941 | 477 | expected a subject |  |
 | 194 | 97 | unrecognized effect verb |  |
-| 148 | 77 | unconsumed text |  |
+| 146 | 75 | unconsumed text |  |
 | 78 | 59 | granted ability in quotes | phase 3 (quoted abilities) |
 | 43 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -10058,6 +10058,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target creature card from your graveyard to the battlefield.`
 - **Resuscitate**
   - `Until end of turn, creatures you control gain "{1}: Regenerate this creature."`
+- **Retaliate**
+  - `Destroy all creatures that dealt damage to you this turn.`
 - **Retaliation**
   - `Creatures you control have "Whenever this creature becomes blocked by a creature, this creature gets +1/+1 until end of turn."`
 - **Rethink**
@@ -10222,6 +10224,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Risky Move**
   - `At the beginning of each player's upkeep, that player gains control of this enchantment.`
   - `When you gain control of this enchantment from another player, choose a creature you control and an opponent. Flip a coin. If you lose the flip, that opponent gains control of that creature.`
+- **Rite of Passage**
+  - `Whenever a creature you control is dealt damage, put a +1/+1 counter on it. (It must survive the damage to get the counter.)`
 - **Rites of Initiation**
   - `Discard any number of cards at random. Creatures you control get +1/+0 until end of turn for each card discarded this way.`
 - **Rites of Refusal**
@@ -11340,6 +11344,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Skull of Ramos**
   - `{T}: Add {B}.`
   - `Sacrifice this artifact: Add {B}.`
+- **Skullcage**
+  - `At the beginning of each opponent's upkeep, this artifact deals 2 damage to that player unless they have exactly three or exactly four cards in hand.`
 - **Skullclamp**
   - `Whenever equipped creature dies, draw two cards.`
 - **Skullscorch**
