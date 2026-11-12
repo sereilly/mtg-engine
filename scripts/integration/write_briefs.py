@@ -308,7 +308,10 @@ def yield_section(yield_md: Path | None) -> str:
 
 
 def group_skeleton(code: str, low: str, round_: str, group: str, spec: dict) -> str:
-    sections = [f for f, groups in per_set_sections(low).items() if group.upper() in groups]
+    # open_test_files.py writes each marker as the group was named on its command
+    # line (`w1g1` or `W1G1`), so the section is found whichever case was used.
+    sections = [f for f, groups in per_set_sections(low).items()
+                if group.upper() in {g.upper() for g in groups}]
     return "\n".join([
         f"# {group.upper()} — {spec['title']}",
         "",
