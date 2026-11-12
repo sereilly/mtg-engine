@@ -151,6 +151,11 @@ def _choose_role_targets(
         mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     )
     options = announced.get("valid_targets") or []
+    if _moves_an_attachment(card):
+        # "Attach target Equipment to target creature" (Magnetic Theft): which
+        # Equipment, and onto whose creature, weighed by rehearsal
+        # (`_weighed_attachment_moves`) rather than by one side per role.
+        return _weighed_attachment_moves(game, caster_index, card, options)
     sides = role_target_sides(card, offers)
     # "Choose any number of target players or planeswalkers. For each of them,
     # … deals damage …" (Kaboom!): every role is aimed where the loop's body
@@ -320,6 +325,91 @@ def _weighed_seat_prefix(game: Game, caster_index: int, card: CardDefinition, pi
             best, best_swing = answer, rehearsal.swing
     if best is None:
         return shaped(picks) if picks else ()
+    return best
+
+
+#: The instruction kinds that move an attachment from wherever it is onto a
+#: second target ("Attach target Equipment to target creature", CR 701.3).
+_ATTACHMENT_MOVE_KINDS = frozenset({"attach_target_to_target"})
+
+#: How many (attachment, new host) chains one cast weighs, the likeliest
+#: first (`_weighed_attachment_moves`). Tuning: each is a rehearsal of the
+#: turn through its fight.
+ATTACHMENT_MOVES_WEIGHED = 8
+
+
+def _moves_an_attachment(card: CardDefinition) -> bool:
+    """Whether the candidate being built resolves an attachment move
+    (:data:`_ATTACHMENT_MOVE_KINDS`)."""
+    return any(
+        step is not None and step.kind in _ATTACHMENT_MOVE_KINDS
+        for step in _announced_steps(card, compile_card_oracle(card))
+    )
+
+
+def _weighed_attachment_moves(
+    game: Game, caster_index: int, card: CardDefinition, options: list[dict],
+):
+    """`_choose_role_targets`' answer for "Attach target Equipment to target
+    creature" (Magnetic Theft, CR 701.3; control of the Equipment does not
+    change, CR 301.5d): the chain whose cast leaves the caster furthest
+    ahead, or ``()`` — no cast — where none does.
+
+    One side per role read this as the caster's own Equipment onto the
+    caster's own creature, which never takes an opponent's Equipment off its
+    creature — Grafted Wargear's "sacrifice that permanent" falls on its
+    controller, so moving theirs off kills their creature — and the side
+    picker's fallback had moved an AI's own Wargear onto an opponent's
+    creature when it controlled none (5DN W1G4). So every chain the picker's
+    tree offers is a candidate, ordered by what is likeliest to pay (an
+    opponent's Equipment onto the caster's creature, then the caster's own
+    between its creatures, then an opponent's onto another of theirs, last
+    the caster's onto an opponent's — almost always a gift), at most
+    :data:`ATTACHMENT_MOVES_WEIGHED`, each rehearsed through the turn's fight
+    (`_weighed_through_the_fight`); a move onto the creature it is already on
+    is no move. The best accepted swing that changes something is announced.
+    """
+    from .ai_scoring import _weighed_through_the_fight
+    from .equipment import equipped_creature
+
+    def prior(chain) -> tuple:
+        equipment, host = chain
+        theirs = equipment["seat"] != caster_index
+        onto_mine = host["seat"] == caster_index
+        rank = (
+            0 if theirs and onto_mine else 1 if onto_mine else 2 if theirs else 3
+        )
+        creature = game.permanent_at(host["seat"], host["index"])
+        return (rank, -(creature.effective_power if creature is not None else 0))
+
+    chains = []
+    for equipment in options:
+        moved = game.permanent_at(equipment.get("seat"), equipment.get("index"))
+        if equipment.get("kind") != "permanent" or moved is None:
+            continue
+        on = equipped_creature(moved)
+        for host in equipment.get("next") or ():
+            creature = game.permanent_at(host.get("seat"), host.get("index"))
+            if host.get("kind") != "permanent" or creature is None or creature is on:
+                continue
+            chains.append((equipment, host))
+    best, best_swing = (), None
+    for chain in sorted(chains, key=prior)[:ATTACHMENT_MOVES_WEIGHED]:
+        answer = _role_answer(game, caster_index, list(chain))
+        if not answer:
+            continue
+        announcement = _announcement(
+            game, card, target=answer[0], caster=caster_index,
+            permanent_index=answer[1], permanent_ids=answer[2], role_refs=answer[4],
+        )
+        rehearsal = _weighed_through_the_fight(
+            game, caster_index, card, announcement,
+            _rehearse_announcement(game, caster_index, card, announcement),
+        )
+        if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
+            continue
+        if best_swing is None or rehearsal.swing > best_swing + 1e-9:
+            best, best_swing = answer, rehearsal.swing
     return best
 
 
