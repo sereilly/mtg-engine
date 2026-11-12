@@ -280,8 +280,9 @@ to something that exists. The names most likely to matter this set:
    first.** Extend the shared one; do not fork it.
 6. **Snapshot both differentials before your first edit**:
    `python scripts/oracle_diff.py snapshot --snapshot <your scratch>\od.json` **and**
-   `python scripts/sim_fingerprint.py snapshot` (twelve seeded games, a few minutes,
-   through `run_and_wait.sh`; three Darksteel groups rebuilt a base snapshot from an
+   `python scripts/sim_fingerprint.py snapshot --workers 1` (twelve seeded games, a few minutes,
+   through `run_and_wait.sh`; its default is four processes at ~1.5 GB each, and a
+   wave's groups snapshotting at once would exhaust the machine; three Darksteel groups rebuilt a base snapshot from an
    export because only the first was asked for). Compare `oracle_diff` (same flag)
    after each substantial change and both at the end; name every seeded game that
    moved and why. It diffs every card's full compiled program over both
