@@ -1,9 +1,9 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **5,246** unique cards — thirty-three sets,
+Target: grow the card pool from **6,739** unique cards — forty-two sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
-USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/APC/ODY/M21, all shipped and all supported — to the
-full release line:
+USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/APC/ODY/TOR/JUD/ONS/LGN/SCG/8ED/MRD/
+DST/5DN/M21, all shipped and all supported — to the full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
@@ -194,9 +194,11 @@ mechanism" and becomes "which single line is cheapest per card". A block that
 needs two rounds is worth splitting only if neither half ships a card alone.
 
 **Re-measure a block's priority before acting on it, including the ones below.**
-The legend rule sat open for a year and a half arguing its own urgency from
+The legend rule's choice (CR 704.5j) sat open arguing its own urgency from
 "all eleven legendary creatures in the pool are M21" — true when written, and
-stale the day Legends took the pool to 91 legendary permanents. A card count
+stale the day Legends took the pool to 91 legendary permanents; when Fifth
+Dawn built it (`engine/legend_rule.py`), 227 shipped legendary permanents
+were still kept or binned by battlefield order, with nobody asked. A card count
 written in prose is a claim about the pool with no test behind it, and it
 decays in either direction; every bullet here that carries a number should be
 re-run before it is cited.
@@ -215,23 +217,28 @@ last re-probed. Re-probe before scheduling one — and re-probe the *premise*,
 not only the work: an entry whose premise expires ("the set is measured", "only
 one card prints this") reads as a work item long after it stopped being true.
 
-- **Supported is not working, and the card-level instruments cannot tell.** A
-  card is supported when **any** line is, so a card can report supported while
-  another line produces nothing — or the wrong thing. Four shapes, in the order
-  they were named:
+- **Supported is not working, and the card-level instruments cannot tell.** An
+  artifact, enchantment, instant or sorcery is supported when **any** line is,
+  so a card can report supported while another line produces nothing — or the
+  wrong thing. Four shapes, in the order they were named:
 
   1. **The hollow line** — an ability part with no instruction.
      `scripts/support_report.py --hollow-lines` sees it, and it is a Phase 3
      exit criterion rather than only a Phase 2 reading: Antiquities read 85/85
      for thirty rounds with three cards in it. **It reads one today**
-     (2026-09-07): Cyclopean Tomb, a line a registry implements in full and the
-     compiler cannot see.
+     (re-probed 2026-11-12): Cyclopean Tomb, a line a registry implements in
+     full and the compiler cannot see.
   2. **The unclaimed sentence** — a line no reader claims, on a card some other
      line makes supported. `parse_coverage.py --set <CODE>` sees it and is
      advisory for a measured set, so read it from the first backlog round:
      Mirage reached 335/335 with thirteen such sentences on eleven cards, six
      admitted into the support gate by a single whitelist word, and needed a
-     fourth wave.
+     fourth wave. Fifth Dawn arrived with six (its noncreature sunburst
+     cards, the keyword dropped), and a shipped card lost one mid-round
+     (Suffocation's damage clause, captured by a new reading and dropped
+     while the card stayed supported, which `oracle_diff` caught); 14
+     shipped cards carry a line the compile refuses and a channel outside it
+     claims (SET_PLAYBOOK's Known gaps holds the parts).
   3. **The channel mismatch and the runtime decline** — a line that parses,
      lowers and compiles, and does nothing at run time. Equipoise chose the
      right permanents and phased out none (a scratchpad channel whose arity was
@@ -1806,8 +1813,15 @@ before citing it.**
 42. **Quoted text is oracle text no census walks.** An ability a card grants a
     token ("attacks each combat if able" on Pursued Whale's Pirates) or a tribe
     (`All Slivers have "…"`) is compiled from a string inside a payload, and
-    none of the five instruments reads inside it (TMP). When a set prints the
-    shape, sweep the quoted lines by hand and give one a game.
+    none of the five instruments reads inside it (TMP). Two censuses now
+    walk two of its readers — an Aura's grant
+    (`tests/engine/test_aura_quoted_grants.py`) and a board-wide one
+    (`tests/engine/test_5dn_w1g3_board_wide_grants.py`, which found Endless
+    Whispers granting every creature a sentence that compiled to nothing) —
+    and both support gates ask that a board-wide grant's text compiles
+    (`global_statics.global_static_implemented`). Any other shape is
+    unwalked: when a set prints it, sweep the quoted lines by hand and give
+    one a game.
 43. **The asymmetric gate: a question asked on one of the paths that must ask
     it.** Six of these were found during Urza's Saga, by five independent
     groups, and every one was found by *a card* rather than by an instrument.
@@ -1869,6 +1883,20 @@ before citing it.**
     four of them will drift from. That is an advisory in a file that already
     exists, and it is the version of "which predicates are asked on one of a
     pair of paths?" that does not need a new instrument at all.
+44. **What the cast did is recorded on the cast, measured, and read where the
+    card asks — never predicted.** Sunburst (CR 702.44a) counts the colours
+    "spent to cast it": `PoolPaymentMixin._pay_cast_mana` reports the
+    difference it made to the pool and every restricted bucket
+    (`sunburst.pool_units`, `mana_spent_between`), the cast keeps it on
+    `StackItem.choices["mana_spent_to_cast"]`, and the resolving permanent
+    spell stamps it on the permanent before the entry reads it. A permanent
+    put onto the battlefield any other way carries no stamp, which is CR
+    702.44b's "from the stack as a resolving spell" by construction (Animate
+    Dead on Suntouched Myr gives no counters), and the keyword stays a
+    rewrite: the printed line becomes the rule's text and only the entry
+    reader knows a record exists. The activation's `mana_spent_for_cost` read
+    the pool alone until W2G2 measured it the same way, and Jeweled Amulet
+    and Ice Cauldron, paid from a restricted bucket, had noted no mana.
 
 ---
 
@@ -1885,6 +1913,20 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
+Run on 2026-11-12, with Fifth Dawn promoting, it answers **Champions of
+Kamigawa** (CHK, 2004-10-01, 291 cards, 283 new by the release line's count
+— re-measure against this pool), the earliest unshipped set by release
+date; nothing of it is ingested or read yet, its reprint sources included.
+**Fifth Dawn arrived at 69.1%** — 114 of 165 read supported, but its six
+noncreature sunburst cards had dropped the keyword, Possessed Portal's draw
+skip was unclaimed, Salvaging Station hollow and Door to Nothingness
+without a picker, so the work list was 60, and Endless Whispers (supported
+while granting a sentence that compiled to nothing) made 61; 163 of its
+cards were new to this pool. Sunburst (CR 702.44) was its one new keyword,
+a rewrite read off the colours the cast recorded spending. Seven wave-1
+groups landed all 60 with no hook and no decline; wave 2's four took the
+last card with an engine pile, the client in a browser, the AI pile and
+the legend rule (CR 704.5j), the player's choice at last.
 Run on 2026-11-11, with Darksteel shipped, it answers **Fifth Dawn** (5DN,
 2004-06-04, 165 cards, 162 of them new — re-measure against this pool), the
 block's third set: modular, imprint, affinity, entwine and equipment ship
@@ -2041,7 +2083,7 @@ Mirage that debt stayed invisible until the promotion because `parse_coverage`
 gates on the shipped half alone.
 
 **Read the keyword census against three tables, not one.** The registry diff
-(`vocabulary.IMPLEMENTED_KEYWORDS`, 31 words) misreads in both directions: a
+(`vocabulary.IMPLEMENTED_KEYWORDS`, 32 words) misreads in both directions: a
 keyword implemented as the ability CR 702 says it *is* — cumulative upkeep,
 buyback, equip — reads as missing, and `keyword_lines.UNSUPPORTED_KEYWORDS` outranks
 the registry entirely, so a word there costs every card printing it whatever
@@ -2066,9 +2108,10 @@ a transform card does not have, so a double-faced card raises `ValueError` on
 `commander.py`'s colour-identity derivation — the compiler has never seen a
 second face. That is CR 709/710/712/714/715/720, 45 rules, none implemented;
 it already costs Origins 5 cards and M19 one. Second, keyword abilities stand at
-**31** of CR 702's 192 in the registry, with buyback, cumulative upkeep, equip,
-cycling (CR 702.29), echo (CR 702.30), kicker (CR 702.33) and now
-**flashback (CR 702.34)** implemented below it.
+**32** of CR 702's 194 in the registry (re-read 2026-11-12), with buyback,
+cumulative upkeep, equip, cycling (CR 702.29), echo (CR 702.30), fading,
+kicker (CR 702.33), flashback (CR 702.34), affinity, entwine, modular and
+now **sunburst (CR 702.44)** implemented below it.
 **Read that number with the registry's actual question in mind**, which two USG
 groups had to work out independently because this line does not say it:
 `IMPLEMENTED_KEYWORDS` admits a keyword being *granted* or *named* ("gains
@@ -2077,8 +2120,11 @@ absent from it by design — by the time any reader sees the card, the word is
 gone and the ability it means is in its place. `test_keyword_registry`'s
 bare-keyword-card guard is what forces the choice: listing cycling would mean
 either failing that guard or admitting a costless cycling that charges nothing.
-So "31 in the registry" undercounts what the engine implements and always has;
-the honest reading is 31 granted-or-named plus seven rewrites. Alternative costs (CR 118.9) were the third gap and
+So "32 in the registry" undercounts what the engine implements and always has;
+the honest reading is 32 granted-or-named, plus the keyword lines rewritten
+before any reader sees them (eleven in `line_rewrites.expand_ability_lines`)
+and those compiled to triggers (`keyword_lines.keyword_line_triggers`).
+Alternative costs (CR 118.9) were the third gap and
 are closed: `engine/alternative_costs.py` reads the "rather than pay this
 spell's mana cost" template, the client offers optional and repeated costs
 through `legality_cast_spec.cast_cost_offers`, and the buyback/flashback/evoke/madness
@@ -2127,6 +2173,7 @@ a wave is five parallel worktree groups integrated serially.
 | 8ED | 342 | 99.7% (11 new to the pool) | no group: one production by the integrator (Balance of Power), the eleven driven headless, promoted the day of the ingest + 1 AI fix the set's pinned AI games found |
 | MRD | 291 | 72.5% (211 read supported; 27 of them hollow: entwine, affinity, imprint) | 2 waves (twelve groups landed 103 of 107 with no hook; then nine: Mindslaver, Liar's Pendulum and Shared Fate, Second Sunrise and the graveyard's arrival seam, the wave-close census reds, the client, two engine piles, the AI pile, the rehearsal's inventories) + 4 follow-ups (the seam's Tempest Efreet red a full gate found, the client's second round, the rehearsal's second batch, the promotion's full-pass census reds) |
 | DST | 165 | 65.5% (108 read supported; 6 of them hollow) | 2 waves (nine groups landed all 63 with no hook and no decline; then three: the client in a browser, the AI pile with the promotion's last red, the engine pile with the whenever table's notes) + 2 follow-ups (the rehearsal's census reds, both in the censuses) |
+| 5DN | 165 | 69.1% (114 read supported; 8 of them dropping a line, 6 of those sunburst) | 2 waves (seven groups landed all 60 with no hook and no decline, and found a 61st supported while doing nothing; then four: that card with the engine pile, the client in a browser, the AI pile, the legend rule end to end) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds, each one commit on the chain tip) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2142,21 +2189,25 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-11-11, after Darksteel's promotion): 6,576 unique cards
-over 41 sets, 9,448 printings, 100% supported. Grammar parses 89.7% of
-lines, lowers 89.2% and executes 62.1% (`GRAMMAR_COVERAGE.md`; the pool row
-moved down 0.2 on membership alone — Darksteel's own lines parse at 80.4%).
-**0.7%** of supported cards carry a name-keyed hook — 45 cards, 49 entries
-in 6 registries (`HOOK_RELIANCE.md`) — and the projection that implies for
-the release line has fallen from 1,195 hand-written entries to **195**,
-across twenty-eight consecutive sets that added no hook (Mirrodin's 268 new
-cards and Darksteel's 162 added none). That is the measure moving the way
-the architecture needs it to.
-Parse coverage: 6,574 of 6,576 supported cards fully claimed, 2
-acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is
-the CR coverage tracker (442 of 653 tracked rules, 3,716 tests).
+2026-11-12 for Fifth Dawn's promotion — the membership with the set read as
+shipped, `MTG_PROMOTE=5DN`; the grammar and hook numbers off the promotion
+preview's `--accept`s; the rest off the trackers before it): 6,739 unique
+cards over 42 sets, 9,613 printings, 100% supported. Grammar parses 89.7%
+of lines, lowers 89.2% and executes 62.0% (`GRAMMAR_COVERAGE.md`; the pool
+row's execution moved down 0.1 on membership alone — Fifth Dawn's own lines
+parse at 85.7%). **0.7%** of supported cards carry a name-keyed hook — 45 cards, 49
+entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection that
+implies for the release line has fallen from 1,195 hand-written entries to
+**190**, across twenty-nine consecutive sets that added no hook (Mirrodin's
+268 new cards, Darksteel's 162 and Fifth Dawn's 163 added none). That is
+the measure moving the way the architecture needs it to.
+Parse coverage: 6,574 of the 6,576 cards shipped before Fifth Dawn fully
+claimed, 2 acknowledged, **0 unclaimed**, and Fifth Dawn's 165 fully claimed
+(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker (444
+of 655 tracked rules, 3,735 tests, before the legend rule's).
 `CARD_VERIFICATION.md` is a log, not a target: 1,007 passed (694 in-game,
-313 auto), 74 equivalent, 0 failed, 5,495 untested.
+313 auto), 74 equivalent, 0 failed, 5,495 untested, Fifth Dawn's cards not
+yet in it.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

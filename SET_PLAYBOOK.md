@@ -61,7 +61,12 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   gate alone at `-n 4`; at kg ~55 GB was free and eleven agents ran at once
   beside `-n 2` meeting runs; at kg5 the owner's game engine held ~13 GB and
   9–17 GB stayed free, so gates ran at `-n 3` or `-n 4` and four of seven
-  wave-2 groups launched at once, the other three as wave-1 agents finished.
+  wave-2 groups launched at once, the other three as wave-1 agents finished;
+  at Fifth Dawn 30–40 GB stayed free, enough for seven wave-1 agents beside
+  the `-n 4` Phase 1 full pass and four wave-2 agents beside the gates. A
+  tool an agent runs counts by its processes: `sim_fingerprint`'s default
+  four workers, at seven groups snapshotting together, is ~40 GB, so briefs
+  ask for `--workers 1`.
   **And read it again before every launch and every
   gate**: at Onslaught free commit went from 29 GB to 0.8 GB and back within a
   day as the owner's own work opened and closed (a game engine; an IDE that
@@ -137,6 +142,10 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   popped a sibling's work into their own tree. Commit instead.
 - **Give each group a private scratch folder**
   (`.worktrees/scratch/<round>/<group>/`); a shared one gets overwritten.
+  **In every brief and message, write "read-only" beside an integrator's
+  path and "your scratch" beside every output**: Fifth Dawn's follow-up
+  messages named the rehearsal's catalog log as "Log: <path>", and three of
+  seven groups wrote their runs into it, one truncating it.
   **Save each group's final report verbatim the day it lands**
   (`scratch/<round>/reports/<group>.md`), beside the merge notes: Phase 6 is
   briefed from both, and kg5's had to be recovered from the session
@@ -223,7 +232,10 @@ And when writing one:
 - **A ruling** (how a card is played, as against what a rule says) **carries its
   source** — Scryfall's per-card `rulings_uri` — or is not stated. Rulings are
   not in `MagicCompRules.txt`, and two briefs have stated a wrong one from
-  memory. Check every rule a brief states against the CR as well:
+  memory; checking every one against the rulings file before sending caught
+  a third (Fifth Dawn's draft had Doubling Cube's added mana keep a
+  restriction, where its 2004-12-01 ruling copies none). Check every rule a
+  brief states against the CR as well:
   `scripts/integration/check_brief_crs.py <repo> <briefs>` prints each cited
   number with its rule's opening words, and a `SUBJECT?` line for a citation
   whose rule shares no word with the sentence citing it — a wrong section
@@ -263,7 +275,13 @@ And when writing one:
   the thing it waits on.
 - **Dedupe shapes before the groups exist.** Read the sentences for a shared
   shape and put one shape in one group; two mechanisms reconciled at a merge
-  cost more.
+  cost more. A sentence printed on cards that other groups own is split the
+  same way: its owner tests it on invented one-line cards, and the
+  integrator writes each card's whole-card test at the merge that completes
+  it. Fifth Dawn's CR 701.10 doubling went to W1G7 alone
+  (`characteristics._parse_double`: Doubling Cube's mana, Solarion's
+  counters for W1G1, Beacon of Immortality's life total for W1G3), and both
+  whole-card tests landed on the W1G7 link.
 - **A wire change and its client are one unit.** Give that group the client, or
   put the client half in the same wave's plan before the first agent starts;
   until it lands, the merge message says the feature is not finished.
@@ -285,7 +303,13 @@ And when writing one:
   yield), and extend a running group by message — census path,
   parts, and the names a sibling already took, so the two union rather than
   fork. File the measured-and-declined pile **by subject**, not by reporting
-  group: five reports each holding a piece become one brief.
+  group: five reports each holding a piece become one brief. **A wave
+  launched beside its base's close gate is sent the gate's reds the day they
+  are read, and each fix's link as it merges**: Fifth Dawn's wave 2 started
+  on the wave-1 close link while its gate ran, the reds were fixed on
+  follow-up links above it, and three of four wave-2 groups re-found them —
+  one re-adding a census row a follow-up already carried, a duplicate dict
+  key Python takes without a word.
 - **Brief a Known-gaps entry by its subject, not its example.** At kg four of
   twelve groups found a larger defect beside their entry than in it (the
   effect-label prefix read as dispatch; every "creature dies" trigger reading
@@ -381,7 +405,12 @@ And when writing one:
   pairs and two triples; none needed the bisect. A follow-up commit on a
   branch already merged (a rehearsal red sent back to its group) is staged
   under an alias, since its link name is taken: `git branch <round>/fu3
-  <round>/w1g3`, then `chain_stage.sh fu3 <tip>`.
+  <round>/w1g3`, then `chain_stage.sh fu3 <tip>`. The message tells the
+  group to fast-forward its branch onto the chain tip (`git merge --ff-only
+  <tip>`) before it edits, so its fix is one commit on the tree that went
+  red: Fifth Dawn's seven follow-ups were staged as `fu1`–`fu7` links, each
+  committed with its scans, then regenerated and met once at the top (one
+  meeting, plus the rehearsal's red files under `MTG_PROMOTE`).
 - **Name the `full`-marked structural guards in every group brief**
   (`tests/engine/test_face_blind_guards.py`, `test_grammar_layering.py`,
   `test_cast_prohibition_readers.py`): an agent's quick-pass `tests/engine` never
@@ -558,7 +587,13 @@ on at least one resolution.
   with a search that holds each candidate seed to the test's own assertions.
   kg5 reseeded two that way (`test_kg5_mana_substitution_simulation` 5151 to
   5155, `test_kg_layers_ai_balance_and_deaths` 69 to 141;
-  `scratch/kg5/tools/reseed_*.py`).
+  `scratch/kg5/tools/reseed_*.py`). **A seeded row the promotion's decks
+  move is the same question**: under `MTG_PROMOTE` a seeded game deals the
+  set's cards, so trace the red first (`explain_cast` over each dropped
+  cast) and reseed only a game that is honest and unlucky, to a seed that
+  holds every assertion on both manifests. Fifth Dawn's `ai_vs_ai` web row
+  went red in the wave-1 rehearsal: seed 3 left a seat on two lands from
+  turn 3 to 13, every drop honest; seed 1 holds both ways.
 - **A new `PlayerState` or `Game` field is read by every `vars()` walker** —
   `ai_rehearsal.position_digest` and the AI censuses' board signatures. One that
   moves on every resolution (a graveyard arrival stamp) reads as a lasting
@@ -785,11 +820,15 @@ carry its row, and the census is in hand.
    stays Phase 4's reviewed move.
 2. **First, `tests_for_diff.py --ingest <CODE> --run -n 4`**: every test whose
    population walks the measured set, by node id, in the full pass, longest
-   first — checked against six ingests' full passes (every one of their reds
-   named: DST 13, JUD 32, LGN 2, MRD 13, ONS 8, SCG 6) — so its reds go into
-   `yield.txt` and the briefs before the fan-out, where Darksteel's arrived 80
-   minutes into the wave. Then run the **full pass** (`pytest --full`) and **treat what fires as yield,
-   not noise** — the quick pass samples the censuses, and Legions' one
+   first — checked against seven ingests' full passes (every one of their
+   reds named: 5DN 5, DST 13, JUD 32, LGN 2, MRD 13, ONS 8, SCG 6) — so its
+   reds go into `yield.txt` and the briefs before the fan-out, where
+   Darksteel's arrived 80 minutes into the wave. Then run the **full pass**
+   (`pytest --full`) and **treat what fires as yield, not noise**: Fifth
+   Dawn's `--ingest` (497 tests in 225 files) named all five reds its whole
+   full pass found (~37 minutes at `-n 4`, beside the seven wave-1 agents),
+   and the pass is what checks the list, so it stays. The quick pass samples
+   the censuses, and Legions' one
    engine yield (a trigger census naming Chromeshell Crab) hid in a sample
    until a meeting run named the file and it ran whole: a new set's
    text reaches code the old pool never ran, and these are engine bugs found
@@ -895,10 +934,11 @@ provides?* Three sweeps, in order of blast radius:
 Read-only agents may classify the backlog in parallel — *implementable now*,
 *needs a new handler*, *blocked on a subsystem* — merged serially. **They
 compile, not read**: run each refused line through the live grammar to name
-its exact refusal site, which catches a second gap behind a reason string. A
-card is supported when *any* of its lines is, so a whole mechanic can be absent
-while every card printing it reports fine; only reading the compiled program
-line by line finds that.
+its exact refusal site, which catches a second gap behind a reason string. An
+artifact, enchantment, instant or sorcery is supported when *any* of its lines
+is (CLAUDE.md, "Engine architecture"), so a whole mechanic can be absent
+while every noncreature card printing it reports fine; only reading the
+compiled program line by line finds that.
 
 ## Phase 3 — Backlog rounds (generalise first)
 
@@ -1528,6 +1568,22 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     simulations because the creatures it would put are cast for mana first
     (the doors' order); Panoptic Mirror's imprint picks the lowest slot among
     cards of one mana value.
+  - From Fifth Dawn, each measured: **Helm of Kaldra is activated again once
+    a Kaldra exists** (W2G4; 5DN, MRD and DST at seed 7 with the three pieces
+    pinned: seven legend-rule departures, three after attackers were
+    declared, so the attacking Kaldra left combat). The rehearsal reads the
+    swap as a change because `ai_rehearsal.position_digest` keys permanents by
+    `permanent_id`, so an identical successor differs, and
+    `ai_scoring._worth_proposing` passes it at swing 0; the instant-speed road
+    (`ai_policy.choose_instant_speed_activation`, through
+    `ai_rehearsal.pays_before_the_blocks`) fires too, not yet traced. Parts: a
+    "changed" read off content alone, or the instant-speed path's `lasting >
+    0` floor for a main-phase activation. And Energy Chamber's charge-counter
+    mode lands on the Chamber itself beside its own Pentad Prism, where it
+    would be a mana: the mode's default target does not ask whether a
+    permanent spends the counter (W1G1;
+    `tests/ai/test_ai_trigger_mode_and_colour_defaults.py`).
+  <!-- 5dn integrator: W2G3 AI -->
   *Clears:* the next AI round.
 
 - **Three mana readers still skip what a substitution does** (kg5 `mana2`,
@@ -1640,37 +1696,147 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   raw key ("spendable only on artifact_or_artifact_ability",
   `handlers/mana.py`) where the wire's `restricted_mana_words` has the
   sentence. (c) A granted ability's served text is lowercased by the Aura
-  reader ("{t}, unattach Heartseeker: …"). (d) To respond to a spell a person
-  must click it on the canvas stack within about a second, before the
-  client's auto-pass; Leonin Battlemage's "you may untap" is asked on every
-  cast while it is already untapped. (e) Not driven in a browser: Sundering
+  reader ("{t}, unattach Heartseeker: …"). (d) The client passes priority
+  whenever the stack is non-empty unless a person hovers or click-holds it
+  (`holdPriorityActive` in `app.js` is never set), so to respond to a spell a
+  person must click it on the canvas stack within about a second, and an
+  opponent's activated ability, which has no cast animation to hold during,
+  cannot be answered at all except by holding priority on a spell of one's
+  own first (Fifth Dawn's W2G1: Ouphe Vandals against the AI's Rod of Ruin,
+  three attempts) — part: a hold-priority toggle that sets it; and Leonin
+  Battlemage's "you may untap" is asked on every cast while it is already
+  untapped. (e) Not driven in a browser: Sundering
   Titan's leaves-the-battlefield trigger, Leonin Bola's and Surestrike
   Trident's granted abilities (text checked), the Cataclysm and Planar
   Overlay paths of the restructured keep modal. *Clears:* (a) a damage
   round; (b)–(e) a client round.
 
-- **What the pre-Fifth-Dawn round left** (pre5dn cleared the rest of
-  Darksteel's toolkit wishes: `oracle_diff`'s defaulted fields, `snapshot
-  --rev`, `probe_line --ast` and its raise site, `--require`, `fails_before.sh`,
-  `tests_for_diff`'s base, LF and `--ingest`, the canvas position accessor and
-  `serve_board.py --reload`). Left: no `explain_cast` for an activation
-  (W2G2 spied on `_land_ability_worth` by hand); `--ingest` names ~495 tests
-  because ten sharded AI censuses walk both roles — `stable_sample` always
-  taking the measured set's cards and sampling the rest would cut it (T2's
-  proposal, `tests/helpers.py`); and the speed items the round did not take.
-  It took the redundant state checks (`state_check_witness`, ~9% of the full
-  pass), the hot function-level imports and the land mana derivations
-  (`held_on_compiled`, ~4–7%), and the doubled determinism run. Left, from
-  the profiler: the continuous-effect recompute inside every state-based
-  pass changes nothing ≥98.3% of the time (a dirty marker under
+- **A noncreature card is supported when any of its lines compiles, so a
+  line it drops is invisible to the support count.**
+  `oracle._compile_card_oracle` assembles an artifact's, enchantment's,
+  instant's or sorcery's program line by line
+  (`line_classification._noncreature_line_instructions`), and a line
+  nothing reads contributes nothing; only the creature and planeswalker paths
+  and a land's static text refuse one, naming it. Fifth Dawn met it twice:
+  its six noncreature sunburst cards arrived supported with the keyword
+  dropped (W1G1; keyword lines are now held by
+  `tests/engine/test_5dn_w1g1_noncreature_keyword_lines.py`), and W1G6's new
+  "dealt damage to you this turn" arm captured Suffocation's damage clause
+  mid-round, which vanished while the card stayed supported (W2G2 reproduced
+  it with the arm's narrowing removed: the grammar refuses the line). It is
+  seen — by `oracle_diff`, by `parse_coverage --check` in `check_all`, and by
+  `test_parse_coverage::test_every_supported_card_text_is_claimed_or_acknowledged`
+  — but that test is `full`-marked (the analysis takes ~28 s without its
+  deletion probe), so an agent's quick `tests/engine` never asks it, and
+  `test_front_end_safety` compares the grammar against card hooks alone.
+  Today 14 shipped cards carry a line the compile refuses, each claimed by a
+  channel outside the compile: Cyclopean Tomb, Drain Life, Lich, Time Vault,
+  Jihad, City in a Bottle, Call to Arms, Soul Burn, Soul Echo, Kaervek's
+  Torch, Torrent of Lava, Transcendence, Consume Spirit and Lich's Tomb
+  (`probe_line`'s refused lines on supported cards,
+  `scratch/5dn/w2g2/measure_dropped_lines.py`, re-run on Phase 6's base).
+  Parts, either: (a) the compiler records the lines it dropped on each
+  noncreature program, so a quick test pins the fourteen; or (b) a
+  compile-side claim for each of those fourteen outside channels, and then an
+  unread noncreature line refused as the creature path refuses one.
+  *Clears:* a compiler round.
+
+- **Fifth Dawn's engine leftovers, each measured.** (a) Reversal of Fortune's
+  copy is made in its caster's exile and cast from there, where CR 707.12
+  creates it in the hand it copies: the engine has no cast out of another
+  player's hand (`copy_casts.arm_copy_cast`'s `from_hand_of`), so anything
+  reading the zone a spell was cast from reads exile. Part: a cast road for a
+  card in another seat's hand, the copy made there. (b) All Suns' Dawn asks
+  nobody which colour a multicoloured target fills: the colour each target
+  was chosen as is recorded since W2G2 (`per_color_targets`, re-asked by
+  both CR 608.2b checks), but the choice is the engine's WUBRG matching.
+  (c) `test_front_end_safety`'s guard that every cache holding a compiled
+  answer is registered for clearing reads only the calls in a cache's own
+  body: `global_statics`' text cache held a compile answer through a call
+  two frames down and outlived a compiler swap (Mephidross Vampire's
+  `TypeError` under `MTG_PROMOTE=5DN`, order-dependent; fixed, the guard
+  not). Seen, not measured: a phase-rail upkeep stop on a step Eon Hub skips
+  is not honoured, which is right (CR 614.10), and the client may still show
+  the flag (W1G6). *Clears:* (a) a stack round; (b) a targets round with its
+  client half; (c) a guard round.
+
+- **Fifth Dawn's client leftovers** (W2G1 clicked every prompt the wave-1
+  reports named; these it measured and left). (a) **A person cannot spend
+  fewer colours on a sunburst spell than the pool offers** except by
+  floating exactly the mana to spend: the payment preview names the colours
+  (`payment_plan.sunburst_preview`), and the pool payment then spends the
+  widest spread (`sunburst.color_spreading_costs`). Parts: a cast-body
+  field naming the pool units that pay (`pay_with: {symbol: count}`, a row in
+  `web/schemas.GameActionRequest`, forwarded by `action_helpers`);
+  `pool_payment._pay_cast_mana` honouring it exactly where it pays the cost
+  (CR 601.2h) and refusing with nothing spent where it does not; a
+  pool-unit chooser in the cast flow, shown for a spell sunburst sizes with
+  more in the pool than it costs. (b) A graveyard card's `ways` caption
+  shows only the permission's price (a Bringer from a graveyard under Fist
+  of Suns reads {7}{U}{U}; the {W}{U}{B}{R}{G} offer is in the cast's offer
+  prompt). (c) Wording: the log's "Craw Wurm go to Player 1's battlefield"
+  (`handlers/linked_exile`'s plural verb, Summoner's Egg), and an action
+  hint left reading "Paid for X.". (d) The canvas piles a tapped permanent
+  with an untapped one of the same name (W2G4's two Tolarias at the legend
+  rule's prompt; each still clicks right). (e) Not driven in a browser:
+  Endless Whispers' `trigger_target` at a person's seat (W2G2's branch; an
+  existing kind), Vedalken Shackles' "let it untap" direction, Fold into
+  Aether's and Summoner's Egg's declines, and a Bringer cast from a
+  graveyard under Fist of Suns. *Clears:* (a) a round with its engine half;
+  (b)–(e) a client round.
+
+- **The toolkit and speed wishes still open**, each written down by a group
+  that paid for its absence. Tools: an `explain_cast` for an activation
+  (Darksteel's W2G2 spied on `_land_ability_worth`, Fifth Dawn's W2G4 called
+  `choose_activation_action` and `_rehearse_activation` by hand); a
+  per-game timing line and a stall dump in `simulate_ai_games.py`, which
+  prints nothing until every game ends (W1G5 lost about an hour to Reversal
+  of Fortune's loop and wrote a stack sampler, `scratch/5dn/w1g5/sim_sample.py`;
+  W2G2 waited 11 minutes on four games); one command running the four
+  exit-criteria instruments over a card list; a text-keyed-table
+  differential beside `oracle_diff` (W1G2 diffed the readers against a `git
+  archive` of the base, `scratch/5dn/w1g2/text_tables_census.py`, and W1G7
+  in a throwaway worktree);
+  a seeded batch on another commit with its log-line counts diffed (W2G4's
+  A/B); the prompt kinds a card arms; which gate judged a cast's targets (a
+  graveyard announcement is judged in `legality_cast_gates`, not
+  `cast_target_validation`); a `--diff-pins` mode on the mode-chooser census
+  (`scratch/5dn/w1g7/census_diff.py`); a committed CRLF-keeping replace and a
+  line-ending check (a heredoc drops a backslash, an inline edit missed on a
+  CRLF file, and `grep -c $'\r$'` reads 0 on a CRLF file in Git Bash); a map
+  of `sequences.py`'s riders by antecedent; a hold-priority recipe in the
+  `run-magic` skill (W2G1 lost ~40 minutes to Darksteel's (d) above).
+  Readers that mislead: `serve_board.py`'s command folder runs a `.py` the
+  moment it appears, so a file still being written runs empty (write
+  `.tmp`, then `mv`); the `tests/ui` files that lift client functions out of
+  `app.js` by name carry hand-written preludes, and `tests_for_diff` names
+  none of them (one helper call added to `sendAction` broke five, found only
+  by `tests/ui` whole);
+  `probe_line` shows nothing of what a pronoun's rebound filter carries, its
+  `--card` takes one card (the last flag wins), and it judges a noncreature
+  card's static line by the creature gate
+  (`static_line_support._is_supported_static_creature_line`), which is how it
+  called Endless Whispers' line accepted while the compiler refused it;
+  `tests_for_diff --run` refuses pytest's own flags (`-p no:cacheprovider`)
+  and defaults to `-n 2`; `fails_before.sh` cannot prove a test that imports
+  a name the fix adds (the "before" run is a collection error until the
+  import moves inside the test); a headless `table()`/`start_next_turn`
+  answers an upkeep trigger's prompt only at the next settle, after the
+  draw. Briefs: never name `tests/engine/test_catalog_sweep.py` whole (one
+  test a card, hours serially; `-k <card>`). `--ingest` names ~500 tests
+  (Fifth Dawn's: 497 in 225 files) because ten sharded AI censuses walk both
+  roles — `stable_sample` always taking the measured set's cards and
+  sampling the rest would cut it (T2's proposal, `tests/helpers.py`). Speed,
+  from pre5dn's profiler: the continuous-effect recompute inside every
+  state-based pass changes nothing ≥98.3% of the time (a dirty marker under
   `fast_paths.CHECKING`; a missed invalidation is a stale P/T or type, so
   high risk; ~7% of the full pass), backwards censuses re-run whole (~858 s;
   a smaller sample weakens what they prove), and the state-based pass's own
-  internals (ten sweeps a pass, `has_supertype`). Left, from the two that
-  took theirs: the same window-closing skip on the headless/web branch (the
-  censuses' share — they save 5–8% where the games save ~14% — proved by a
-  census run under `CHECKING`, since the seeded games never reach that
-  branch); the mark carried from a step's `_check_after_turn_based_actions`
+  internals (ten sweeps a pass, `has_supertype`). Beside what pre5dn took
+  (`state_check_witness`, `held_on_compiled`): the same window-closing skip
+  on the headless/web branch (the censuses' share — they save 5–8% where the
+  games save ~14% — proved by a census run under `CHECKING`, since the
+  seeded games never reach that branch); the mark carried from a step's `_check_after_turn_based_actions`
   into its window's first closing check (~1,900 of DST's ~5,200 remaining
   closing checks find an unchanged table); and the import tail under 40,000
   a profile (~140,000 relative imports per DST sim, mostly

@@ -118,7 +118,11 @@ first combat and in response to another seat's object
   Floating mana pays generic through the same choice
   (`mana_payment.floating_units_for_generic`,
   colourless first where nothing is wanted), in `plan_payment` and the cast
-  path's pool spend.
+  path's pool spend. Both ask one thing first for a spell sized by the colours
+  spent on it (sunburst, CR 702.44a): the widest colour spread its free
+  sources or the pool pays (`sunburst.color_spreading_costs`, the printed
+  split last), which the cast chooser reads as the body
+  (`ai_payment.colors_in_reach`).
   `tap_planned_lands` binds every slot to its permanent before the first
   tap (a sacrifice renumbers).
 - **Mulligans**: `engine/ai_mulligan.py` is the one keep decision and London

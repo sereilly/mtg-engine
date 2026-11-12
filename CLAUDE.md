@@ -49,7 +49,8 @@ of the manifest moves that measured set into `sets` at its printing-ordered
 place for the process, the file untouched, so the censuses over
 `load_catalog()` can be run with the set shipped while it is being
 implemented. A rehearsal, never a gate — the shipped-pool guards fail on its
-unsupported cards; the test header names it, and `check_all` and the
+unsupported cards; the test header names it (under `-v`: the `-q` in
+`pytest.ini` hides the header), and `check_all` and the
 integration gates refuse to run under it (`census_rehearsal.sh` is the one that
 does).
 
@@ -255,8 +256,14 @@ cards/*.json (set files) → card_loader.load_cards → CardDefinition (immutabl
 typed AST → lowering to `OracleInstruction`. The compiler reads a line through
 it and then through `card_hooks.CARD_LINE_INSTRUCTIONS` (one printed line of one
 named card), and there is **nothing after that**: a line neither claims produces
-no instruction and the card is reported unsupported naming the clause.
-Coverage lives in `GRAMMAR_COVERAGE.md`.
+no instruction. A creature, a planeswalker and a land's static text are then
+reported unsupported naming the clause, but **an artifact, enchantment, instant
+or sorcery is supported when *any* of its lines compiles**
+(`line_classification._noncreature_line_instructions`): only its Aura and
+Equipment effect lines, a rewrite keyword's line and a spell's own effect have
+gates of their own, so any other line it drops is seen by `parse_coverage
+--check` and `oracle_diff`, never by the support count (SET_PLAYBOOK's Known
+gaps). Coverage lives in `GRAMMAR_COVERAGE.md`.
 
 **Module size.** No Python module in `engine/`, `web/` or `scripts/` may exceed
 **2,000 lines** (`tests/engine/test_module_size.py`) — not style, but the signal

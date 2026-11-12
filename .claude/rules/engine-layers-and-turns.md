@@ -167,12 +167,17 @@ and you can open this file directly whenever its subject is yours.
   Equipment, also asked by the CR 704.5n sweep and by the AI's equip planner,
   and the activation's target picker asks `equip_target_refusal` (an
   Equipment that is a creature may activate equip, which then does nothing,
-  CR 301.5c). An Equipment is supported only if its equip ability compiles
+  CR 301.5c; a creature whose own text says it "can't be equipped",
+  `equipment.self_cant_be_equipped_line`, is a legal target the Equipment
+  then does not move onto, per Goblin Brawler's 2004-12-01 ruling). An
+  Equipment is supported only if its equip ability compiles
   and every effect line is claimed.
 - Text-keyed derivation tables (parameters are payload, and the support gate
   reads the same table the dispatch does): `combat_restrictions.py` (CR 506; its
   rows in `combat_restriction_table.py`),
   `untap_restrictions.py` / `draw_step_modifiers.py` (CR 502/504),
+  `step_skips.py` (a step every player skips, CR 614.10, asked before
+  anything of the step happens),
   `land_animation.py`, `land_play_allowance.py` (CR 305.2), `landwalk.py`,
   `mana_could_produce.py`, `counter_conditions.py`. A table joins the grammar's
   `registry_for_line` for its line to parse, which is what

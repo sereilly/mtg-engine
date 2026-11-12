@@ -72,7 +72,12 @@ per ability, {T} included — `web/offers._ability_denial`), `ability_mana`
 cost decides included, `web/offers._decided_ability_mana`; whether a colour
 is chosen; a mixed split's `combination` and an "or" of quantities'
 `alternatives`, both answered on `mana_combination` —
-`engine/mana_combination.py`; `symbols_by_cost` where the cost's permanent
+`engine/mana_combination.py`, which a land's `tap` also carries: the split
+of the mana its tap sets off in any combination of colours, which the land
+announces as `tap_mana_split` (`{count, colors, source}`,
+`web/offers.tap_mana_split`; Dawn's Reflection), absent taking the seat's
+default (`mana_combination.triggered_split`);
+`symbols_by_cost` where the cost's permanent
 decides; null for an ability that adds no mana), `ability_text_change` and a
 cast's `text_change` (the words a text change announces), `x_payable` /
 `ability_x_payable` (`{pool, board, colors}`: the payable X as the cast or
@@ -86,10 +91,14 @@ cast's `decline_copy` (a copy-as-it-enters "may" declined), `prompt_owed_by`
 else a session-held one, `state_view._SESSION_DECISIONS`),
 `abilities_lost`, `taps_for_mana`, `produced_mana`, a payment prompt's `payable`
 (a "pay" that cannot be collected is refused with the prompt kept, never read as
-a decline), a search's `min_picks`, a graveyard ability's `target_spec`,
+a decline), a search's `min_picks`, an `exile_from_hand_choice`'s
+`face_down` (said before the choice: hidden from every player, CR 406.3), a
+graveyard ability's `target_spec`,
 `target_spec.cost_offers` (every applicable alternative cost by
 `alternative_index`, which the cast answers with `alternative_cost_index`, CR
-118.9a), a castable spell's `mana_combination` when it makes mana in any
+118.9a; a granted price identical to one already offered is not a second
+offer, `cast_alternative_costs._same_price`), a castable spell's
+`mana_combination` when it makes mana in any
 combination (`count`, or `count_by_cost` per permanent that could pay its
 cost — `mana_combination.cast_split_offer`), the active seat's
 `combat.attack_requirements` and a defending seat's `combat.block_requirements`
@@ -114,7 +123,9 @@ on the same turn, step and log length). A state is newer by the payload's
 length, and each event stream is handed its events thread-safely,
 coalesced with their reasons. The client does not plan taps: a
 click on a castable card is answered by `web/payment_plan.py`
-(`POST …/payment_plan` previews; `auto_tap` on the action taps), and every
+(`POST …/payment_plan` previews, with the colours a payment spends as
+`sunburst` for a spell sunburst sizes, `payment_plan.sunburst_preview`;
+`auto_tap` on the action taps), and every
 paying action is previewed before it is sent (`previewPayingAction`), so a
 pool that cannot pay opens the auto-tap dialog without a refused request.
 

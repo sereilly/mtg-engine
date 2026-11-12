@@ -102,7 +102,11 @@ and you can open this file directly whenever its subject is yours.
 ## Prompts
 
 - `engine/pending_choices.py` — every other decision a seat owes part-way
-  through a spell, an ability or a step: one `PendingChoice` queue on
+  through a spell, an ability or a step, or that a state-based check arms
+  (CR 903.9a's `commander_zone_change`; 704.5j's `legend_rule`,
+  `engine/legend_rule.py`, stamped with no stack object — the check skips a
+  group while it is owed and runs again on the answer): one `PendingChoice`
+  queue on
   `Game.pending_choices` and one `ChoiceSpec` per kind (how it is answered,
   what a non-interactive seat does, which action answers it, how the web
   renders and gates it), defined beside its resolver in its family's module

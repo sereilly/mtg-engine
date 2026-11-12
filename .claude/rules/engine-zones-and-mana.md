@@ -193,5 +193,8 @@ and you can open this file directly whenever its subject is yours.
   see**: a card exiled face down, a private find or a card behind a
   face-down object is counted, not named (`linked_exile.exiled_cards_for_the_log`),
   and a face-down exile stays face down after its exiler leaves
-  (`keep_face_down_after_departure`). Held by
+  (`keep_face_down_after_departure`) until an instruction turns it up (CR
+  406.3; Summoner's Egg's `turn_linked_exile_face_up`, through
+  `linked_exile.turn_linked_entries_face_up`), from which line the log names
+  it. Held by
   `tests/engine/test_hidden_cards_stay_out_of_the_log.py`.
