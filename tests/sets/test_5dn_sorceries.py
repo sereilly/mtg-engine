@@ -137,6 +137,28 @@ def test_w1g5_reversal_of_fortune_copy_needs_its_targets(set_pool):
     _w1g5_settle(game)
     assert game.players[1].life == 17
 
+
+def test_w1g5_reversal_of_fortune_does_not_loop_on_the_other_reversal(set_pool):
+    """A copy of the opponent's own Reversal of Fortune, aimed at the same
+    hand, offers the same cards again — an optional loop (CR 732.1b) a seat
+    nobody asks once took without end. It declines that copy and takes the
+    Bolt; a person may still copy it, and the copy offers the hand again."""
+    game = _w1g5_reversal(set_pool, ["Reversal of Fortune", "Lightning Bolt"])
+    _w1g5_settle(game)
+    assert game.players[1].life == 17
+    assert "W1G5-A did not cast a copy of Reversal of Fortune" in game.log
+    assert sum("reveals their hand" in line for line in game.log) == 1
+
+    person = _w1g5_reversal(
+        set_pool, ["Reversal of Fortune", "Lightning Bolt"], interactive=(0,),
+    )
+    first = _w1g5_settle(person, defaults=False)
+    assert first.data["card_name"] == "Reversal of Fortune"
+    assert person.confirm_copy_cast(0, accept=True, target_player_index=1)
+    again = _w1g5_settle(person, defaults=False)
+    assert again is not None and again.kind == "copy_cast"
+    assert sum("reveals their hand" in line for line in person.log) == 2
+
 # ==== end w1g5 ======================================================
 
 

@@ -270,9 +270,54 @@ def default_copy_cast_offer(game, choice) -> None:
     from .ai_payment import tap_planned_lands
     from .ai_policy import choose_copy_cast
 
+    from .ai_rehearsal import rehearsing
+
     card = choice.data.get("_card")
     seat = choice.player_index
     source_name = str(choice.data.get("source_name") or "")
+    # **Inside a rehearsal, one card of a group is weighed.** Each offer of
+    # "copy **a** card …" is weighed by rehearsing its cast one level down
+    # (``ai_policy.choose_copy_cast``), and a rehearsal of anything with the
+    # offering spell on the stack resolves it — so Reversal of Fortune over a
+    # hand of three instants and sorceries rehearsed every one of them inside
+    # every rehearsal the table made while it waited, and one seeded game ran
+    # for over ten minutes. The group is offered best first (most expensive,
+    # ``handlers/stack.cast_copy_of_revealed_card``), so a rehearsal weighs
+    # that one and declines the rest unweighed; the record is the scratch
+    # copy's own, so the real table still weighs every offer.
+    #
+    # **…and none is weighed a level further down.** A copy weighed one level
+    # down (``ai_prompt_picks._one_level_deeper``) may itself offer copies —
+    # Reversal of Fortune copying the other player's Reversal of Fortune —
+    # and weighing those would be the third level that function promises is
+    # never opened: inside a rehearsal already one level down, the offer is
+    # declined unweighed, as every prompt of such a rehearsal is answered.
+    from .ai_prompt_picks import _DEEPER
+
+    # **A copy of the spell that is offering it is never taken.** Reversal of
+    # Fortune shown the other player's Reversal of Fortune may copy it, and
+    # the copy — aimed at the same opponent, whose hand still holds the
+    # original — offers exactly the same cards again: an optional loop
+    # (CR 732.1b; every pass a "may") a seat nobody asks took without end,
+    # one seeded game casting copies until it was stopped. Taking it never
+    # offers more than declining it and picking from the same hand now, so
+    # a seat nobody asks declines it; a person may still loop as long as
+    # they like.
+    if card is not None and card.name == source_name:
+        game.log.append(
+            f"{game.players[seat].name} did not cast a copy of {card.name}"
+        )
+        game.discard_pending_choice(choice)
+        return
+
+    one_of = choice.data.get(ONE_OF)
+    if rehearsing() and (
+        _DEEPER.get() or (isinstance(one_of, dict) and one_of.get("weighed"))
+    ):
+        game.discard_pending_choice(choice)
+        return
+    if rehearsing() and isinstance(one_of, dict):
+        one_of["weighed"] = True
 
     def choose(copy, permission):
         action = choose_copy_cast(game, seat, copy, permission)
