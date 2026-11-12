@@ -766,6 +766,8 @@ _COVERED_ELSEWHERE = {
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
     "attacked_you_this_turn":
         "test_attacked_you_this_turn_outlives_the_combat_it_names",
+    "dealt_damage_to_you_this_turn":
+        "test_dealt_damage_to_you_this_turn_reads_the_ledger_for_the_seat_asking",
     "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "not_attacking": "test_the_nonattacking_nonblocking_pair_names_a_creature_in_neither_role",
@@ -1465,6 +1467,43 @@ def test_attacked_you_this_turn_outlives_the_combat_it_names(pool):
     assert not subject_matches(game, attacker, {"attacking_you": True}, observer=1), (
         "the live relation is what the record exists to outlive"
     )
+
+
+def test_dealt_damage_to_you_this_turn_reads_the_ledger_for_the_seat_asking(pool):
+    """"Destroy all creatures **that dealt damage to you this turn**."
+    (Retaliate.) The turn's damage ledger joined at both ends: the dealer by
+    its ``permanent_id``, the recipient by the seat asking (the observer).
+    A creature that damaged another *player*, or a creature, did not damage
+    you; one that left and came back is a new object (CR 400.7) the ledger
+    has nothing for; and a caller with no observer is answered no, as the
+    pure matcher answers every seat-relative key."""
+    from engine.damage_ledger import DamageEntry, ledger
+
+    dealer = Permanent(card=pool["Grizzly Bears"])
+    biter = Permanent(card=pool["Grizzly Bears"])
+    idle = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[PlayerState(name=f"P{seat}") for seat in (1, 2, 3)])
+    for permanent in (dealer, biter, idle):
+        game._put_permanent_onto_battlefield(0, permanent, None)
+    assert dealer.permanent_id is not None
+    entries = ledger(game).entries
+    entries.append(DamageEntry(2, "Grizzly Bears", dealer.permanent_id, None, 0, 1, None))
+    entries.append(DamageEntry(2, "Grizzly Bears", biter.permanent_id, None, 0, None, idle.permanent_id))
+
+    described = {"type_filter": "creature", "dealt_damage_to_you_this_turn": True}
+    assert subject_matches(game, dealer, described, observer=1)
+    assert not subject_matches(game, dealer, described, observer=2), (
+        "damaging somebody else is not damaging you"
+    )
+    assert not subject_matches(game, biter, described, observer=1), (
+        "damage to a creature is not damage to you"
+    )
+    assert not subject_matches(game, idle, described, observer=1)
+    assert not subject_matches(game, dealer, described)
+    game.remove_from_battlefield(dealer)
+    returned = Permanent(card=pool["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, returned, None)
+    assert not subject_matches(game, returned, described, observer=1)
 
 
 def test_controlled_since_turn_start_rejects_a_creature_that_just_arrived(pool):
