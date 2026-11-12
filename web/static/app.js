@@ -19539,6 +19539,9 @@ function carryAnnouncedSeat(body, actionBody) {
 // ---------------------------------------------------------------------------
 
 function castCostOffers(card) {
+  // A land is played, never cast (CR 305.1), so no price is announced for it,
+  // though Fist of Suns' "spells you cast" offer rides on its payload too.
+  if (/\bLand\b/.test(String(card?.type || ""))) return null;
   const offers = targetSpecOf(card)?.cost_offers;
   return Array.isArray(offers) && offers.length ? offers : null;
 }
