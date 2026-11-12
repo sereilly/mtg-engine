@@ -33,7 +33,7 @@ from .damage_substitutions import (DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT,
 from .draws import (DISCARD_INSTEAD_OF_DRAW_TEXT, DOUBLE_DRAW_TEXT,
                     LIFE_GAIN_TO_DRAW_TEXT, PILE_TOP_INSTEAD_OF_DRAW_TEXT,
                     RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT, SKIP_DRAW_TEXT,
-                    draw_becomes_counter)
+                    SKIPPED_DRAW_TEXT, draw_becomes_counter)
 from .life_gain import gains_no_life_instead_line
 from .opponent_library_draws import OPPONENT_LIBRARY_DRAW_TEXT
 from .permanents import (EXILE_UNCAST_CREATURE_TEXT, EXTRA_PLUS1_COUNTER_TEXT,
@@ -161,6 +161,9 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # _skip_instead_of_drawing (Obstinate Familiar): the phrase is the whole
     # line. The offer and both of its answers are the interceptor's.
     (SKIP_DRAW_TEXT, ""),
+    # _skip_draw_mandatorily (Possessed Portal): the phrase is the whole line —
+    # every seat's draw, skipped with nothing offered.
+    (SKIPPED_DRAW_TEXT, ""),
     # _pile_top_instead_of_drawing (Parallel Thoughts): the phrase is the
     # whole line. The offer and both of its answers are the interceptor's, and
     # "the pile you exiled" is the linked record its entry trigger wrote.

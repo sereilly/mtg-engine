@@ -231,6 +231,13 @@ def _narrowing_flags(source: dict) -> dict:
         # reason exactly: the seat choosing is the one it is relative to, and
         # a picker without it offers every creature on the board.
         flags["attacked_you_this_turn"] = True
+    if source.get("dealt_damage_to_you_this_turn"):
+        # "…creature **that dealt damage to you this turn**" — the damage
+        # ledger's twin of the attack record above, carried for its reason: a
+        # seat test relative to the seat choosing. No targeted printing in the
+        # pool yet (Retaliate sweeps); carried so the first one's picker does
+        # not offer every creature on the board.
+        flags["dealt_damage_to_you_this_turn"] = True
     if source.get("chosen_keyword"):
         # "target creature **with the chosen ability**" (Phyrexian Splicer).
         # A narrowing whose word is a fact about the *announcement*: the cost

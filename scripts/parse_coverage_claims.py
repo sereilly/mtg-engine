@@ -68,11 +68,13 @@ from engine.cost_modifier_lines import (  # noqa: E402
     cost_modifier_reduction_sentences,
     cost_modifiers_for,
 )
+from engine.deck_construction import any_number_line  # noqa: E402
 from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
 from engine.global_statics import global_static_for  # noqa: E402
 from engine.stack_statics import stack_static_claims_line  # noqa: E402
+from engine.step_skips import skipped_step_of_line  # noqa: E402
 from engine.mana_spending import (activation_spending_color,  # noqa: E402
                                   mana_spending_for)
 from engine.enchant_targets import enchant_graveyard_line, enchant_line_subject  # noqa: E402
@@ -685,6 +687,9 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # sentence — `draw_step_skip_for` reads them together to decide whether
     # the card is supported at all.
     ("draw_step_modifiers.py", lambda s: draw_step_skip_line(s)),
+    # "Players skip their upkeep steps." (Eon Hub.) The whole-step skip of
+    # every player's turn, through the reader the step asks as it would begin.
+    ("step_skips.py", lambda s: skipped_step_of_line(s) is not None),
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
     ("activation gate (stack/activation_checks)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
     ("mixin text scan", lambda s: _matches_any(s, _MIXIN_TEXT_SCANS)),
@@ -1018,5 +1023,14 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
         # and carries that row's label because it is that row's channel.
         "auras.py (attached effect)",
         lambda card, s: aura_effect_claim(s, card.name) is not None,
+    ),
+    (
+        # "A deck can have any number of cards named Relentless Rats." CR
+        # 100.2a's four-of limit lifted for the card's own name, enforced at
+        # deck construction (`web/deck_legality.effective_max_copies`) through
+        # the reader asked here. A card channel for `stack_statics`' reason:
+        # only the card can say the name in the sentence is its own.
+        "deck_construction.py (any number of copies)",
+        lambda card, s: any_number_line(s, card.name),
     ),
 )

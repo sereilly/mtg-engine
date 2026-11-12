@@ -365,6 +365,24 @@ def accept_relative_clause_history(stream: TokenStream, d, parse_filter) -> bool
         ):
             d.dealt_damage_to_source_this_turn = True
             return True
+        # "Destroy all creatures that **dealt damage to you this turn**."
+        # (Retaliate.) The same history with its far end a *seat*: "you" is
+        # CR 109.5's controller, so the relation is to the seat asking and is
+        # answered off the turn's damage ledger by the reader that holds an
+        # observer (``subject_filters.subject_matches``). "This turn" is
+        # required for the arm above's reason.
+        #
+        # A *permanent's* history only: the ledger names a dealer on the
+        # battlefield by its ``permanent_id``. "…the last red instant or
+        # sorcery **spell that dealt damage to you this turn**" (Suffocation)
+        # is a spell's, read whole by the production that asks the casts in
+        # the ledger (``last_damager``), and taking the words here would leave
+        # that production nothing to read.
+        if d.zone == "battlefield" and not d.is_card and stream.accept_phrase(
+            "you", "this", "turn"
+        ):
+            d.dealt_damage_to_you_this_turn = True
+            return True
     # "…that **has been dealt damage this turn**" (Giant Shark). The
     # passive voice with no agent, which is the whole difference from
     # the clause above: that one asks who dealt it, this one only that

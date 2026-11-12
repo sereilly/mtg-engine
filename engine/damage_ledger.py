@@ -247,6 +247,25 @@ def damage_dealt_to_seat(game, seat: int | None) -> int:
     )
 
 
+def dealt_damage_to_seat_this_turn(game, permanent_id: int | None, seat: int | None) -> bool:
+    """Whether the permanent *permanent_id* dealt damage to the **player**
+    *seat* this turn.
+
+    "Destroy all creatures that dealt damage to you this turn." (Retaliate.)
+    The two queries above joined at both ends: the dealer by its id, which
+    CR 400.7 makes one object per time on the battlefield (one that left and
+    came back is a new object that dealt nothing), and the recipient by its
+    seat. Only damage *dealt* is here — a prevented point never was
+    (``record_damage`` writes nothing for 0).
+    """
+    if permanent_id is None or seat is None:
+        return False
+    return any(
+        entry.source_permanent_id == permanent_id and entry.recipient_seat == seat
+        for entry in ledger(game).entries
+    )
+
+
 def damage_dealt_by_cast(game, item) -> int:
     """How much damage one *cast* dealt this turn (CR 120.7's per-cast source)."""
     if item is None:

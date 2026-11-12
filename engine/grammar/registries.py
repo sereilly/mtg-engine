@@ -69,6 +69,8 @@ from ..counter_conditions import (CLASS_UNCOUNTERABLE_CLAIM,
 from ..cost_x_definitions import (cast_x_ceiling_line, cast_x_definition_line,
                                   cast_x_floor_line)
 from ..damage_source_colors import colorless_source_line
+from ..deck_construction import CLAIM as DECK_CONSTRUCTION_CLAIM
+from ..deck_construction import any_number_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
@@ -86,6 +88,8 @@ from ..prevention import prevention_claims_line
 from ..regeneration import denies_regeneration_line, self_regeneration_line
 from ..replacements import replacement_claims_line
 from ..revealed_hands import revealed_hands_line
+from ..step_skips import CLAIM as STEP_SKIPS_CLAIM
+from ..step_skips import skipped_step_of_line
 from ..target_requirements import CLAIM as TARGET_REQUIREMENTS_CLAIM
 from ..target_requirements import must_choose_claims_line
 from ..enchant_targets import enchant_line_subject
@@ -424,6 +428,12 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # permanent's own text.
     if skips_own_draw_step(line):
         return "draw_step_modifiers"
+    # engine/step_skips.py — CR 614.10's skip of a whole step of every
+    # player's turn ("Players skip their upkeep steps.", Eon Hub), asked by
+    # that step as it would begin, off the permanent's own text. Only a step
+    # whose code asks is claimed.
+    if skipped_step_of_line(line) is not None:
+        return STEP_SKIPS_CLAIM
 
     # engine/cost_modifiers.py — CR 601.2f cost taxes (Gloom), applied by
     # spell_cost_tax / ability_cost_tax. The helper is the whole-line form of
@@ -574,6 +584,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # instruction; claimed through the reader the seed asks.
     if every_creature_type_line(line, card_name):
         return EVERY_CREATURE_TYPE_CLAIM
+
+    # engine/deck_construction.py -- "A deck can have any number of cards named
+    # Relentless Rats." CR 100.2a's four-of limit lifted for the card's own
+    # name: an instruction that functions outside the game (CR 113.6a),
+    # enforced by ``web/deck_legality.effective_max_copies`` through the same
+    # reader, so there is nothing to lower. Only beside the name it names.
+    if any_number_line(line, card_name):
+        return DECK_CONSTRUCTION_CLAIM
 
     return None
 

@@ -115,7 +115,17 @@ def _lower_lose_game(node: ast.LoseGame) -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             f"no handler makes {node.player.kind!r} lose the game", node=node
         )
-    return (OracleInstruction(kind, "", {}),)
+    payload: dict[str, object] = {}
+    # "…, Sacrifice this artifact: **Target player** loses the game." (Door to
+    # Nothingness.) The seat is CR 115.1's target, chosen as the ability is
+    # activated (CR 602.2b) — so the sentence describes it, the evidence the
+    # picker and the announcement read (``instruction_targets``). Without it
+    # the activation announced nobody and the handler read whatever
+    # ``context.target`` defaulted to. "That player" (Amulet of Quoz) names a
+    # seat an earlier sentence chose and describes nothing of its own.
+    if node.player.kind in ("target_player", "target_opponent"):
+        _describe_targets(payload, node.player)
+    return (OracleInstruction(kind, "", payload),)
 
 
 def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:

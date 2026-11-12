@@ -443,12 +443,13 @@ class TargetEnumerationMixin:
                     or spec.get("blocking_source")
                     or spec.get("attacking_you")
                     or spec.get("attacked_you_this_turn")
+                    or spec.get("dealt_damage_to_you_this_turn")
                 ):
                     relation = {
                         key: True
                         for key in (
                             "blocked_by_source", "blocking_source", "attacking_you",
-                            "attacked_you_this_turn",
+                            "attacked_you_this_turn", "dealt_damage_to_you_this_turn",
                         )
                         if spec.get(key)
                     }

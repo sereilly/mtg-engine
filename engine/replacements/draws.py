@@ -32,7 +32,8 @@ from .registry import (DRAW_ARMED_REPLACEMENT, DRAW_BECOMES_COUNTER,
                        DRAW_DISCARD_INSTEAD, DRAW_DOUBLED, DRAW_FROM_EXILED_PILE,
                        DRAW_FROM_OUTSIDE,
                        DRAW_GIVEN_TO_ANOTHER, DRAW_MAY_BE_SKIPPED,
-                       DRAW_RETURNS_FROM_GRAVEYARD, LIFE_GAIN_TO_DRAW,
+                       DRAW_RETURNS_FROM_GRAVEYARD, DRAW_SKIPPED,
+                       LIFE_GAIN_TO_DRAW,
                        ReplacementOutcome, replacement_effect)
 
 
@@ -861,6 +862,73 @@ def _resolve_skip_draw(game, choice: ReplacementChoice, option_index: int) -> in
     # in front of them is finished (the seam parks them until then).
     drawn += draws_behind(game, player, remaining, data.get(QUEUED_EXCLUDES) or ())
     return drawn
+
+
+#: "If a player would draw a card, that player skips that draw instead."
+#: (Possessed Portal.) Obstinate Familiar's sentence made **mandatory** and
+#: widened to every seat: "a player" names each of them (CR 109.5 does not
+#: narrow it to the controller), so the sources are the whole board's, and
+#: there is no offer — CR 614.10: "'Skip [something]' is the same as 'Instead
+#: of doing [something], do nothing.'" Applied even to a draw from an empty
+#: library (CR 614.11), which is then no draw at all and nothing CR 704.5b sees.
+#:
+#: The whole line, with no payload; a printing that narrowed the seat or added
+#: a rider would be a different rule and stays unmatched.
+SKIPPED_DRAW_TEXT = "if a player would draw a card, that player skips that draw instead"
+
+
+def skipped_draw_line(line: str) -> bool:
+    """Whether *line* is, in full, the mandatory skip above. One reader for the
+    interceptor and for the claim (``REPLACEMENT_LINES``)."""
+    return " ".join((line or "").split()).strip().lower().rstrip(".") == SKIPPED_DRAW_TEXT
+
+
+def _skipped_draw_sources(game, payload: dict) -> list:
+    """Every permanent on the battlefield printing the mandatory skip, less
+    those this event has already been through (CR 614.5). Every seat's
+    permanents, because "a player" is every seat's draw. Read off
+    ``effective_card`` (CR 707.2, 612.1). Pure."""
+    exclude = set(payload.get("exclude_sources") or ())
+    return [
+        permanent
+        for permanent in game.all_permanents()
+        if permanent.permanent_id not in exclude
+        and any(
+            skipped_draw_line(line)
+            for line in (permanent.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_skipped_draw(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _skipped_draw_sources(game, payload)
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_SKIPPED, applies=_applies_skipped_draw,
+    sources=_skipped_draw_sources, label="Skip the draw",
+)
+def _skip_draw_mandatorily(game, payload: dict) -> ReplacementOutcome | None:
+    """Possessed Portal: one draw at a time (CR 121.2), each replaced by
+    nothing. The draws queued behind it go back through the seam with the
+    exclusions the *event* carries — not this source, which has replaced only
+    the draw in front: each draw behind is its own event, and the Portal
+    replaces it too (or, CR 616.1e, whatever the drawer orders first).
+
+    Nothing is drawn, so this reports 0 and "whenever a player draws a card"
+    sees no draw — a turn-based draw included (CR 504.1's draw is replaced
+    like any other; the step itself still happens)."""
+    player = payload["player"]
+    sources = _skipped_draw_sources(game, payload)
+    game.log.append(
+        f"{player.name} skipped a draw ({', '.join(source_names(sources[:1]))})"
+    )
+    payload["drawn"] = draws_behind(
+        game, player, int(payload["count"]) - 1, queued_excludes(payload)
+    )
+    return ReplacementOutcome(replaced=True)
 
 
 #: "If you would draw a card, you may instead put the top card of the pile you

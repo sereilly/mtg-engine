@@ -108,6 +108,44 @@ def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
     return parse_comparison(stream)
 
 
+def _accept_exact_bounds(stream: TokenStream) -> tuple[ast.Comparison, ...]:
+    """"**exactly three or exactly four**" — every bound a "has …" clause
+    states with the word "exactly", or ``()`` having consumed nothing.
+
+    "Exactly N" is the equality ``parse_comparison`` already reads a bare
+    number as; the word is printed when the sentence offers a *second* exact
+    count beside it (Skullcage: "unless they have exactly three or exactly
+    four cards in hand"), which no single ``Comparison`` can state — so each
+    is its own, and the caller asks them as one disjunction
+    (:func:`_over_bounds`). An "or" is taken only in front of another
+    "exactly": "exactly three or more" is a different bound, and refusing it
+    here leaves the words for the reader that would refuse the line.
+    """
+    if not stream.at_word("exactly"):
+        return ()
+    mark = stream.mark()
+    bounds: list[ast.Comparison] = []
+    while stream.accept_word("exactly"):
+        try:
+            bounds.append(ast.Comparison("eq", parse_amount(stream)))
+        except GrammarError:
+            stream.reset(mark)
+            return ()
+        joined = stream.mark()
+        if not (stream.accept_word("or") and stream.at_word("exactly")):
+            stream.reset(joined)
+            break
+    return tuple(bounds)
+
+
+def _over_bounds(bounds, make) -> "ast.Condition":
+    """*make* of the one bound, or a :class:`ast.SomeOf` of *make* of each —
+    "three or four cards in hand" is the hand counted against either."""
+    if len(bounds) == 1:
+        return make(bounds[0])
+    return ast.SomeOf(tuple(make(bound) for bound in bounds))
+
+
 def _accept_hand_at_turn_start(
     stream: TokenStream, counted: ast.PlayerRef,
 ) -> "ast.HandSizeAtTurnStart | None":
@@ -372,9 +410,13 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 counted, ast.Comparison("more_than_you", ast.Fixed(margin or 0)),
             )
         stream.reset(lead_mark)
-        comparison = _parse_count_bound(stream)
+        # "…unless they have **exactly three or exactly four** cards in hand"
+        # (Skullcage). Every bound the clause states, each arm of its own
+        # node (:func:`_over_bounds`), so whichever count follows asks all of
+        # them and none is dropped.
+        bounds = _accept_exact_bounds(stream) or (_parse_count_bound(stream),)
         if stream.accept_word("life"):
-            return ast.PlayerLifeIs(counted, comparison)
+            return _over_bounds(bounds, lambda bound: ast.PlayerLifeIs(counted, bound))
         # "if **you have four or more creature cards in your graveyard**"
         # (Oversold Cemetery). The pile count the "there are …" and the
         # subject-position spellings below already read into ``CardsInZones``,
@@ -397,13 +439,17 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 and pile_filter.zone in ("graveyard", "library", "hand")
                 and pile_filter.zone_owner is not None
                 and pile_filter.zone_owner.kind == "you"
-                and isinstance(comparison.value, ast.Fixed)
+                and all(isinstance(bound.value, ast.Fixed) for bound in bounds)
             ):
-                return ast.CardsInZones(pile_filter, comparison)
+                return _over_bounds(
+                    bounds, lambda bound: ast.CardsInZones(pile_filter, bound)
+                )
             stream.reset(pile_mark)
         if stream.accept_word("cards", "card") and stream.accept_word("in"):
             if stream.accept_word("hand"):
-                return ast.ZoneHasCards(counted, "hand", comparison)
+                return _over_bounds(
+                    bounds, lambda bound: ast.ZoneHasCards(counted, "hand", bound)
+                )
             # "if **you have 200 or more cards in your library**" (Battle of
             # Wits). The third word order of the one question, with the pile
             # named after the count: the possessive has to be the subject's
@@ -416,7 +462,9 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             ):
                 zone = stream.peek_word()
                 stream.advance(1)
-                return ast.ZoneHasCards(counted, zone, comparison)
+                return _over_bounds(
+                    bounds, lambda bound: ast.ZoneHasCards(counted, zone, bound)
+                )
     stream.reset(have_mark)
 
     # "if **a player controls more creatures than each other player**" (Wild
