@@ -389,6 +389,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # combat, one a per-turn stamp — and a card printed after combat can only
     # ask the second.
     "attacked_you_this_turn",
+    # "Destroy all creatures **that dealt damage to you this turn**."
+    # (Retaliate.) The same footing as the record above: what it needs beyond
+    # the object is the seat asking (``observer``), and the record is the
+    # turn's damage ledger rather than the attack stamp.
+    "dealt_damage_to_you_this_turn",
     # "…all Merfolk **tapped this turn to pay for its abilities**" (Vodalian
     # War Machine). A history rather than a characteristic, and one no read of
     # the permanent alone can answer: a tapped permanent looks the same however
@@ -488,6 +493,10 @@ OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     # the set; admitting it would let a sweep with no observer take every
     # creature, the caster's and the opponents' alike.
     "cast_by_you_this_turn",
+    # Out for the key above's reason: "dealt damage to **you**" is a seat
+    # test, and a caller with no observer has no seat to look the ledger up
+    # against.
+    "dealt_damage_to_you_this_turn",
     # Out for the key above's reason exactly: "played by your opponents" is a
     # seat comparison, and a caller with no observer has nobody to be an
     # opponent *of* — which would take every played creature rather than the
@@ -1020,6 +1029,23 @@ def subject_matches(
             k: v for k, v in described.items() if k != "attacked_you_this_turn"
         }
         if observer is None or not attacked_seat_this_turn(obj, observer):
+            return False
+    # "Destroy all creatures **that dealt damage to you this turn**."
+    # (Retaliate.) The attack record's twin over the turn's damage ledger,
+    # answered here for the same reason — the observer is the seat — and
+    # stripped before the pure matcher, which refuses it. Keyed on the
+    # object's ``permanent_id``, so one that left and came back dealt nothing
+    # (CR 400.7).
+    if described.get("dealt_damage_to_you_this_turn"):
+        from .damage_ledger import dealt_damage_to_seat_this_turn
+
+        described = {
+            k: v for k, v in described.items()
+            if k != "dealt_damage_to_you_this_turn"
+        }
+        if observer is None or not dealt_damage_to_seat_this_turn(
+            game, getattr(obj, "permanent_id", None), observer
+        ):
             return False
     # "…with mana value **equal to the number of age counters on this
     # enchantment**" (Wave of Terror). Both halves are numbers, but only one of

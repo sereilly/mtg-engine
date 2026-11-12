@@ -117,6 +117,8 @@ def _derived_static_claims(
     from .replacements import replacement_claims_line
     from .revealed_hands import revealed_hands_line
     from .special_actions import special_action_line
+    from .step_skips import CLAIM as STEP_SKIPS_CLAIM
+    from .step_skips import steps_skipped_by
     from .target_immunity import CLAIM as TARGET_IMMUNITY_CLAIM
     from .target_immunity import immunity_claims_line
     from .lethal_damage import CLAIM as LETHAL_DAMAGE_CLAIM
@@ -567,6 +569,12 @@ def _derived_static_claims(
     # here would leave this one silently unread.
     if skips_own_draw_step(oracle_text):
         claims.append("draw_step_modifiers")
+    # "Players skip their upkeep steps." (Eon Hub.) CR 614.10's skip of a
+    # whole step of every player's turn, asked by the step as it would begin
+    # off the permanent's own text — no instruction, and on an artifact whose
+    # whole text is the sentence, no claim here would leave it unsupported.
+    if steps_skipped_by(oracle_text or ""):
+        claims.append(STEP_SKIPS_CLAIM)
     # "<permanent> can't be the target of Aura spells" (Bartel Runeaxe, Tetsuo
     # Umezawa). `_can_be_targeted` reads the permanent's own text at the moment
     # a target is chosen, so there is no instruction — and on a creature whose

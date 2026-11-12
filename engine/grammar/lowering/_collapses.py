@@ -359,13 +359,29 @@ def each_seat_pays_its_own_toll(node: ast.May) -> ast.May:
     a set of seats pays this way in the pool, and any other body naming a set
     under the pronoun refuses rather than charging one seat's decline to all
     of them.
+
+    "At the beginning of each end step, **each player** sacrifices a permanent
+    of their choice **unless they discard a card**." (Possessed Portal.) The
+    same toll with an *action* where the mana was: the pronoun performs it
+    ("they discard"), so the action's performer becomes the offered seat too —
+    ``you`` for the penalty's reason. Left alone, the offer went to the one
+    seat the end step froze (none) while the penalty swept every player, and
+    a player with an empty hand was never made to sacrifice. A discard alone:
+    it is the one action a set of seats takes this way in the pool, and any
+    other refuses below rather than being performed by the wrong seat.
     """
     if not (
         isinstance(node.actor, ast.PlayerRef)
         and node.actor.kind == "that_player"
-        and node.action is None
         and node.then is None
         and node.reflexive is None
+    ):
+        return node
+    action = node.action
+    if action is not None and not (
+        isinstance(action, ast.Discard)
+        and isinstance(action.player, ast.PlayerRef)
+        and action.player.kind == "that_player"
     ):
         return node
     body = node.otherwise
@@ -384,6 +400,10 @@ def each_seat_pays_its_own_toll(node: ast.May) -> ast.May:
     return dataclasses.replace(
         node,
         actor=performer,
+        action=(
+            None if action is None
+            else dataclasses.replace(action, player=ast.PlayerRef("you"))
+        ),
         otherwise=dataclasses.replace(body, player=ast.PlayerRef("you")),
     )
 

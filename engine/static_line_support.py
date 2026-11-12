@@ -420,6 +420,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if is_ante_deck_line(normalized):
         return True
+    # "A deck can have any number of cards named Relentless Rats." The other
+    # deck-construction line (CR 100.2a's four-of limit lifted for the card's
+    # own name, CR 113.6a), claimed for the ante line's reason through the
+    # reader `web/deck_legality.effective_max_copies` asks — and only beside
+    # the card's own name, so a caller with no name in hand is answered no.
+    from .deck_construction import any_number_line
+
+    if any_number_line(normalized, card_name):
+        return True
     # "You may play two additional lands on each of your turns." (Azusa, Lost
     # but Seeking.) The land-drop path derives the allowance from every
     # controlled permanent's own text (engine/land_play_allowance.py), creatures

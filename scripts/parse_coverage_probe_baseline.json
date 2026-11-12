@@ -4205,13 +4205,6 @@
   ]
  },
  {
-  "card": "Suffocation",
-  "clause": "suffocation deals 4 damage to the controller of the last red instant or sorcery spell that dealt damage to you this turn",
-  "ignored": [
-   "spell"
-  ]
- },
- {
   "card": "Suleiman's Legacy",
   "clause": "destroy all djinns and efreets. they can't be regenerated",
   "ignored": [

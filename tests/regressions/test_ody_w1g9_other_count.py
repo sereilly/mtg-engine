@@ -69,6 +69,10 @@ def _one_of(filt: dict, *, cost: str = ""):
     """A card the count's noun phrase describes — of mana value 1 where a
     *cost* is printed, for a total of mana values (Ancient Ooze) to sum."""
     keywords = "\n".join(str(k).capitalize() for k in filt.get("with_keywords") or ())
+    # "…for each other creature on the battlefield **named Relentless Rats**"
+    # (Relentless Rats, CR 201.2): the counted card carries the name the
+    # phrase prints, or it is not one of them.
+    name = str(filt.get("named") or "Counted")
     # "other Squirrels" names a creature type and no card type (CR 109.2): a
     # creature of the type is one of them, as a Kindred permanent would be.
     if filt.get("type_filter") == "creature" or (
@@ -76,11 +80,11 @@ def _one_of(filt: dict, *, cost: str = ""):
     ):
         subtype = str(filt.get("subtype_filter") or "bear").title()
         return _mk_card(
-            name="Counted", mana_cost=cost, type_line=f"Creature - {subtype}",
+            name=name, mana_cost=cost, type_line=f"Creature - {subtype}",
             oracle_text=keywords,
         )
     assert filt.get("type_filter") == "enchantment", filt
-    return _mk_card(name="Counted", mana_cost=cost, type_line="Enchantment")
+    return _mk_card(name=name, mana_cost=cost, type_line="Enchantment")
 
 
 def _rate(amount) -> int:

@@ -124,6 +124,8 @@ class _FilterDraft:
     # "…creature **that attacked you this turn**" (Jabari's Influence) — see
     # the field of the same name on ``ast.ObjectFilter``.
     attacked_you_this_turn: bool = False
+    #: See ``ast.ObjectFilter.dealt_damage_to_you_this_turn`` (Retaliate).
+    dealt_damage_to_you_this_turn: bool = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     #: See ``ast.ObjectFilter.mana_value_at_most_counters``.
@@ -366,6 +368,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         banded_with_source=d.banded_with_source,
         attacking_you=d.attacking_you,
         attacked_you_this_turn=d.attacked_you_this_turn,
+        dealt_damage_to_you_this_turn=d.dealt_damage_to_you_this_turn,
         blocked=d.blocked,
         power=d.power,
         toughness=d.toughness,

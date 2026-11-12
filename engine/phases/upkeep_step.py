@@ -39,6 +39,7 @@ from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
 from ..phasing_locks import expire_phase_out_locks
 from ..pt import BASE_PT_UPKEEP_START_REVERT_KEY, clear_base_pt
 from ..replacements.damage_substitutions import DAMAGE_TO_COUNTER_REMOVAL_RECORD
+from ..step_skips import step_skip_source
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import battlefield_triggers, matching_triggers
 from ..turn_state import record_controllers_upkeep
@@ -178,7 +179,20 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         an Aura's — goes on the stack together and its controller orders it
         (Tangle Wire's fade removal against its tap). Closed before the
         priority window, which is what would resolve them.
+
+        "Players skip their upkeep steps." (Eon Hub.) Asked as the step would
+        begin, before anything of it happens (CR 614.10: the skip replaces the
+        step with nothing, CR 500.11): no phase change, no trigger, no
+        priority, nothing scheduled for "your next upkeep" spent (CR 614.10a).
+        The turn goes on to the draw step from wherever the untap step left it.
         """
+        skipper = step_skip_source(self, "upkeep")
+        if skipper is not None:
+            self.log.append(
+                f"{self.players[player_index].name} skips their upkeep step "
+                f"({skipper.card.name})"
+            )
+            return
         with self.putting_triggers_on_stack():
             self._resolve_upkeep_actions(
                 player_index, human_choices, optional_choices,

@@ -400,6 +400,32 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         ),
     ),
     (
+        # Mephidross Vampire: "Each creature you control is a Vampire in
+        # addition to its other creature types and has "Whenever this creature
+        # deals damage to a creature, put a +1/+1 counter on this creature.""
+        # Aurification's sentence over the controller's own creatures (the
+        # Vampire itself among them — the sentence says no "other") with a
+        # whole **quoted** ability where that card grants a keyword: the type
+        # added in layer 4 (CR 205.1b, CR 613.1d) and the ability in layer 6
+        # (CR 613.1f), one static and one timestamp for Humility's reason.
+        #
+        # Both words are payload. The type is held to the creature-type
+        # catalog and the quoted ability to the compiler
+        # (:func:`_controlled_retype_words`, asked by the scan), so a word the
+        # engine cannot honour leaves the line unclaimed rather than a static
+        # that grants nothing. The ability rides as the text the creature
+        # would print (``grants_ability``), folded into its effective card and
+        # compiled from there like any printed line.
+        re.compile(
+            r"^each creature you control is an? (?P<controlled_added>[a-z]+(?:-[a-z]+)?) "
+            r"in addition to its other creature types and has "
+            r"\"(?P<controlled_ability>.+)\"$"
+        ),
+        GlobalStatic(
+            name="controlled_creatures_retyped", applies_to="creature_you_control",
+        ),
+    ),
+    (
         # Shifting Sky. Darkest Hour's sentence with the colour chosen as the
         # enchantment entered instead of printed, and Celestial Dawn's noun with
         # no controller narrowing: every player's nonland permanents, the Sky
@@ -675,6 +701,17 @@ def _static_from_match(index: int, items: tuple) -> GlobalStatic:
             adds_subtypes=(added,),
             grants_ability=keyword.capitalize() if keyword else "",
         )
+    if groups.get("controlled_added"):
+        # Mephidross Vampire. The type singularised and checked, and the
+        # quote compiled, by the scan already (:func:`_controlled_retype_words`);
+        # the ability rides as the text the creature would print.
+        added, ability = _controlled_retype_words(groups)
+        return GlobalStatic(
+            name=static.name,
+            applies_to=static.applies_to,
+            adds_subtypes=(added,),
+            grants_ability=ability,
+        )
     sets = groups.get("sets")
     if sets:
         # "All **creatures** are black" (Darkest Hour) carries its own
@@ -767,6 +804,23 @@ def _counter_scope_words(groups: dict) -> tuple[str, str] | None:
     return added, keyword
 
 
+def _controlled_retype_words(groups: dict) -> tuple[str, str] | None:
+    """Mephidross Vampire's added type, singularised, and its quoted ability —
+    or None when the type is not in the creature-type catalog or the engine
+    does not compile the quote (``granted_abilities.granted_ability_supported``,
+    asked of a card that says nothing else, exactly what the creature's
+    effective card will hand the compiler). Read late for
+    :func:`_tribe_words`' reason."""
+    from .grammar.vocabulary import CREATURE_TYPES, singular
+    from .granted_abilities import granted_ability_supported
+
+    added = singular(groups["controlled_added"])
+    ability = groups["controlled_ability"].strip()
+    if added not in CREATURE_TYPES or not granted_ability_supported(ability):
+        return None
+    return added, ability
+
+
 @lru_cache(maxsize=None)
 def _template_match(oracle_text: str) -> tuple[tuple[int, tuple], ...]:
     """Where in :data:`_TEMPLATES` each line of *oracle_text* first matches,
@@ -795,6 +849,11 @@ def _line_match(raw_line: str) -> tuple[int, tuple] | None:
         ):
             continue
         if groups.get("counter_kind") and _counter_scope_words(groups) is None:
+            continue
+        if (
+            groups.get("controlled_added")
+            and _controlled_retype_words(groups) is None
+        ):
             continue
         return index, tuple(sorted(groups.items()))
     return None

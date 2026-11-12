@@ -861,4 +861,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # `create_copy_token` under (`triggered_token`) — rather than the
     # `tokens` category's default.
     "create_copy_token": "activated_token",
+    # --- Fifth Dawn ------------------------------------------------------
+    # Door to Nothingness: "…, Sacrifice this artifact: Target player loses
+    # the game." The triggered table's `triggered_game_end` row in the
+    # activated position, and what the `game_end` category default already
+    # said, so the row moves no label: it pins one.
+    "target_player_loses_game": "activated_game_end",
 }

@@ -302,7 +302,20 @@ DRAW_MAY_BE_SKIPPED = 26  # Obstinate Familiar
 # they may play where those take the draw away or cost more than it. CR 616.1e
 # lets the drawing player choose among them, and with two Shared Fates which
 # one replaces each draw (ruling 2004-12-01; one instance per permanent).
-DRAW_EXILES_OPPONENT_TOP = 28  # Shared Fate
+#
+# 27 rather than the 28 it was born with, to make room behind it for the skip
+# below; nothing else sits at 27, so its place among every other draw
+# replacement is unchanged.
+DRAW_EXILES_OPPONENT_TOP = 27  # Shared Fate
+# "If a player would draw a card, that player skips that draw instead."
+# (Possessed Portal.) Shared Fate's slot exactly — a mandatory consuming
+# replacement from a permanent any seat may control — and just behind it,
+# because Shared Fate hands the drawer a card they may play and this hands
+# back nothing; ahead of Plagiarize and the consumers below, which take the
+# draw away *and* give something to somebody else or cost more. The order the
+# drawing player would choose, which CR 616.1e permits; the default for a seat
+# nobody asks.
+DRAW_SKIPPED = 28  # Possessed Portal
 # "Until end of turn, if target player would draw a card, instead that player
 # skips that draw and you draw a card." (Plagiarize.) A mandatory consuming
 # replacement another player armed, so behind everything the drawing player

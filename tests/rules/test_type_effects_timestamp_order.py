@@ -1543,9 +1543,18 @@ def test_j6_no_card_that_enters_beside_another_players_carries_an_ordered_static
     ("Forests you control are 1/1 green Elf creatures that are still lands"),
     and still leaves the order unobservable: what it reaches is its own
     controller's Forests, and no other card a cross-player entry moves carries
-    a layer-4 or layer-5 static that could reach them beside it."""
+    a layer-4 or layer-5 static that could reach them beside it.
+
+    Fifth Dawn's Mephidross Vampire is the third, and for Ambush Commander's
+    reason: "Each creature you control is a Vampire in addition to its other
+    creature types" reaches only its own controller's creatures, and it
+    *adds* a type (CR 205.1b) — an addition gives the same answer in either
+    order beside another addition, and no creature or land card a
+    cross-player entry moves *sets* a type over that controller's creatures."""
     pool_size, found = _j6_ordered_static_sources()
-    assert found.get("creature") == {"Transmogrifying Licid", "Ambush Commander"}
+    assert found.get("creature") == {
+        "Transmogrifying Licid", "Ambush Commander", "Mephidross Vampire",
+    }
     assert "land" not in found
     # Mycosynth Lattice (Darksteel, measured) is the third: an artifact, so
     # no cross-player entry this census covers moves it.

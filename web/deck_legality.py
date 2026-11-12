@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping
 
 from engine.ante import is_ante_card
+from engine.deck_construction import allows_any_number
 from engine.commander import (
     BASIC_LAND_TYPES,
     commander_type_problem,
@@ -175,8 +176,11 @@ def _is_basic_land(card: Mapping[str, Any]) -> bool:
 
 
 def _any_number_allowed(card: Mapping[str, Any]) -> bool:
-    # Cards like Relentless Rats / Shadowborn Apostle opt out of the four-of rule.
-    return "a deck can have any number of cards named" in str(card.get("oracle_text") or "").lower()
+    # Cards like Relentless Rats / Shadowborn Apostle opt out of the four-of
+    # rule (CR 100.2a) for their own name. The engine's reader, which the
+    # compiler's support gate and parse claim ask too, so what lifts the limit
+    # and what claims the line are one reading of one sentence.
+    return allows_any_number(card)
 
 
 def effective_max_copies(card: Mapping[str, Any], fmt: Mapping[str, Any], status: str) -> int | None:

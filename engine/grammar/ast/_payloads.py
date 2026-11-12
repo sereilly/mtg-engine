@@ -177,6 +177,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["attacking_you"] = True
     if self.attacked_you_this_turn:
         payload["attacked_you_this_turn"] = True
+    if self.dealt_damage_to_you_this_turn:
+        payload["dealt_damage_to_you_this_turn"] = True
     if self.was_dealt_damage_this_turn:
         payload["dealt_damage_this_turn"] = True
     if self.blocking is True:

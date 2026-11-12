@@ -13,6 +13,7 @@ from __future__ import annotations
 from engine.ai_graveyard_activations import graveyard_abilities
 from engine.hand_size import maximum_hand_size
 from engine.phases.upkeep_prompts import upkeep_prompt_key
+from engine.step_skips import step_skip_source
 from engine.upkeep_costs import cost_from_payload
 
 from .session_store import Session
@@ -635,6 +636,14 @@ def _resolve_upkeep_step(session: Session, player_index: int) -> bool:
     _begin_turn and the untap-selection actions that resume a turn mid-untap.
     """
     game = session.game
+
+    # "Players skip their upkeep steps." (Eon Hub, CR 614.10 / 500.11.) A
+    # skipped step never begins, so nothing below may run for it: no upkeep
+    # prompt gathered, no phase-rail hold, no priority window. The engine's own
+    # step logs the skip and changes nothing; the turn goes on to the draw.
+    if step_skip_source(game, "upkeep") is not None:
+        game.resolve_upkeep(player_index)
+        return _finish_beginning_phase(session, player_index)
 
     # CR 503.1/503.1a: the upkeep step opens with a priority window — triggers go
     # on the stack and the active player acts BEFORE any of them resolve, so an

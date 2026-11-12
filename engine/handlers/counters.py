@@ -441,6 +441,29 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         )
         return True, "resolved"
 
+    if instruction.payload.get("on_event_subject"):
+        # "Whenever a creature you control is dealt damage, put a +1/+1 counter
+        # on **it**." (Rite of Passage.) The object the event was about, read by
+        # the id the announcement froze (CR 603.10) — the named-counter
+        # handler's read of the same key. A creature the damage killed, or one
+        # that left and came back (CR 400.7), is not found: "It must survive the
+        # damage to get the counter."
+        subject_id = (context.trigger_context or {}).get("event_subject_permanent_id")
+        creature = game.permanent_by_id(subject_id) if subject_id is not None else None
+        wanted = instruction.payload.get("filter") or {}
+        if creature is not None and wanted and not permanent_matches_filter(
+            creature, wanted
+        ):
+            creature = None
+        if creature is None:
+            game.log.append(f"{card.name}: the permanent it names is gone")
+            return True, "resolved"
+        game.place_pt_counters(creature, kind, how_many)
+        game.log.append(
+            f"{creature.card.name} gets {how_many} {kind} counter(s) ({card.name})"
+        )
+        return True, "resolved"
+
     pair_member = instruction.payload.get("pair_member")
     if pair_member:
         bound = (context.trigger_context or {}).get(

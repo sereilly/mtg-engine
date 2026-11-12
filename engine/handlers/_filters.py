@@ -897,6 +897,11 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # answers it.
     if payload.get("attacked_you_this_turn"):
         return False
+    # "…creatures **that dealt damage to you this turn**" (Retaliate): the
+    # same seat-relative record over the damage ledger, refused here for the
+    # reason above and answered by ``subject_matches``.
+    if payload.get("dealt_damage_to_you_this_turn"):
+        return False
     # "…with the greatest power **among creatures on the battlefield**"
     # (Topple). The answer is about the rest of the board, which this pure half
     # cannot see; ignored, it would offer every creature for a spell that names

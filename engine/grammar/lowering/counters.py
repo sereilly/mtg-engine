@@ -47,7 +47,7 @@ from ._named_counters import (lower_named_block_pair_placement,
                               lower_named_placement)
 from ._plus_one_counters import lower_plus_one_placement
 from ._counter_stores import lower_loyalty_counters
-from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, binds_block_pair, _RECORDED_PERMANENTS)
+from ._events import (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT, EVENT_SUBJECT_CONTROLLER, binds_block_pair, _EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
 from ._seats import _CHOOSER_SEATS
 from ._amounts import recorded_count_spec
@@ -816,6 +816,51 @@ def _lower_put_counter(
         return (OracleInstruction("add_counter_to_target", "", {
             "counter": node.counter, "count": node.count.value,
             "on_block_pair": True, **({"filter": described} if described else {}),
+        }),)
+    # "Whenever a creature you control is dealt damage, put a +1/+1 counter on
+    # **it**." (Rite of Passage.) Freyalise's Winds' event-subject placement
+    # (`_named_counters`, "put a wind counter on it") with a **P/T pair** on it,
+    # so it goes to the handler that owns the P/T channel for the block pair's
+    # reason one branch up. The pronoun was rebound to the event's subject
+    # (`rebinding.rebind_pronoun_to_event_subject`): nothing is chosen, and the
+    # object is the one the fire site froze by id (CR 603.10) — so a creature
+    # that died of the damage, or left and came back (CR 400.7), takes nothing
+    # (the card's own reminder: "It must survive the damage to get the
+    # counter"). Gated on the event exactly as the named twin is: under any
+    # other trigger the word names an object no fire site recorded.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "it"
+        and not node.subject.filter.is_source
+        and not node.up_to
+        and not node.then_double
+        and node.cap is None
+        and is_pt_counter(node.counter)
+        and event in _EVENT_SUBJECT_OBJECTS
+    ):
+        if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+            raise LoweringError(
+                "an event-subject placement counts a fixed number", node=node
+            )
+        described = _filter_payload(node.subject.filter)
+        # The rebound filter is the trigger's own noun phrase restated ("a
+        # creature **you control**"), and its seat was tested where it can be:
+        # at the fire site, against the observer (`_announce_dealt_damage_
+        # triggers`' ``subject_matches(..., observer=seat)``). "It" names the
+        # object that admitted the trigger, not whatever matches the phrase as
+        # the counter lands — so the seat is not asked again (a creature that
+        # changed hands in between is still "it"), and only a restatement of
+        # the event's own phrase may shed it.
+        if node.subject.filter == event_subject:
+            described.pop("controller", None)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the counter's subject carries a restriction the resolution "
+                "cannot test", node=node,
+            )
+        return (OracleInstruction("add_counter_to_target", "", {
+            "counter": node.counter, "count": node.count.value,
+            "on_event_subject": True, **({"filter": described} if described else {}),
         }),)
     # "You put a **-1/-1** counter on **each creature that player controls**"
     # (Misfortune). A CR 122.1a counter placed on every member of a set the

@@ -867,6 +867,15 @@ class ObjectFilter:
     # declaration writes, and relative to the seat asking, which is what keeps
     # it out of the pure matcher.
     attacked_you_this_turn: bool = False
+    # "Destroy all creatures **that dealt damage to you this turn**."
+    # (Retaliate.) Brine Hag's history with the far end a *seat* rather than
+    # the source — so, like the field above, it is relative to the seat asking
+    # and answered by ``subject_matches`` (its observer) off the turn's damage
+    # ledger (``damage_ledger.dealt_damage_to_seat_this_turn``), never by the
+    # pure matcher. The ledger keys a dealer by its ``permanent_id``, so a
+    # creature that left and came back is a new object that dealt nothing
+    # (CR 400.7).
+    dealt_damage_to_you_this_turn: bool = False
     # "…all creatures that were **blocked by that creature this turn**"
     # (Glyph of Doom). A history relative to the object a delayed triggered
     # ability was bound to, answered from the block record that creature
