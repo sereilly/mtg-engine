@@ -363,6 +363,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # moving an Equipment onto a creature is neither a tap nor a zone change,
     # and sharing a switch with either would let one be gated off by the other.
     "attach_source_to_target": "attachments",
+    # "Attach target Equipment [you control] to target creature [you
+    # control]" (Auriok Windwalker, Magnetic Theft): the same action with
+    # both ends announced as two roles.
+    "attach_target_to_target": "attachments",
     # "…attach all Equipment on the battlefield to it" (Vulshok Battlemaster)
     # and "Unattach all Equipment from target creature" (Disarm): CR 701.3
     # over a described set, the same family.

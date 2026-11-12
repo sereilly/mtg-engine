@@ -26,7 +26,8 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_describe_targets, _filter_payload, _is_enchanted,
-                      _is_source, _is_target, _restrictions_beyond)
+                      _is_source, _is_target, _restrictions_beyond,
+                      describe_independent_target_roles)
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
                       CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
@@ -96,6 +97,12 @@ def _lower_attach(
     with no such step in front of it, "it" is a back-reference to nothing and
     the line keeps its refusal.
     """
+    if (
+        isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject)
+        and isinstance(node.host, ast.TargetSpec) and _is_target(node.host)
+        and node.host.targeted and node.host.quantifier == "target"
+    ):
+        return _lower_attach_target_to_target(node)
     if isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject):
         return _lower_attach_chosen(node)
     if node.host_it_can_enchant:
@@ -123,6 +130,56 @@ def _lower_attach(
     payload = _filter_payload(node.host.filter)
     _describe_targets(payload, node.host)
     return (OracleInstruction("attach_source_to_target", "", payload),)
+
+
+def _lower_attach_target_to_target(node: ast.Attach) -> tuple[OracleInstruction, ...]:
+    """"Attach **target Equipment** you control **to target creature** you
+    control." (Auriok Windwalker.) "Attach target Equipment to target
+    creature." (Magnetic Theft.)
+
+    CR 701.3 with *both* ends announced: two targeted phrases of one
+    announcement, of two different kinds, so they are described as the
+    ordered roles Fumarole's "target creature and target land" already is
+    (``describe_independent_target_roles``) — the picker asks for the
+    Equipment and then the creature (CR 601.2c), the cast and activation gates
+    re-walk the same description, and the handler reads each role back by name
+    and re-asks both at resolution (CR 608.2b).
+
+    Every printed narrowing rides its role's filter, so Windwalker's two "you
+    control" are enforced and Magnetic Theft, printing neither, may put one
+    player's Equipment on another's creature without changing who controls it
+    (its 2004-12-01 ruling; CR 301.5d). Whether the Equipment can actually
+    equip the creature — CR 301.5c's animated Equipment, protection, Goblin
+    Brawler — is not a targeting question: both are legal targets and the
+    Equipment simply doesn't move (CR 301.5b, 701.3b), which
+    ``equipment.attach_equipment`` answers at resolution.
+
+    Only an Equipment moves this way. An Aura that changed hosts here would
+    want CR 303.4j's enchant legality offered by the host's picker, which these
+    roles do not carry, so any other moved noun refuses.
+    """
+    subject, host = node.subject, node.host
+    assert isinstance(subject, ast.TargetSpec) and isinstance(host, ast.TargetSpec)
+    if node.host_it_can_enchant or node.chooser is not None or node.optional:
+        raise LoweringError(
+            "an attach between two targets reads no enchant clause, chooser "
+            "or decline",
+            node=node,
+        )
+    if tuple(subject.filter.subtypes) != ("equipment",) or subject.filter.card_types:
+        raise LoweringError(
+            "only a targeted Equipment is moved onto a second target", node=node
+        )
+    payload: dict[str, object] = {}
+    describe_independent_target_roles(payload, (subject, host))
+    for role in payload["targets"]["roles"]:
+        untestable = untestable_filter_keys(role["filter"])
+        if untestable:
+            raise LoweringError(
+                "the attach cannot test " + ", ".join(sorted(untestable)),
+                node=node,
+            )
+    return (OracleInstruction("attach_target_to_target", "", payload),)
 
 
 def _lower_attach_all_to_source(

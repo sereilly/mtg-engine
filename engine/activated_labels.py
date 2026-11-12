@@ -195,6 +195,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # defined to be. Its own bucket: the support report and the AI read the
     # label, and "activated_attachments" names what the ability does.
     "attach_source_to_target": "activated_equip",
+    # "{T}: Attach target Equipment you control to target creature you
+    # control." (Auriok Windwalker.) Not an equip ability (CR 702.6a is the
+    # Equipment's own), so not its bucket: the grammar category's word.
+    "attach_target_to_target": "activated_attachments",
     "untap_enchanted_creature": "activated_untap",
     "untap_self": "activated_untap",
     "untap_target_land": "spell_pattern",

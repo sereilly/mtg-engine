@@ -121,4 +121,47 @@ def test_w1g4_the_ai_never_plans_an_equip_onto_goblin_brawler(set_pool):
     assert game.players[0].battlefield[chosen] is bears
     assert brawler is not bears
 
+
+def test_w1g4_auriok_windwalker_moves_its_controllers_equipment_between_their_creatures(set_pool):
+    """"{T}: Attach target Equipment you control to target creature you
+    control." Two roles, both narrowed to the activator: the picker offers only
+    the activator's Equipment and creatures, an announcement naming either of
+    the opponent's is refused before the {T} is paid (CR 602.2b), and the legal
+    one moves the Equipment at instant speed."""
+    from engine.targeting import derive_activation_spec
+
+    fifth, mirrodin, alpha = set_pool("5DN"), set_pool("MRD"), set_pool("LEA")
+    game = _w1g4_table(set_pool)
+    walker = _w1g4_put(game, fifth["Auriok Windwalker"], 0)
+    splitter = _w1g4_put(game, mirrodin["Bonesplitter"], 0)
+    bears = _w1g4_put(game, alpha["Grizzly Bears"], 0)
+    their_splitter = _w1g4_put(game, mirrodin["Bonesplitter"], 1)
+    their_bears = _w1g4_put(game, alpha["Grizzly Bears"], 1)
+
+    ability = _w1g4_compile(walker.card).activated_abilities[0]
+    spec = derive_activation_spec(ability)
+    assert [(role["role"], role.get("own_only")) for role in spec["roles"]] == [
+        ("equipment", True), ("creature", True),
+    ]
+
+    for equipment, creature in (
+        (their_splitter, bears), (splitter, their_bears),
+    ):
+        refused = _w1g4_activate(
+            game, 0, walker,
+            target_permanent_ids=[equipment.permanent_id, creature.permanent_id],
+        )
+        assert not refused.supported
+        assert not walker.tapped
+
+    result = _w1g4_activate(
+        game, 0, walker,
+        target_permanent_ids=[splitter.permanent_id, bears.permanent_id],
+    )
+    assert result.supported, result.details
+    assert walker.tapped
+    assert _w1g4_equipped(splitter) is bears
+    assert bears.effective_power == 4
+    assert _w1g4_equipped(their_splitter) is None
+
 # ==== end w1g4 ======================================================
