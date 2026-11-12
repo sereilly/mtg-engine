@@ -8575,9 +8575,20 @@ function applyMadnessCastPrompt(info) {
 // it: the viewer's own exile carries its cast spec (serialized for casting
 // from exile); another seat's pile does not, so its spec is asked for.
 function copyCastExiledCard(info, state = currentState) {
+  // "…copy an instant or sorcery card in it" (Reversal of Fortune): the card
+  // is in a revealed hand (`hand_seat` / `hand_index`), not an exile, and that
+  // hand is hidden in this viewer's state — so the offer carries the card
+  // itself (`card`). Its exile fields are null.
+  if (copyCastFromHand(info)) return info.card;
   const exile = state?.players?.[info?.exile_seat]?.exile || [];
   const card = Number.isInteger(info?.exile_index) ? exile[info.exile_index] : null;
   return card && typeof card === "object" ? card : null;
+}
+
+// Whether the offer copies a card in a revealed hand (Reversal of Fortune)
+// rather than an exiled one: the server says where it is (`hand_seat`).
+function copyCastFromHand(info) {
+  return !!info && Number.isInteger(info.hand_seat) && !!info.card && typeof info.card === "object";
 }
 
 // The way the copy is cast: free of its mana cost (CR 118.9 through the
@@ -8598,7 +8609,10 @@ function copyCastWay(info) {
 async function beginCopyCast(info) {
   let card = copyCastExiledCard(info);
   if (!card) {
-    updateActionHint(`${info.card_name || "The card"} is no longer in exile, so no copy can be made.`, true);
+    updateActionHint(
+      `${info.card_name || "The card"} is no longer ${copyCastFromHand(info) ? "in that hand" : "in exile"}, so no copy can be made.`,
+      true,
+    );
     return;
   }
   if (!card.target_spec && sessionId && seat !== null) {
@@ -8618,7 +8632,13 @@ async function beginCopyCast(info) {
   if (xLivesInManaCost(card) && card.target_spec) {
     card = { ...card, target_spec: { ...card.target_spec, announces_x: false } };
   }
-  beginZoneCast(card, "exile", null, copyCastWay(info), { copyCastSlot: info.exile_index });
+  // The copy is made in the caster's exile and cast from there either way
+  // (`copy_cast_confirm` reads the zone itself), so the chain runs as an
+  // exile cast; the slot only marks the cast as this offer's answer
+  // (`carryCopyCastAnswer`), and a revealed-hand offer has no exile slot.
+  const slot = Number.isInteger(info.exile_index) ? info.exile_index
+    : Number.isInteger(info.hand_index) ? info.hand_index : 0;
+  beginZoneCast(card, "exile", null, copyCastWay(info), { copyCastSlot: slot });
 }
 
 function applyCopyCastPrompt(info) {
@@ -8644,10 +8664,17 @@ function applyCopyCastPrompt(info) {
   title.textContent = `Cast a copy — ${cardName}`;
   body.textContent = info.prompt
     || `Cast a copy of ${cardName} without paying its mana cost (${source})?`;
-  const owner = Number.isInteger(info.exile_seat) && info.exile_seat !== seat
+  const fromHand = copyCastFromHand(info);
+  const owner = fromHand
+    ? (info.hand_seat !== seat
+      ? `${currentState?.players?.[info.hand_seat]?.name || "Another player"}'s revealed hand`
+      : "your revealed hand")
+    : Number.isInteger(info.exile_seat) && info.exile_seat !== seat
     ? `${currentState?.players?.[info.exile_seat]?.name || "Another player"}'s exile`
     : "your exile";
-  const slot = Number.isInteger(info.exile_index) ? info.exile_index + 1 : null;
+  const slot = fromHand
+    ? (Number.isInteger(info.hand_index) ? info.hand_index + 1 : null)
+    : Number.isInteger(info.exile_index) ? info.exile_index + 1 : null;
   steps.innerHTML = [
     `<div id="copyCastCardSlot" class="prompt-card-row"></div>`,
     `<div>${escapeHtml(source)} offers a copy of ${escapeHtml(cardName)}, in ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}.</div>`,
