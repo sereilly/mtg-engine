@@ -313,7 +313,7 @@ KICKED_ENTRY_SIZED_BY_X = re.compile(
 )
 
 #: The permanent-metadata key the announced X of the cast that became this
-#: permanent is stamped under (``resolution._resolve_card``). Spelled here for
+#: permanent is stamped under (``_resolve_permanent_spell``). Spelled here for
 #: the reason ``entry_choices.LIFE_PAID_AS_ENTERED`` is: the entry state reads it for
 #: three sentences now, and a channel spelled at each end is one that can be
 #: renamed at one.
@@ -325,7 +325,7 @@ CAST_X_VALUE = "cast_x_value"
 #: order and its count not printed: the number is a characteristic of the card
 #: the spell's own kicker discarded (CR 601.2b; "Kicker—{2}{B}, Discard a
 #: creature card."), which the resolving spell stamps on the permanent beside
-#: the kicked stamp itself (``resolution._resolve_card``,
+#: the kicked stamp itself (``_resolve_permanent_spell``,
 #: ``cast_costs.CAST_COST_DISCARD_MANA_VALUE``).
 #:
 #: Its own pattern rather than a widening of the one above: that one reads a

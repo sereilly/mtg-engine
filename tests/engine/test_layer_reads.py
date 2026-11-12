@@ -517,10 +517,12 @@ PRINTED_COMPILE_BASELINE: dict[str, int] = {
     # tests/engine/test_kg3_textspell_spell_text_reads.py), which took the
     # entries counter_conditions, stack_targets and legality_resolution had.
     "mixins/target_announcements.py": 1,
-    # …and a spell cast from a graveyard's own card target (Odyssey), and a
-    # modal spell's announced mode (``arm_modal_mode_targets``, which went to
-    # ``cast_announcement`` when ``casting.py`` split at the 2,000-line cap).
-    "mixins/stack/casting.py": 1,
+    # …and a spell cast from a graveyard's own card target (Odyssey,
+    # ``_rebase_graveyard_targets``, which went to ``cast_completion`` at the
+    # pre-Fifth-Dawn split), and a modal spell's announced mode
+    # (``arm_modal_mode_targets``, which went to ``cast_announcement`` when
+    # ``casting.py`` split at the 2,000-line cap).
+    "mixins/stack/cast_completion.py": 1,
     "mixins/stack/cast_announcement.py": 1,
     # CR 707.9: a copier's *own* exceptions ("except it's an enchantment in
     # addition to its other types") are read off the copier as printed, before

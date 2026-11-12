@@ -722,9 +722,9 @@ def spell_cap_ban(game: "Game", caster_index: int) -> str | None:
     The count read is the seat's **own** record, not a shared one: CR 601.3a
     restricts the player who is casting, and one table-wide tally would let an
     opponent's turn-one Ornithopter spend everybody's allowance. The record is
-    appended to further down the cast (``mixins/stack/casting.py``), so a seat
-    that has already cast *cap* spells is at its limit and the spell being
-    announced is the one too many.
+    appended to further down the cast (``mixins/stack/cast_completion.py``),
+    so a seat that has already cast *cap* spells is at its limit and the spell
+    being announced is the one too many.
 
     ``effective_card`` rather than the printed face, for :func:`global_cast_ban`'s
     reason: what a permanent says is what layer 1 and layer 3 have made of it

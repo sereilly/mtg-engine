@@ -41,7 +41,7 @@ import engine.legality_enumeration as legality_enumeration
 from engine import Game, PlayerState, faces
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_permissions import grant_permission
-from engine.mixins.stack.casting import SpellCastingMixin
+from engine.mixins.stack.cast_completion import CastCompletionMixin
 from engine.models import CardDefinition
 from engine.oracle import compile_card_oracle
 from engine.targeting import (CAST_FROM_GRAVEYARD, GRAVEYARD_TARGET_KIND,
@@ -193,7 +193,7 @@ def test_w1g3_the_census_sees_a_slot_counted_after_the_spell_has_left(monkeypatc
     """Validated backwards: without the re-count, the census names the cards —
     a shipped one among them, which is what this was before Odyssey."""
     monkeypatch.setattr(
-        SpellCastingMixin, "_rebase_graveyard_targets", lambda self, *args: None
+        CastCompletionMixin, "_rebase_graveyard_targets", lambda self, *args: None
     )
     census = _Census().run(only={"Raise Dead", "Regrowth", "Morgue Theft", "Coffin Purge", "Recoup"})
     assert len(census.wrong) == 5, census.wrong

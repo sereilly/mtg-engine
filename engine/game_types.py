@@ -1015,9 +1015,9 @@ def chosen_damage_source(
     Here rather than in either announcement path because **both** write the
     ``chosen_source`` key declared above this file's dataclasses:
     ``mixins/stack/activation.py`` has since Jade Monolith, and
-    ``mixins/stack/casting.py`` since Kor Chant — and a second copy of six
-    lines is how the two would come to disagree about which end of the stack an
-    index counts from. The permanent is resolved through ``permanent_at``, the
+    ``mixins/stack/cast_completion.py`` since Kor Chant — and a second copy
+    of six lines is how the two would come to disagree about which end of the
+    stack an index counts from. The permanent is resolved through ``permanent_at``, the
     control seam's bounds-checked reader, rather than by subscripting a
     battlefield list.
 

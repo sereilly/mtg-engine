@@ -3,16 +3,19 @@ modes and X, and paid its cost.
 
 Everything here runs *before* the spell resolves. ``cast_from_hand`` is the
 entry point and ``queue_from_hand`` does the work, through
-``_cast_onto_stack``: CR 601.2a–i in order, every refusal before any payment,
-and the push that finishes the cast (CR 601.2i).
+``_cast_onto_stack``: CR 601.2a–i in order, every refusal before the mana
+payment that is its hinge, every payment from it on, and the push that
+finishes the cast (CR 601.2i).
 
 What the cast asks on the way is a mixin each, composed onto ``Game``
 directly after this one, and ``_cast_onto_stack`` calls its steps there in
-CR order — each moved out of it whole at the 2,000-line cap:
+CR order — each moved out of it whole at the 2,000-line cap, or at the
+pre-Fifth-Dawn split:
 
 * ``cast_announcement`` — where the spell is cast from and under what
-  permission (CR 601.2a, 601.3), its modes (CR 601.2b, 700.2) and each
-  announced mode's target gates (CR 601.2c);
+  permission (CR 601.2a, 601.3), the costs it announces and the choices
+  beside them (CR 601.2b), its modes (CR 601.2b, 700.2) and each announced
+  mode's target gates (CR 601.2c);
 * ``cast_additional_costs`` — the printed additional costs (CR 601.2b,
   601.2f–h), the optional ones a cast announces (kicker, buyback), the
   sacrifices a board tax adds (Drought), and whether every cost of the cast
@@ -21,53 +24,35 @@ CR order — each moved out of it whole at the 2,000-line cap:
 * ``cast_target_validation`` — the target gate (CR 601.2c), the count and
   the division (CR 601.2d), and the Aura enchant-noun helpers;
 * ``pool_payment`` — the X a cast is for (CR 107.3) and the mana payment
-  (CR 601.2g–h).
+  (CR 601.2g–h);
+* ``cast_completion`` — below the hinge, where nothing refuses: every other
+  cost paid at one moment (CR 601.2h), and the stack object built from the
+  announcement, pushed, and cast (CR 601.2i).
 """
 
 from __future__ import annotations
 
-import re
-
-from ...cast_permissions import consume as consume_permission
 from ...bare_announcements import (announced_fields, announced_seat,
                                    default_cast_target,
                                    names_an_object, seat_of_unseated_slot)
-from ...cast_costs import (additional_costs, buyback_cost, cast_announces_x,
-                           kicked, optional_x_offers)
 from ...cast_prohibitions import cast_prohibition
 from ...cast_restrictions import check_cast_timing
-from ...cast_timing import (CAST_AT_INSTANT_SPEED,
-                            cast_by_its_own_flash_permission,
-                            sacrifices_at_cleanup_if_cast_at_instant_speed)
-from ...damage_ledger import record_cast
-from ...counter_conditions import spend_next_spell_promises
 from ...divided_damage import divided_entry, stamped_entry
-from ...enter_effects import COPY_DECLINED, copy_on_enter_type
 from ...entwine import entwined_mode_choices
 from ...face_down import announced_morph_cost, face_down_card
 from ...faces import choose_a_face_refusal, spell_named
-from ...mana_combination import MANA_COMBINATION, split_refusal
+from ...mana_combination import split_refusal
 from ...classifier import classify_card
-from ...cost_modifiers import (CostReduction, buyback_cost_reduction,
-                               cost_reduction_for_cast, reduce_cost,
-                               spell_cost_tax,
+from ...cost_modifiers import (cost_reduction_for_cast, spell_cost_tax,
                                spell_life_tax, spell_symbol_tax)
 from ...self_cost_modifiers import self_per_target_tax
-from ...target_keywords import (ANTE, ANTE_INDEX, GRAVEYARD, announced_slot,
-                               cast_target_zone)
-from ...flashback import is_flashback
-from ...game_types import (as_graveyard_stamps, as_target_ids,
-                           as_target_slots, chosen_damage_source,
-                           first_target_id, SimulationResult, StackItem,
-                           target_slots)
+from ...target_keywords import (ANTE, GRAVEYARD, announced_slot,
+                                cast_target_zone)
+from ...game_types import as_target_slots, SimulationResult
 from ...models import CardDefinition
 from ...oracle import compile_card_oracle
-from ...oracle_types import _COLOR_WORD_TO_SYMBOL
 from ...targeting import graveyard_target_spec, derive_cast_spec
-from ...target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLE_SEATS
-from .cast_additional_costs import (_optional_cost_announcement,
-                                    _optional_cost_totals, _taken_offers,
-                                    optional_cost_taken)
+from .cast_additional_costs import _taken_offers
 from .cast_announcement import _mode_announcements
 from ...mana_payment import mana_cost_label
 from ...refusals import refuse, take_back_refused_attempt
@@ -822,197 +807,25 @@ class SpellCastingMixin:
         if timing_denial is not None:
             return refuse(card.name, classification.effect_kind, timing_denial)
 
-        # A printed additional cost (CR 601.2b). Only the costs this *zone*
-        # charges: Demonic Embrace prints one card with two prices —
-        # {1}{B}{B} from the hand and {1}{B}{B} plus 3 life plus a card from the
-        # graveyard — so a cost naming a zone applies to that zone alone, and
-        # an unmarked cost ("as an additional cost to cast this spell") applies
-        # wherever the spell is cast from.
-        #
-        # Gathered here and *checked* below, once X has been announced. See the
-        # gate's own note for why the check moved.
-        cast_costs = tuple(
-            cost for cost in additional_costs(card)
-            if cost.from_zone is None or cost.from_zone == from_zone
-        )
-
-        # CR 601.2b's optional additional costs, announced now and folded into
-        # the mana below. **Not** part of `_unpayable_additional_cost`: an offer
-        # is not a price, so declining one cannot make a spell uncastable, and
-        # taking one past what the pool holds is refused by the mana payment
-        # itself — which is where CR 601.2h puts an unpayable mana cost, and
-        # which spends nothing on the way to refusing.
-        optional_paid, optional_denial = _optional_cost_announcement(
-            card, cast_costs, optional_cost_payments,
-        )
-        if optional_denial is not None:
-            return refuse(
-                card.name, classification.effect_kind, optional_denial,
-            )
-        # CR 601.2b's choice-shaped price, announced here — beside the optional
-        # offers above and before any mana is spent, which is where CR 601.2b
-        # puts every choice a cast makes. It charges nothing, so there is no
-        # CR 601.2h gate to pass: every creature type is a legal answer.
-        #
-        # Refused rather than repaired when the word is not a creature type
-        # (idiom 9): a picker's list is only true if the engine declines what is
-        # not on it, and a silently-corrected answer would make the spell's own
-        # P/T disagree with what the player chose.
-        #
-        # The same announcement with no price behind it, for a spell whose
-        # *targets* are of the type chosen (Aphetto Dredging: "the creature
-        # type before the targets", its ruling). Made here, before the target
-        # gates below judge what was named under it.
-        chosen_type_word: str | None = None
-        if any(
-            cost.choose_creature_type for cost in cast_costs
-        ) or self._cast_type_narrows_graveyard_targets(card):
-            from ...grammar.vocabulary import CREATURE_TYPES, display_type_word
-
-            if chosen_creature_type is not None:
-                chosen_type_word = str(chosen_creature_type).strip().lower()
-                if chosen_type_word not in CREATURE_TYPES:
-                    denial = (
-                        f"{chosen_creature_type} is not a creature type "
-                        f"(CR 601.2b, CR 205.3m)"
-                    )
-                    return refuse(
-                        card.name, classification.effect_kind, denial,
-                    )
-            else:
-                chosen_type_word = self._default_cast_creature_type(
-                    caster_index, card
-                )
-            self.log.append(
-                f"{caster.name} chose "
-                f"{display_type_word(chosen_type_word) if chosen_type_word else 'no creature type'} "
-                f"to cast {card.name}"
-            )
-
-        # The copy-as-it-enters "may" declined (``decline_copy``), announced
-        # with the copy target it replaces and checked here, before anything
-        # is paid. Naming a permanent to copy *and* declining to copy is two
-        # answers to one question, refused rather than ranked.
-        copy_declined = bool(decline_copy) and copy_on_enter_type(
-            compile_card_oracle(card).normalized_text or ""
-        ) is not None
-        if copy_declined and (
-            target_permanent_index is not None
-            or first_target_id(target_permanent_ids) is not None
-        ):
-            return refuse(
-                card.name, classification.effect_kind,
-                "a cast cannot both name a permanent to copy and decline "
-                "to copy (CR 707.5)",
-            )
-
-        # "Buyback costs cost {2} less." (Memory Crystal.) CR 601.2f applied to
-        # CR 702.27a's offer, so it is read here — where the offer's symbols
-        # become mana this cast owes — and nowhere near the spell's own mana
-        # cost, which this modifier says nothing about.
-        #
-        # Only the buyback offer is reduced, never every optional cost this
-        # spell prints: Primitive Justice's "you may pay {1}{R} and/or {1}{G}"
-        # is CR 601.2b's repeated offer and no keyword at all, and reducing it
-        # would be a card Memory Crystal does not print. The offer is picked out
-        # by asking ``cast_costs.buyback_cost`` for this card's key — the same
-        # reader ``buyback_paid`` uses at resolution, so the offer this
-        # discounts is exactly the offer that buys the card back.
-        buyback_key = buyback_cost(card.oracle_text or "")
-        buyback_off, buyback_by = (
-            buyback_cost_reduction(self) if buyback_key is not None else (0, [])
-        )
-        # "Kicker {X}" (Verdeloth the Ancient), "Kicker {X}{2}" (Kangee). An X
-        # that lives in an *offer* (CR 107.3a's "additional cost with an {X} in
-        # it"), so CR 601.2b's two announcements depend on each other: a caster
-        # who took the offer names a number and pays for it just below, and one
-        # who declined names none. The number is settled here, before anything
-        # reads it, so a stray X sent with a declined kicker cannot reach the
-        # permanent ("create X Saprolings") by another road -- and an X nobody
-        # announced for a kicker that *was* taken is the 0 it reads as.
-        if optional_x_offers(card, from_zone=from_zone):
-            if cast_announces_x(card, from_zone=from_zone, taken=optional_paid):
-                x_value = max(0, int(x_value or 0))
-            else:
-                x_value = None
-        # "Spend only colored mana on X. No more than one mana of each color
-        # may be spent this way." (Emblazoned Golem's "Kicker {X}".) The X of
-        # such an offer is not generic mana: it is one unit of each of X
-        # colours, and *which* colours is the payer's CR 601.2h choice. So the
-        # offer contributes only its non-X part to the taxes below, and the
-        # candidate colourings travel to the payment, which takes the first
-        # the pool can pay with real units of those colours.
-        #
-        # ``((),)`` -- one choice, of nothing -- for every other cast, so the
-        # payment below makes exactly one pass and sets nothing aside.
-        offer_x_colorings: tuple[tuple[str, ...], ...] = ((),)
-        for offer, times in _optional_cost_totals(cast_costs, optional_paid):
-            colorings = offer.x_colorings(x_value)
-            if colorings is None:
-                charged = offer.cost_at(x_value)
-            elif not colorings:
-                # There are five colours, so no X above five can be paid one
-                # mana of each. Refused here -- before any cost is paid, and
-                # whether or not this game charges mana -- because the sentence
-                # bounds the announcement itself: an X the cost cannot be paid
-                # at is not one the caster may name (CR 601.2h, CR 601.2e).
-                refusal = (
-                    f"{card.name}: X can't be {x_value} -- no more than one "
-                    f"mana of each color may be spent on X"
-                )
-                return refuse(
-                    card.name, classification.effect_kind, refusal,
-                )
-            else:
-                charged = offer.cost_at(0)
-                offer_x_colorings = colorings
-            if buyback_off and offer.symbols == buyback_key:
-                # Through ``reduce_cost``, the one place CR 118.7's arithmetic
-                # lives: a generic reduction touches only the generic component
-                # and clamps at zero, so a buyback of {1} under two Crystals is
-                # free rather than negative.
-                charged = reduce_cost(charged, CostReduction(generic=buyback_off))
-                self.log.append(
-                    f"{card.name}'s buyback costs {{{buyback_off}}} less "
-                    f"({', '.join(sorted(set(buyback_by)))})"
-                )
-            for symbol, count in charged.items():
-                if symbol == "generic":
-                    extra_generic_tax += count * times
-                else:
-                    extra_pip_tax[symbol] = (
-                        extra_pip_tax.get(symbol, 0) + count * times
-                    )
-        # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
-        # mana clause of an optional price that is not only mana: folded into
-        # the same payment as the offers above, and only for the caster who
-        # took the price — through the one reader the gate and the collector
-        # below skip an untaken offer by, so the mana and the discard are
-        # charged together or not at all.
-        for cost in cast_costs:
-            if cost.mana_symbols and optional_cost_taken(cost, optional_paid):
-                for symbol, count in cost.mana_cost.items():
-                    if symbol == "generic":
-                        extra_generic_tax += count
-                    else:
-                        extra_pip_tax[symbol] = extra_pip_tax.get(symbol, 0) + count
-
-        # Resolve the named discard **here**, while `cost_hand_index` still
-        # indexes the hand the caster was looking at. The spell leaves that hand
-        # further down, and every card after it slides up a slot — so an index
-        # read afterwards names the neighbour, and one past the shortened end
-        # fell through to a bare `0` and discarded the *first* card in hand. A
-        # cast that names a card it cannot pay with is refused rather than
-        # silently repointed, before any mana is spent.
-        cost_hand_cards, cost_denial = self._resolve_discard_cost_cards(
-            caster_index, card, cast_costs,
-            cost_hand_index=cost_hand_index,
+        # CR 601.2b: the costs this cast announces, and the choices beside them.
+        announced = self._announced_cast_costs(
+            card=card, caster=caster, caster_index=caster_index,
+            chosen_creature_type=chosen_creature_type,
+            classification=classification, cost_hand_index=cost_hand_index,
             cost_other_hand_indices=cost_other_hand_indices,
-            spell_hand_index=hand_index if from_zone == "hand" else None,
-            x_value=x_value,
+            decline_copy=decline_copy, extra_generic_tax=extra_generic_tax,
+            extra_pip_tax=extra_pip_tax, from_zone=from_zone,
+            hand_index=hand_index,
+            optional_cost_payments=optional_cost_payments,
+            target_permanent_ids=target_permanent_ids,
+            target_permanent_index=target_permanent_index, x_value=x_value,
         )
-        if cost_denial is not None:
-            return refuse(card.name, classification.effect_kind, cost_denial)
+        if isinstance(announced, SimulationResult):
+            return announced
+        (
+            cast_costs, chosen_type_word, copy_declined, cost_hand_cards,
+            extra_generic_tax, offer_x_colorings, optional_paid, x_value,
+        ) = announced
 
         # The **alternative** cost (CR 118.9), announced in the same step as the
         # additional costs above (CR 601.2b) and resolved here for the same
@@ -1375,355 +1188,52 @@ class SpellCastingMixin:
             return mana_paid
         permission, resolved_x_value, x_mana_spent = mana_paid
 
-        # A card played out of exile leaves it deliberately (CR 400.7 makes it a
-        # new object wherever it lands), so the record that said it was face
-        # down stops speaking for it — otherwise the *next* effect to exile the
-        # same card would find that record alive and hide it from the table.
-        # That retirement is the departure seam's, which is why this is not a
-        # ``pop``: one transition out of exile, thirteen sites, one place for
-        # anything that must happen when a card leaves.
-        if from_zone == "exile":
-            self.take_card_from_exile(source_seat, held)
-        else:
-            del source_zone[hand_index]
-        # Now, and not before: the spell is no longer in the hand, so it cannot
-        # be discarded to pay for itself, and the creature it eats is gone from
-        # the battlefield before the spell is on the stack.
-        # CR 118.9d keeps the additional costs in force alongside an
-        # alternative one, so both are paid, in the order CR 601.2h leaves free.
-        # The graveyard slots the caster named, re-counted for a spell that has
-        # just left the same pile (every slot above it slid down one) — the
-        # arrangement the additional costs' exile below makes.
-        renumbered_slots = (
-            cost_graveyard_indices
-            if cost_graveyard_indices is None or spell_graveyard_slot is None
-            else [
-                slot - 1 if slot > spell_graveyard_slot else slot
-                for slot in cost_graveyard_indices
-            ]
-        )
-        self._pay_alternative_cost(
-            caster_index, card, chosen_alternative, alternative_card,
-            named_permanents=alternative_permanents,
-            other_cards=alternative_others,
-            # "Flashback—{1}{U}, Exile X blue cards from your graveyard" / "…,
-            # Sacrifice X Mountains": the X the cast announced, and the cards
-            # named for the exile when no additional cost has the channel.
-            x_value=resolved_x_value,
-            graveyard_slots=(
-                renumbered_slots
-                if self.alternative_takes_named_graveyard_slots(
-                    cast_costs, chosen_alternative, optional_paid,
-                )
-                else None
-            ),
-        )
-        # CR 601.2f's increases, in life. Gated far above, where the targets
-        # settle what they come to, and paid here with every other cost —
-        # nothing between the two points spends anything, so a refusal up there
-        # costs the caster exactly nothing.
-        if life_owed:
-            caster.life -= life_owed
-            self.log.append(
-                f"{caster.name} paid {life_owed} life to cast {card.name} "
-                f"({', '.join(life_taxing_names)})"
-            )
-        cost_spoils = self._pay_additional_costs(
-            caster_index, card, cast_costs,
-            cost_permanent_index=cost_permanent_index,
-            cost_permanent_ids=cost_permanent_ids,
+        # CR 601.2h: every other cost, paid at one moment.
+        (
+            cost_spoils, exiled_for_cost, sacrificed_for_cost,
+        ) = self._pay_cast_costs(
+            alternative_card=alternative_card,
+            alternative_others=alternative_others,
+            alternative_permanents=alternative_permanents, card=card,
+            cast_costs=cast_costs, caster=caster, caster_index=caster_index,
+            chosen_alternative=chosen_alternative,
+            cost_graveyard_indices=cost_graveyard_indices,
             cost_hand_cards=cost_hand_cards,
-            x_value=resolved_x_value,
-            taken=optional_paid,
-            # Re-counted for a spell that has just left the same pile: the
-            # gate above refused the spell's own slot, and every slot above it
-            # slid down one when it went to the stack.
-            cost_graveyard_indices=renumbered_slots,
+            cost_permanent_ids=cost_permanent_ids,
+            cost_permanent_index=cost_permanent_index, from_zone=from_zone,
+            hand_index=hand_index, held=held, life_owed=life_owed,
+            life_taxing_names=life_taxing_names, optional_paid=optional_paid,
+            owed=owed, permission=permission,
+            resolved_x_value=resolved_x_value, source_seat=source_seat,
+            source_zone=source_zone, spell_graveyard_slot=spell_graveyard_slot,
         )
-        sacrificed_for_cost = cost_spoils["sacrificed_for_cost"]
-        exiled_for_cost = cost_spoils["exiled_for_cost"]
-        # Drought's imposed sacrifices, paid with the printed ones and at the
-        # same moment. The victims were picked before the mana was spent, so a
-        # board that has not changed since pays exactly what the gate measured.
-        self._pay_sacrifice_tax(owed, f"to cast {card.name}")
-        if permission is not None:
-            consume_permission(self, permission, held)
-        if from_zone == "command":
-            # CR 903.8's "each previous time" is counted once the cast is
-            # announced and paid for, so the tax charged above is the one this
-            # cast owed and the next one is {2} higher. A cast that failed
-            # anywhere above returned before here and costs nothing.
-            self.record_commander_cast(caster_index, held)
-        if from_zone != "hand":
-            # Whose pile it left, which is not always the caster's: a grant may
-            # open somebody else's exile (Grinning Totem). The permission is the
-            # only thing that knows, so it is asked rather than assumed.
-            pile_seat = (
-                permission.zone_seat if permission is not None else caster_index
-            )
-            # A land is played, never cast (CR 305.1): Future Sight's "play
-            # lands … from the top of your library" comes through this path as
-            # the land drop, and the log called it a cast.
-            verb = "played" if card.primary_type == "land" else "cast"
-            self.log.append(
-                f"{card.name} {verb} from {self.players[pile_seat].name}'s {from_zone}"
-            )
 
+        # CR 601.2i: the spell is put on the stack, and is cast.
         if card.primary_type != "land":
-            # Determine which stack spell this one targets. An explicit choice
-            # (target_stack_item) wins; otherwise fall back to the topmost legal
-            # spell so AI and untargeted casts still work.
-            target_stack_item_val = target_stack_item
-            enumerated = False
-            if target_stack_item_val is None:
-                # The gate's own enumeration first (`default_stack_target`):
-                # the topmost object the printed phrase admits, so the default
-                # is a target `cast_stack_target_refusal` would have accepted
-                # by name. The text reading below is what is left for the
-                # shape that gate declines — a permanent spell, whose "counter
-                # target spell" is an entry trigger's — and it is not consulted
-                # where the enumeration answered, an answer of "nothing"
-                # included. A modal spell is always answered, for the mode it
-                # announced.
-                enumerated, target_stack_item_val = self.default_stack_target(
-                    caster_index, card, from_zone=from_zone,
-                    mode_index=mode_index,
-                )
-            if (
-                not enumerated
-                and target_stack_item_val is None
-                and self.stack
-                and "counter target" in card.oracle_text.lower()
-            ):
-                color_match = re.search(r"counter target (\w+) spell", card.oracle_text.lower())
-                color_filter: str | None = None
-                if color_match:
-                    color_filter = _COLOR_WORD_TO_SYMBOL.get(color_match.group(1))
-                # The spell's colours through ``object_colors``, so a stack
-                # object Celestial Dawn has made white is what "counter target
-                # white spell" finds — the same reading `_shares_a_color`
-                # twenty lines up already makes for the other half of CR 105.
-                # The stack object's own colour reader — a Lace's recolour
-                # and a text-changed colour included — not its printed card's.
-                matching = [
-                    it for it in self.stack
-                    if not color_filter
-                    or color_filter in self._stack_item_colors(it)
-                ]
-                if matching:
-                    target_stack_item_val = matching[-1]
-            spell_item = StackItem(
-                    card=card,
-                    caster_index=caster_index,
-                    # CR 108.3/400.3: the seat whose pile the card left owns
-                    # it — the caster's for a hand, a command zone or their own
-                    # graveyard, the opponent's for Grinning Totem's exile — and
-                    # that seat's zones are where it goes when it leaves the
-                    # stack, whoever cast it.
-                    owner_index=source_seat,
-                    target_player_index=target_player_index,
-                    target_permanent_index=as_target_slots(target_permanent_index),
-                    target_permanent_id=as_target_ids(target_permanent_ids),
-                    # A roles announcement's graveyard slots (see the top of
-                    # this method); None for every other cast, whose graveyard
-                    # target is stamped as the item is pushed.
-                    target_graveyard_card=as_graveyard_stamps(role_graveyard_stamps),
-                    x_value=resolved_x_value,
-                    target_stack_item=target_stack_item_val,
-                    chosen_mode_index=mode_index,
-                    chosen_modes=chosen_modes,
-                    cast_from_zone=from_zone,
-                    # CR 707.12: a copy of a card cast under the grant that
-                    # made it (``engine/copy_casts.py``) is a copy on the stack
-                    # (CR 707.10a): it resolves and ceases to exist.
-                    is_copy=bool(permission is not None and permission.cast_as_copy),
-                    exile_instead_of_graveyard=bool(
-                        permission is not None and permission.exile_instead
-                    ),
-                    # CR 702.34a: "If the flashback cost was paid, exile this
-                    # card instead of putting it anywhere else any time it
-                    # would leave the stack." Whether it was paid is this
-                    # cast's own fact — the cost it was announced under — and
-                    # the stack object is the only thing that outlives the
-                    # announcement to say so.
-                    flashback=is_flashback(chosen_alternative),
-                    choices={
-                        "divided_targets": divided_targets,
-                        "new_color": new_color,
-                        MANA_COMBINATION: mana_combination,
-                        "old_color": old_color,
-                        # What the additional cost ate, for the spell whose
-                        # effect asks about it ("…equal to the sacrificed
-                        # creature's mana value"). The Permanent is off the
-                        # battlefield by now, so this is last-known information
-                        # (CR 608.2h) held on the stack item rather than a
-                        # second lookup that could not succeed.
-                        # How many times each CR 601.2b optional additional
-                        # cost was taken. The pool is empty by resolution
-                        # (CR 500.5) and the spell is on the stack, so nothing
-                        # in the game state can answer "for each additional
-                        # {1}{R} you paid" — this is where the announcement
-                        # survives, beside the other costs' spoils and for the
-                        # same reason.
-                        "additional_costs_paid": optional_paid,
-                        # CR 609.7a's chosen damage source, resolved to the
-                        # object it names. On the same channel the activation
-                        # path writes, because the handler behind it is the same
-                        # handler: `handlers/prevention.chosen_shield_source`
-                        # reads this key first, ahead of every fallback that
-                        # reads a target slot instead. Without it a *spell* that
-                        # names a source could only be given one by spending one
-                        # of its own target slots, which is what kept Honorable
-                        # Passage sourceless and Kor Chant unsupported.
-                        "chosen_source": chosen_damage_source(
-                            self,
-                            seat=chosen_source_seat,
-                            permanent_index=chosen_source_permanent_index,
-                            stack_index=chosen_source_stack_index,
-                        ),
-                        "sacrificed_for_cost": sacrificed_for_cost,
-                        # …the cards a *discard* cost took, on the channel the
-                        # activation path records them on and for its reason:
-                        # the card is in a graveyard by now (CR 400.7: a
-                        # different object), so the announcement is the only
-                        # thing that can say which of that pile's cards it was.
-                        "discarded_for_cost": cost_spoils["discarded_for_cost"],
-                        # …and what an *exile* cost ate, on the channel the
-                        # activation path already records it on. Last-known
-                        # information for the same reason (CR 608.2h): the
-                        # permanent left the battlefield before the spell was
-                        # on the stack, so nothing on the board can be asked
-                        # what it was.
-                        "exiled_for_cost": exiled_for_cost,
-                        # CR 601.2h's answer to "the amount of {B} spent on X"
-                        # (Soul Burn). Decided as the cost was built rather than
-                        # measured as a pool delta afterwards: this card costs
-                        # {X}{2}{B}, so a black unit missing from the pool may
-                        # have paid the mandatory pip, the generic {2} or X, and
-                        # a delta cannot tell those apart. The allocation is the
-                        # cost, so the number is exact.
-                        "x_mana_spent": x_mana_spent,
-                        # The word CR 601.2b made the caster choose. Here
-                        # rather than nowhere because the spell has no
-                        # permanent yet and the permanent it becomes is a new
-                        # object (CR 400.7), so the announcement is the only
-                        # place the answer survives the trip to resolution —
-                        # the cost spoils above are on this channel for exactly
-                        # that reason. `_resolve_card` copies it onto the
-                        # permanent as it is built.
-                        "chosen_creature_type": chosen_type_word,
-                        # Every seat the announcement named, by role, where it
-                        # named two or more (`target_roles.ROLE_SEATS`) — beside
-                        # `target_player_index` above, which then holds the
-                        # first. None for every other cast.
-                        ROLE_SEATS: role_seats,
-                        # "If you cast it any time a sorcery couldn't have been
-                        # cast, …" (Mirage's five flash Auras). Answered *here*
-                        # because here is the only moment it can be: CR 601.3d's
-                        # timing is about the game state as the spell is
-                        # announced, and by resolution the stack has emptied
-                        # down to this spell and the step may have moved on.
-                        # Stamped only for a card whose text asks — see
-                        # `cast_permissions`, whose whole rider this feeds —
-                        # and only when its **own** permission is what lets
-                        # it be cast now: cast under Vernal Equinox's or a
-                        # Rootwater Shaman's, it is not sacrificed (the
-                        # cycle's rulings, 2022-12-08).
-                        CAST_AT_INSTANT_SPEED: (
-                            sacrifices_at_cleanup_if_cast_at_instant_speed(
-                                card.oracle_text or ""
-                            )
-                            and cast_by_its_own_flash_permission(
-                                self, caster_index, card
-                            )
-                        ),
-                    },
+            return self._put_cast_spell_on_stack(
+                ante_index=ante_index, card=card, cast_costs=cast_costs,
+                caster=caster, caster_index=caster_index,
+                chosen_alternative=chosen_alternative,
+                chosen_modes=chosen_modes,
+                chosen_source_permanent_index=chosen_source_permanent_index,
+                chosen_source_seat=chosen_source_seat,
+                chosen_source_stack_index=chosen_source_stack_index,
+                chosen_type_word=chosen_type_word,
+                classification=classification, copy_declined=copy_declined,
+                cost_spoils=cost_spoils, divided_targets=divided_targets,
+                exiled_for_cost=exiled_for_cost, from_zone=from_zone,
+                hand_index=hand_index, mana_combination=mana_combination,
+                mode_index=mode_index, new_color=new_color,
+                old_color=old_color, optional_paid=optional_paid,
+                permission=permission, resolved_x_value=resolved_x_value,
+                role_graveyard_stamps=role_graveyard_stamps,
+                role_seats=role_seats, sacrificed_for_cost=sacrificed_for_cost,
+                source_seat=source_seat,
+                target_permanent_ids=target_permanent_ids,
+                target_permanent_index=target_permanent_index,
+                target_player_index=target_player_index,
+                target_stack_item=target_stack_item, x_mana_spent=x_mana_spent,
             )
-            if from_zone == "graveyard":
-                self._rebase_graveyard_targets(spell_item, source_seat, hand_index)
-            # "For each opponent, … target permanent that player controls"
-            # (Blatant Thievery): who controlled each named permanent as it was
-            # targeted, for CR 608.2b to ask again (``target_roles.
-            # ANNOUNCED_TARGET_CONTROLLERS``). Absent for every other cast.
-            controllers = self.announced_target_controllers(
-                card, target_permanent_ids, mode_index=mode_index,
-            )
-            if controllers is not None:
-                spell_item.choices[ANNOUNCED_TARGET_CONTROLLERS] = controllers
-            # The declined copy rides to resolution on the announcement's
-            # channel, the one the chosen creature type rides on — the
-            # permanent does not exist yet (``_resolve_card`` copies it on).
-            # Only where declined, so every other stack item is unchanged.
-            if copy_declined:
-                spell_item.choices[COPY_DECLINED] = True
-            if ante_index is not None:
-                spell_item.choices[ANTE_INDEX] = ante_index
-            self._stack_push(spell_item)
-            self.log.append(f"{card.name} added to stack")
-            if any(cost.choose_number is not None for cost in cast_costs):
-                # "As an additional cost to cast this spell, choose a number
-                # between 0 and 5." (Liquid Fire.) Said in the log for the
-                # reason a kick is, one block down: CR 601.2b makes the choice
-                # part of the announcement so that an opponent deciding whether
-                # to respond knows which spell this is — five damage to the
-                # creature or five to its controller's face.
-                self.log.append(
-                    f"{caster.name} chose {int(resolved_x_value or 0)} "
-                    f"for {card.name}"
-                )
-            if kicked(card, spell_item.choices):
-                # CR 702.33d: the spell is kicked from the moment its
-                # controller declared the intention to pay, which is now. Said
-                # in the log because nothing else on the table shows it -- the
-                # mana is spent either way, and an opponent deciding whether to
-                # counter Kavu Titan needs to know which Kavu Titan it is.
-                self.log.append(
-                    f"{caster.name} kicked {card.name}"
-                    + (f" (X={resolved_x_value})" if optional_x_offers(
-                        card, from_zone=from_zone
-                    ) else "")
-                )
-            # "Whenever a player casts a [color] spell" triggers (Rod/Cup/Sphere)
-            # and "whenever you cast an X spell" triggers (Verduran Enchantress)
-            # fire now, as the spell is put on the stack, and go on the stack above
-            # it (CR 603.3) — so the trigger resolves while the triggering spell is
-            # still on the stack, not after it has already resolved.
-            # The record every ordinal reads — "you've cast an instant or
-            # sorcery spell this turn" (Stormwing Entity), "their second spell
-            # each turn" (Mangara), "other than the first instant spell that
-            # player casts each turn" (Ichneumon Druid). CR 601.2i finishes the
-            # casting before anything can respond, so the spell is on the list
-            # before *any* of the announcements below, not just the ones that
-            # used to follow it: it was appended inside `_apply_cast_triggers`,
-            # which runs second, so an opponent-scoped ordinal counted a list
-            # missing the very spell that fired it and every such trigger was
-            # one cast late.
-            if 0 <= caster_index < len(self.players):
-                self.players[caster_index].spells_cast_this_turn.append(card)
-            # The same record, by the identity that list cannot carry: a
-            # `CardDefinition` is shared by every copy in every deck, so two
-            # casts of one sorcery are one entry there and two here. Backdraft's
-            # "one of those sorcery spells" is a choice **between** them.
-            record_cast(self, spell_item)
-            # "The next instant or sorcery spell you cast this turn can't be
-            # countered." (Overmaster.) Spent here, where CR 601.2i makes the
-            # spell cast — the next matching spell is this one, before any
-            # counter can be announced at it.
-            spend_next_spell_promises(self, spell_item)
-            self._apply_spell_cast_any_triggers(
-                caster_index, card, from_zone, item=spell_item
-            )
-            self._apply_cast_triggers(caster_index, card, item=spell_item)
-            # "An opponent chooses one —" (CR 700.2e): the other player chooses
-            # "when the spell's controller normally would", which is CR 601.2b.
-            # Armed here rather than earlier because CR 601.2i finishes the
-            # casting first — the spell is on the stack and the cast triggers
-            # are announced, and the prompt holds priority, so nobody acts
-            # between the two. A non-interactive chooser takes the default where
-            # this stands (`default_at_arm`), which is what keeps AI and
-            # headless play from stopping on a decision nobody will make.
-            self._arm_opponent_mode_choice(caster_index, card, spell_item)
-            return SimulationResult(card.name, True, classification.effect_kind, "queued")
 
         self._resolve_card(
             caster_index=caster_index,
@@ -1738,39 +1248,3 @@ class SpellCastingMixin:
             owner_index=source_seat,
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
-    def _rebase_graveyard_targets(
-        self, item: StackItem, pile_seat: int, left_slot: int
-    ) -> None:
-        """Re-count *item*'s graveyard target slots now that the spell itself
-        has left *pile_seat*'s graveyard from *left_slot*.
-
-        A graveyard target is announced as a slot, and the announcement is
-        made against the pile **the caster is looking at** — the spell still
-        in it, which is the list the picker enumerated and the list the
-        announcement gates above just checked the slot against. The card then
-        leaves that pile (CR 601.2a), every later slot slides down one, and
-        ``_stack_push`` names the target by the slot it is handed. Read
-        unshifted, Morgue Theft flashed back from under two creature cards
-        returned the *other* one, and a slot past the shortened end named
-        nothing and fell back to the first legal card.
-
-        Only where the slot counts into the pile the spell left: the same
-        ``graveyard_target_seat`` the stamp is about to ask, so the two cannot
-        disagree about whose pile an index is into. The spell's own slot never
-        arrives here — the picker does not offer it and
-        ``cast_target_refusal`` has refused it (``targeting.CAST_FROM_GRAVEYARD``).
-        """
-        spec = graveyard_target_spec(
-            item.card, compile_card_oracle(item.card),
-            mode_index=item.chosen_mode_index,
-        )
-        if spec is None or self.graveyard_target_seat(item, spec) != pile_seat:
-            return
-
-        def rebased(slot):
-            return slot - 1 if isinstance(slot, int) and slot > left_slot else slot
-
-        if item.target_permanent_index is not None:
-            item.target_permanent_index = [
-                rebased(slot) for slot in target_slots(item.target_permanent_index)
-            ]

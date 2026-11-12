@@ -379,10 +379,10 @@ def spend_next_spell_promises(game: "Game", item: "StackItem") -> None:
     """Spend every promise the just-cast spell *item* answers, marking it.
 
     Called once, from the single site that puts a cast spell on the stack
-    (``mixins/stack/casting.py``, beside ``record_cast``), so a copy — which is
-    put on the stack without being cast — never reaches it. The type test is
-    ``search_filters.card_has_type`` (CR 205.2: a card has every type its line
-    names), so an artifact creature spell is a creature spell.
+    (``mixins/stack/cast_completion.py``, beside ``record_cast``), so a copy
+    — which is put on the stack without being cast — never reaches it. The
+    type test is ``search_filters.card_has_type`` (CR 205.2: a card has every
+    type its line names), so an artifact creature spell is a creature spell.
     """
     promises = list(getattr(game, "next_spells_uncounterable", None) or ())
     if not promises or getattr(item, "is_copy", False):

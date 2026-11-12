@@ -224,7 +224,8 @@ def mark_delayed_destruction(
     of the permanent it becomes sacrifices it at the beginning of the next
     cleanup step" — are CR 603.7g's case: a static ability that let a player
     take an action created the delayed ability, so its controller is the
-    caster and its source the card (``Game._resolve_card`` passes both).
+    caster and its source the card (``Game._resolve_permanent_spell``
+    passes both).
     """
     key = mark + DELAYED_CREATIONS_SUFFIX
     creations = list(permanent.metadata.get(key) or ()) if permanent.metadata.get(mark) else []

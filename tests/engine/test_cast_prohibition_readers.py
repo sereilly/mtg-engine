@@ -584,11 +584,14 @@ _READERS = {
 _STEPS_OF = {
     "engine/mixins/stack/casting.py": {
         "engine/mixins/stack/cast_announcement.py": (
-            "_spell_source", "_mode_target_refusal",
+            "_spell_source", "_announced_cast_costs", "_mode_target_refusal",
         ),
         "engine/mixins/stack/cast_target_validation.py": ("_settled_cast_division",),
         "engine/mixins/stack/cast_additional_costs.py": ("_checked_cast_costs",),
         "engine/mixins/stack/pool_payment.py": ("_resolved_cast_x", "_pay_cast_mana"),
+        "engine/mixins/stack/cast_completion.py": (
+            "_pay_cast_costs", "_put_cast_spell_on_stack",
+        ),
     },
 }
 

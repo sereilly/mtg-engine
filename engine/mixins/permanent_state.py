@@ -993,7 +993,7 @@ class PermanentStateMixin:
         # "**If this creature was kicked, it enters with** two +1/+1 counters
         # on it **and with flying**." (Faerie Squadron.) The loop above under
         # CR 702.33d's condition, read off the stamp the resolving spell left
-        # on the permanent before it entered (``resolution._resolve_card``) --
+        # on the permanent before it entered (``_resolve_permanent_spell``) --
         # so a creature put onto the battlefield without being cast, which
         # carries no stamp, enters as the card's printed body. That is the
         # rule: it was not cast, so it was not kicked.

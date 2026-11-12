@@ -103,7 +103,7 @@ PRINTED_CARD_READS: dict[tuple[str, str], str] = {
         "the mana cost, which no text change reaches (CR 612.1)",
     ("engine/mixins/stack/cast_announcement.py", "arm_modal_mode_targets"):
         "the announcement (CR 601.2b-c), before any effect can change it",
-    ("engine/mixins/stack/casting.py", "_rebase_graveyard_targets"):
+    ("engine/mixins/stack/cast_completion.py", "_rebase_graveyard_targets"):
         "the announcement (CR 601.2c), before any effect can change it",
     ("engine/mixins/stack/choices/triggers.py", "_default_trigger_target"):
         "a triggered ability (CR 113.3c): not a spell, carries no text change",
@@ -335,16 +335,17 @@ def test_no_printed_card_read_entry_is_dead():
 
 def test_the_resolution_folds_the_record_and_carries_it():
     """``_resolve_card`` receives the printed card and the record; it folds
-    them once (``spell_text_of``) for every text read, carries them onto
-    the permanent a permanent spell becomes (CR 400.7a), and
-    ``_apply_spell_text`` compiles what the spell says (``text_card``)."""
+    them once (``spell_text_of``) for every text read, its permanent arm
+    (``_resolve_permanent_spell``) carries them onto the permanent a
+    permanent spell becomes (CR 400.7a), and ``_apply_spell_text`` compiles
+    what the spell says (``text_card``)."""
     modules = list(_modules())
     assert ("engine/mixins/stack/resolution.py", "_resolve_card") in functions_calling(
         modules, "spell_text_of",
     )
-    assert ("engine/mixins/stack/resolution.py", "_resolve_card") in functions_calling(
-        modules, "carry_spell_text_changes",
-    )
+    assert (
+        "engine/mixins/stack/permanent_spell_resolution.py", "_resolve_permanent_spell",
+    ) in functions_calling(modules, "carry_spell_text_changes")
     tree = dict(modules)["engine/mixins/oracle_instructions.py"]
     (apply_spell_text,) = [
         node for node in ast.walk(tree)

@@ -332,7 +332,7 @@ def buyback_paid(card: CardDefinition, choices: dict | None) -> bool:
 # all of its kicker costs". So :func:`kicked` is the one reader, asked
 #
 # * by the condition evaluator, of a resolving spell's own stack record;
-# * by ``resolution._resolve_card`` as a permanent spell becomes a permanent,
+# * by ``_resolve_permanent_spell`` as a permanent spell becomes a permanent,
 #   which stamps :data:`KICKED` on it -- because the permanent is what an entry
 #   replacement, an entry trigger and Skizzik's end-step trigger turns later
 #   read, and the stack item is gone by then (CR 400.7 gives a permanent that
@@ -368,7 +368,7 @@ KICKED_WITH = "kicked_with"
 #: Discard a creature card".)
 #:
 #: Beside :data:`KICKED` and stamped at the same place for the same reason
-#: (``resolution._resolve_card``): the cost was paid at CR 601.2h, the card it
+#: (``_resolve_permanent_spell``): the cost was paid at CR 601.2h, the card it
 #: took is in a graveyard and a different object by resolution (CR 400.7), and
 #: the permanent that asks is a new object too — so the number rides the stack
 #: item's ``discarded_for_cost`` record onto the permanent before it enters,
@@ -609,7 +609,7 @@ def kickers_paid(card: CardDefinition, choices: dict | None) -> tuple[str, ...]:
 
     The one reader of the record: :func:`kicked` is "is this non-empty?",
     :func:`kicked_with` is "is this key in it?", and
-    ``resolution._resolve_card`` copies it onto the permanent
+    ``_resolve_permanent_spell`` copies it onto the permanent
     (:data:`KICKED_WITH`) for the sentences asked after the stack item is gone.
     """
     keys = kicker_costs(getattr(card, "oracle_text", "") or "")

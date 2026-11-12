@@ -13,8 +13,10 @@ mixin each, composed onto :class:`~engine.game.Game` the same way
 The first three outgrew one module each at the 2,000-line cap, and each part
 split out of one is a mixin ``Game`` composes immediately after it:
 
-    casting      cast_announcement       CR 601.2a–c — where from, modes,
-                                         each mode's targets
+    casting      cast_completion         CR 601.2h–i — the other costs paid,
+                                         the spell put on the stack
+                 cast_announcement       CR 601.2a–c — where from, the costs
+                                         announced, modes, each mode's targets
                  cast_additional_costs   CR 601.2b/f–h — additional costs
                  cast_alternative_costs  CR 118.9 — the alternative cost
                  cast_target_validation  CR 601.2c–d — the target gate
@@ -24,12 +26,15 @@ split out of one is a mixin ``Game`` composes immediately after it:
                  activation_charges      CR 601.2h — the payers chosen, the payment
                  card_activation         an ability of a card in a hand or
                                          a graveyard (CR 113.6)
+    resolution   permanent_spell_resolution
+                                         CR 608.3 — the permanent a spell becomes
+                 trigger_targets         CR 603.3c–d — a trigger's mode, targets
+                 triggered_abilities     CR 603.3 — triggers onto the stack
 
 ``_cast_onto_stack`` and ``_activate_onto_stack`` each call their steps in
 CR order from those modules; the hinge between refusing and paying (the mana
-payment) stays in the method itself.
-    resolution   trigger_targets         CR 603.3c–d — a trigger's mode, targets
-                 triggered_abilities     CR 603.3 — triggers onto the stack
+payment) stays in the method itself. ``_resolve_card`` hands a card that
+becomes a permanent to ``permanent_spell_resolution`` the same way.
 
 The split is along "what stage of the object's life is this?", which is why
 ``choices`` exists as its own module rather than staying inside the two that arm
@@ -49,6 +54,7 @@ from .card_activation import CardActivationMixin
 from .activation_checks import ActivationChecksMixin
 from .activation_charges import ActivationChargesMixin
 from .casting import SpellCastingMixin
+from .cast_completion import CastCompletionMixin
 from .cast_additional_costs import AdditionalCastCostsMixin
 from .cast_alternative_costs import AlternativeCastCostsMixin
 from .cast_target_validation import (
@@ -78,6 +84,7 @@ from .choices import (
     SacrificeChoicesMixin,
 )
 from .resolution import StackResolutionMixin
+from .permanent_spell_resolution import PermanentSpellResolutionMixin
 from .trigger_targets import TriggerTargetsMixin
 from .triggered_abilities import TriggeredAbilitiesMixin
 
@@ -103,12 +110,14 @@ __all__ = [
     "SpellChoicesMixin",
     "SacrificeChoicesMixin",
     "SpellCastingMixin",
+    "CastCompletionMixin",
     "AdditionalCastCostsMixin",
     "AlternativeCastCostsMixin",
     "CastTargetValidationMixin",
     "PoolPaymentMixin",
     "CastAnnouncementMixin",
     "StackResolutionMixin",
+    "PermanentSpellResolutionMixin",
     "TriggerTargetsMixin",
     "TriggeredAbilitiesMixin",
     "aura_enchant_noun",

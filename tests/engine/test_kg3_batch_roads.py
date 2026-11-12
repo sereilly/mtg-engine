@@ -33,6 +33,14 @@ ENGINE = Path(__file__).resolve().parents[2] / "engine"
 
 _SEAM = "_put_permanent_onto_battlefield"
 
+#: Steps of a road moved out of it whole, counted where the road is rather than
+#: one call further from the seam: ``_resolve_card``'s permanent arm, cut out
+#: of it at the pre-Fifth-Dawn split. Counted as a call, the hop it inserted
+#: dropped ``resolve_top_of_stack`` and ``queue_from_hand`` past the census's
+#: three calls, and the two loops reviewed over ``resolve_top_of_stack`` went
+#: unread.
+_STEPS = frozenset({"_resolve_permanent_spell"})
+
 #: The seam's own machinery, which is not a road.
 _INTERNAL = frozenset({
     _SEAM, "_enter_battlefield", "_finish_or_await", "_complete_entries",
@@ -100,7 +108,7 @@ def _entering_functions(trees) -> set[str]:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 defined[node.name].append(node)
-    reaching = {_SEAM}
+    reaching = {_SEAM, *_STEPS}
     for _level in range(3):
         frontier = set()
         for name, funcs in defined.items():

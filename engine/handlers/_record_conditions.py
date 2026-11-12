@@ -85,7 +85,7 @@ def evaluate_record_condition(
         # the answer is kept, picked by what is asking:
         #
         # * a **permanent**'s ability (an entry trigger, Skizzik's end-step
-        #   trigger) reads the stamp ``resolution._resolve_card`` left on the
+        #   trigger) reads the stamp ``_resolve_permanent_spell`` left on the
         #   permanent that spell became -- the stack item is long gone, and a
         #   permanent nothing cast has no stamp, which is the rule's answer;
         # * a **spell** resolving reads its own stack record.
@@ -97,8 +97,8 @@ def evaluate_record_condition(
         # the same question about one of the card's two kicker costs
         # (CR 702.33b): ``kicker`` is that cost's recorded key, and the two
         # places answer it the same way -- the permanent off
-        # ``KICKED_WITH``, the tuple of keys ``_resolve_card`` stamped beside
-        # the flag, and the spell off its own record through
+        # ``KICKED_WITH``, the tuple of keys ``_resolve_permanent_spell``
+        # stamped beside the flag, and the spell off its own record through
         # ``cast_costs.kicked_with``. A permanent stamped by nothing (not cast,
         # CR 400.7) was kicked with none of them.
         from ..cast_costs import KICKED, KICKED_WITH, kicked, kicked_with

@@ -1130,8 +1130,9 @@ spell, so this is not the cast event with a wider name -- it is one
 condition with two fire sites, and a version that only watched casts
 would leave the artifact sitting through a land drop. Both halves are
 announced in ``engine/mixins`` (the cast announcement and the land
-branch of ``_resolve_card``); ``engine/cast_event_filters.py`` scopes it to the
-permanent's own controller, which is what the printed "you" says.
+branch of ``_resolve_permanent_spell``); ``engine/cast_event_filters.py``
+scopes it to the permanent's own controller, which is what the printed
+"you" says.
 '''),
     ('land_enters', 'whenever a land', r'''
 Ankh of Mishra's land entry keeps its own kind and its own fire site, so

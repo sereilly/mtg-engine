@@ -14,6 +14,7 @@ from .mixins import (
     LandTappedForManaMixin,
     PhaseStepsMixin,
     SpellCastingMixin,
+    CastCompletionMixin,
     AdditionalCastCostsMixin,
     AlternativeCastCostsMixin,
     CastTargetValidationMixin,
@@ -25,6 +26,7 @@ from .mixins import (
     ActivationChecksMixin,
     ActivationChargesMixin,
     StackResolutionMixin,
+    PermanentSpellResolutionMixin,
     TriggerTargetsMixin,
     TriggeredAbilitiesMixin,
     PendingChoicesMixin,
@@ -137,6 +139,7 @@ class Game(
     # each followed by the parts split out of it at the 2,000-line cap.
     # See engine/mixins/stack/__init__.py.
     SpellCastingMixin,
+    CastCompletionMixin,
     AdditionalCastCostsMixin,
     AlternativeCastCostsMixin,
     CastTargetValidationMixin,
@@ -148,6 +151,7 @@ class Game(
     ActivationChecksMixin,
     ActivationChargesMixin,
     StackResolutionMixin,
+    PermanentSpellResolutionMixin,
     TriggerTargetsMixin,
     TriggeredAbilitiesMixin,
     PendingChoicesMixin,

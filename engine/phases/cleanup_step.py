@@ -144,7 +144,7 @@ class CleanupStepMixin:
         # ability that let the spell be cast as though it had flash created it
         # as the spell was cast — recorded as a mark on the permanent the
         # spell became (``destruction_events.mark_delayed_destruction``, at
-        # ``Game._resolve_card``) and announced as a stack object
+        # ``Game._resolve_permanent_spell``) and announced as a stack object
         # (``delayed_triggers.delayed_mark_events``). It triggers **now**, as
         # the step begins ("at the beginning of"), so what it names is read
         # off the board before the discard and the sweeps below; it goes on

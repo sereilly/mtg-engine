@@ -230,7 +230,8 @@ def _force_of_nature(game):
 
 
 def _fastbond(game):
-    """``stack/resolution._resolve_card``'s extra-land rider: the second land."""
+    """``stack/permanent_spell_resolution._resolve_permanent_spell``'s extra-land
+    rider: the second land."""
     _put(game, 0, "Fastbond")
     game.players[0].hand.extend([_POOL["Forest"], _POOL["Forest"]])
     game.enter_next_turn_phase("beginning")

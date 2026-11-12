@@ -447,7 +447,7 @@ def _derived_static_claims(
     # produce, on any card type.
     #
     # **The gate that asked this table was Aura-only**, and that is the whole of
-    # what this row fixes. `mixins/stack/casting.py` stamps
+    # what this row fixes. `mixins/stack/cast_completion.py` stamps
     # `CAST_AT_INSTANT_SPEED` off `sacrifices_at_cleanup_if_cast_at_instant_speed`
     # with no type test at all, and `cast_timing.casts_at_instant_speed` reads
     # the permission off any card's text — but the only reader crediting the
