@@ -427,10 +427,20 @@ def aura_enchants(oracle_text: str, noun: str) -> bool:
 #: (CR 605.4a), so the board it counts is the board of the tap. A clause that
 #: reader refuses leaves the whole line unimplemented rather than adding the
 #: mana once.
+#:
+#: **And a split.** "…adds an additional **two mana in any combination of
+#: colors**." (Dawn's Reflection.) That many units, each one of the five
+#: colours (CR 105.1) and each chosen apart from the others — the ruling
+#: (2004-12-01): "The two mana can be of two different colors. The
+#: controller of the land chooses the colors." So it is
+#: :data:`AURA_ANY_COLOR_MANA` once per unit, which is what the payment
+#: planner already reads a unit of any colour as (``board_payment._aura_units``),
+#: and the tap seam answers the units together (``combination_colors``).
 _ADDITIONAL_MANA_ON_TAP = re.compile(
     r"^whenever enchanted land is tapped for mana, "
     r"its controller adds an additional "
-    r"(?:(?P<symbols>(?:\{[wubrgc]\})+)|(?P<any>one mana of any color))"
+    r"(?:(?P<symbols>(?:\{[wubrgc]\})+)|(?P<any>one mana of any color)"
+    r"|(?P<combination>[a-z]+) mana in any combination of colors)"
     r"(?P<per_each> for each .+)?$"
 )
 
@@ -467,6 +477,16 @@ def _additional_mana_parts(
             return None
     if match.group("any"):
         return (AURA_ANY_COLOR_MANA,), rate
+    if match.group("combination"):
+        from .grammar.vocabulary import NUMBER_WORDS
+
+        units = NUMBER_WORDS.get(match.group("combination"))
+        # "a"/"an"/"one" mana in any combination is no combination and no
+        # card prints it; a word the table does not hold is a line this does
+        # not implement, and the card keeps its refusal.
+        if units is None or units < 2 or rate is not None:
+            return None
+        return (AURA_ANY_COLOR_MANA,) * units, rate
     return tuple(
         sym.upper() for sym in re.findall(r"[wubrgc]", match.group("symbols"))
     ), rate

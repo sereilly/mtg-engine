@@ -871,6 +871,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # like any other trigger, where its neighbour is run inline by the tap seam.
     "frozen_seat_adds_mana": "mana",
     "lose_all_unspent_mana": "mana",
+    # CR 701.10f: the pool's own mana added again, type by type (Doubling
+    # Cube). A producer — `mana_abilities.MANA_PRODUCING_KINDS` names it, so
+    # the ability is a mana ability (ruling 2004-12-01).
+    "double_unspent_mana": "mana",
     # "If target Plains is tapped for mana, it produces colorless mana instead
     # of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect on
     # one land rather than a production of mana — the same category because

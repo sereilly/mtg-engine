@@ -26,8 +26,8 @@ from ._common import (
 )
 from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
                       _RECORDED_PERMANENTS)
-from ._amounts import (count_filter_on_frozen_seat, count_spec,
-                       recorded_count_spec, x_offset_amount)
+from ._amounts import (OPPONENTS_SCOPE, count_filter_on_frozen_seat,
+                       count_spec, recorded_count_spec, x_offset_amount)
 from ._cost_records import (SACRIFICED_FOR_COST, UNTAPPED_FOR_COST,
                             shared_creature_type_referent)
 
@@ -392,13 +392,22 @@ def _lower_add_mana(
                         "battlefield and to a player", node=node,
                     )
                 owner = "all"
+            # "Add {R} for each tapped land **your opponents control**." (Mana
+            # Geyser.) The scope `count_spec` lifts for the same phrase
+            # (``OPPONENTS_SCOPE``): every battlefield is scanned and the
+            # filter keeps its ``controller`` key, answered by `subject_matches`
+            # relative to the producer's own seat (CR 109.5) — so the count is
+            # the union of every opponent's board, never the producer's.
+            opponents_scope = zone == "battlefield" and owner == "opponent"
+            if opponents_scope:
+                owner = OPPONENTS_SCOPE
             # "…in **target opponent's** graveyard" (Spoils of Evil). A chosen
             # seat rather than the producer's own, which the evaluator already
             # answers — `count_from_payload` reads any owner that is not "you"
             # off the resolution's target. Only out of a *zone*: "you control"
             # is a battlefield scope and a targeted one there would be a
             # different sentence with a different reader.
-            if owner not in ("you", "all") and not (
+            if owner not in ("you", "all", OPPONENTS_SCOPE) and not (
                 zone != "battlefield" and owner == "target_opponent"
             ):
                 raise LoweringError(
@@ -460,6 +469,11 @@ def _lower_add_mana(
                 )
             if related is not None:
                 carried = {**carried, "shares_creature_type_with": related}
+            if opponents_scope:
+                # Put back rather than trusted to the scope, for the reason
+                # `count_spec` gives: the scan reads every seat, and the key
+                # is what leaves the producer's own permanents out of it.
+                carried = {**carried, "controller": "opponent"}
             payload["per_each"] = {
                 "zone": zone, "owner": owner, "filter": carried,
             }
@@ -1010,4 +1024,24 @@ def _lower_lose_unspent_mana(
             _pool_clause_payload(node.player, node, event),
         ),
     )
+
+
+def _lower_double_unspent_mana(
+    node: ast.DoubleUnspentMana,
+) -> tuple[OracleInstruction, ...]:
+    """"**Double the amount of each type of unspent mana you have.**"
+    (Doubling Cube.)
+
+    CR 701.10f, performed by ``handlers/mana.double_unspent_mana`` on the
+    controller's own pool. A kind of :data:`mana_abilities.MANA_PRODUCING_KINDS`
+    — the ability could add mana and targets nothing, so it is a mana ability
+    (CR 605.1a; ruling 2004-12-01) and never uses the stack. Only "you": a
+    printed seat other than the controller would be another sentence, and
+    doubling the wrong pool is not a smaller version of this one.
+    """
+    if node.player.kind != "you":
+        raise LoweringError(
+            f"no handler doubles {node.player.kind!r}'s unspent mana", node=node
+        )
+    return (OracleInstruction("double_unspent_mana", "", {"player": "you"}),)
 

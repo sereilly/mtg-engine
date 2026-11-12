@@ -85,6 +85,8 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_choose_graveyard_card,
                        _lower_pay_life, _lower_ante, _lower_exchange_life_totals,
                        _lower_set_life_total, _lower_double_power, _lower_switch_pt,
+                       _lower_double_counters, _lower_double_unspent_mana,
+                       _lower_double_life_total,
                        _lower_lose_ability_text,
                        _lower_exile_cost_sacrifices, _lower_exile_graveyard,
                        _lower_exile_graveyard_arrivals_this_turn,
@@ -277,6 +279,11 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ChangeBasePT: _lower_change_base_pt,
     ast.ReanimateEnchantedCard: _lower_reanimate_enchanted_card,
     ast.DoublePower: _lower_double_power,
+    # CR 701.10's other three objects, one node and one lowering each
+    # (Solarion, Doubling Cube, Beacon of Immortality).
+    ast.DoubleCounters: _lower_double_counters,
+    ast.DoubleUnspentMana: _lower_double_unspent_mana,
+    ast.DoubleLifeTotal: _lower_double_life_total,
     ast.SwitchPT: _lower_switch_pt,
     ast.Ante: _lower_ante,
     ast.ExchangeLifeTotals: _lower_exchange_life_totals,

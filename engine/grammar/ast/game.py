@@ -83,6 +83,20 @@ class SetLifeTotal:
 
 
 @dataclass(frozen=True)
+class DoubleLifeTotal:
+    """"**Double target player's life total.**" (Beacon of Immortality.)
+
+    CR 701.10d: the player gains or loses the amount that makes the new total
+    twice the current one — a gain or a loss, never an assignment, so life-gain
+    replacements and triggers meet it (ruling 2007-07-15), and a negative total
+    doubles by the real arithmetic into a loss (ruling 2007-02-01: -10 becomes
+    -20). Its own node rather than a :class:`SetLifeTotal` because the printed
+    words name no result: the result is read off the player at resolution.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class ExchangeLifeTotals:
     """"Exchange life totals with target opponent." (Mirror Universe.)
 

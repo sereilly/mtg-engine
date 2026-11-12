@@ -435,9 +435,16 @@ def set_life_total(game: Game, instruction: OracleInstruction, context: OracleEx
     # control**." (Biorhythm.) One number per seat, through the channel's one
     # reader — each seat's own board, counted as its total is set.
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
+    # "**Double** target player's life total." (Beacon of Immortality.) CR
+    # 701.10d: the result is twice the total as it is now, so it is read here
+    # rather than printed — and a negative total doubles by the real
+    # arithmetic, into a loss (ruling 2007-02-01: -10 becomes -20).
+    doubled = bool(instruction.payload.get("doubled"))
     for player in players:
         if per_seat is not None:
             total = per_recipient_amount(game, context, per_seat, player)
+        if doubled:
+            total = 2 * player.life
         before = player.life
         if total > before:
             game._gain_life(player, total - before, context.card.name)

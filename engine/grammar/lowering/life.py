@@ -1015,6 +1015,27 @@ def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ..
         ),
     )
 
+
+def _lower_double_life_total(
+    node: ast.DoubleLifeTotal,
+) -> tuple[OracleInstruction, ...]:
+    """"**Double target player's life total.**" (Beacon of Immortality.)
+
+    CR 701.10d is CR 119.5's arithmetic with the result read off the player:
+    a gain or a loss of whatever makes the total twice what it is. So it is
+    ``set_life_total``'s handler — the one that already turns a result into
+    a gain through ``_gain_life`` or a loss — with ``doubled`` standing where
+    a printed result would, and the seat read the way that kind reads it
+    (the picker, the ``"target"`` recipient, the caster for "your").
+    """
+    payload: dict[str, object] = {"doubled": True}
+    if node.player.kind in ("target_player", "target_opponent"):
+        payload["recipient"] = "target"
+        _describe_targets(payload, node.player)
+    else:
+        payload["recipient"] = _player_recipient(node.player, node)
+    return (OracleInstruction("set_life_total", "", payload),)
+
 def _lower_pay_life(node: ast.PayLife) -> tuple[OracleInstruction, ...]:
     """"Pay 4 life." (Sylvan Library.) CR 119.4.
 

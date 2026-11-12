@@ -324,6 +324,21 @@ class DoublePower:
 
 
 @dataclass(frozen=True)
+class DoubleCounters:
+    """``Double the number of <kind> counters on <subject>.`` (Solarion.)
+
+    CR 701.10e: the permanent is given as many more counters of that kind as it
+    already has — a placement, so whatever modifies counters being put on a
+    permanent (CR 614) meets it — counted as the effect happens (ruling
+    2004-12-01: three become six). Its own node rather than a
+    :class:`PutCounter` whose count is "the counters on it", because that
+    count names the *source's* pile and the subject need not be the source.
+    """
+    subject: Recipient
+    counter: str = "+1/+1"
+
+
+@dataclass(frozen=True)
 class RemoveCounter:
     subject: Recipient
     counter: str = "+1/+1"

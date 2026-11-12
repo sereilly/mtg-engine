@@ -38,7 +38,7 @@ from ..records import _parse_for_each_this_way, parse_for_each_milled_this_way
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
 from ..nouns import parse_object_filter
-from ..references import parse_recipient
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 
 from ..durations import _parse_duration
@@ -808,22 +808,86 @@ def _parse_has_base_pt(stream: TokenStream, subject: ast.Recipient) -> ast.State
     return ast.SetBasePT(subject, power, None, duration)
 
 
-def _parse_double(stream: TokenStream) -> ast.DoublePower:
-    """``Double the power of <subject> until end of turn.`` (Unleash Fury.)
+def _parse_double(
+    stream: TokenStream,
+) -> "ast.DoublePower | ast.DoubleCounters | ast.DoubleUnspentMana | ast.DoubleLifeTotal":
+    """CR 701.10's "double", one arm per object it doubles.
 
-    Only power: doubling toughness, life or mana are separate effects with
-    separate handlers, and consuming the noun without checking it is how one
-    card's production quietly claims another's.
+    ``Double the power of <subject> until end of turn.`` (Unleash Fury.)
+    ``Double the number of <kind> counters on <subject>.`` (Solarion; CR
+    701.10e.) ``Double the amount of each type of unspent mana you have.``
+    (Doubling Cube; CR 701.10f.) ``Double <player>'s life total.`` (Beacon of
+    Immortality; CR 701.10d.)
+
+    Each object is its own arm with its own node and its own handler, and
+    each arm reads its noun before it commits: doubling toughness, a
+    characteristic other than power, or anything else is a separate effect,
+    and consuming the noun without checking it is how one card's production
+    quietly claims another's. What no arm reads keeps the refusal.
     """
     stream.expect_word("double")
-    stream.expect_word("the")
-    if not stream.accept_word("power"):
-        raise stream.error("only doubling power has a handler")
-    stream.expect_word("of")
+    if stream.accept_word("the"):
+        if stream.accept_word("power"):
+            stream.expect_word("of")
+            subject = parse_recipient(stream)
+            if subject is None:
+                raise stream.error("expected something whose power to double")
+            return ast.DoublePower(subject, _parse_duration(stream))
+        if stream.accept_phrase("number", "of"):
+            return _parse_double_counters(stream)
+        if stream.accept_phrase("amount", "of"):
+            return _parse_double_unspent_mana(stream)
+        raise stream.error(
+            "only power, counters, unspent mana and a life total have a "
+            "doubling handler"
+        )
+    return _parse_double_life_total(stream)
+
+
+def _parse_double_counters(stream: TokenStream) -> ast.DoubleCounters:
+    """``…the number of <kind> counters on <subject>`` (Solarion.)
+
+    The kind must be written out (``_expect_counter_kind``'s rule): "double
+    the number of counters" with no kind names every kind at once, which is
+    a different instruction (CR 701.10e asks per kind)."""
+    kind = _expect_counter_kind(stream, " to double")
+    if not stream.accept_word("counter", "counters"):
+        raise stream.error("expected 'counters' after the kind to double")
+    stream.expect_word("on")
     subject = parse_recipient(stream)
     if subject is None:
-        raise stream.error("expected something whose power to double")
-    return ast.DoublePower(subject, _parse_duration(stream))
+        raise stream.error("expected the permanent whose counters to double")
+    return ast.DoubleCounters(subject, kind.text)
+
+
+def _parse_double_unspent_mana(stream: TokenStream) -> ast.DoubleUnspentMana:
+    """``…the amount of each type of unspent mana you have`` (Doubling Cube.)
+
+    Every word is read: "each type of" is the per-type addition CR 701.10f
+    describes (a type is a colour or colourless, ruling 2004-12-01), and
+    "you have" is the one seat a pool clause here can name."""
+    if not stream.accept_phrase("each", "type", "of", "unspent", "mana"):
+        raise stream.error("expected 'each type of unspent mana'")
+    if not stream.accept_phrase("you", "have"):
+        raise stream.error("only your own unspent mana has a doubling handler")
+    return ast.DoubleUnspentMana(ast.PlayerRef("you"))
+
+
+def _parse_double_life_total(stream: TokenStream) -> ast.DoubleLifeTotal:
+    """``Double <player>'s life total`` / ``Double your life total``.
+    (Beacon of Immortality.)"""
+    if stream.accept_word("your"):
+        player = ast.PlayerRef("you")
+    else:
+        player = parse_player_ref(stream)
+        if player is None or not stream.accept_word("'s"):
+            raise stream.error(
+                "only power, counters, unspent mana and a life total have a "
+                "doubling handler"
+            )
+    if not stream.accept_phrase("life", "total"):
+        raise stream.error("expected 'life total' after the player to double")
+    return ast.DoubleLifeTotal(player)
 
 
 def _parse_switch_pt(stream: TokenStream) -> ast.SwitchPT:

@@ -165,6 +165,49 @@ def lose_all_unspent_mana(
     return True, "resolved"
 
 
+@effect_handler("double_unspent_mana")
+def double_unspent_mana(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"**Double the amount of each type of unspent mana you have.**"
+    (Doubling Cube.)
+
+    CR 701.10f: for each type, the player adds that much mana of that type.
+    A type is a colour or colourless (ruling 2004-12-01), so the count per
+    symbol is every unit of it the seat holds — the pool and every
+    restricted bucket (``engine/restricted_mana.py``: mana that may pay only
+    for some things is still unspent mana, CR 106.4). **What is added is
+    plain**: "Any restrictions on the unspent mana aren't copied" (the same
+    ruling — artifacts-only {U}{U}{U} doubles into itself plus {U}{U}{U}
+    for anything), so every unit lands in the unrestricted pool.
+
+    Read before anything is added, so the doubling is of the pool as it
+    stood. An addition rather than a write: the dispatch seam's CR 614.1a
+    swap (False Dawn) meets it like any other mana an ability adds.
+    """
+    caster = context.caster
+    held: dict[str, int] = {}
+    for symbol, amount in caster.mana_pool.items():
+        if int(amount or 0) > 0:
+            held[symbol] = held.get(symbol, 0) + int(amount)
+    for bucket in caster.restricted_mana.values():
+        for symbol, amount in bucket.items():
+            if int(amount or 0) > 0:
+                held[symbol] = held.get(symbol, 0) + int(amount)
+    added: list[str] = []
+    for symbol in ("W", "U", "B", "R", "G", "C"):
+        amount = held.get(symbol, 0)
+        if amount:
+            caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + amount
+            added.append(f"{{{symbol}}}" * amount)
+    game.log.append(
+        f"{context.card.name} doubled {caster.name}'s unspent mana, adding "
+        f"{''.join(added)}" if added
+        else f"{context.card.name}: {caster.name} has no unspent mana to double"
+    )
+    return True, "resolved"
+
+
 _COLOR_WORDS = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
 
 

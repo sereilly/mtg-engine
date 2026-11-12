@@ -570,6 +570,10 @@ class GameActionRequest(BaseModel):
     # symbol -> count, sent with `activate` or `cast`. The engine refuses a
     # split naming an unlisted symbol or the wrong total before anything is
     # paid; absent, the seat's default split (engine/mana_combination.py).
+    # Sent with `tap` too, for what the tap sets off: "Whenever enchanted
+    # land is tapped for mana, its controller adds an additional two mana in
+    # any combination of colors" (Dawn's Reflection) — a split that does not
+    # fit there takes the default (`mana_combination.triggered_split`).
     mana_combination: dict[Literal["W", "U", "B", "R", "G", "C"], int] | None = None
     # Text-change spells (Magical Hack / Sleight of Mind): the "from" word to
     # replace. `mana_color` carries the "to" word. Both are color symbols (a basic

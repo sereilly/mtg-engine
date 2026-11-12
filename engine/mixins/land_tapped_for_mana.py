@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from ..auras import AURA_ANY_COLOR_MANA, aura_additional_mana_now
 from ..delayed_triggers import matching_delayed_triggers
+from ..mana_combination import triggered_split
 from ..land_mana_swaps import (production_snapshot, source_wide_swap,
                                substitute_production)
 from ..game_types import OracleExecutionContext
@@ -124,6 +125,7 @@ def _mana_made_since(player, before: dict) -> dict[str, int]:
 class LandTappedForManaMixin:
     def _land_tapped_for_mana(
         self, player_index: int, land, chosen_color: str | None, produce,
+        *, mana_combination=None,
     ) -> bool:
         """**A land was tapped for mana** (CR 106.12) — the one event.
 
@@ -293,8 +295,25 @@ class LandTappedForManaMixin:
             # A *run* of symbols, because Overgrowth prints "{G}{G}" where Wild
             # Growth prints "{G}" — the count is data, and adding one symbol for
             # a card that says two is the quiet direction of wrong.
-            for extra in aura_additional_mana_now(self, attached_aura):
-                if extra == AURA_ANY_COLOR_MANA:
+            extras = aura_additional_mana_now(self, attached_aura)
+            # "…adds an additional **two mana in any combination of colors**"
+            # (Dawn's Reflection). Several units of open colour from one
+            # clause are one choice of the land's controller (ruling
+            # 2004-12-01: "The controller of the land chooses the colors"),
+            # made with the tap — the split it sent (*mana_combination*), or
+            # its default (``mana_combination.triggered_split``). A single
+            # unit (Fertile Ground) keeps the answer below.
+            open_units = sum(1 for extra in extras if extra == AURA_ANY_COLOR_MANA)
+            split_colors = (
+                triggered_split(
+                    self, player_index, open_units, chosen_color, mana_combination,
+                )
+                if open_units > 1 else None
+            )
+            for extra in extras:
+                if extra == AURA_ANY_COLOR_MANA and split_colors:
+                    extra = split_colors.pop(0)
+                elif extra == AURA_ANY_COLOR_MANA:
                     # "…adds an additional **one mana of any color**" (Fertile
                     # Ground) rather than a printed pip. CR 106.6 leaves the
                     # colour to the controller, and CR 605.4a gives a triggered

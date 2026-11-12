@@ -584,6 +584,7 @@ class LandManaTapsMixin:
         *,
         permanent_id: int | None = None,
         ability_index: int | None = None,
+        mana_combination: dict | None = None,
     ) -> bool:
         """Tap one land for mana (CR 605.1a), as its controller: True when it
         was tapped. :meth:`tap_land_for_mana_or_refusal` with the reason
@@ -591,6 +592,7 @@ class LandManaTapsMixin:
         return self.tap_land_for_mana_or_refusal(
             player_index, land_name, chosen_color, permanent_index,
             permanent_id=permanent_id, ability_index=ability_index,
+            mana_combination=mana_combination,
         ) is None
 
     def tap_land_for_mana_or_refusal(
@@ -602,6 +604,7 @@ class LandManaTapsMixin:
         *,
         permanent_id: int | None = None,
         ability_index: int | None = None,
+        mana_combination: dict | None = None,
     ) -> str | None:
         """Tap one land for mana (CR 605.1a), as its controller. None when it
         was tapped; otherwise why not, for the seat that asked.
@@ -640,6 +643,13 @@ class LandManaTapsMixin:
         forced tap-out is the one already tapped, so the untapped one is
         skipped and the seat pays nothing. The id is stable across the loop
         (CR 400.7) where a slot is not.
+
+        *mana_combination* is the seat's ``{symbol: count}`` split for a
+        triggered mana ability the tap sets off that adds mana "in any
+        combination of colors" (Dawn's Reflection) — chosen with the tap,
+        since that ability resolves inside it (CR 605.4a). None, or a split
+        that does not fit, takes the seat's default
+        (``mana_combination.triggered_split``).
         """
         player = self.players[player_index]
         if permanent_id is not None:
@@ -861,5 +871,8 @@ class LandManaTapsMixin:
         # watches a land tapped for mana. One method, because this is one of
         # three roads to it (:meth:`_land_tapped_for_mana`). The log names
         # the land, not the name it was asked for by.
-        self._land_tapped_for_mana(player_index, land, chosen_color, produce)
+        self._land_tapped_for_mana(
+            player_index, land, chosen_color, produce,
+            mana_combination=mana_combination,
+        )
         return None

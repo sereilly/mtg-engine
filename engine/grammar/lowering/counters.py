@@ -846,3 +846,37 @@ def _lower_put_counter(
     # rather than returned to the caller, so the printed-specificity order
     # stays one list in one place and this function keeps one exit.
     return lower_plus_one_placement(node, produced, trigger_event=trigger_event)
+
+
+def _lower_double_counters(node: ast.DoubleCounters) -> tuple[OracleInstruction, ...]:
+    """"{T}: **Double the number of +1/+1 counters on this creature.**"
+    (Solarion.)
+
+    CR 701.10e: as many more counters of that kind as the permanent has —
+    which is the source's own placement (``add_counter_to_self``, through
+    the CR 614 seam ``Game.place_pt_counters``) of a count read off its own
+    pile at resolution (``count_from_payload``'s ``source_counters``), so a
+    Solarion with three gets three more (ruling 2004-12-01) and a placement
+    replacement meets the doubling as it would any other counter.
+
+    Only the source and only a CR 122.1a P/T pair: the count channel reads
+    the *source's* pile, so a doubling on any other permanent would count the
+    wrong one, and ``add_counter_to_self``'s ``x_from_count`` is read for the
+    P/T pairs alone. Each refuses rather than placing the wrong number.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "a doubling of counters is read off the source's own pile only",
+            node=node,
+        )
+    if not is_pt_counter(node.counter):
+        raise LoweringError(
+            f"no handler doubles {node.counter} counters", node=node
+        )
+    payload: dict[str, object] = (
+        {"power": 1, "toughness": 1} if node.counter == "+1/+1"
+        else {"counter": node.counter}
+    )
+    payload["count"] = "x"
+    payload["x_from_count"] = {"source_counters": node.counter}
+    return (OracleInstruction("add_counter_to_self", "", payload),)
