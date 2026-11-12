@@ -83,7 +83,11 @@ def _person_or_ai_step(sid: str) -> None:
 
 
 @pytest.mark.cr("505.6")
-@pytest.mark.parametrize("mode, seed", [("ai_vs_ai", 3), ("ai_vs_ai", 17), ("human_vs_ai", 17)])
+# ai_vs_ai seed 1, not 3 (5DN): once Fifth Dawn ships, seed 3's decks hold its cards and
+# its game is a mana screw (seat 0 on two lands turns 3-13), so no precombat main casts
+# two spells and the floor fails with nothing wrong; seed 1 holds every assertion on
+# both manifests (W2G3's scan, scratch/5dn/w2g3/webturn2_seeds.py).
+@pytest.mark.parametrize("mode, seed", [("ai_vs_ai", 1), ("ai_vs_ai", 17), ("human_vs_ai", 17)])
 def test_census_an_ai_leaves_its_main_phase_only_when_it_would_cast_nothing(monkeypatch, mode, seed):
     """Census over seeded web games — ``ai_vs_ai`` stepped by ``ai_step``
     alone, and a person's table (the person ending their turns and passing):
