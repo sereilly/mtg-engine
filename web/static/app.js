@@ -3481,6 +3481,23 @@ function autoTapChargedCost(plan) {
   return tokens.length ? tokens.join("") : "{0}";
 }
 
+// Sunburst (CR 702.44a): how many colours this payment spends, which is how
+// many counters the permanent enters with — the server's answer, read off the
+// trial cast's own record (`plan.sunburst.colors`, web/payment_plan.
+// sunburst_preview). The auto-tap and the pool payment both spend as many
+// colours as they can, so the line also says how to spend fewer. Empty for
+// every other spell.
+function autoTapSunburstLine(plan) {
+  const colors = plan && plan.payable && plan.sunburst && Array.isArray(plan.sunburst.colors)
+    ? plan.sunburst.colors : null;
+  if (!colors) return "";
+  const n = colors.length;
+  const spent = n ? colors.map((symbol) => `{${symbol}}`).join("") : "no colored mana";
+  return `<div id="autoTapSunburst">Sunburst: this payment spends ${renderSymbolsInline(spent)} — `
+    + `${n} color${n === 1 ? "" : "s"}, so ${n} counter${n === 1 ? "" : "s"}. `
+    + "It spends as many colors as it can; to spend fewer, tap exactly the mana you want by hand first.</div>";
+}
+
 // What the dialog says under its title, for the three things a plan can be.
 function autoTapPromptText(pending) {
   const plan = pending.plan;
@@ -15366,6 +15383,7 @@ function renderActivationPrompt() {
       plan && plan.payable && planLines.length
         ? `<div id="autoTapPlan">Auto-Tap: ${planLines.map((line) => renderSymbolsInline(escapeHtml(line))).join(", ")}</div>`
         : "",
+      autoTapSunburstLine(plan),
     ].join("");
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
