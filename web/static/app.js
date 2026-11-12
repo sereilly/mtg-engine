@@ -11079,9 +11079,14 @@ function applyExileFromHandPrompt(info) {
   // What becomes of the exiled card is the card's to say — this told Panoptic
   // Mirror's and Spellbinder's imprints "you may cast it for as long as it
   // remains exiled", which neither card grants.
-  body.textContent = declinable
+  // "…face down" (Summoner's Egg, `face_down`): said before the choice, since
+  // once exiled the card is hidden from everyone, its owner included (CR 406.3).
+  const faceDown = info.face_down
+    ? " It is exiled face down: no player, you included, may look at it while it stays there."
+    : "";
+  body.textContent = (declinable
     ? `You may exile one of these cards from your hand with ${info.card_name || "this effect"} — or decline and exile nothing.`
-    : "Exile one of these cards.";
+    : "Exile one of these cards.") + faceDown;
   const buttons = info.choices
     .map(
       (c) =>
@@ -24491,7 +24496,16 @@ function selectStackSpellTarget(arrayIndex) {
   const pending = pendingCastTarget;
   if (!pendingPromptTargetsTheStack()) return;
   const item = _currentStack[arrayIndex];
-  if (!item || !isStackItemValidCastTarget(item, arrayIndex)) return;
+  if (!item || !isStackItemValidCastTarget(item, arrayIndex)) {
+    // Said, as a click on an illegal permanent is: Ouphe Vandals clicked at a
+    // Lightning Bolt (it counters an artifact's *ability*) did nothing at all.
+    if (item) {
+      updateActionHint(
+        `${item.card?.name || item.label || "That"} isn't a legal target for ${pending?.cardName || "this"}.`, true,
+      );
+    }
+    return;
+  }
 
   // A roles walk standing on a spell role: the click answers that one role and
   // the walk goes on to the next — nothing is sent yet, and the prompt stays.
@@ -24545,7 +24559,25 @@ function selectStackSpellTarget(arrayIndex) {
     updateActionHint(`Activating ${pending.cardName} at ${item.card?.name || "spell"}...`);
     sendAction(body)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
-      .catch((e) => updateActionHint(e.message, true));
+      .catch((e) => {
+        // The cost's mana is still on the board: the auto-tap dialog the
+        // permanent-target activation opens (`resolvePendingCastTarget`), the
+        // stack target kept on the body for its retry. This dropped the
+        // activation — Ouphe Vandals' {G} at a Rod of Ruin's ability, a
+        // Deathgrip's {B}{B} at a green spell — unless the mana was floated
+        // first (5DN W2G1).
+        if (isManaRefusal(e.message)) {
+          pendingAutoTap = {
+            card: pending.card,
+            cardName: pending.cardName,
+            cost: getActivatedAbilityCost(pending.card, pending.abilityIndex),
+            actionBody: body,
+          };
+          renderActivationPrompt();
+          return;
+        }
+        updateActionHint(e.message, true);
+      });
     return;
   }
 
