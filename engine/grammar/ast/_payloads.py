@@ -18,6 +18,7 @@ reads attributes off whatever it is handed, so this module imports no node and
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from ...oracle_types import X_BOUND
@@ -374,14 +375,26 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # (Ghastly Demise's ``count_from``): zone, whose, and the card phrase — the
     # parse admits only a pile of the controller's own cards narrowed by type,
     # so the inner payload is exactly what ``count_spec`` would write for it.
+    #
+    # "…with power **less than or equal to the number of Islands you
+    # control**" (Vedalken Shackles). On the battlefield the seat is the
+    # *controller* word, lifted into ``owner`` and out of the filter exactly as
+    # ``lowering/_amounts.count_spec`` lifts it — ``evaluate_count`` counts the
+    # owner's battlefield and its matcher tests no controller.
     if self.power_vs_count is not None:
         counted = self.power_vs_count.value.filter
+        if counted.zone == "battlefield":
+            owner = counted.controller
+            described = replace(counted, controller=None).to_payload()
+        else:
+            owner = counted.zone_owner.kind
+            described = counted.to_payload()
         payload["power_vs_count"] = {
             "op": self.power_vs_count.op,
             "count": {
                 "zone": counted.zone,
-                "owner": counted.zone_owner.kind,
-                "filter": counted.to_payload(),
+                "owner": owner,
+                "filter": described,
             },
         }
     # "with power 4 or greater" (Turret Ogre's intervening-if). Same rule

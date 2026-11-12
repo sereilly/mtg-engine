@@ -73,7 +73,7 @@ draft, the filter and the payload alike.
 
 from __future__ import annotations
 
-from .bounds import (accept_cards_in_hand_bound,
+from .bounds import (accept_board_count_bound, accept_cards_in_hand_bound,
                      accept_comparative_characteristic,
                      accept_pile_count_bound,
                      accept_counters_on_it_bound, accept_source_counter_bound,
@@ -199,6 +199,13 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
             pile_bound = accept_pile_count_bound(stream)
             if pile_bound is not None:
                 d.power_vs_count = pile_bound
+                return True
+            # "…with power **less than or equal to the number of Islands you
+            # control**" (Vedalken Shackles). The same bound over a count of
+            # the controller's own permanents, on the same key.
+            board_bound = accept_board_count_bound(stream)
+            if board_bound is not None:
+                d.power_vs_count = board_bound
                 return True
             d.power = parse_comparison(stream)
             return True
