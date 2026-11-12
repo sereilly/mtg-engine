@@ -11,6 +11,7 @@ while the grammar reads it — and the census rows built from them
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -22,7 +23,9 @@ import probe_line  # noqa: E402
 import support_report  # noqa: E402
 
 from engine import ability_lines, trigger_conditions  # noqa: E402
+from engine import grammar as grammar_package  # noqa: E402
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
+from engine.grammar import LoweringError, compile_line  # noqa: E402
 from engine.line_normalization import normalize_creature_line  # noqa: E402
 from engine.oracle import compiled_units  # noqa: E402
 from tests.helpers import stable_sample  # noqa: E402
@@ -155,7 +158,108 @@ def test_the_probe_agrees_with_the_compiler_across_the_pool():
     ["--card", "Prodigal Sorcerer"],
     ["--card", "Prodigal Sorcerer", "--json"],
     ["Frobnicate the gribble until morning.", "--full"],
+    ["Draw two cards. You lose 2 life.", "--ast"],
+    ["--card", "Prodigal Sorcerer", "--json", "--ast"],
 ])
 def test_the_command_line_runs(argv, capsys):
     assert probe_line.main(argv) == 0
     assert capsys.readouterr().out.strip()
+
+
+# ---------------------------------------------------------------------------
+# Where a lowering refused, and the parsed tree (--ast)
+# ---------------------------------------------------------------------------
+
+def _refuse_inside():
+    raise LoweringError("the innermost reason")
+
+
+def test_a_lowering_refusal_names_the_innermost_raise_and_the_chain(monkeypatch):
+    """The message ``compile_line`` reports is the outermost refusal's; the
+    site is where the innermost was raised — the furthest frame of a parse,
+    or the last refusal's message, misled three Darksteel groups."""
+    def lowering(node, *, event=None):
+        try:
+            _refuse_inside()
+        except LoweringError:
+            raise LoweringError("the reported reason")
+
+    monkeypatch.setattr(grammar_package, "lower_ability", lowering)
+    verdict = probe_line.grammar_verdict("Draw a card.", None)
+
+    assert verdict.lowering_error == "the reported reason"
+    refusal = verdict.lowering
+    assert refusal.chain == ["the reported reason", "the innermost reason"]
+    assert refusal.message == "the innermost reason"
+    assert refusal.site.startswith("tests/engine/test_probe_line.py:")
+    assert refusal.site.endswith("(_refuse_inside)")
+    # The watch is gone again: the grammar's name is the patched one, unwrapped.
+    assert grammar_package.lower_ability is lowering
+
+    text = probe_line.render_text(probe_line.probe_card(
+        probe_line.invented_card(["Draw a card."], "Sorcery", "Probe Lowering Site")))
+    assert "lowering: error: the reported reason" in text
+    assert f"raised at {refusal.site}" in text
+    assert "innermost of 2 chained: 'the innermost reason'" in text
+
+
+def test_the_watch_sees_compile_line_s_own_call():
+    """The watch rebinds ``engine.grammar.lower_ability``; that is only the
+    lowering ``compile_line`` runs while it reads the name from its package."""
+    from engine.grammar import lower
+
+    assert "lower_ability" in compile_line.__code__.co_names
+    assert compile_line.__globals__ is vars(grammar_package)
+    assert grammar_package.lower_ability is lower.lower_ability
+
+
+def test_ast_prints_each_node_with_the_fields_it_sets_and_each_sentence_alone():
+    card = probe_line.invented_card(["Draw two cards. You lose 2 life."], "Sorcery", "Probe Ast")
+    reports = probe_line.probe_card(card)
+    probe_line.attach_ast(reports)
+    (line,) = reports[0].lines
+
+    whole, *alone = line.ast
+    assert not whole["alone"] and whole["ast"]["node"] == "SpellEffectLine"
+    assert [reading["text"] for reading in alone] == ["Draw two cards.", "You lose 2 life."]
+    assert all(reading["alone"] and reading["ast"] for reading in alone)
+
+    text = probe_line.render_text(reports)
+    assert "      ast:\n        SpellEffectLine\n          statement: " in text
+    assert "sentence 2 of 2, asked alone (out of its context: a lead): 'You lose 2 life.'" in text
+    (record,) = json.loads(probe_line.render_json(reports))
+    assert record["lines"][0]["ast"][0]["ast"] == whole["ast"]
+
+
+def test_a_field_at_its_default_is_left_out_of_the_tree():
+    from dataclasses import dataclass, field as dc_field
+
+    @dataclass(frozen=True)
+    class Leaf:
+        word: str
+        count: int = 0
+        tags: tuple = dc_field(default_factory=tuple)
+
+    @dataclass(frozen=True)
+    class Root:
+        leaves: tuple
+        flag: bool = False
+
+    tree = probe_line.ast_dict(Root((Leaf("a"), Leaf("b", 2, ("x",)))))
+    assert tree == {"node": "Root", "leaves": [{"node": "Leaf", "word": "a"},
+                                               {"node": "Leaf", "word": "b", "count": 2, "tags": ["x"]}]}
+    assert probe_line.ast_lines(tree) == [
+        "Root", "  leaves: (2)", "    [0] Leaf", "      word: 'a'",
+        "    [1] Leaf", "      word: 'b'", "      count: 2", "      tags: ('x',)",
+    ]
+
+
+def test_sentences_are_never_cut_inside_a_quoted_ability_or_reminder_text():
+    line = 'Equipped creature has "{T}: Draw a card. Scry 1." (It may. Or not.) Draw a card.'
+    assert probe_line.sentences(line) == [
+        'Equipped creature has "{T}: Draw a card. Scry 1." (It may. Or not.)', "Draw a card.",
+    ]
+    # Reminder text after a sentence's full stop stays with that sentence.
+    assert probe_line.sentences("Draw a card. (A reminder. Of two.) Scry 1.") == [
+        "Draw a card. (A reminder. Of two.)", "Scry 1.",
+    ]
