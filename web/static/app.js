@@ -2622,9 +2622,66 @@ function severalGraveyardHint() {
   if (Number.isInteger(p.exactTargets)) {
     return `${n} of ${p.exactTargets} chosen — choose exactly ${p.exactTargets} card${p.exactTargets === 1 ? "" : "s"} ${where} for ${p.cardName} (X = ${p.exactTargets}), then confirm.`;
   }
+  if (spec.one_target_per_color) {
+    // "For each color, … up to one target card of that color" (All Suns'
+    // Dawn): which colour each chosen card is standing for, so the person sees
+    // why a click was refused and that a white-blue card counts once.
+    const assignment = perColorAssignment(p.severalGraveyard, spec);
+    const named = (assignment || []).map((color, i) => {
+      const slot = p.severalGraveyard[i];
+      const card = currentState?.players?.[slot.seat]?.graveyard?.[slot.idx];
+      return `${card?.name || "a card"} as the ${perColorWord(color)} one`;
+    });
+    return n === 0
+      ? `Choose up to one card of each color ${where} for ${p.cardName} (click each), then confirm. Choosing none is legal.`
+      : `${n} chosen: ${named.join(", ")}.`;
+  }
   return n === 0
     ? `Choose up to ${p.maxTargets} cards ${where} for ${p.cardName} (click each), then confirm. Choosing none is legal.`
     : `${n} of up to ${p.maxTargets} chosen${spec.single_graveyard ? " (all from one graveyard)" : ""}.`;
+}
+
+// A colour letter as a word ("the white one").
+function perColorWord(color) {
+  return ({ W: "white", U: "blue", B: "black", R: "red", G: "green" })[color] || color;
+}
+
+// CR 601.2c for "For each color, return up to one target card of that color"
+// (All Suns' Dawn, `one_target_per_color` on the cast spec): every target is
+// chosen *as* a different colour's card. That is a matching, not a colour
+// count — two white-blue cards are legal as the white one and the blue one
+// (ruling 2004-12-01) — so this is Kuhn's augmenting path over the chosen
+// cards (at most five) and the spec's `graveyard_colors`. Returns the colour
+// each chosen slot stands for, or null when no assignment exists; the colours
+// are the graveyard card's own as the server serialized it. The engine judges
+// the same matching (`engine/per_color_targets.assign_colors`) and refuses an
+// unmatched set; this keeps a person from building one.
+function perColorAssignment(slots, spec) {
+  const allowed = Array.isArray(spec?.graveyard_colors) && spec.graveyard_colors.length
+    ? spec.graveyard_colors : ["W", "U", "B", "R", "G"];
+  const colorsOf = (slots || []).map((slot) => {
+    const card = currentState?.players?.[slot.seat]?.graveyard?.[slot.idx];
+    const colors = Array.isArray(card?.colors) ? card.colors : [];
+    return colors.filter((color) => allowed.includes(color));
+  });
+  const holder = {};
+  const place = (i, seen) => {
+    for (const color of colorsOf[i]) {
+      if (seen.has(color)) continue;
+      seen.add(color);
+      if (holder[color] === undefined || place(holder[color], seen)) {
+        holder[color] = i;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let i = 0; i < colorsOf.length; i += 1) {
+    if (!place(i, new Set())) return null;
+  }
+  const assignment = new Array(colorsOf.length);
+  for (const [color, i] of Object.entries(holder)) assignment[i] = color;
+  return assignment;
 }
 
 function toggleSeveralGraveyardTarget(zoneSeat, index) {
@@ -2653,6 +2710,25 @@ function toggleSeveralGraveyardTarget(zoneSeat, index) {
         true,
       );
       return;
+    }
+    // One card of each colour (All Suns' Dawn): refused at the click that
+    // would leave some chosen card with no colour of its own, rather than by
+    // the engine at the confirm ("the targets must be one card of each color").
+    const spec = targetSpecOf(p.card);
+    if (spec.one_target_per_color) {
+      const widened = [...p.severalGraveyard, { seat: zoneSeat, idx: index }];
+      if (!perColorAssignment(widened, spec)) {
+        const card = currentState?.players?.[zoneSeat]?.graveyard?.[index];
+        const colors = (Array.isArray(card?.colors) ? card.colors : [])
+          .map(perColorWord);
+        updateActionHint(
+          `${p.cardName} returns one card of each color — ${card?.name || "that card"}`
+          + ` (${colors.join("-") || "colorless"}) has no color left that another chosen card isn't`
+          + " already standing for. Deselect one to choose it.",
+          true,
+        );
+        return;
+      }
     }
     p.severalGraveyard.push({ seat: zoneSeat, idx: index });
   }
