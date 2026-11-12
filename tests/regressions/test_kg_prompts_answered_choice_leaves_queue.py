@@ -1947,6 +1947,29 @@ def _shared_fate():
     return _draw_one(game)
 
 
+# 5DN W2G4: CR 704.5j asks the controller which legend stays. Seat 0 casts a
+# second Sir Shandlar and keeps the new one (the last candidate): the one on
+# the board since before the turn goes to the graveyard.
+@scenario(
+    "legend_rule", "Sir Shandlar of Eberyn (a second copy)",
+    answer=lambda g, c: {"permanent_id": c.data["candidates"][-1]},
+    wire=lambda g, c: {"target_permanent_id": c.data["candidates"][-1]},
+    then=lambda g: _assert(
+        len(_all_named(g, 0, "Sir Shandlar of Eberyn")) == 1
+        and _all_named(g, 0, "Sir Shandlar of Eberyn")[0].metadata.get(
+            "summoning_sickness_turn") != -99
+        and names(g.players[0].graveyard) == ["Sir Shandlar of Eberyn"]
+    ),
+)
+def _a_second_sir_shandlar():
+    game = duel(
+        hands=(("Sir Shandlar of Eberyn",), ()),
+        boards=(("Sir Shandlar of Eberyn",), ()),
+    )
+    game.cast_from_hand(0, "Sir Shandlar of Eberyn")
+    return game
+
+
 # ---------------------------------------------------------------------------
 # Helpers the table reads
 # ---------------------------------------------------------------------------

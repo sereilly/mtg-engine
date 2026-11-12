@@ -162,6 +162,15 @@ def _keep(game, choice, kept, live) -> None:
             f"{choice.data.get('name')} (704.5j: legend rule)"
         )
         game.check_state_based_actions()
+        # The check was made because a player would receive priority (CR
+        # 704.3), nearly always after something resolved, and the priority
+        # pass handed the window to the seat that owed this answer while it
+        # was owed ("awaiting_choice"). Answered, it is CR 117.3b's again:
+        # the active player receives priority — what the release of a held
+        # resolution does (``_release_stack_item``).
+        if game.priority_player_index is not None and game.waiting_prompt() is None:
+            game.priority_player_index = game.active_player_index
+            game.priority_pass_count = 0
         return
     put_the_rest_into_graveyards(
         game, choice.player_index, choice.data.get("name"), kept, live
