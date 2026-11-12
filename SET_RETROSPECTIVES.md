@@ -2059,3 +2059,78 @@ leftovers (a spell paid for by a cast trigger; three weights for the owner),
 its engine and client leftovers, and the toolkit wishes its groups wrote
 down. ROADMAP: the next set is Fifth Dawn; the pool numbers, stale since
 Eighth Edition, read again.
+
+### 5DN — 2026-11-12
+
+*The Mirrodin block's third set: 165 cards, 163 new, 69.1% on arrival and
+eight of those dropping a line (six noncreature sunburst cards had lost the
+keyword to the noncreature any-line gate; Possessed Portal's draw skip;
+Salvaging Station), Door to Nothingness with no picker, so 60 to do; one new
+keyword, sunburst.* The ingest's `--ingest` run named five reds in three
+files (Door to Nothingness, Salvaging Station, Abuna's Chant's and Spectral
+Shift's modes — the files Darksteel's ingest turned red), each in its
+owner's brief before the fan-out, and the full pass beside the wave (~37
+minutes at `-n 4`) found nothing more. Wave 1's seven groups landed all 60
+with no hook and no decline: sunburst as a rewrite read off the colours the
+cast recorded spending (Modular—Sunburst beside it; a Suntouched Myr
+Animate Dead returns gets no counters, CR 702.44b), the Bringers' {W}{U}{B}{R}{G}
+and Fist of Suns' grant, Orrery and Crucible as permissions that shipped,
+the Beacons' shuffle as the Pulse cycle's record, All Suns' Dawn's
+one-per-colour check, Magnetic Theft's two roles, Grafted Wargear's
+"becomes unattached" from every road an attachment ends, Eon Hub's step
+skip, Possessed Portal's draw skip on Shared Fate's pattern, Reversal of
+Fortune's copy of a revealed card, and CR 701.10's doubling, one group's
+for three groups' cards. W1G3 found a 61st: Endless Whispers reported
+supported while granting a sentence that compiled to nothing. Wave 2's four
+took it with an engine pile (W2G2: the creature static gate had admitted a
+board-wide grant on its template alone, and a text cache outlived a
+compiler swap), the client in a browser (W2G1: every prompt the wave-1
+reports named, Dawn's Reflection's tap split, a sunburst preview), the AI
+pile (W2G3) and the legend rule (W2G4: CR 704.5j the player's choice, a
+value default for a seat nobody asks, clicked in a browser). Shipped cards
+fixed beside them: every legendary permanent, kept or binned by battlefield
+order until then (227); Overtaker, aimed at its own controller's creature;
+Jeweled Amulet and Ice Cauldron, noting no mana paid from a restricted
+bucket; Power Conduit's refusal printing a placeholder; and in the client
+an untargeted modal mode and an activation targeting the stack, each ending
+on "insufficient mana" instead of the auto-tap. Measured and left: a
+noncreature card's dropped line is invisible to the support count (14
+shipped cards carry one, each claimed elsewhere; Suffocation lost its
+damage clause mid-round, and `oracle_diff` caught it).
+
+*What the integration learned.* The ingest list named every red the full
+pass found. A sentence printed on three groups' cards went to one group,
+tested on invented one-line cards, and the integrator wrote each whole-card
+test at its merge. Checking every ruling before sending caught one drafted
+from memory (Doubling Cube's added mana copies no restriction). Each wave-1
+follow-up was one commit on the chain tip after a fast-forward: seven `fu`
+links, regenerated and met once. A follow-up message naming the
+rehearsal's log as "Log: <path>" was read as a destination by three groups.
+Wave 2 launched on the close link beside its gate, and three of its four
+groups re-found the gate's reds, one re-adding a census row as a duplicate
+dict key. The promotion's decks turned a seeded web row into a mana screw,
+traced honest and reseeded on both manifests. Two conflicts, both unions by
+script, and one probe-baseline accept. Memory: 30–40 GB free throughout.
+Toolkit before the wave: `write_briefs.py` reads each keyword by its own
+line and finds sections whatever their case, `gen_cards.py` skips the
+census's exit line, and the wave-1 template asks for both differentials
+(`sim_fingerprint` at one worker) and forbids `sed -i`.
+
+*Edits in place:* Phase 1's ingest list and its full pass; Phase 2's
+"supported when any line is" names the noncreature types; one owner for a
+shared sentence; the ruling check; "read-only" beside an integrator's path;
+follow-ups fast-forwarded and staged as aliases; a wave beside its base's
+close gate told the reds and their links; a seed the promotion's decks
+move; the memory reading. CLAUDE.md's "a line neither claims" for
+noncreature cards and `MTG_PROMOTE`'s header under `-v`; the rule files:
+sunburst and a granted affinity, a face-down exile turned up, "can't be
+equipped", the step-skip table, prompts a state-based check arms, the
+wire's tap split, cost offers, sunburst preview and `face_down`, the
+planner's colour spread. *Known gaps:* **drained** none of the standing
+entries (the legend rule was built before it was filed); **rewritten** the
+toolkit entry, with this set's wishes; **added** the noncreature any-line
+gate, Fifth Dawn's engine and client leftovers, two AI leftovers (Helm of
+Kaldra activated again, Energy Chamber's charge mode), and Darksteel's
+priority hold measured against an activated ability. ROADMAP: the next set
+is Champions of Kamigawa; the pool at the promotion; idiom 44.
+<!-- 5dn integrator: W2G3, the promotion gate, Phase 5 -->
