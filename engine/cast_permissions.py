@@ -398,8 +398,16 @@ def board_free_cast(game, card) -> str | None:
 #: Read whole. Both verbs are the permission (CR 305.1 plays a land, CR 601.2
 #: casts a spell) and "your graveyard" is its only zone; a narrower printing —
 #: a card type, "the top of" — is a different sentence and must not match.
+#:
+#: "You may play lands from your graveyard." (Crucible of Worlds.) The same
+#: sentence with the casting verb left off, so its permission is the land half
+#: alone (:func:`board_graveyard_play`'s ``as_land``): a spell in the graveyard
+#: stays where it is. The land drop is still the turn's one (CR 305.2), at the
+#: times a land may be played (CR 305.1; the card's ruling, 2018-07-13: "You
+#: can still play only one land per turn, and only during your main phase
+#: when you have priority and the stack is empty").
 _BOARD_GRAVEYARD_PLAY = re.compile(
-    r"^you may play lands and cast spells from your graveyard$"
+    r"^you may play lands(?P<spells> and cast spells)? from your graveyard$"
 )
 
 #: The claim name the support gate and ``engine/grammar/registries.py`` use for
@@ -418,7 +426,14 @@ def board_graveyard_play_line(line: str) -> bool:
     return _BOARD_GRAVEYARD_PLAY.match(line.strip().lower().rstrip(".")) is not None
 
 
-def board_graveyard_play(game, player_index: int) -> str | None:
+def _opens_graveyard_to_spells(line: str) -> bool:
+    """Whether the graveyard permission *line* states covers spells too
+    (Yawgmoth's Agenda), not lands alone (Crucible of Worlds)."""
+    match = _BOARD_GRAVEYARD_PLAY.match(line.strip().lower().rstrip("."))
+    return match is not None and match.group("spells") is not None
+
+
+def board_graveyard_play(game, player_index: int, *, as_land: bool = True) -> str | None:
     """The name of a permanent *player_index* controls that opens their own
     graveyard to them, or None.
 
@@ -426,12 +441,18 @@ def board_graveyard_play(game, player_index: int) -> str | None:
     Through the control seam and ``effective_card``, so an Agenda that changes
     hands opens its new controller's graveyard and closes the old one's, and a
     copy of it grants what it copies (CR 707.2).
+
+    *as_land* is what is being asked about: a land play (both sentences open
+    it) or a spell cast, which only the Agenda's "and cast spells" does — a
+    Crucible of Worlds opens nothing to a sorcery in the same pile.
     """
     if not 0 <= player_index < len(game.players):
         return None
     for permanent in game.controlled_by(game.players[player_index]):
         for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
-            if board_graveyard_play_line(raw_line):
+            if board_graveyard_play_line(raw_line) and (
+                as_land or _opens_graveyard_to_spells(raw_line)
+            ):
                 return permanent.card.name
     return None
 
@@ -518,7 +539,9 @@ def _permissions_for(
     if zone == "graveyard" and any(
         entry is card for entry in game.players[player_index].graveyard
     ):
-        source = board_graveyard_play(game, player_index)
+        # "You may play lands from your graveyard" (Crucible of Worlds) is
+        # asked about a land play alone; the Agenda's sentence about both.
+        source = board_graveyard_play(game, player_index, as_land=as_land)
         if source is not None:
             yield CastPermission(
                 player_index=player_index, zone="graveyard", mode="play",

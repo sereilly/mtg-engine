@@ -25,6 +25,17 @@ from ...models import CardDefinition, Permanent
 from ...subject_filters import card_matches_any, filter_head_noun
 
 
+def _same_price(one: AlternativeCost, other: AlternativeCost) -> bool:
+    """Whether two alternative costs charge the same thing, whatever sentence
+    printed them and whoever was offered them — every field but the phrase
+    and the grant's scope."""
+    from dataclasses import replace
+
+    return replace(one, phrase="", controller_only=False) == replace(
+        other, phrase="", controller_only=False,
+    )
+
+
 class AlternativeCastCostsMixin:
     # ------------------------------------------------------------------
     # The printed alternative cost (CR 118.9)
@@ -52,11 +63,21 @@ class AlternativeCastCostsMixin:
         from ...alternative_costs import condition_holds, granted_alternative_cost
 
         found = list(alternative_costs(card))
-        for _seat, permanent in self.permanents_with_controller():
+        for seat, permanent in self.permanents_with_controller():
             granted = granted_alternative_cost(
                 permanent.effective_card.oracle_text or ""
             )
-            if granted is not None:
+            # "…for spells **you** cast" (Fist of Suns): offered to the
+            # granting permanent's controller alone (CR 109.5), where Dream
+            # Halls' "its controller may" reaches every caster.
+            if granted is not None and (
+                not granted.controller_only or seat == caster_index
+            ) and not any(_same_price(granted, held) for held in found):
+                # A price already on offer is not a second choice: a Bringer
+                # under Fist of Suns is {W}{U}{B}{R}{G} either way, and CR
+                # 118.9a's "one alternative cost" is one offer of it — two
+                # identical ones made a bare announcement refuse for want of
+                # naming which.
                 found.append(granted)
         # "**If you control a Swamp**, you may pay 4 life rather than pay this
         # spell's mana cost." (Snuff Out, and seven more in Mercadian Masques.)

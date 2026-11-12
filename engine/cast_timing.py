@@ -287,9 +287,16 @@ def granted_flash_timing(game: "Game", seat: int, card) -> bool:
 #: reader answers rather than a second pattern. And **which** spells: a printed
 #: union of card types, where an object with either type answers it (CR 205.2b),
 #: read as a list so a card naming one class is the same row with one entry.
+#:
+#: "You may cast **spells** as though they had flash." (Vedalken Orrery.) The
+#: class left unprinted, which is every spell its controller casts -- CR
+#: 702.8a's timing for each of them, and nothing for a land, which is never
+#: cast (CR 305.1; the card's ruling, 2004-12-01: "nonland artifact, creature,
+#: enchantment, and sorcery cards"). The same row with an empty class list
+#: (:attr:`StaticFlashPermission.card_classes`), never a word for "any".
 _STATIC_FLASH_PERMISSION = re.compile(
     r"^(?P<who>you|any player) may cast (?P<article>an? )?"
-    r"(?P<klass>[a-z]+(?: and [a-z]+)*) spells?"
+    r"(?:(?P<klass>[a-z]+(?: and [a-z]+)*) )?spells?"
     r"(?: with enchant (?P<enchant>[a-z]+))?"
     r" as though (?:it|they) had flash$"
 )
@@ -327,7 +334,9 @@ class StaticFlashPermission:
 
     ``card_classes`` are the printed words before "spells" — a **union**, since
     "creature and enchantment spells" (Vernal Equinox) names every spell that is
-    either (CR 205.2b) and an object with both types answers it once.
+    either (CR 205.2b) and an object with both types answers it once. Empty
+    is the sentence that prints no class at all — "You may cast spells as
+    though they had flash" (Vedalken Orrery) — and covers every spell.
     ``enchant_noun`` is the Aura clause it may narrow to, or None where the
     sentence named none. ``everyone`` is the printed seat word: False for "you"
     (CR 109.5, the permission's own controller) and True for "any player".
@@ -356,6 +365,11 @@ class StaticFlashPermission:
                 return card_has_type(card, klass)
             return klass in card_creature_types(game, card, seat)
 
+        if not self.card_classes:
+            # "You may cast spells …" (Vedalken Orrery): every spell, and a
+            # land is never one (CR 305.1) — it keeps its own timing however
+            # the gate asks.
+            return not card_has_type(card, "land")
         if not any(_is(klass) for klass in self.card_classes):
             return False
         if self.enchant_noun is None:
@@ -375,6 +389,15 @@ def static_flash_permission(line: str) -> StaticFlashPermission | None:
     match = _STATIC_FLASH_PERMISSION.match(_normalize(line).rstrip("."))
     if match is None:
         return None
+    if match.group("klass") is None:
+        # "You may cast spells …" (Vedalken Orrery): every spell. An article
+        # or an enchant clause with no class to hang off is no sentence this
+        # pool prints, and it refuses rather than widening to every spell.
+        if match.group("article") or match.group("enchant"):
+            return None
+        return StaticFlashPermission(
+            card_classes=(), everyone=match.group("who") == "any player",
+        )
     classes = tuple(match.group("klass").split(" and "))
     # **Every** word, not the first: a union with one unreadable half would
     # otherwise grant flash to the half this engine can test and silently drop

@@ -56,7 +56,9 @@ from .cost_modifier_lines import (
     _KEYWORD_ABILITY_REDUCTION,
     _KEYWORD_COST_MODIFIER,
     _ALL_KEYWORD_COSTS_MODIFIER,
+    _GRANTED_AFFINITY,
     cost_modifiers_for,
+    _granted_affinity_modifier,
     _keyword_cost_modifier,
     _all_keyword_costs_modifier,
     _keyword_ability_reduction,
@@ -115,6 +117,18 @@ def cost_modifier_claims_line(line: str) -> bool:
         spell is not None
         and spell.end() == len(text)
         and _spell_tax_modifier(spell) is not None
+    ):
+        return True
+    # "Artifact creature spells you cast have affinity for artifacts. (They
+    # cost {1} less …)" (Mycosynth Golem): the granted keyword, claimed whole
+    # once its reminder is left off (CR 207.2a: reminder text is not the
+    # rule), and only when the reduction it is rewritten into reads.
+    granted = re.sub(r"\s*\([^()]*\)\s*$", "", text).rstrip(".")
+    affinity = _GRANTED_AFFINITY.match(granted)
+    if (
+        affinity is not None
+        and affinity.end() == len(granted)
+        and _granted_affinity_modifier(affinity) is not None
     ):
         return True
     if any(
@@ -296,6 +310,12 @@ def _matches(
         )
     ):
         return False
+    # "**Artifact** creature spells …" (Mycosynth Golem): the stacked type is
+    # had as well, never instead (CR 205.2a).
+    if modifier.also_types and not all(
+        _has_printed_type(card, wanted) for wanted in modifier.also_types
+    ):
+        return False
     # "**Goblin** spells you cast …" (the Warchiefs). CR 205.3m through the one
     # reader of a spell's creature types, with the caster's seat — a face-down
     # spell (the blank, CR 708.2a) has none and is never discounted by it.
@@ -407,6 +427,7 @@ def _names_a_permanent(modifier: CostModifier) -> bool:
     return bool(
         modifier.colour
         or modifier.card_types
+        or modifier.also_types
         or modifier.keyword
         or modifier.alternative_subjects
         or modifier.creature_type
