@@ -751,7 +751,18 @@ def test_whole_games_with_planeshifts_modal_spells_pinned():
     what the seed gives, so another card's play does not move them. Six
     games until kg5, whose attack changes — a trick held for after the
     blocks — moved the one game casting Hull Breach's third mode to the
-    eighth.)"""
+    eighth.)
+
+    **And a seed is still a run.** Equal modes keep printed order and nothing
+    in the choice iterates an unordered collection. So a two-game run of the
+    same seed logs, line for line, what this run logs for its first two
+    games. Both runs deal their decks off one deck RNG and play off the module
+    RNG, each seeded once before game 1, and nothing in a game reads how many
+    games the run has. Its mode counts are the modes those lines name
+    (``SimulationReport.modal_casts`` counts what each cast line prints), so
+    they come out alike too. A test of its own made the same statement with
+    two two-game runs. It played two more games than this does (pre5dn, P1's
+    item 7)."""
     report = _planeshift_games(8)
 
     assert report.games_completed == 8
@@ -769,13 +780,9 @@ def test_whole_games_with_planeshifts_modal_spells_pinned():
     named = [line for line in report.log_lines if " cast Hull Breach -> resolved" in line]
     assert any("[mode 2: " in line for line in named), named
 
-
-@pytest.mark.full
-def test_a_seed_still_reproduces_a_run_in_which_modes_are_chosen():
-    """Determinism: equal modes keep printed order and nothing in the choice
-    iterates an unordered collection, so a seed is still a run."""
-    first, second = _planeshift_games(2), _planeshift_games(2)
-
-    assert first.log_lines == second.log_lines
-    assert first.modal_casts == second.modal_casts
-    assert sum(first.modal_casts.values()) >= 5
+    first_two = _planeshift_games(2)
+    cut = report.log_lines.index("=== Game 3 ===")
+    assert first_two.games_completed == 2
+    assert first_two.log_lines == report.log_lines[:cut]
+    assert first_two.modal_casts <= report.modal_casts
+    assert sum(first_two.modal_casts.values()) >= 5

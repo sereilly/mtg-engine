@@ -38,6 +38,7 @@ from .ai_scratch_copy import _scratch, held_for_an_answer, mid_resolution
 from .ai_player_control import served_seat
 from .ai_standing import CARD_WORTH, standing_swing, standings, swing_worth
 from .ai_weighed_cast import permitted_casts
+from . import state_check_witness
 from .text_changes import spell_text_card
 
 
@@ -287,13 +288,35 @@ def _settle_scratch(game) -> None:
     """Empty the stack of a scratch copy, answering what each object asks —
     and check state-based actions (CR 704.3) once it is empty: a creature
     dealt lethal damage is on the battlefield until they are, and a reading
-    taken before would count it as alive."""
+    taken before would count it as alive.
+
+    The window often closes on that check already: its own closing check,
+    or the one after its last resolution, with nothing done since. It says
+    so in what it returns (``engine/state_check_witness.py``). Then, with
+    nothing left to answer and nothing on the stack, the check here would
+    look at the table that check left and find nothing. It was 99% of these
+    checks and a tenth of a simulated game (pre5dn P1), so it is skipped
+    there (:func:`_settle_needs_a_check`). Under ``fast_paths.CHECKING`` it is
+    made anyway and must perform nothing."""
     for _ in range(_REHEARSAL_PASSES):
-        game._resolve_priority_window()
+        closed_on_a_check = game._resolve_priority_window()
+        owed = bool(game.pending_choices)
         game.auto_resolve_pending_choices()
-        game.check_state_based_actions()
+        if _settle_needs_a_check(game, closed_on_a_check, owed):
+            game.check_state_based_actions()
+        else:
+            state_check_witness.skipped(game, "settle_after_a_closing_check")
         if not game.stack and not game.pending_choices:
             return
+
+
+def _settle_needs_a_check(game, closed_on_a_check, owed: bool) -> bool:
+    """Whether :func:`_settle_scratch`'s check could find anything. It can
+    unless the window closed on a check (*closed_on_a_check*), nothing was
+    queued for the answers just taken (*owed*), and the stack is empty. An
+    answer is the rest of a resolution and can make a creature lethal, and
+    an object left on the stack is one the window did not resolve."""
+    return not closed_on_a_check or owed or bool(game.stack)
 
 
 def combat_is_still_to_come(game, seat: int) -> bool:
@@ -520,6 +543,11 @@ def _fight_priority_driver(table, seat: int):
             action = choose_instant_speed_activation(game, seat)
             if action is None:
                 return False
+            # An activation that is tried and refused answers False, which
+            # the window reads as a pass. Whatever the attempt did to the copy,
+            # the copy is not the one its last check left
+            # (``engine/state_check_witness.py``).
+            state_check_witness.changed(game)
             result = activate_chosen_ability(game, seat, action)
         return bool(getattr(result, "supported", False))
 

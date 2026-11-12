@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .. import state_check_witness
 from ..game_over_guard import goes_no_further
 
 from ._constants import _PHASE_STEPS, phases_after
@@ -17,8 +18,15 @@ EVERY_INSTANCE = -1
 
 class PhaseStepsMixin:
     @goes_no_further()
-    def _resolve_priority_window(self) -> None:
+    def _resolve_priority_window(self) -> bool | None:
         """Drain the stack for a step nobody is holding priority through.
+
+        Returns whether the last thing done to the table was a state-based
+        check of it (``engine/state_check_witness.py``). That is the window's
+        closing check, or the one after the last resolution, with nothing
+        done since. A rehearsal's settle reads the answer
+        (``ai_rehearsal._settle_scratch``). Every other caller ignores it,
+        and a game already over answers None.
 
         500.2 simplified: both players pass in succession once the stack is
         empty — unless the table has a ``priority_driver`` (the AI
@@ -56,36 +64,41 @@ class PhaseStepsMixin:
             # One object at a time, which a table whose players are asked
             # anything needs — a prompt answered, or priority given, before
             # the next object resolves.
-            self._resolve_window_answering_prompts()
-            return
+            return self._resolve_window_answering_prompts()
         # An interactive seat to stop for, or nobody (``holds_for_answers``;
         # a driver's table took the branch above).
         pause_for_choices = self.holds_for_answers()
-        for _ in range(self.MAX_SETTLE_ITERS):
-            # CR 104.1: a resolution that ended the game ends the window —
-            # nothing beneath it resolves (``resolve_next_object`` is guarded).
-            if self.is_game_over():
-                return
-            # One object at a time, with the state-based check a player would
-            # make before receiving priority between them (CR 704.3, 117.5) —
-            # inside the resolution's trigger window, so what it set off
-            # chooses after the check (``resolve_next_object``).
-            while self.stack and self.resolve_next_object(pause_for_choices=pause_for_choices):
-                pass
-            if not self.stack:
-                if self._window_may_close(waits=pause_for_choices):
-                    return
-                continue
-            top = self.stack[-1]
-            # Two ways the top can refuse to resolve, and both end this loop:
-            # its resolution is held pending a decision it armed, or it is
-            # still owed the mode/target it should have chosen as it was
-            # announced (``announcement_choice_for``). Only the first was
-            # asked, so an unanswered announcement prompt turned this into a
-            # spin — `resolve_stack` returning at once, the stack never
-            # shrinking, the condition never true.
-            if top.resolution_held or self.announcement_choice_for(top) is not None:
-                return
+        # The answer this returns (``engine/state_check_witness.py``): each
+        # resolution unmarks the table, and the check after it marks it again.
+        with state_check_witness.watching(self) as witness:
+            for _ in range(self.MAX_SETTLE_ITERS):
+                # CR 104.1: a resolution that ended the game ends the window —
+                # nothing beneath it resolves (``resolve_next_object`` is guarded).
+                if self.is_game_over():
+                    return witness.checked
+                # One object at a time, with the state-based check a player would
+                # make before receiving priority between them (CR 704.3, 117.5) —
+                # inside the resolution's trigger window, so what it set off
+                # chooses after the check (``resolve_next_object``).
+                while self.stack:
+                    witness.checked = False
+                    if not self.resolve_next_object(pause_for_choices=pause_for_choices):
+                        break
+                if not self.stack:
+                    if self._window_may_close(waits=pause_for_choices):
+                        return witness.checked
+                    continue
+                top = self.stack[-1]
+                # Two ways the top can refuse to resolve, and both end this loop:
+                # its resolution is held pending a decision it armed, or it is
+                # still owed the mode/target it should have chosen as it was
+                # announced (``announcement_choice_for``). Only the first was
+                # asked, so an unanswered announcement prompt turned this into a
+                # spin — `resolve_stack` returning at once, the stack never
+                # shrinking, the condition never true.
+                if top.resolution_held or self.announcement_choice_for(top) is not None:
+                    return witness.checked
+            return witness.checked
 
     def awaits_an_answer(self) -> bool:
         """Whether a prompt is owed that this table's priority windows wait for.
@@ -207,8 +220,9 @@ class PhaseStepsMixin:
         self.check_state_based_actions()
         return not self.stack
 
-    def _resolve_window_answering_prompts(self) -> None:
-        """The window above for a table whose prompts a driver answers.
+    def _resolve_window_answering_prompts(self) -> bool:
+        """The window above for a table whose prompts a driver answers, and
+        the same answer (whether its last check is the last thing done).
 
         One object at a time, and each one's prompts answered before the next
         resolves — and before this returns, which is the part that was missing.
@@ -250,38 +264,61 @@ class PhaseStepsMixin:
         # False only for a table with a priority driver and no prompt driver,
         # whose prompts nobody here answers.
         pause_for_choices = self.holds_for_answers()
-        for _ in range(self.MAX_SETTLE_ITERS):
-            answered = self.drive_owed_prompts()
-            # While a resolution still waits on a later answer it is not over,
-            # and neither the state-based check nor priority has a moment in
-            # it (CR 704.3, 117.3b); its release makes the check.
-            waiting = self.resolution_waiting()
-            if answered and not waiting:
-                self.check_state_based_actions()
-            if self.stack and not waiting and not (passed and not answered):
-                self.offer_priority()
-            passed = False
-            # The resolution and its state-based check, one unit of play
-            # (``resolve_next_object``); a held one is checked by its release.
-            resolved = (
-                bool(self.stack) and not waiting
-                and self.resolve_next_object(pause_for_choices=pause_for_choices)
-            )
-            if not answered and not resolved:
-                # An object that refuses to resolve ends the window as it
-                # always did. An *empty* stack ends it only once the check
-                # the players' passes would make has put nothing there
-                # (CR 117.5; ``_window_may_close``) — and once every player
-                # has had priority with nothing on the stack and passed it
-                # (CR 117.4, CR 500.2).
-                if self.stack:
-                    return
-                if not self._window_may_close(waits=False):
-                    continue
-                if self._receives_priority(self.current_step) and self.offer_priority():
-                    passed = True
-                    continue
-                return
+        # Whether the table is the one the last state-based check of it left
+        # (``engine/state_check_witness.py``). Each call below that can change
+        # the table unmarks it first: an answer, a priority offer, a
+        # resolution. Each completed check marks it again.
+        with state_check_witness.watching(self) as witness:
+            for _ in range(self.MAX_SETTLE_ITERS):
+                # Nothing queued: the driver below is not asked anything,
+                # and the call changes nothing.
+                quiet = not self.pending_choices
+                if not quiet:
+                    witness.checked = False
+                answered = self.drive_owed_prompts()
+                # While a resolution still waits on a later answer it is not over,
+                # and neither the state-based check nor priority has a moment in
+                # it (CR 704.3, 117.3b); its release makes the check.
+                waiting = self.resolution_waiting()
+                if answered and not waiting:
+                    self.check_state_based_actions()
+                if self.stack and not waiting and not (passed and not answered):
+                    witness.checked = False
+                    self.offer_priority()
+                passed = False
+                # The resolution and its state-based check, one unit of play
+                # (``resolve_next_object``); a held one is checked by its release.
+                resolved = False
+                if self.stack and not waiting:
+                    witness.checked = False
+                    resolved = self.resolve_next_object(pause_for_choices=pause_for_choices)
+                if not answered and not resolved:
+                    # An object that refuses to resolve ends the window as it
+                    # always did. An *empty* stack ends it only once the check
+                    # the players' passes would make has put nothing there
+                    # (CR 117.5; ``_window_may_close``) — and once every player
+                    # has had priority with nothing on the stack and passed it
+                    # (CR 117.4, CR 500.2).
+                    if self.stack:
+                        return witness.checked
+                    if quiet and witness.checked:
+                        # That check is made already. The last thing done to
+                        # this table was a check that left the stack empty
+                        # (the previous resolution's, or the one after an
+                        # answer), and this pass did nothing. The check runs
+                        # to a fixed point, so a second one would find nothing.
+                        state_check_witness.skipped(self, "window_close_after_a_check")
+                    elif not self._window_may_close(waits=False):
+                        continue
+                    if self._receives_priority(self.current_step):
+                        if self.offer_priority():
+                            witness.checked = False
+                            passed = True
+                            continue
+                        # Every seat passed (CR 117.3d), which changes nothing,
+                        # so the mark this returns stands.
+                    return witness.checked
+            return witness.checked
 
     #: How many actions one :meth:`offer_priority` may take before it hands
     #: the stack back to its caller to resolve. Generous: a seat answering one

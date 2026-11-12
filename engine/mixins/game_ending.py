@@ -18,6 +18,7 @@ from ..game_result_bans import player_cant_lose
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..pt import toughness_has_been_set
+from .. import state_check_witness
 from ..trigger_utils import battlefield_triggers, matching_triggers
 from ..target_immunity import cannot_be_enchanted
 from ..tokens import is_token_card
@@ -244,9 +245,15 @@ class GameEndingMixin:
         actions simultaneously as a single event"): an event putting
         permanents onto the battlefield that is open around this check — an
         answer re-joining one checks state as it settles — is set aside, so
-        the cards a sweep gives back (CR 610.3d) are not its newcomers."""
+        the cards a sweep gives back (CR 610.3d) are not its newcomers.
+
+        A check that completes marks the loop watching this table
+        (``engine/state_check_witness.py``). The loop skips the next check
+        if nothing it did since could have changed the table."""
         with self.putting_triggers_on_stack(), self.outside_any_entry_event():
-            return self._check_state_based_actions()
+            performed = self._check_state_based_actions()
+        state_check_witness.saw(self)
+        return performed
 
     def _state_based_pass(
         self, banned_set_codes, banner_perm_ids, banner_names=(),
