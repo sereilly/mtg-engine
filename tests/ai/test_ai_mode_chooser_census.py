@@ -1437,6 +1437,17 @@ UNBUILDABLE = {
     # its own game instead (DST W1G3's drive: the five reordered as chosen).
     ("Second Sight", 0): "it has nothing to act on on any census board",
     ("Second Sight", 1): "it has nothing to act on on any census board",
+    # Fifth Dawn's (W1G7). "Sacrifice any number of creatures. You gain 3
+    # life for each creature sacrificed this way": the bullet needs no target,
+    # so its board is empty, and a caster with no creature sacrifices none and
+    # gains nothing — Grab the Reins' sacrifice, one card over. Its sibling's
+    # board is the one the card is cast on ([1], natural: modes [1]).
+    ("Plunge into Darkness", 0): "it has nothing to act on on any census board",
+    # "Untap all lands you control": no census board taps the caster's lands
+    # before the cast, so the untap changes nothing; what it is for is mana
+    # spent already this turn, which no one-bait board holds. Its sibling
+    # (the lands become 2/2 creatures) is cast on its own board.
+    ("Rude Awakening", 0): "it has nothing to act on on any census board",
 }
 
 #: Modes with a board on which **nothing is cast**, each with why: the mode's
@@ -1490,6 +1501,17 @@ HELD = {
     ("Recuperate", 1): "a shield on a creature with no damage coming",
     # Mirrodin's (W1G4): Ivory Charm's tap one set over.
     ("Dream's Grip", 0): "a tap of a creature with no attack to stop, undone at its untap step",
+    # Fifth Dawn's (W1G7). Recuperate's shield one set over.
+    ("Abuna's Chant", 1): "a shield on a creature with no damage coming",
+    # "Change the text of target spell or permanent by replacing all
+    # instances of one basic land type / one color word with another." Not
+    # over with the turn — the change lasts indefinitely — but the census
+    # zoo's creatures print no text, so there is no word for either bullet to
+    # replace and the census's own cast changes nothing at all. What a text
+    # change is for is a card that reads a land type or a colour (a landwalk,
+    # a protection, a "for each Swamp"), which no one-bait board here holds.
+    ("Spectral Shift", 0): "a text change on a permanent whose text names no basic land type",
+    ("Spectral Shift", 1): "a text change on a permanent whose text names no colour word",
 }
 
 #: Modes whose own board leaves a sibling worth casting too, and the sibling
@@ -1542,6 +1564,8 @@ SHADOWED = {
     # their library" takes the opposing hand away; seven cards each way
     # measures even.
     ("Temporal Cascade", 1): ([0], "the opposing hand shuffled away against seven cards drawn by each seat"),
+    # Fifth Dawn's (W1G7): Recuperate's pair one set over.
+    ("Abuna's Chant", 1): ([0], "five life lasts; a shield with no damage coming measures nothing"),
     # Darksteel's Savage Beating is in neither table. On the caster's own
     # combat (its printed window) its bullets measure 1.75 (double strike on
     # the unblocked 2/2) and 2.0 ("untap all creatures you control … an
