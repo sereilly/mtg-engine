@@ -1183,7 +1183,7 @@ def preview_payment(session_id: str, req: GameActionRequest):
     if reason is None and req.action == "cast":
         # The colours this payment spends, for a spell sunburst sizes
         # (``payment_plan.sunburst_preview``): absent for every other spell.
-        sunburst = sunburst_preview(view.game, req.seat, req.card_name)
+        sunburst = sunburst_preview(view.game, req.seat, len(game.stack))
         if sunburst is not None:
             answer["sunburst"] = sunburst
     return answer

@@ -108,12 +108,14 @@ def recording_taps():
         _TAPS.reset(token)
 
 
-def sunburst_preview(game, seat: int, card_name: str | None) -> dict | None:
+def sunburst_preview(game, seat: int, before: int) -> dict | None:
     """``{"colors": [...]}``: the colours of mana the trial cast on *game* (a
     preview's copy, after the cast reached its stack) spent, for a spell
     whose counters that number decides — sunburst, Modular—Sunburst (CR
     702.44a: one counter per colour, colourless counting none). None for any
-    other spell, or where no cast of *card_name* by *seat* is on the stack.
+    other spell, or where no cast by *seat* is on the stack above the
+    *before* objects the table held before the trial (the cast is the one the
+    trial put there — found by where it sits, not by a name).
 
     Read off the record the cast itself wrote (``StackItem.choices
     [MANA_SPENT_TO_CAST]``, ``pool_payment._pay_cast_mana``), so it is what
@@ -122,15 +124,13 @@ def sunburst_preview(game, seat: int, card_name: str | None) -> dict | None:
     (W1G1), and a person deciding whether to tap by hand instead was told
     nothing of what that spread would be.
     """
-    for item in reversed(getattr(game, "stack", []) or []):
-        if getattr(item, "caster_index", None) != seat or item.card is None:
-            continue
-        if card_name and item.card.name != card_name:
-            continue
+    for item in (getattr(game, "stack", []) or [])[before:]:
         spent = (getattr(item, "choices", None) or {}).get(MANA_SPENT_TO_CAST)
+        if getattr(item, "caster_index", None) != seat or spent is None:
+            continue
         # What the spell *says* (``spell_text_card``: a text change on it is
         # folded in), not its printed words.
-        if spent is None or not counts_colors_spent(spell_text_card(item)):
+        if not counts_colors_spent(spell_text_card(item)):
             return None
         return {"colors": [color for color in COLORS if int(spent.get(color, 0) or 0) > 0]}
     return None
