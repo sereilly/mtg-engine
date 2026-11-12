@@ -36,6 +36,7 @@ from .entwine import expand_entwine_lines
 from .fading import expand_fading_lines
 from .late_modules import LateModules
 from .modular import expand_modular_lines
+from .sunburst import expand_sunburst_lines
 from .self_reference import expand_short_self_references
 
 _late = LateModules(__package__)
@@ -209,6 +210,16 @@ def expand_ability_lines(
       "When this permanent is put into a graveyard from the battlefield, you
       may put a +1/+1 counter on target artifact creature for each +1/+1
       counter on this permanent." (``engine/modular.py``), fading's shape.
+      "Modular—Sunburst" (CR 702.44c) becomes the same pair with CR 702.44c's
+      count: "…enters with a +1/+1 counter on it for each color of mana spent
+      to cast it."
+    * a **sunburst** keyword line becomes the entry replacement CR 702.44a
+      says it means — "If this object is entering as a creature, … it enters
+      with a +1/+1 counter on it for each color of mana spent to cast it.
+      Otherwise, it enters with a charge counter …" — on one line, the second
+      sentence being the first one's "otherwise" (``engine/sunburst.py``).
+      From there it is ``enter_effects``' colours-spent entry reader, sized by
+      what the cast's payment measured, none of which knows the word.
     * an **affinity** keyword line becomes the sentence CR 702.41a says it
       means — "This spell costs {1} less to cast for each [text] you
       control." (``engine/affinity.py``). From there it is the self-reduction
@@ -263,6 +274,12 @@ def expand_ability_lines(
     # the "put into a graveyard from the battlefield" trigger), one line each
     # (``engine/modular.py``). Read by none of the rewrites around it.
     oracle_text = expand_modular_lines(oracle_text)
+    # CR 702.44a's, modular's shape with one line out: a sunburst keyword line
+    # becomes the rule's own entry replacement, both of its sentences on one
+    # line because the second is the first one's "otherwise"
+    # (``engine/sunburst.py``). Read by none of the rewrites around it —
+    # Modular—Sunburst is modular's line, rewritten above.
+    oracle_text = expand_sunburst_lines(oracle_text)
     # CR 702.33a's: "Kicker [cost]" *means* "You may pay an additional [cost] as
     # you cast this spell", which is the CR 601.2b offer buyback's first half
     # already becomes (``engine/cast_costs.py``). Its own statement for echo's

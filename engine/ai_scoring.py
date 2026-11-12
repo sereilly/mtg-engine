@@ -73,7 +73,9 @@ from .oracle import OracleInstruction, compile_card_oracle
 from .search_filters import search_matches
 from .targeting import spec_roles
 from .ai_mana_sources import _MANA_SYMBOLS
+from .sunburst import counts_colors_spent
 from .ai_payment import (
+    colors_in_reach,
     tap_planned_lands,
     _cost_for,
     _charged_in_place_of_mana_cost,
@@ -1143,6 +1145,14 @@ def _cast_body(game: Game, caster_index: int, card: CardDefinition) -> tuple[int
     power, toughness = card.base_power, card.base_toughness
     if power is None or toughness is None:
         power, toughness = game.card_pt_outside_battlefield(card, caster_index)
+    # **And the counters its cast puts on it**: a sunburst creature (CR
+    # 702.44a) enters with a +1/+1 counter for each colour of mana spent, so
+    # Suntouched Myr is the 3/3 three colours of land make it and not the 0/0
+    # it is printed as — the colours this seat's payment would spend
+    # (``ai_payment.colors_in_reach``).
+    if counts_colors_spent(card):
+        grown = colors_in_reach(game, caster_index, card)
+        power, toughness = int(power or 0) + grown, int(toughness or 0) + grown
     return max(0, int(power or 0)), max(0, int(toughness or 0))
 
 

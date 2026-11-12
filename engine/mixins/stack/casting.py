@@ -1186,7 +1186,7 @@ class SpellCastingMixin:
         )
         if isinstance(mana_paid, SimulationResult):
             return mana_paid
-        permission, resolved_x_value, x_mana_spent = mana_paid
+        permission, resolved_x_value, x_mana_spent, mana_spent_to_cast = mana_paid
 
         # CR 601.2h: every other cost, paid at one moment.
         (
@@ -1233,6 +1233,7 @@ class SpellCastingMixin:
                 target_permanent_index=target_permanent_index,
                 target_player_index=target_player_index,
                 target_stack_item=target_stack_item, x_mana_spent=x_mana_spent,
+                mana_spent_to_cast=mana_spent_to_cast,
             )
 
         self._resolve_card(
