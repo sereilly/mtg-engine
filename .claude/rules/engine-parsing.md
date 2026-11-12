@@ -172,4 +172,12 @@ asks for a permanent's program on every scan of the board. Beneath it,
 while a card compiles (`grammar.parser.each_line_parsed_once`) each
 (line, card name) is parsed once — the compiler asks the same line from
 several readers — so the store builds in ~13 s; outside a compile, a parse
-(the parse-coverage probe's) is never kept.
+(the parse-coverage probe's) is never kept. **An answer derived only from a
+compiled program or ability is held on that object** by
+`oracle.held_on_compiled` (the land mana walk on the program of a land's
+*effective* card, `is_tap_alone_mana_ability` on the ability), under the same
+generation, in a slot named with `oracle_types.DERIVED_SLOT_PREFIX` that
+`__getstate__` leaves out of every copy, pickle and the program store; under
+`fast_paths.CHECKING` each is derived again and compared. Nothing is keyed by
+`id()`, and an answer that also reads a table a test patches without
+clearing the caches (`is_mana_ability`, `LIBRARY_SAFE_ZONE_KINDS`) is not held.

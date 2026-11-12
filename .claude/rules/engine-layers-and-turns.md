@@ -28,6 +28,7 @@ paths:
   - "engine/mana_could_produce.py"
   - "engine/counter_conditions.py"
   - "engine/game_over_guard.py"
+  - "engine/state_check_witness.py"
   - "engine/phases/**"
   - "engine/mixins/*.py"
   - "web/actions.py"
@@ -96,7 +97,9 @@ and you can open this file directly whenever its subject is yours.
     answer: a text reader may be cached on its text (the Aura readers are),
     and a state-based sweep asks its cheap metadata test before a layer read,
     but nothing skips a recompute "because nothing changed" (ROADMAP, "The
-    folds that do run").
+    folds that do run"). The one skip of a whole state check rests on a
+    stronger fact — a completed check of the same table was the last thing
+    done to it — and is below (`engine/state_check_witness.py`).
     **A channel the fold starts reading belongs in that tuple**
     (`tests/engine/test_effective_card_fast_path.py`).
     `engine/fast_paths.CHECKING` recomputes every shortcut the long way; run the
@@ -201,7 +204,19 @@ and you can open this file directly whenever its subject is yours.
   resolutions, inside the resolution's trigger window** (`resolve_next_object`
   → `_check_between_resolutions`, CR 704.3), and
   **after each step's turn-based actions, before its first priority**
-  (`_check_after_turn_based_actions`, CR 703.3). **At a table with a person,
+  (`_check_after_turn_based_actions`, CR 703.3). **A check is skipped only
+  when the last thing done to the table was a completed check** (it runs to
+  a fixed point, so a second finds nothing): the window watches its game
+  through `engine/state_check_witness.py`, every completed
+  `check_state_based_actions` marks the watch, and the loop unmarks it before
+  anything of its own that can change the table — a resolution, an answer, a
+  priority offer. At a table the simulator drives, the window's closing check
+  straight after a resolution's or an answer's is skipped, and
+  `_resolve_priority_window` returns the mark so a rehearsal's settle skips
+  its own (`ai_rehearsal._settle_scratch`); the headless/web branch skips
+  nothing. The mark is a context variable, never on the game, and under
+  `fast_paths.CHECKING` every skipped check is made and must move nothing.
+  **At a table with a person,
   a step does not end while its stack is owed** (CR 500.2, 608.2): every
   site that leaves a step asks `window_left_unfinished()` (anything on the
   stack, or `awaits_an_answer()`); a step that must wait is held

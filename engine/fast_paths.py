@@ -24,6 +24,12 @@ shortcut gives is computed again the long way, a different answer raises, and
 :data:`CHECKED` counts the answers checked per accessor, so a run under the
 flag can say how much it examined.
 
+Two other kinds of shortcut answer to the same flag: an answer held on a
+compiled program or ability (``oracle.held_on_compiled`` — the land mana walk,
+``is_tap_alone_mana_ability``) is derived again and compared, and a state check
+skipped because the last thing done to the table was a completed one
+(``engine/state_check_witness.py``) is made anyway and must move nothing.
+
 Set by a harness — a test, or a seeded simulator run wrapped to set it — and
 never by the engine. Imports nothing from the engine.
 """

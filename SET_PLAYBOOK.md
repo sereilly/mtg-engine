@@ -1657,12 +1657,24 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   (W2G2 spied on `_land_ability_worth` by hand); `--ingest` names ~495 tests
   because ten sharded AI censuses walk both roles — `stable_sample` always
   taking the measured set's cards and sampling the rest would cut it (T2's
-  proposal, `tests/helpers.py`); and three of the profiler's speed items not
-  taken: the continuous-effect recompute inside every state-based pass
-  changes nothing ≥98.3% of the time (a dirty marker under
+  proposal, `tests/helpers.py`); and the speed items the round did not take.
+  It took the redundant state checks (`state_check_witness`, ~9% of the full
+  pass), the hot function-level imports and the land mana derivations
+  (`held_on_compiled`, ~4–7%), and the doubled determinism run. Left, from
+  the profiler: the continuous-effect recompute inside every state-based
+  pass changes nothing ≥98.3% of the time (a dirty marker under
   `fast_paths.CHECKING`; a missed invalidation is a stale P/T or type, so
   high risk; ~7% of the full pass), backwards censuses re-run whole (~858 s;
   a smaller sample weakens what they prove), and the state-based pass's own
-  internals (ten sweeps a pass, `has_supertype`). Its profiles are in
-  `scratch/pre5dn/p1/`. *Clears:* a speed round with `fast_paths.CHECKING`
-  runs as its gate; the rest a toolkit round.
+  internals (ten sweeps a pass, `has_supertype`). Left, from the two that
+  took theirs: the same window-closing skip on the headless/web branch (the
+  censuses' share — they save 5–8% where the games save ~14% — proved by a
+  census run under `CHECKING`, since the seeded games never reach that
+  branch); the mark carried from a step's `_check_after_turn_based_actions`
+  into its window's first closing check (~1,900 of DST's ~5,200 remaining
+  closing checks find an unchanged table); and the import tail under 40,000
+  a profile (~140,000 relative imports per DST sim, mostly
+  `_filters.permanent_state_holds` and `_is_equipped`). The profiles are in
+  `scratch/pre5dn/p1/`, V1's and V2's measurements beside them. *Clears:* a
+  speed round with `fast_paths.CHECKING` runs as its gate; the rest a
+  toolkit round.
