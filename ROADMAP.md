@@ -194,9 +194,11 @@ mechanism" and becomes "which single line is cheapest per card". A block that
 needs two rounds is worth splitting only if neither half ships a card alone.
 
 **Re-measure a block's priority before acting on it, including the ones below.**
-The legend rule sat open for a year and a half arguing its own urgency from
+The legend rule's choice (CR 704.5j) sat open arguing its own urgency from
 "all eleven legendary creatures in the pool are M21" — true when written, and
-stale the day Legends took the pool to 91 legendary permanents. A card count
+stale the day Legends took the pool to 91 legendary permanents; when Fifth
+Dawn built it (`engine/legend_rule.py`), 227 shipped legendary permanents
+were still kept or binned by battlefield order, with nobody asked. A card count
 written in prose is a claim about the pool with no test behind it, and it
 decays in either direction; every bullet here that carries a number should be
 re-run before it is cited.

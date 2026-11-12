@@ -72,7 +72,10 @@ per ability, {T} included — `web/offers._ability_denial`), `ability_mana`
 cost decides included, `web/offers._decided_ability_mana`; whether a colour
 is chosen; a mixed split's `combination` and an "or" of quantities'
 `alternatives`, both answered on `mana_combination` —
-`engine/mana_combination.py`; `symbols_by_cost` where the cost's permanent
+`engine/mana_combination.py`, which a land's `tap` also carries, the split of
+the mana its tap sets off in any combination of colours (Dawn's Reflection,
+`mana_combination.triggered_split`; absent, the seat's default);
+`symbols_by_cost` where the cost's permanent
 decides; null for an ability that adds no mana), `ability_text_change` and a
 cast's `text_change` (the words a text change announces), `x_payable` /
 `ability_x_payable` (`{pool, board, colors}`: the payable X as the cast or
@@ -89,7 +92,8 @@ else a session-held one, `state_view._SESSION_DECISIONS`),
 a decline), a search's `min_picks`, a graveyard ability's `target_spec`,
 `target_spec.cost_offers` (every applicable alternative cost by
 `alternative_index`, which the cast answers with `alternative_cost_index`, CR
-118.9a), a castable spell's `mana_combination` when it makes mana in any
+118.9a; a granted price identical to one already offered is not a second
+offer, `cast_alternative_costs._same_price`), a castable spell's `mana_combination` when it makes mana in any
 combination (`count`, or `count_by_cost` per permanent that could pay its
 cost — `mana_combination.cast_split_offer`), the active seat's
 `combat.attack_requirements` and a defending seat's `combat.block_requirements`
