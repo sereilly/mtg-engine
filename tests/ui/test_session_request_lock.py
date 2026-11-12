@@ -51,6 +51,14 @@ class _PausingLog(list):
         # The undo history copies the game before an action; a copy is a log.
         return list(self)
 
+    def __reduce__(self):
+        # Pickled, too, it is a log: its two Events are this test's alone, and
+        # the session it is planted in stays in the process-wide store, where
+        # the board harness's save (`board_pickle.save_board`, which pickles
+        # every session) met them as "cannot pickle '_thread.lock'" whenever a
+        # worker ran tests/ui/test_pre5dn_t4_board_harness.py after this file.
+        return (list, (list(self),))
+
 
 def _session():
     created = client.post("/api/sessions", json={
