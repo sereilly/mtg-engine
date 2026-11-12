@@ -105,7 +105,7 @@ class ZoneFunnelsMixin:
         of them, and the caller then puts exactly one somewhere: the rest cease
         to exist.
 
-        ``engine/phases/upkeep_step.py`` documents the same bug found in a
+        ``engine/phases/upkeep_prompts.py`` documents the same bug found in a
         graveyard (Nether Shadow: five cards in, four out) and fixed there by
         carrying the index. Five more sites had it in hands — Sylvan Library's
         "put the card on top of your library", a forced discard, two discard

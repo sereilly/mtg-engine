@@ -4,7 +4,8 @@ CR 613.7 orders the effects in a layer by timestamp, and a resolved effect's is
 "the time it's created" (CR 613.7b). Five sites wrote a permanent's gained or
 lost types by appending a dict to a metadata list — four handlers in
 ``handlers/board_misc.py`` (``types.py`` since the 2,000-line split) and one in
-``handlers/zones.py`` (``reanimation.py`` since the same split) — and none of them
+``handlers/zones.py`` (``reanimation.py`` since the same split,
+``bound_reanimation.py`` since the pre-Fifth-Dawn one) — and none of them
 recorded when. The layer bridge had nothing to order by and gave both lists the
 constant 0, additions in front of removals: a Snow-Covered Forest thawed by
 Arcum's Weathervane and then frozen again was not snow, and a land frozen under
@@ -79,8 +80,10 @@ _WRITER_USES = {
             "lose_type (Neurok Transmuter's \"isn't an artifact\")",
         ),
     },
-    "engine/handlers/reanimation.py": {
+    "engine/handlers/bound_reanimation.py": {
         "lose_types": (1, "return_source_card_to_battlefield's 'as a non-Aura enchantment'"),
+    },
+    "engine/handlers/reanimation.py": {
         "gain_types": (
             1, "_entering_characteristics: Chainer's reanimated creature enters "
             "'a Nightmare in addition to its other creature types'",

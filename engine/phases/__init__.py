@@ -7,6 +7,8 @@ the comprehensive rules turn structure:
     Beginning phase        beginning_phase
       ├─ Untap step        untap_step
       ├─ Upkeep step       upkeep_step
+      │    ├─ its costs    upkeep_payment
+      │    └─ its prompts  upkeep_prompts
       └─ Draw step         draw_step
     Precombat main phase   precombat_main_phase
     Combat phase           combat_phase
@@ -34,6 +36,8 @@ extra turns/phases/steps, skips) is not tied to a single phase and remains in
 from .beginning_phase import BeginningPhaseMixin
 from .untap_step import UntapStepMixin
 from .upkeep_step import UpkeepStepMixin
+from .upkeep_payment import UpkeepPaymentMixin
+from .upkeep_prompts import UpkeepPromptsMixin
 from .draw_step import DrawStepMixin
 from .precombat_main_phase import PrecombatMainPhaseMixin
 from .combat_phase import CombatPhaseMixin
@@ -58,6 +62,8 @@ __all__ = [
     "BeginningPhaseMixin",
     "UntapStepMixin",
     "UpkeepStepMixin",
+    "UpkeepPaymentMixin",
+    "UpkeepPromptsMixin",
     "DrawStepMixin",
     "PrecombatMainPhaseMixin",
     "CombatPhaseMixin",

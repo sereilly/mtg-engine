@@ -91,7 +91,7 @@ def upkeep_answer(answers: dict | None, permanent):
     look-alike answers too.
 
     ``resolve_upkeep`` normalises every answer map before a handler sees it
-    (:meth:`UpkeepStepMixin._upkeep_answers_by_permanent`), so a caller may
+    (:meth:`UpkeepPromptsMixin._upkeep_answers_by_permanent`), so a caller may
     still key by printed name and mean "every copy of it"; by the time the map
     reaches here the ids are the only keys that matter. The raw value is
     returned rather than a bool because one channel carries a number

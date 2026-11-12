@@ -29,7 +29,7 @@ from ..mana_payment import generic_cost
 from ..pt import BASE_PT_REVERT_KEY, clear_base_pt
 from ..upkeep_costs import UpkeepCost, cost_prompt_fields
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
-from .upkeep_step import upkeep_subject_answer
+from .upkeep_prompts import upkeep_subject_answer
 
 #: The two draw-step conditions and the only difference between them, the same
 #: pair the upkeep and end steps carry: ``draw_step_self`` is "at the beginning
@@ -64,7 +64,7 @@ class DrawStepMixin:
         dicts*. There is no id and nothing to stamp one on that survives the
         record being rebuilt, so what names one is the same thing that names a
         graveyard card — its position among the same-named ones
-        (:func:`engine.phases.upkeep_step.subject_prompt_key`).
+        (:func:`engine.phases.upkeep_prompts.subject_prompt_key`).
 
         One reader for the prompt side and the resolution side, so the ordinal a
         seat is offered and the ordinal a seat is charged for cannot drift.
@@ -87,7 +87,7 @@ class DrawStepMixin:
         The card says the payment happens "before that draw step", so these are
         offered during the player's upkeep alongside the other pay-or-else
         prompts; the answers come back to ``resolve_draw_step(pay_life_loss=...)``
-        keyed by :func:`engine.phases.upkeep_step.upkeep_prompt_key`.
+        keyed by :func:`engine.phases.upkeep_prompts.upkeep_prompt_key`.
 
         **One prompt per obligation.** Obligations from two copies of one source
         used to collapse into a single prompt "because they share a name and a

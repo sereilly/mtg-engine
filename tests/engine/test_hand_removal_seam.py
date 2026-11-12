@@ -4,7 +4,7 @@ Split out rather than folded into a card's test because the hazard is not about
 a card. A hand is a ``list[CardDefinition]`` and every copy of a card in a deck
 is *the same Python object* (``web/deck_builder.py``: ``[card] * count``), so
 the obvious identity filter removes all of them and the caller then puts one
-somewhere. ``engine/phases/upkeep_step.py`` documents the same class found in a
+somewhere. ``engine/phases/upkeep_prompts.py`` documents the same class found in a
 graveyard; five hand sites had it, and the AI simulator's fixed eight-card
 decklist could reach none of them.
 """

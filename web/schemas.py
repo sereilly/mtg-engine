@@ -458,7 +458,7 @@ class GameActionRequest(BaseModel):
     # (a card in a graveyard) and a Nafs Asp obligation (a record). Which of
     # the several same-named subjects this action answers, counting from the
     # first — ``subject_ordinal`` as the prompt serialized it, and
-    # ``engine/phases/upkeep_step.subject_prompt_key`` is what both sides file
+    # ``engine/phases/upkeep_prompts.subject_prompt_key`` is what both sides file
     # it under. Required whenever the prompt carries one, for
     # ``prompt_permanent_id``'s reason: a card name alone cannot say which of
     # two eligible Nether Shadows is being returned, and answering by name

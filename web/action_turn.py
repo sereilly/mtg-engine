@@ -8,7 +8,7 @@ Sanctuary's draw choice, and stepping an AI turn forward.
 from __future__ import annotations
 
 from engine.untap_restrictions import permanent_in_limited_scope
-from engine.phases.upkeep_step import upkeep_prompt_key
+from engine.phases.upkeep_prompts import upkeep_prompt_key
 from fastapi import HTTPException
 
 from .action_helpers import answered_permanent_id
@@ -413,7 +413,7 @@ def _action_resolve_optional_trigger(session, req, seat_type):
     if choice.get("needs_target") and req.accept:
         # The answer is filed as the chosen permanent's **id** (CR 400.7) —
         # what each `valid_targets` entry carries and what the engine reads
-        # (`UpkeepStepMixin._upkeep_target_pick`). It was the (seat, slot)
+        # (`UpkeepPromptsMixin._upkeep_target_pick`). It was the (seat, slot)
         # pair, which the step read again later: a permanent leaving in
         # between moved the slot onto its neighbour. `target_permanent_id` is
         # the address to send (a stale one is the preamble's 404); a seat and

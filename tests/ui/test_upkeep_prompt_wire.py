@@ -185,7 +185,7 @@ def test_the_client_and_the_server_spell_the_subject_address_the_same_way():
     rather than against a spelled-out ``"#"`` — the point is that there is one
     encoding, not that it is that character.
     """
-    from engine.phases.upkeep_step import upkeep_prompt_key
+    from engine.phases.upkeep_prompts import upkeep_prompt_key
 
     source = _APP_JS.read_text(encoding="utf-8")
     assert "function upkeepPromptKey(entry)" in source
