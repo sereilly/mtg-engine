@@ -13,6 +13,12 @@ any that does not resolve.
 tests/ is read too: a split's moved name imported by a test at its old home
 is a collection error the suite reports only as ERROR (kg4: a test imported
 `permanent_worth` from `ai_rehearsal` after it moved to `ai_standing`).
+
+So is every **LateModules read** in engine/ and web/ (`_late.<module>.<name>`,
+`engine/late_modules.py`): an attribute lookup made when its line runs, which
+no import statement names, so the scan above cannot see it, and a split that
+moves <name> out of <module> breaks it silently until that line runs (pre5dn
+V2 turned 79 hot function-level imports into such reads).
 """
 import ast
 import importlib
@@ -84,7 +90,50 @@ for top in ("engine", "web", "scripts", "tests"):
                         f"{path.relative_to(ROOT)}:{node.lineno} {target} has no {alias.name}"
                     )
 
-print(f"checked {checked} imported names")
+late_checked = 0
+for top in ("engine", "web"):
+    for path in sorted((ROOT / top).rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        holders = [
+            target.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
+            and getattr(node.value.func, "id", None) == "LateModules"
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        ]
+        if not holders:
+            continue
+        owner_name = package_of(path)
+        if path.stem != "__init__":
+            owner_name = f"{owner_name}.{path.stem}"
+        owner = importlib.import_module(owner_name)
+        # The package each holder reads under, off the instance itself: the
+        # constructions vary (__package__, f"{__package__}.grammar",
+        # __package__.rpartition(".")[0]).
+        packages = {holder: getattr(owner, holder)._package for holder in holders}
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute)
+                    and isinstance(node.value.value, ast.Name)
+                    and node.value.value.id in packages):
+                continue
+            target = f"{packages[node.value.value.id]}.{node.value.attr}"
+            late_checked += 1
+            try:
+                module = importlib.import_module(target)
+            except Exception as exc:  # noqa: BLE001 - report, never mask
+                failures.append(f"{path.relative_to(ROOT)}:{node.lineno} late read of {target}: {exc!r}")
+                continue
+            if hasattr(module, node.attr):
+                continue
+            try:
+                importlib.import_module(f"{target}.{node.attr}")
+            except ModuleNotFoundError:
+                failures.append(
+                    f"{path.relative_to(ROOT)}:{node.lineno} {target} has no {node.attr} (a LateModules read)"
+                )
+
+print(f"checked {checked} imported names, {late_checked} LateModules reads")
 for line in failures:
     print("UNRESOLVED", line)
 print(f"unresolved: {len(failures)}")

@@ -37,6 +37,7 @@ export ROUND=ons
 | `extract_reports.py <out> <transcript|dir> --groups <agents.json>` | each report, the day it lands | every subagent's hand-back report out of the session transcript (a subagent cannot write a report file), one `<group>.md` each; names the groups still owed |
 | `dup_ideas.py <base>` | after a wave | a new name defined in two modules (one idea, two homes) |
 | `missing_names.py <files>` | each merge | a name loaded but never defined or imported |
+| `import_names.py` | each merge over a split | every `from X import Y` in engine/, web/, scripts/ and tests/ resolves, function-level ones too, and every `_late.<module>.<name>` LateModules read — the two a moved name breaks only when the line runs |
 | `merge_blocks.py <branch>` | conflicts | append-append conflicts in per-set test files, by bytes |
 | `wordmerge_rows.py <file> <branch>` | conflicts | conflicted table rows (`engine/ARCHITECTURE.md`'s module table) merged word by word against the merge base; aborts on a word-level conflict |
 | `resolve_both.py <file> <n>` | conflicts | keep both sides of exactly *n* conflicts (refuses any other count) |
