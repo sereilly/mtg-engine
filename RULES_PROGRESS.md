@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**444 / 655 tracked rules covered (67%)** — 3734 tests, 0 unannotated.
+**444 / 655 tracked rules covered (67%)** — 3735 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -121,7 +121,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(3 tests)*
 - [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(2 tests)*
-- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(45 tests, subrules bc)*
+- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(46 tests, subrules bc)*
 
 ### 102. Players
 
@@ -146,7 +146,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **104.2** There are several ways to win the game. *(15 tests, subrules ab)*
 - [x] **104.3** There are several ways to lose the game. *(31 tests, subrules abcdefj)*
 - [x] **104.4** There are several ways for the game to be a draw. *(9 tests, subrules ac)*
-- [x] **104.5** If a player loses the game, that player leaves the game. If the game is a draw for a player, that... *(2 tests)*
+- [x] **104.5** If a player loses the game, that player leaves the game. If the game is a draw for a player, that... *(3 tests)*
 
 ### 105. Colors
 
@@ -670,7 +670,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(350 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(351 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(32 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -697,7 +697,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(51 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(37 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(38 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
