@@ -908,7 +908,7 @@ def _applies_skipped_draw(game, payload: dict) -> bool:
 
 @replacement_effect(
     "draw", DRAW_SKIPPED, applies=_applies_skipped_draw,
-    sources=_skipped_draw_sources, label="Skip the draw",
+    sources=_skipped_draw_sources, label="Draw nothing instead (every player's draws)",
 )
 def _skip_draw_mandatorily(game, payload: dict) -> ReplacementOutcome | None:
     """Possessed Portal: one draw at a time (CR 121.2), each replaced by
