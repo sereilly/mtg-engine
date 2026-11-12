@@ -70,6 +70,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_waive_shroud, _lower_change_event_targets, _lower_change_target, _lower_counter_spell,
                        _lower_put_exiled_card_on_stack_as_copy,
                        _lower_cast_copy_of_exiled_card,
+                       _lower_cast_copy_of_revealed_card,
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
                        _lower_coin_flip_stakes_loop, _lower_damage_this_game_history,
@@ -673,6 +674,9 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
 #: consulted first.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     ast.Attach: _lower_attach,
+    # "…copy an instant or sorcery card **in it**." (Reversal of Fortune.)
+    # "It" is the hand a reveal of this same effect showed.
+    ast.CastCopyOfRevealedCard: _lower_cast_copy_of_revealed_card,
     # "Target creature becomes **that type** until end of turn." (Unnatural
     # Selection.) Here for ``ast.Attach``'s reason: the two words name what a
     # "Choose a creature type" step recorded, and with no such step they name

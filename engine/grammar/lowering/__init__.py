@@ -395,6 +395,7 @@ from .stack import (
     _lower_modal_head,
     _lower_put_exiled_card_on_stack_as_copy,
     _lower_cast_copy_of_exiled_card,
+    _lower_cast_copy_of_revealed_card,
 )
 from .delayed import (
     _lower_delayed_self_action,
@@ -760,6 +761,7 @@ __all__ = [
     "_lower_copy_target_spell",
     "_lower_put_exiled_card_on_stack_as_copy",
     "_lower_cast_copy_of_exiled_card",
+    "_lower_cast_copy_of_revealed_card",
     "_lower_create_delayed_trigger",
     "_lower_modal_head",
     "_lower_combat_restriction",

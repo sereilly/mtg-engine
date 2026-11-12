@@ -240,6 +240,11 @@ DREW_COUNT = "drew_count"
 # or random-from-hand reveal named: one is a set and the other is an object, and
 # a reader handed the wrong one would ask a list what its mana value is.
 REVEALED_HAND_CARDS = "revealed_hand_cards"
+# …and **whose** hand that was, for a sentence that acts on a card still in it:
+# "Target opponent reveals their hand. You may copy an instant or sorcery card
+# **in it**." (Reversal of Fortune.) A seat, written by the one-hand reveal
+# only — "each player reveals their hand" names no one hand for "it" to be.
+REVEALED_HAND_SEAT = "revealed_hand_seat"
 
 # "Reveal any number of blue cards in your hand. **Counter target spell unless
 # its controller pays {1} for each card revealed this way.**" (Brine Seer and

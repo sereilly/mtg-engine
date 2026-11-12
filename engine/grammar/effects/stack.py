@@ -821,7 +821,7 @@ def _parse_put_exiled_card_on_stack_as_copy(
 
 def _parse_cast_copy_of_exiled_card(
     stream: TokenStream,
-) -> "ast.CastCopyOfExiledCard | None":
+) -> "ast.CastCopyOfExiledCard | ast.CastCopyOfRevealedCard | None":
     """``You may copy the exiled card. If you do, you may cast the copy without
     paying its mana cost.`` (Isochron Scepter.)
 
@@ -844,6 +844,28 @@ def _parse_cast_copy_of_exiled_card(
     # "the exiled card" copies each. The permanent names itself by any of its
     # nouns or by its name.
     chosen = False
+    # "…you may copy **an instant or sorcery card in it**" (Reversal of
+    # Fortune, behind "Target opponent reveals their hand."). The same offer
+    # over a card in the revealed hand; the printed union is read by the one
+    # reader every "<type> or <type> card" position uses, and "in it" is
+    # required — the hand is the only pile the pronoun can name.
+    revealed_mark = stream.mark()
+    if stream.accept_phrase("you", "may", "copy") and stream.accept_word("a", "an"):
+        revealed_types = accept_spell_type_union(stream, noun="card")
+        if revealed_types is not None and stream.accept_phrase("in", "it"):
+            if (
+                stream.accept_punct(".")
+                and stream.accept_phrase("if", "you", "do")
+                and stream.accept_punct(",")
+                and stream.accept_phrase(
+                    "you", "may", "cast", "the", "copy", "without", "paying",
+                    "its", "mana", "cost",
+                )
+            ):
+                return ast.CastCopyOfRevealedCard(revealed_types)
+            stream.reset(mark)
+            return None
+    stream.reset(revealed_mark)
     if stream.accept_phrase("you", "may", "copy", "the", "other"):
         other = True
     elif stream.accept_phrase("you", "may", "copy", "a", "card", "exiled", "with"):

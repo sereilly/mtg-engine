@@ -91,8 +91,19 @@ def cease_to_exist(game, seat: int, copy) -> None:
     game.take_card_from_exile(seat, copy)
 
 
-def arm_copy_cast(game, seat: int, card, source_name: str, *, one_of=None) -> None:
+def arm_copy_cast(
+    game, seat: int, card, source_name: str, *, one_of=None,
+    from_hand_of: int | None = None,
+) -> None:
     """Offer *seat* a cast of a copy of *card*.
+
+    *from_hand_of* is the seat whose **hand** holds *card*, when it is not in
+    exile: "Target opponent reveals their hand. You may copy an instant or
+    sorcery card in it." (Reversal of Fortune.) The offer then asks after the
+    card in that hand rather than in exile, and nothing else changes — the
+    copy is still made in the caster's exile and cast from there, the one
+    road this module casts by (CR 707.12 would create it in the hand it
+    copies; the engine has no cast out of another player's hand).
 
     *one_of* is the record an offer shares with its siblings when the
     sentence copies **one** of the exiled cards ("a card exiled with this
@@ -104,11 +115,16 @@ def arm_copy_cast(game, seat: int, card, source_name: str, *, one_of=None) -> No
     data = {"card_name": card.name, "source_name": source_name, "_card": card}
     if one_of is not None:
         data[ONE_OF] = one_of
+    if from_hand_of is not None:
+        data[FROM_HAND_OF] = int(from_hand_of)
     game.arm_pending_choice("copy_cast", seat, **data)
 
 
 #: The pending choice's key for the record its sibling offers share.
 ONE_OF = "_one_of"
+
+#: The pending choice's key for the seat whose hand holds the copied card.
+FROM_HAND_OF = "_from_hand_of"
 
 
 def new_one_of() -> dict:
@@ -145,6 +161,32 @@ def _in_exile(game, card) -> int | None:
     return None
 
 
+def _still_there(game, choice) -> bool:
+    """Whether the card *choice* copies is still where the offer found it —
+    in exile, or in the hand :data:`FROM_HAND_OF` names. A card that left
+    makes no copy (Isochron Scepter's ruling)."""
+    card = choice.data.get("_card")
+    if card is None:
+        return False
+    hand_of = choice.data.get(FROM_HAND_OF)
+    if isinstance(hand_of, int) and 0 <= hand_of < len(game.players):
+        return any(held is card for held in game.players[hand_of].hand)
+    return _in_exile(game, card) is not None
+
+
+def _gone_line(game, choice) -> str:
+    """The log line for a copy that cannot be made: the card left."""
+    card = choice.data.get("_card")
+    name = getattr(card, "name", "The card")
+    hand_of = choice.data.get(FROM_HAND_OF)
+    if isinstance(hand_of, int) and 0 <= hand_of < len(game.players):
+        return (
+            f"{name} is no longer in {game.players[hand_of].name}'s hand, "
+            "so no copy is made"
+        )
+    return f"{name} is no longer exiled, so no copy is made"
+
+
 def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
     """Answer the ``copy_cast`` prompt.
 
@@ -163,10 +205,8 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
         )
         game.discard_pending_choice(choice)
         return True
-    if card is None or _in_exile(game, card) is None:
-        game.log.append(
-            f"{getattr(card, 'name', 'The card')} is no longer exiled, so no copy is made"
-        )
+    if not _still_there(game, choice):
+        game.log.append(_gone_line(game, choice))
         game.discard_pending_choice(choice)
         return True
     result = _cast_a_copy(
@@ -240,7 +280,7 @@ def default_copy_cast_offer(game, choice) -> None:
             return None
         return cast_announcement(tap_planned_lands(game, seat, action))
 
-    if card is not None and _in_exile(game, card) is not None:
+    if _still_there(game, choice):
         result = _cast_a_copy(game, seat, card, source_name, choose=choose)
         if getattr(result, "supported", False):
             _take_one_of(game, choice)
@@ -257,6 +297,7 @@ __all__ = [
     "COPY_CAST_KIND",
     "COPY_CAST_OFFER",
     "COPY_CAST_PROMPT",
+    "FROM_HAND_OF",
     "ONE_OF",
     "arm_copy_cast",
     "cease_to_exist",

@@ -452,6 +452,7 @@ from .stack import (
     NextSpellUncounterable,
     PutExiledCardOnStackAsCopy,
     CastCopyOfExiledCard,
+    CastCopyOfRevealedCard,
     WaiveShroud,
 )
 from .combat import (
@@ -939,6 +940,7 @@ __all__ = [
     "ChooseTarget",
     "PutExiledCardOnStackAsCopy",
     "CastCopyOfExiledCard",
+    "CastCopyOfRevealedCard",
     "WaiveShroud",
     "CreateDelayedTrigger",
     "NextDrawReplacement",

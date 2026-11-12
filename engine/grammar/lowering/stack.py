@@ -14,7 +14,7 @@ of modes the engine can carry out.
 import dataclasses
 
 from ...oracle_types import (BIDDING_WINNER, COUNTERED_ABILITY_SOURCE,
-                             OracleInstruction)
+                             OracleInstruction, REVEALED_HAND_CARDS)
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
@@ -784,6 +784,41 @@ def _lower_cast_copy_of_exiled_card(
         # (CR 607.3) — the handler's offers are one choice, not one each.
         return (OracleInstruction("cast_copy_of_exiled_card", "", {"chosen": True}),)
     return (OracleInstruction("cast_copy_of_exiled_card", "", {}),)
+
+
+#: The card types a copy cast out of a revealed hand may name: the two a
+#: spell cast while another resolves is printed for (CR 707.12), and the only
+#: union the pool prints there.
+_REVEALED_COPY_TYPES = frozenset({"instant", "sorcery"})
+
+
+def _lower_cast_copy_of_revealed_card(
+    node: "ast.CastCopyOfRevealedCard", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Target opponent reveals their hand. **You may copy an instant or
+    sorcery card in it. If you do, you may cast the copy without paying its
+    mana cost.**" (Reversal of Fortune.)
+
+    "It" is the hand a step in front of this one revealed, so the record of
+    that reveal is demanded (``REVEALED_HAND_CARDS``) or the line refuses:
+    with no reveal the offer would find no hand and do nothing on a card
+    reporting supported. The handler reads the seat the reveal wrote and
+    offers each matching card through ``engine/copy_casts.py``.
+    """
+    if REVEALED_HAND_CARDS not in produced:
+        raise LoweringError(
+            "'a card in it' names a hand no step of this effect revealed",
+            node=node,
+        )
+    unknown = [t for t in node.card_types if t not in _REVEALED_COPY_TYPES]
+    if not node.card_types or unknown:
+        raise LoweringError(
+            f"no copy cast out of a revealed hand names {unknown or 'no type'}",
+            node=node,
+        )
+    return (OracleInstruction(
+        "cast_copy_of_revealed_card", "", {"card_types": list(node.card_types)},
+    ),)
 
 
 #: The instruction an auction of life lowers to when nothing is handed to the

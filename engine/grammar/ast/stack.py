@@ -471,6 +471,23 @@ class CastCopyOfExiledCard:
 
 
 @dataclass(frozen=True)
+class CastCopyOfRevealedCard:
+    """``You may copy an instant or sorcery card in it. If you do, you may
+    cast the copy without paying its mana cost.`` (Reversal of Fortune,
+    behind "Target opponent reveals their hand.")
+
+    :class:`CastCopyOfExiledCard`'s offer with the card found in a **revealed
+    hand** rather than a linked exile: "it" is the hand the step in front of
+    this one revealed, the caster copies one card of the printed types from
+    it (both halves optional, the 2005-03-01 ruling), and the copy is cast
+    during the resolution without its mana cost (CR 707.12; X is 0, the
+    2004-12-01 ruling). ``card_types`` is the printed union.
+    """
+
+    card_types: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PutExiledCardOnStackAsCopy:
     """``the player puts it onto the stack as a copy of the original spell``
     (Ertai's Meddling).

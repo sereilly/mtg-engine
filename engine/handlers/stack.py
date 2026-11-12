@@ -313,6 +313,73 @@ def cast_copy_of_exiled_card(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("cast_copy_of_revealed_card")
+def cast_copy_of_revealed_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target opponent reveals their hand. **You may copy an instant or
+    sorcery card in it. If you do, you may cast the copy without paying its
+    mana cost.**" (Reversal of Fortune.)
+
+    The hand is the one the reveal in front of this step showed — its seat
+    the reveal recorded (``REVEALED_HAND_SEAT``), its cards the ones still in
+    that hand that were shown — and the caster copies **one** card of the
+    printed types: the offers go card by card under one record
+    (``copy_casts.arm_copy_cast``'s ``one_of``), the first taken is the
+    choice, and declining them all is declining the copy (both halves are
+    optional, the 2005-03-01 ruling). Offered most expensive first, ties in
+    hand order: a free cast is worth most on the spell that costs most, and a
+    seat nobody asks answers each offer as it is armed. Two copies of one card
+    in a hand are one object and one offer.
+    """
+    from ..copy_casts import arm_copy_cast, new_one_of, one_of_taken
+    from ..oracle_types import REVEALED_HAND_CARDS, REVEALED_HAND_SEAT
+    from ..search_filters import card_has_type
+
+    caster_seat = next(
+        (i for i, seated in enumerate(game.players) if seated is context.caster),
+        None,
+    )
+    victim_seat = context.results.get(REVEALED_HAND_SEAT)
+    revealed = list(context.results.get(REVEALED_HAND_CARDS) or ())
+    if (
+        caster_seat is None or not isinstance(victim_seat, int)
+        or not 0 <= victim_seat < len(game.players)
+    ):
+        game.log.append(f"{context.card.name}: no revealed hand to copy from")
+        return True, "resolved"
+    wanted = tuple(instruction.payload.get("card_types") or ())
+    offered: list = []
+    for card in game.players[victim_seat].hand:
+        if any(card is held for held in offered):
+            continue
+        if not any(card is shown for shown in revealed):
+            continue
+        if not any(
+            card_has_type(card, name, game=game, owner=victim_seat) for name in wanted
+        ):
+            continue
+        offered.append(card)
+    if not offered:
+        game.log.append(
+            f"{context.card.name}: no {' or '.join(wanted)} card in "
+            f"{game.players[victim_seat].name}'s hand to copy"
+        )
+        return True, "resolved"
+    offered = [
+        card for _position, card in sorted(
+            enumerate(offered), key=lambda pair: (-float(pair[1].cmc or 0), pair[0]),
+        )
+    ]
+    one_of = new_one_of()
+    for card in offered:
+        if one_of_taken(one_of):
+            break
+        arm_copy_cast(
+            game, caster_seat, card, context.card.name, one_of=one_of,
+            from_hand_of=victim_seat,
+        )
+    return True, "resolved"
+
+
 def _the_other_exiled_cards(game, context, exiled):
     """"…if it has the same name as one of the cards exiled with this
     artifact, you may copy **the other**." (Spellweaver Helix.)
