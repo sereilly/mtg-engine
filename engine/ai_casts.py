@@ -141,6 +141,7 @@ from .ai_sacrifice_victims import (
     cast_naming_its_sacrifices,
     sacrifices_weighed_provisionally,
 )
+from .ai_sunburst_x import aims_at_mana_value_zero
 from .ai_text_changes import choose_object_or_spell
 
 
@@ -1175,7 +1176,9 @@ def _announced_candidate(
     x_value = _pick_x_value(
         game, player, card, extra_generic, hand_index=spell_hand_index,
     )
-    if x_value == 0:
+    if x_value == 0 and not aims_at_mana_value_zero(game, player_index, card):
+        # …except a sunburst count aimed at mana value 0 (Engineered
+        # Explosives over tokens, `ai_sunburst_x`), which is the X it wants.
         return cast_trace.dropped("its X would be 0: a price paid for nothing")
 
     # CR 601.2h's printed **additional** costs, asked of the engine's own gate

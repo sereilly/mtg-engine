@@ -54,6 +54,7 @@ from .ai_rehearsal import (
 )
 from .ai_scratch_copy import public_counts
 from .ai_standing import CARD_WORTH
+from .ai_sunburst_x import aimed_sunburst_x
 from .ai_valuation import (
     board_lowers_toughness,
     cards_drawn_by_controller,
@@ -1257,4 +1258,10 @@ def _pick_x_value(
         # X of nothing.
         return 0
     max_x = _max_affordable_x(game, player, card, extra_generic)
-    return max_x
+    # "Sunburst. … Destroy each nonland permanent with mana value equal to the
+    # number of charge counters on this artifact" (Engineered Explosives): the
+    # X is the colour count aimed at the mana value the board wants swept, and
+    # no more mana than that (`ai_sunburst_x`); the largest X where nothing is.
+    seat = next((i for i, seated in enumerate(game.players) if seated is player), 0)
+    aimed = aimed_sunburst_x(game, seat, card, max_x)
+    return max_x if aimed is None else aimed

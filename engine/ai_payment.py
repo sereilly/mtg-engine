@@ -1095,9 +1095,13 @@ def _plan_land_taps(
     return found
 
 
-def colors_in_reach(game: Game, seat: int, card: CardDefinition) -> int:
+def colors_in_reach(
+    game: Game, seat: int, card: CardDefinition, *, x_value: "int | None" = None,
+) -> int:
     """How many colours of mana *seat* would spend casting *card* now — the
-    number sunburst counts (CR 702.44a) — or 0 where the board cannot pay.
+    number sunburst counts (CR 702.44a) — or 0 where the board cannot pay;
+    at *x_value* for a card with {X} in its cost (Engineered Explosives'
+    count is the colours its X was paid in, ``ai_sunburst_x``).
 
     The planner's own spread (`_PaymentPlanner.plan`): the first of
     ``sunburst.color_spreading_costs`` the free sources pay is the payment
@@ -1106,7 +1110,7 @@ def colors_in_reach(game: Game, seat: int, card: CardDefinition) -> int:
     creature as the 0/0 it is printed as.
     """
     player = game.players[seat]
-    required = _cost_for(game, player, card, None)
+    required = _cost_for(game, player, card, x_value)
     with _paying_for(card):
         planner = _PaymentPlanner(game, player)
     for spread in color_spreading_costs(required):
