@@ -85,6 +85,12 @@ _PRINTED_SIDES = {
     # "…Prevent all damage that would be dealt to any target …": a shield,
     # so a permanent it names is one of the activator's own.
     "Shieldmage Advocate": (None, "you"),
+    # Fifth Dawn (W1G4): "{T}: Attach target Equipment **you control** to
+    # target creature **you control**." Both roles print the activator's seat,
+    # so both are the activator's own. The mirrored board carries no
+    # Equipment, so the census examines it and nothing proposes it; the board
+    # that does is `test_5dn_w1g4_auriok_windwalker_aims_both_roles_at_its_own_board`.
+    "Auriok Windwalker": ("you", "you"),
 }
 
 
@@ -135,6 +141,28 @@ def test_every_role_an_activation_names_is_on_the_board_its_step_wants():
     assert sorted(examined) == sorted(_PRINTED_SIDES), examined
     assert proposed >= 7, proposed
     assert wrong == [], wrong
+
+
+def test_5dn_w1g4_auriok_windwalker_aims_both_roles_at_its_own_board():
+    """The row above, on a board where it is asked: a Bonesplitter and the same
+    creatures on both sides. Both roles print "you control", so the chain the
+    activation chooser proposes names the activator's own Equipment and one of
+    its own creatures, never the opponent's (which the announcement would
+    refuse before the {T} is paid)."""
+    game = _table()
+    _put(game, 0, "Auriok Windwalker")
+    for seat in (0, 1):
+        for name in ("Bonesplitter", "Grizzly Bears", "Hill Giant", "Serra Angel"):
+            _put(game, seat, name)
+    game.auto_resolve_pending_choices()
+
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *args, **kwargs: True):
+        action = choose_activation_action(game, 0)
+    assert action is not None and action.permanent_name == "Auriok Windwalker"
+    named = [game.permanent_by_id(ref["permanent_id"]) for ref in action.target_role_refs]
+    assert [permanent.card.name for permanent in named][0] == "Bonesplitter"
+    assert named[1].is_creature
+    assert [game.controller_index_of(permanent) for permanent in named] == [0, 0]
 
 
 def test_the_splicer_takes_an_opponents_flying_and_gives_it_to_its_own_creature():
