@@ -264,7 +264,7 @@ class CostModifier:
     #: "**Artifact creature** spells you cast have affinity for artifacts."
     #: (Mycosynth Golem.) Card types the affected object must have **as well
     #: as** one of ``card_types``: two type words printed side by side are one
-    #: noun phrase naming an object with both (CR 205.2a), which
+    #: noun phrase naming an object with both (CR 205.2b), which
     #: ``card_types``' alternation ("instant and enchantment spells", Mana
     #: Matrix) cannot say -- read as one, the Golem would discount every
     #: artifact spell and every creature spell. Set only on a one-subject
@@ -372,7 +372,7 @@ _NOT_A_TYPE_WORD = rf"(?!(?:{_TYPES}|{_SPELL_COLOURS}|face-down|spells?)\b)"
 _CREATURE_TYPE_SLOT = rf"(?:{_NOT_A_TYPE_WORD}[a-z][a-z'’-]* )"
 # "**Artifact** creature spells …" (Mycosynth Golem). A type word printed
 # directly in front of another, with no conjunction between: one noun phrase
-# naming an object with both types (CR 205.2a), carried as
+# naming an object with both types (CR 205.2b), carried as
 # ``CostModifier.also_types``. The lookahead is what keeps it from taking the
 # only type word of "artifact spells", which is the type list's.
 _STACKED_TYPE_SLOT = rf"(?:(?:{_TYPES}) (?=(?:{_TYPES}) ))"

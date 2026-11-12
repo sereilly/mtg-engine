@@ -311,7 +311,7 @@ def _matches(
     ):
         return False
     # "**Artifact** creature spells …" (Mycosynth Golem): the stacked type is
-    # had as well, never instead (CR 205.2a).
+    # had as well, never instead (CR 205.2b).
     if modifier.also_types and not all(
         _has_printed_type(card, wanted) for wanted in modifier.also_types
     ):

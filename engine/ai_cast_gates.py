@@ -244,8 +244,30 @@ def _is_a_price_in_mana_alone(cost) -> bool:
     )
 
 
+def permission_leaves_the_price(game: Game, player_index: int, under) -> bool:
+    """Whether a cast made under *under* — a :class:`PermittedCast`, or None
+    for a cast from the hand — may still take an alternative cost the card
+    prints or a permanent grants (CR 118.9a: one per spell).
+
+    True from the hand, and under a permission that charges the card's own
+    mana cost — "you may play lands and cast spells from your graveyard"
+    (Yawgmoth's Will) — where the engine, told ``alternative_cost``, finds no
+    permission requiring a cost of its own (CR 118.9b's flashback is asked
+    first, ``_spell_source``) and applies the printed one. False under a
+    waiver or a required cost: the cast is already paid for some other way."""
+    if under is None:
+        return True
+    if under.cost is not None or under.waives_mana_cost:
+        return False
+    from .cast_permissions import permission_for
+
+    return permission_for(
+        game, player_index, under.held, under.zone, spell=under.spell, costed=True,
+    ) is None
+
+
 def cheaper_mana_alternative_indices(
-    game: Game, player_index: int, card: CardDefinition, hand_index: int,
+    game: Game, player_index: int, card: CardDefinition, hand_index: "int | None",
     required: "dict[str, int]", *, extra_generic: int = 0,
 ) -> list[int]:
     """The payable alternatives (CR 118.9) that charge **mana alone** and
