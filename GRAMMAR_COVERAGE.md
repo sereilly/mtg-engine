@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| 5DN *(measured)* | 165 | 273 | 78.0% | 75.8% | 52.0% | 124 |
+| 5DN *(measured)* | 165 | 273 | 78.8% | 76.6% | 52.0% | 124 |
 | **All (shipped)** | **9448** | **14064** | **89.7%** | **89.2%** | **62.1%** | **7410** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -70,8 +70,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 947 | 483 | expected a subject |  |
-| 195 | 98 | unrecognized effect verb |  |
+| 946 | 482 | expected a subject |  |
+| 194 | 97 | unrecognized effect verb |  |
 | 148 | 77 | unconsumed text |  |
 | 78 | 59 | granted ability in quotes | phase 3 (quoted abilities) |
 | 43 | 8 | expected what this creature can't block, or a duration |  |
