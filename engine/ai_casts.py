@@ -137,6 +137,10 @@ from .ai_slot_targets import (
 )
 from .ai_divisions import choose_divided_targets
 from .ai_imprint import held_for_an_imprint
+from .ai_sacrifice_victims import (
+    cast_naming_its_sacrifices,
+    sacrifices_weighed_provisionally,
+)
 from .ai_text_changes import choose_object_or_spell
 
 
@@ -1074,23 +1078,26 @@ def _cast_candidate_announcing(
 ) -> CastAction | None:
     """`_announced_candidate`, as one attempt of the decision's trace
     (``ai_cast_trace.attempt``): the mode, the offers and the size of an X
-    paid in life it is built at are the ones being weighed."""
-    if cast_trace.silent():
-        return _announced_candidate(
-            game, player_index, card, hand_index,
-            from_zone=from_zone, extra_generic=extra_generic, offers=offers,
-        )
-    asked = _LIFE_X_ASKED.get()
-    with cast_trace.attempt(
-        game, player_index, card, mode_index=_announced_mode(card),
-        offers=offers if _announces_any_offer(card, offers) else None,
-        life_x=asked[1] if asked is not None and asked[0] is card else None,
-        from_zone=from_zone, zone_index=hand_index,
-    ):
-        return _announced_candidate(
-            game, player_index, card, hand_index,
-            from_zone=from_zone, extra_generic=extra_generic, offers=offers,
-        )
+    paid in life it is built at are the ones being weighed — and an "any
+    number of" sacrifice's provisional victims, for its target choosers
+    (``ai_sacrifice_victims.sacrifices_weighed_provisionally``)."""
+    with sacrifices_weighed_provisionally(game, player_index, card, from_zone, offers):
+        if cast_trace.silent():
+            return _announced_candidate(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic, offers=offers,
+            )
+        asked = _LIFE_X_ASKED.get()
+        with cast_trace.attempt(
+            game, player_index, card, mode_index=_announced_mode(card),
+            offers=offers if _announces_any_offer(card, offers) else None,
+            life_x=asked[1] if asked is not None and asked[0] is card else None,
+            from_zone=from_zone, zone_index=hand_index,
+        ):
+            return _announced_candidate(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic, offers=offers,
+            )
 
 
 def _announced_candidate(
@@ -1637,6 +1644,8 @@ def _announced_candidate(
     # "…where X is the sacrificed artifact's mana value" (Forge Armor): the
     # victim weighed, where the effect reads what the sacrifice ate.
     action = _cast_naming_its_sacrifice(game, player_index, card, action, offers)
+    # …how many an "any number of" sacrifice eats, where the effect counts them.
+    action = cast_naming_its_sacrifices(game, player_index, card, action, offers)
     # …and the hand cards a printed discard is paid with.
     action = _cast_naming_its_discards(game, player_index, card, action, offers)
     # **What the cast would do, asked of the engine** — for a spell, whose

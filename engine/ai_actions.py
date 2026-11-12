@@ -505,6 +505,36 @@ _OFFERS_ANNOUNCED: ContextVar["dict[str, int] | None"] = ContextVar(
 )
 
 
+#: The permanents an "any number of" sacrifice would be paid with while the
+#: target choosers weigh the candidate being built ("As an additional cost to
+#: cast this spell, sacrifice any number of creatures", Vicious Betrayal; CR
+#: 601.2b) — ids, the cheapest to lose first, or None for every card printing
+#: no such cost. A pump counted by what was sacrificed, rehearsed with nothing
+#: sacrificed, is +0/+0 on every body, so every target read as nothing and the
+#: spell was dropped for "no legal target on the side the effect wants". Each
+#: target is rehearsed with the cheapest of these that is not itself
+#: (:func:`provisional_sacrifice`); how many is weighed once the target is
+#: named (``ai_sacrifice_victims.cast_naming_its_sacrifices``). Set around the
+#: single call that builds a candidate, for `_OFFERS_ANNOUNCED`'s reason.
+_SACRIFICES_ANNOUNCED: ContextVar["tuple[int, ...] | None"] = ContextVar(
+    "ai_sacrifices_announced", default=None
+)
+
+
+def provisional_sacrifice(permanent_ids) -> "list[int] | None":
+    """The ``cost_permanent_ids`` a target chooser's rehearsal of the
+    candidate being built announces where it names *permanent_ids*: the
+    cheapest provisional victim (`_SACRIFICES_ANNOUNCED`) that is not one of
+    them, or None — the engine's default, and every card's but one printing
+    an "any number of" sacrifice."""
+    victims = _SACRIFICES_ANNOUNCED.get()
+    if not victims:
+        return None
+    named = set(permanent_ids or ())
+    victim = next((each for each in victims if each not in named), None)
+    return None if victim is None else [victim]
+
+
 #: The **speed** the candidate being built is weighed at: ``"main"`` — its
 #: seat's own main phase with an empty stack (``ai_policy.choose_cast_action``
 #: and the casts a resolution offers) — or ``"instant"``, every other moment

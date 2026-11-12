@@ -18,9 +18,22 @@ characteristic, the cheapest to lose among equals — and the cast chooser
 rehearses each (``ai_casts._cast_naming_its_sacrifice``). A tie keeps the
 cheaper permanent, so a board where the reading cannot matter pays as the
 default always paid.
+
+**How many**, where the effect counts what the sacrifice ate: "As an
+additional cost to cast this spell, sacrifice any number of creatures. Target
+creature gets +2/+2 until end of turn for each creature sacrificed this way"
+(Vicious Betrayal). Named nothing, the engine sacrifices nothing and pumps
++0/+0, so every rehearsal read nothing and the spell was never cast. The
+target choosers rehearse each target with one provisional victim
+(``ai_actions._SACRIFICES_ANNOUNCED``, set by
+:func:`sacrifices_weighed_provisionally`), and then
+:func:`cast_naming_its_sacrifices` rehearses one set per size, the cheapest to
+lose first: a creature is given up only where what it buys outweighs it.
 """
 
 from __future__ import annotations
+
+from contextlib import contextmanager
 
 from .ai_standing import permanent_worth
 from .ai_weighed_cast import _effect_steps
@@ -34,6 +47,16 @@ SACRIFICE_READ_KEY = "cost_sacrifice_characteristic"
 #: Tuning: each is a rehearsal of the whole turn, and a limited board rarely
 #: offers more distinct values than this.
 VICTIM_READINGS_WEIGHED = 4
+
+#: The payload key a count spec reads how many permanents an "any number of"
+#: sacrifice ate through (``handlers/_amounts.py``): "+2/+2 … for each
+#: creature sacrificed this way".
+SACRIFICE_COUNT_KEY = "cost_sacrificed_count"
+
+#: How many sizes of an "any number of" sacrifice a cast is rehearsed at, one
+#: set per size, the cheapest to lose first. Tuning: each is a rehearsal of
+#: the whole turn through its fight.
+SACRIFICE_SETS_WEIGHED = 4
 
 
 def characteristic_read_off_the_sacrifice(instructions) -> str | None:
@@ -81,6 +104,142 @@ def victims_to_weigh(
             cheapest[reading] = permanent
     kept = [cheapest[reading] for reading in sorted(cheapest, reverse=True)]
     return sorted(kept[:VICTIM_READINGS_WEIGHED], key=cost)
+
+
+def counts_its_sacrifices(instructions) -> bool:
+    """Whether a step of *instructions* counts the permanents its "any number
+    of" sacrifice ate (:data:`SACRIFICE_COUNT_KEY`). Wrappers opened."""
+    for instruction in instructions or ():
+        if instruction is None:
+            continue
+        for step in (instruction, *_effect_steps(instruction)):
+            for value in (step.payload or {}).values():
+                if isinstance(value, dict) and value.get(SACRIFICE_COUNT_KEY):
+                    return True
+    return False
+
+
+def any_number_sacrifice(game, card, from_zone: str, offers):
+    """The "sacrifice any number of <noun phrase>" price (CR 601.2b) a cast of
+    *card* out of *from_zone* would pay with *offers* taken, where its effect
+    counts what that sacrifice ate — or None. Only where that price is the
+    cast's one chosen-permanent demand (``Game._chosen_cast_cost_demands``,
+    whose count is None for "any number"): one list of ids names it whole."""
+    from .ai_actions import _announced_steps
+    from .cast_costs import additional_costs
+    from .oracle import compile_card_oracle
+
+    costs = tuple(
+        cost for cost in additional_costs(card)
+        if cost.from_zone is None or cost.from_zone == from_zone
+    )
+    if not any(getattr(cost, "sacrifice_any_number", False) for cost in costs):
+        return None
+    if not counts_its_sacrifices(_announced_steps(card, compile_card_oracle(card))):
+        return None
+    demands = game._chosen_cast_cost_demands(costs, x_value=None, taken=offers)
+    if len(demands) != 1 or demands[0][0] != "sacrifice" or demands[0][2] is not None:
+        return None
+    return demands[0][1]
+
+
+def cheapest_to_lose(game, seat: int, candidates) -> list:
+    """*candidates* in the order *seat* would give them up: the least lost
+    first (``ai_standing.permanent_loss``), the engine's own order
+    (``Game.sacrifice_preference_key``) on a tie."""
+    from .ai_standing import permanent_loss
+
+    return sorted(
+        candidates,
+        key=lambda permanent: (
+            permanent_loss(game, seat, permanent), game.sacrifice_preference_key(permanent),
+        ),
+    )
+
+
+@contextmanager
+def sacrifices_weighed_provisionally(game, seat: int, card, from_zone: str, offers):
+    """Around the build of a candidate cast of *card*: where it pays an "any
+    number of" sacrifice its effect counts (:func:`any_number_sacrifice`), the
+    permanents that could pay, cheapest first, as the provisional victims the
+    target choosers rehearse with (``ai_actions._SACRIFICES_ANNOUNCED``).
+    Nothing for every other card."""
+    from .ai_actions import _SACRIFICES_ANNOUNCED
+
+    cost = any_number_sacrifice(game, card, from_zone, offers)
+    if cost is None:
+        yield
+        return
+    victims = tuple(
+        permanent.permanent_id
+        for permanent in cheapest_to_lose(
+            game, seat, game._additional_cost_candidates(seat, cost),
+        )
+    )
+    token = _SACRIFICES_ANNOUNCED.set(victims)
+    try:
+        yield
+    finally:
+        _SACRIFICES_ANNOUNCED.reset(token)
+
+
+def cast_naming_its_sacrifices(game, seat: int, card, action, offers):
+    """*action* naming the permanents its "any number of" sacrifice is paid
+    with — or *action* as it is, naming none, which the engine pays with
+    nothing at all.
+
+    One set per size up to :data:`SACRIFICE_SETS_WEIGHED`, the cheapest to
+    lose first (:func:`cheapest_to_lose`), each rehearsed as a cast of its own
+    with the turn's fight read through it, and the one that moves the seat
+    furthest named — the smaller on a tie. A set that leaves its caster worse
+    off is not named, so a creature is sacrificed only where the pump it buys
+    is worth more than it is. Never a permanent the cast names as a target: a
+    pump paid for with its own target is a pump on nothing.
+    """
+    from dataclasses import replace
+
+    from . import ai_cast_trace as cast_trace
+    from .ai_actions import cast_announcement
+    from .ai_payment import _bind_action_slots
+    from .ai_scoring import (
+        _rehearse_announcement,
+        _weighed_through_the_fight,
+        _worth_proposing,
+    )
+
+    cost = any_number_sacrifice(game, card, action.from_zone, offers)
+    if cost is None:
+        return action
+    bound = _bind_action_slots(game, seat, action)
+    named = [bound.get("target"), *bound.get("targets", ()), *bound.get("divided", ())]
+    named += [
+        game.permanent_by_id(permanent_id)
+        for permanent_id in (action.target_permanent_ids or ())
+        if isinstance(permanent_id, int)
+    ]
+    victims = [
+        permanent
+        for permanent in cheapest_to_lose(game, seat, game._additional_cost_candidates(seat, cost))
+        if not any(permanent is other for other in named if other is not None)
+    ]
+    best, best_swing = action, None
+    for count in range(1, min(len(victims), SACRIFICE_SETS_WEIGHED) + 1):
+        eaten = victims[:count]
+        variant = replace(action, cost_permanent_ids=[each.permanent_id for each in eaten])
+        rehearsal = _rehearse_announcement(
+            game, seat, card, cast_announcement(variant), planned=variant,
+        )
+        rehearsal = _weighed_through_the_fight(
+            game, seat, card, cast_announcement(variant), rehearsal, planned=variant,
+        )
+        names = ", ".join(each.card.name for each in eaten)
+        if rehearsal is None or not _worth_proposing(rehearsal):
+            cast_trace.note(f"sacrifice {names}: not worth proposing")
+            continue
+        cast_trace.note(f"sacrifice {names}: swing {rehearsal.swing:+.2f}")
+        if best_swing is None or rehearsal.swing > best_swing:
+            best, best_swing = variant, rehearsal.swing
+    return best
 
 
 def activation_sacrifice_choices(
@@ -154,11 +313,18 @@ def eats_a_land_it_needs(game, seat: int, permanent_ids) -> bool:
 
 
 __all__ = [
+    "SACRIFICE_COUNT_KEY",
     "SACRIFICE_READ_KEY",
+    "SACRIFICE_SETS_WEIGHED",
     "VICTIM_READINGS_WEIGHED",
     "activation_sacrifice_choices",
+    "any_number_sacrifice",
+    "cast_naming_its_sacrifices",
+    "cheapest_to_lose",
+    "counts_its_sacrifices",
     "eats_a_land_it_needs",
     "characteristic_read_off_the_sacrifice",
+    "sacrifices_weighed_provisionally",
     "sacrificed_reading",
     "victims_to_weigh",
 ]

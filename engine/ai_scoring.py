@@ -91,6 +91,7 @@ from .ai_actions import (
     _announced_steps,
     _cast_zone,
     _cast_spec,
+    provisional_sacrifice,
     _announces_any_offer,
     target_keywords,
 )
@@ -202,6 +203,10 @@ def _announcement(
     *spell_zone*)."""
     offers = _OFFERS_ANNOUNCED.get()
     under = cast_weighed(card)
+    keywords = target_keywords(
+        game, cast_target_zone(card, mode_index=_announced_mode(card)),
+        caster, target, permanent_index, permanent_ids,
+    )
     return cast_announcement(CastAction(
         card_name=card.name,
         target_player_index=target,
@@ -209,10 +214,10 @@ def _announcement(
         land_tap_indices=(),
         score=0.0,
         hand_index=0,
-        **target_keywords(
-            game, cast_target_zone(card, mode_index=_announced_mode(card)),
-            caster, target, permanent_index, permanent_ids,
-        ),
+        **keywords,
+        # "Sacrifice any number of creatures" (Vicious Betrayal): the
+        # provisional victim, never the target named (`_SACRIFICES_ANNOUNCED`).
+        cost_permanent_ids=provisional_sacrifice(keywords.get("target_permanent_ids")),
         target_stack_index=stack_index,
         target_role_refs=role_refs,
         optional_cost_payments=(
