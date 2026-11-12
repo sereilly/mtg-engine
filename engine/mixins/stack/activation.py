@@ -28,6 +28,7 @@ from ...activation_cost_alternatives import (alternative_cost_refusal,
                                             has_alternative_costs,
                                             mana_cost_text, printed_mana_costs)
 from ...restricted_mana import ACTIVATE, PaymentPurpose
+from ...sunburst import mana_spent_between, pool_units
 from ...bare_announcements import (announced_fields, default_activation_target,
                                    names_an_object, seat_of_unseated_slot)
 from ...cost_modifiers import sacrifice_taxes
@@ -760,7 +761,15 @@ class AbilityActivationMixin:
         # and the payer's own choice — and any restricted bucket it drew on — is
         # only visible afterwards. Empty when nothing was charged, which is a
         # note of nothing and not an absent note.
-        pool_before = dict(controller.mana_pool)
+        #
+        # Over the pool **and** every restricted bucket (CR 106.6;
+        # ``sunburst.pool_units``, the cast's own measurement): an activation
+        # may be paid out of "spend this mana only to activate abilities of
+        # artifacts" (Soldevi Machinist, Vedalken Engineer) or Thran Turbine's
+        # "can't be spent to cast spells", and a delta of the pool alone
+        # reported that payment as nothing — Jeweled Amulet noted no mana and
+        # then added none.
+        units_before = pool_units(controller)
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(
                 controller, required_cost,
@@ -776,12 +785,7 @@ class AbilityActivationMixin:
                 f"{permanent.effective_card.name}: activated for "
                 f"{mana_cost_text(announced_mana)}"
             )
-        mana_spent_for_cost = {
-            symbol: spent
-            for symbol in ("W", "U", "B", "R", "G", "C")
-            if (spent := pool_before.get(symbol, 0)
-                - controller.mana_pool.get(symbol, 0)) > 0
-        }
+        mana_spent_for_cost = mana_spent_between(units_before, pool_units(controller))
 
         # **Nothing below this line refuses.** The mana payment above is the
         # last gate and is all-or-nothing (``_pay_mana_cost`` leaves the pool
