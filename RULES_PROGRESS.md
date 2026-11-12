@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**444 / 655 tracked rules covered (67%)** — 3735 tests, 0 unannotated.
+**444 / 655 tracked rules covered (67%)** — 3745 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -121,7 +121,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(3 tests)*
 - [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(2 tests)*
-- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(46 tests, subrules bc)*
+- [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(48 tests, subrules bc)*
 
 ### 102. Players
 
@@ -226,7 +226,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **111.4** A spell or ability that creates a token sets both its name and its subtype(s). If the spell or ab... *(3 tests)*
 - [ ] **111.5** If a spell or ability would create a token, but a rule or effect states that a permanent with one...
 - [ ] **111.6** A token is subject to anything that affects permanents in general or that affects the token’s car...
-- [x] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action... *(7 tests)*
+- [x] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action... *(8 tests)*
 - [ ] **111.8** A token that has left the battlefield can’t move to another zone or come back onto the battlefiel...
 - [x] **111.9** Some effects instruct a player to create a legendary token. These may be written “create [name], ... *(2 tests)*
 - [x] **111.10** Some effects instruct a player to create a predefined token. These effects use the definition bel... *(2 tests)*
@@ -287,7 +287,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(4 tests, subrules a)*
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
-- [x] **117.3** Which player has priority is determined by the following rules: *(29 tests, subrules abcd)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(30 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(8 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(11 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(2 tests)*
@@ -839,7 +839,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
 - [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(34 tests, subrules abdeg)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
-- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(12 tests)*
+- [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(13 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
 - [ ] **700.6** The term historic refers to an object that has the legendary supertype, the artifact card type, o...
 - [ ] **700.7** If an ability uses a phrase such as “this [something]” to identify an object, where [something] i...
@@ -932,7 +932,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(13 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
-- [x] **704.5** The state-based actions are as follows: *(111 tests, subrules abcdefghijkmnpqrsz)*
+- [x] **704.5** The state-based actions are as follows: *(122 tests, subrules abcdefghijkmnpqrsz)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
