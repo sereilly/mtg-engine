@@ -81,10 +81,10 @@ from .serialization import (
     _serialize_card_summary,
     _serialize_modes,
     _serialize_permanent_summary,
-    _serialize_player,
     _serialize_stack_item,
     hidden_card_view,
 )
+from .player_view import _serialize_player
 from .catalog import CATALOG_BY_NAME
 from .pregame import _build_pregame_info
 from .turn_steps import (

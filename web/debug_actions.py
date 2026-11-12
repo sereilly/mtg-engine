@@ -21,7 +21,8 @@ from engine.models import Permanent
 from .session_store import Session
 
 from .runtime import CARD_BY_NAME
-from .serialization import _printed_stat, exile_hidden_flags
+from .serialization import _printed_stat
+from .player_view import exile_hidden_flags
 
 
 # Debug actions that stay available while the game is waiting on a pending
@@ -126,7 +127,7 @@ def _pasted_exile(game, seat: int, entries, viewer_seat: int | None) -> list[tup
     ``(card, kept)`` — *kept* when it is an object the pile holds now.
 
     A ``<hidden>`` entry names no card: it is the card back the pasting viewer
-    was shown (``serialization.exile_hidden_flags``), so it is **that object**,
+    was shown (``player_view.exile_hidden_flags``), so it is **that object**,
     kept — the next one of the pile's hidden objects, in pile order. Read as
     "nothing" (it used to be), a paste of a board with a card face down in
     exile deleted the card. A placeholder past the last hidden object names

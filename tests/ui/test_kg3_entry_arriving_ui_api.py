@@ -6,7 +6,7 @@ keeps the permanent in no zone until the answer (``engine/entry_awaiting.py``).
 Two things the web layer has to do with that:
 
 * **show it arriving**. It is sent beside its controller's board marked
-  ``entering`` (``serialization._serialize_arriving``) — the shape the client
+  ``entering`` (``player_view._serialize_arriving``) — the shape the client
   already draws as the printed card ghosted under an ENTERING ribbon — to both
   seats, with nothing chosen on it and nothing else on the board changed;
 * **render the prompt without a battlefield position** (part 6 of the

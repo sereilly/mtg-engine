@@ -408,7 +408,7 @@ def _w1g8_settle(game) -> None:
 
 
 def _w1g8_exile_on_the_wire(game, viewer, seat: int) -> list:
-    from web.serialization import _serialize_player
+    from web.player_view import _serialize_player
 
     payload = _serialize_player(game.players[seat], viewer, seat, game)["exile"]
     return [entry if isinstance(entry, str) else entry["name"] for entry in payload]

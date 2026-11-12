@@ -9,7 +9,7 @@ waits, in no zone, inside the open entry event (``Game.open_entry_events``)
 while the second seat chooses. CR 101.4a lets a card chosen from a hidden
 zone stay face down as it is chosen — the other seats need not be shown it —
 but its controller chose it, and the wire showed that seat nothing either:
-gone from its hand and on no battlefield. ``serialization._serialize_arriving``
+gone from its hand and on no battlefield. ``player_view._serialize_arriving``
 now lists an open event's puts, arriving (``entering: true``), on their
 controller's battlefield **for that viewer alone**.
 

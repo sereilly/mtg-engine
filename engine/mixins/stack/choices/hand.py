@@ -1520,6 +1520,6 @@ OUTSIDE_GAME_PICK_SPEC = ChoiceSpec(
     # the stated default is taken where the effect stands.
     default_at_arm=True,
     # Deliberately *not* spectator_visible: the candidates are the seat's
-    # sideboard, which ``web/serialization`` keeps private like a hand — so
+    # sideboard, which ``web/player_view`` keeps private like a hand — so
     # only the seat that owes the decision is shown them.
 )

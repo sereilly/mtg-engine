@@ -33,7 +33,7 @@ from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 from tests.helpers import app_js_function_body, client, resolve_stack, run_app_js, stable_sample
 from web.app import store
-from web.serialization import _ability_denial
+from web.offers import _ability_denial
 
 _CATALOG = load_catalog()
 _CARDS = {card.name: card for card in _CATALOG}

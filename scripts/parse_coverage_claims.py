@@ -615,7 +615,7 @@ CHANNELS: tuple[tuple[str, object], ...] = (
      lambda line: cast_x_ceiling_line(line) is not None),
     # "Players play with their hands revealed." (Revelation.) CR 701.20a, whose
     # whole effect is who may see what -- so the consumer is the per-seat
-    # serialization in web/serialization.py, reading engine/revealed_hands.py's
+    # serialization in web/player_view.py, reading engine/revealed_hands.py's
     # board scan. No instruction to point at, and the grammar's registry claim
     # asks the same function.
     ("revealed_hands.py", revealed_hands_line),

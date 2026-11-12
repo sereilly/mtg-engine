@@ -18,7 +18,7 @@ permanent's records, deleted at kg3 once nothing could enter owing a choice);
 kg3's ``entry`` group built the engine half (``engine/entry_awaiting.py``): the
 permanent now waits on its way, in no zone and with nothing recorded, until
 the answer, and is sent beside its controller's board marked ``entering``
-(``serialization._serialize_arriving``). What this holds is what the wire says
+(``player_view._serialize_arriving``). What this holds is what the wire says
 in that window: the rest of the board reads as it did before the cast, and the
 arriving permanent is marked.
 """
@@ -31,7 +31,7 @@ from engine.card_loader import load_catalog
 from engine.faces import compilation_units, whole_card
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from web.serialization import _serialize_player
+from web.player_view import _serialize_player
 
 _CATALOG = {card.name: card for card in load_catalog()}
 _ENTRY_CHOICE_LINE = re.compile(r"^as .*\benters\b.*\bchoose\b", re.I)

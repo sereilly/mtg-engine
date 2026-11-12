@@ -10,7 +10,7 @@ not make it: the browser's activation cascade refuses an empty picker ("No
 valid artifact targets in play") for every kind alike, and the wire called the
 picker ``requires_target``.
 
-The wire says what is true now. ``web/serialization.py`` asks the engine's own
+The wire says what is true now. ``web/player_view.py`` asks the engine's own
 "does this ability owe a target?" (``legality.activation_target_obligation``)
 and marks the spec ``may_name_nothing`` — with ``requires_target`` false
 beside it — and the client turns an empty picker of that kind into a question

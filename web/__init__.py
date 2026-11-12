@@ -41,6 +41,8 @@ LAYERS = (
     "offers",
     # Engine object -> client JSON, one function per kind of object.
     "serialization",
+    # One player's zones as one viewer is shown them, built from those leaves.
+    "player_view",
     # The card pool and decks as the client browses them.
     "catalog",
     # The manual-verification tracker's read side.

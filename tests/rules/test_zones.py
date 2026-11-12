@@ -636,7 +636,7 @@ def test_402_3_a_player_sees_their_own_hand_and_only_the_count_of_another():
     ``hand_count`` is truthful for everyone. The count is what makes the
     placeholders load-bearing rather than an omission — a hidden hand still has
     to be countable, so it cannot simply be left out of the payload."""
-    from web.serialization import _serialize_player
+    from web.player_view import _serialize_player
 
     p1 = PlayerState(name="P1", hand=[
         _mk_card("Ancestral Recall", "Instant"),
@@ -663,7 +663,7 @@ def test_402_3_the_count_another_player_may_take_tracks_the_hand():
     """"…may count those cards **at any time**": the count is a live read of the
     zone, not a number snapshotted when the hand was last visible. Drawing and
     discarding both move it for the opponent's view."""
-    from web.serialization import _serialize_player
+    from web.player_view import _serialize_player
 
     p1 = PlayerState(name="P1", library=_library(["A", "B"]), hand=[_mk_card("C", "Instant")])
     p2 = PlayerState(name="P2")
@@ -687,7 +687,7 @@ def test_402_3_a_spectator_may_not_look_at_anyones_hand_either():
     them. Asserted because the seat comparison is ``viewer_seat == seat`` and a
     seatless viewer is ``None``, which is exactly the value a sloppy check
     reads as "not an opponent"."""
-    from web.serialization import _serialize_player
+    from web.player_view import _serialize_player
 
     p1 = PlayerState(name="P1", hand=[_mk_card("Ancestral Recall", "Instant")])
     p2 = PlayerState(name="P2", hand=[_mk_card("Counterspell", "Instant")])
