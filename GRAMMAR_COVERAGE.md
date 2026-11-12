@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| 5DN *(measured)* | 165 | 273 | 78.8% | 76.6% | 52.0% | 124 |
+| 5DN *(measured)* | 165 | 273 | 79.9% | 78.4% | 53.5% | 128 |
 | **All (shipped)** | **9448** | **14064** | **89.7%** | **89.2%** | **62.1%** | **7410** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -70,7 +70,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 946 | 482 | expected a subject |  |
+| 944 | 480 | expected a subject |  |
 | 194 | 97 | unrecognized effect verb |  |
 | 148 | 77 | unconsumed text |  |
 | 78 | 59 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -86,15 +86,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5 | 5 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | unrecognized "can't be" restriction |  |
 | 4 | 2 | expected 'top' |  |
 | 3 | 1 | 'that land' names a land no earlier step of this effect chose |  |
 | 3 | 1 | expected 'of' |  |
+| 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 2 | expected what to gain control of |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | a chosen attachment needs one permanent to move onto |  |
+| 2 | 2 | only doubling power has a handler |  |
 
 ## Cards executing through the grammar
 
@@ -781,6 +781,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `As long as this creature is equipped, each creature you control that's a Soldier or a Knight gets +1/+1.`
 - **Auriok Transfixer**
   - `{W}, {T}: Tap target artifact.`
+- **Auriok Windwalker**
+  - `{T}: Attach target Equipment you control to target creature you control.`
 - **Aurochs**
   - `Whenever this creature attacks, it gets +1/+0 until end of turn for each other attacking Aurochs.`
   - `Whenever this creature attacks, it gets +1/+0 until end of turn for each other attacking Aurochs.`
@@ -5314,6 +5316,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your end step, discard your hand.`
   - `At the beginning of your draw step, draw an additional card.`
   - `At the beginning of your end step, discard your hand.`
+- **Grafted Wargear**
+  - `Whenever this Equipment becomes unattached from a permanent, sacrifice that permanent.`
 - **Grand Coliseum**
   - `{T}: Add {C}.`
   - `{T}: Add one mana of any color. This land deals 1 damage to you.`
@@ -5706,6 +5710,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `{1}, {T}: Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
+- **Helm of Kaldra**
+  - `{1}: If you control Equipment named Helm of Kaldra, Sword of Kaldra, and Shield of Kaldra, create Kaldra, a legendary 4/4 colorless Avatar creature token. Attach those Equipment to it.`
 - **Helm of Obedience**
   - `{X}, {T}: Target opponent mills a card, then repeats this process until a creature card or X cards have been put into their graveyard this way, whichever comes first. If one or more creature cards were put into that graveyard this way, sacrifice this artifact and put one of them onto the battlefield under your control. X can't be 0.`
 - **Helm of Possession**
@@ -7381,6 +7387,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way. If the player does, untap those creatures.`
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way. If the player does, untap those creatures.`
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {4} for each creature chosen this way. If the player does, untap those creatures.`
+- **Magnetic Theft**
+  - `Attach target Equipment to target creature. (Control of the Equipment doesn't change.)`
 - **Magnetic Web**
   - `Whenever a creature with a magnet counter on it attacks, all creatures with magnet counters on them block that creature this turn if able.`
   - `{1}, {T}: Put a magnet counter on target creature.`
