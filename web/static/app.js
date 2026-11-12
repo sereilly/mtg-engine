@@ -4889,6 +4889,10 @@ function getPromptBoardTargeting(state = currentState) {
     });
   }
 
+  // CR 704.5j: which same-name legendary permanent this seat keeps.
+  const legendRuleInfo = getLegendRuleInfo(state);
+  if (legendRuleInfo) return legendRuleBoardTargeting(legendRuleInfo);
+
   // Enchantment Alteration: the permanent the resolving spell asks for. By id,
   // for the same reason the two prompts below are: the candidates may sit on
   // either battlefield.
@@ -8890,6 +8894,64 @@ function applyPermanentChoicePrompt(info) {
   } else {
     okBtn.classList.add("hidden");
   }
+}
+
+// CR 704.5j, the legend rule: "that player chooses one of them, and the rest
+// are put into their owners' graveyards." `state.legend_rule` is
+// `{player_seat, name, candidates: [{seat, index, id, name, label}]}`
+// (`web/prompt_board._legend_rule`). Kept in this one block — the getter, the
+// board highlight and the panel — so the two cascades (getPromptBoardTargeting,
+// renderActivationPrompt) each call into it with one line. The kept one is
+// answered by its stable `id` (`legend_rule_confirm`), from a click on a
+// highlighted permanent or from the panel, whose buttons tell look-alike
+// namesakes apart (`label`) where the canvas draws them as one pile.
+function getLegendRuleInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.legend_rule;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.candidates) || info.candidates.length < 2) return null;
+  return info;
+}
+
+function legendRuleKeep(id) {
+  submitPromptAction({ seat, action: "legend_rule_confirm", target_permanent_id: Number(id) });
+}
+
+function legendRuleBoardTargeting(info) {
+  const byKey = new Map(
+    (info.candidates || []).map((c) => [`${c.seat}-${c.index}`, c.id]),
+  );
+  return promptTargeting({
+    permanentKeys: [...byKey.keys()],
+    onPermanent: (targetSeat, idx) => legendRuleKeep(byKey.get(`${targetSeat}-${idx}`)),
+    invalidHint: `Keep one of your highlighted permanents named ${info.name}.`,
+  });
+}
+
+function applyLegendRulePrompt(info) {
+  const panel = q("activationPanel");
+  panel.classList.remove("hidden");
+  q("promptOkBtn").classList.add("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  q("promptTitle").textContent = "Legend rule";
+  q("promptBody").textContent =
+    `You control ${info.candidates.length} legendary permanents named ${info.name}. ` +
+    "Choose the one you keep; the rest are put into their owners' graveyards.";
+  const buttons = info.candidates
+    .map((c) =>
+      `<button type="button" class="prompt-choice-btn" data-legend-keep="${Number(c.id)}">` +
+      `Keep ${escapeHtml(c.label || c.name)}</button>`)
+    .join("");
+  const steps = q("promptSteps");
+  steps.innerHTML =
+    "<div>Action: click the one to keep on the battlefield, or here.</div>" +
+    `<div class="prompt-choice-column">${buttons}</div>`;
+  steps.querySelectorAll("[data-legend-keep]").forEach((btn) => {
+    btn.addEventListener("click", () => legendRuleKeep(btn.dataset.legendKeep));
+  });
 }
 
 // Whose graveyard a card offered by a prompt is in, for the button that names
@@ -14841,6 +14903,13 @@ function renderActivationPrompt() {
   const loyaltyRecipientInfo = getLoyaltyRecipientInfo();
   if (loyaltyRecipientInfo) {
     applyLoyaltyRecipientPrompt(loyaltyRecipientInfo);
+    return;
+  }
+
+  // In getPromptBoardTargeting's order: just before the permanent choice.
+  const legendRuleInfo = getLegendRuleInfo();
+  if (legendRuleInfo) {
+    applyLegendRulePrompt(legendRuleInfo);
     return;
   }
 

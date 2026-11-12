@@ -42,7 +42,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 
 from .ai_rehearsal import deliberating, rehearse, rehearsing
-from .ai_standing import permanent_loss, permanent_worth, seat_standing
+from .ai_standing import permanent_loss, permanent_worth, seat_standing, swing_worth
 from .ai_scoring import _score_tutor_choice
 from .models import CardDefinition, Permanent
 from .oracle import compile_card_oracle
@@ -316,6 +316,64 @@ def mana_breadth(game, permanent) -> int:
     if not permanent.has_type("land"):
         return 0
     return len(set(game._land_payment_colors(permanent) or ()))
+
+
+# -- The legend rule ----------------------------------------------------------
+
+
+def legend_keep_worth(game, seat: int, permanent, *, now: bool) -> float:
+    """What keeping *permanent* is worth to *seat* when the legend rule (CR
+    704.5j) puts its namesakes into the graveyard: the permanent itself
+    (``permanent_worth``, so Equipment's and counters' P/T and keywords are in
+    it through CR 613), and every Aura on it, which stays with it and goes to
+    the graveyard without it (CR 704.5m) — the seat's own Auras for it, an
+    opponent's (a Pacifism) against it. Equipment stays on the battlefield
+    either way, so it counts only as the body it gives."""
+    from .aura_attachment import auras_attached_to
+
+    worth = permanent_worth(permanent, now=now)
+    for attached in auras_attached_to(permanent):
+        # The host's list holds its Equipment too (``aura_attachment``), and
+        # a departed one until the 704.5n sweep forgets it.
+        if not attached.has_type("aura") or not game.is_on_battlefield(attached):
+            continue
+        sign = 1.0 if game.controller_index_of(attached) == seat else -1.0
+        worth += sign * permanent_worth(attached, now=False)
+    return worth
+
+
+def legend_rule_keep(game, seat: int, candidates: list):
+    """Which of *candidates* — one seat's legendary permanents sharing a name
+    — a seat nobody asks keeps under CR 704.5j ("that player chooses one of
+    them"): the one worth most to it, what lasts counted in full and what is
+    true only now for a share of itself (``swing_worth``) — Kaldra with all
+    three Equipment on it over a bare Kaldra, a creature with +1/+1 counters
+    over one without, an untapped creature over a tapped one. Then an
+    untapped permanent over a tapped one (a land's tap is not in its worth),
+    the more loyalty, the less damage marked; the first on the battlefield
+    between equals, so a seed still reproduces a run and a table of identical
+    copies keeps the one it always kept (the one longest under its
+    controller, which is the one free of summoning sickness). Read off the
+    board, never a name."""
+
+    def rank(permanent) -> tuple:
+        lasting = legend_keep_worth(game, seat, permanent, now=False)
+        now = legend_keep_worth(game, seat, permanent, now=True)
+        return (
+            swing_worth(now, lasting),
+            not permanent.tapped,
+            int(permanent.metadata.get("loyalty_counters") or 0),
+            -int(permanent.damage_marked or 0),
+        )
+
+    best, best_rank = None, None
+    for permanent in candidates:
+        ranked = rank(permanent)
+        if best_rank is None or ranked[0] > best_rank[0] + _SAME or (
+            abs(ranked[0] - best_rank[0]) <= _SAME and ranked[1:] > best_rank[1:]
+        ):
+            best, best_rank = permanent, ranked
+    return best
 
 
 # -- Cards out of a pile ------------------------------------------------------

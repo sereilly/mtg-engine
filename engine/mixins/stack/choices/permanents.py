@@ -12,6 +12,7 @@ pickers: tap any number of creatures, untap up to N permanents.
 
 from __future__ import annotations
 
+from .... import legend_rule as _legend_rule
 from ....handlers._common import apply_temp_pt_boost
 from ....handlers._filters import permanent_matches_filter
 from ....pending_choices import ChoiceSpec, PendingChoice
@@ -1381,4 +1382,26 @@ COUNTER_DISTRIBUTION_SPEC = ChoiceSpec(
     spectator_visible=True,
     # Nothing later in the same resolution reads the answer: the move is the
     # last thing the ability does.
+)
+
+
+LEGEND_RULE_SPEC = ChoiceSpec(
+    "legend_rule",
+    resolve=lambda game, choice, r: _legend_rule.resolve_legend_rule(game, choice, r),
+    default=lambda game, choice: _legend_rule.default_legend_rule(game, choice),
+    action="legend_rule_confirm",
+    prompt_key="legend_rule",
+    # CR 704.5j: "that player chooses one of them". Armed by the state-based
+    # check (``engine/legend_rule.py``), not by a resolution, so no object is
+    # held for it — but nobody receives priority until it is answered (CR
+    # 704.3: the check is made before a player would receive priority).
+    blocked_detail="choose which legendary permanent you keep before other actions",
+    # A seat nobody asks keeps the one worth most to it where the check
+    # stands (``ai_prompt_picks.legend_rule_keep``), so AI and headless play
+    # never queue it.
+    default_at_arm=True,
+    # Which permanents are on the battlefield is public.
+    spectator_visible=True,
+    # Not ``suspends``: no loop of a resolution is waiting on the answer. The
+    # answer makes the check again itself (``legend_rule._keep``).
 )

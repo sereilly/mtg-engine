@@ -96,6 +96,7 @@ _DEFAULTS: dict[str, str] = {
     "lamp_draw": "stated",
     "land_type_choice": "stated",         # stamped at arm
     "land_type_swap": "stated",           # stamped at arm
+    "legend_rule": "worth",               # ``ai_prompt_picks.legend_rule_keep``
     "leng_discard": "worth",              # ``ai_prompt_picks.takes_library_top``
     "library_cycle_offer": "stated",      # no
     "library_end_choice": "stated",       # top

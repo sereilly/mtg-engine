@@ -16,6 +16,7 @@ from collections import Counter
 
 from engine.faces import face_cards
 from engine.grammar.vocabulary import display_type_word
+from engine.legend_rule import live_candidates
 from engine.trigger_order import live_trigger_indices, trigger_card
 
 from .prompt_registry import PromptContext, prompt_renderer
@@ -740,6 +741,64 @@ def _loyalty_recipient(ctx: PromptContext, choices: list) -> dict:
             for seat, player in enumerate(ctx.game.players)
             for index, perm in enumerate(player.battlefield)
             if id(perm) in live
+        ],
+    }
+
+
+def _legend_candidate_label(ctx: PromptContext, perm, newest: bool) -> str:
+    """One line telling a legend rule candidate from its namesakes, which the
+    canvas may draw as one pile: its body where it is a creature, what is
+    attached to it, whether it is tapped, a token or the newest of them."""
+    words = [perm.effective_card.name]
+    if perm.is_creature:
+        words.append(f"{perm.effective_power}/{perm.effective_toughness}")
+    notes = []
+    attached = [
+        other.effective_card.name
+        for other in (perm.metadata.get("attached_auras") or [])
+        if ctx.game.is_on_battlefield(other)
+    ]
+    if attached:
+        notes.append("with " + ", ".join(attached))
+    if perm.tapped:
+        notes.append("tapped")
+    if perm.metadata.get("is_token"):
+        notes.append("token")
+    if newest:
+        notes.append("newest")
+    return " ".join(words) + (f" ({'; '.join(notes)})" if notes else "")
+
+
+@prompt_renderer("legend_rule")
+def _legend_rule(ctx: PromptContext, choices: list) -> dict:
+    """CR 704.5j: "that player chooses one of them, and the rest are put into
+    their owners' graveyards." Which of the seat's legendary permanents named
+    ``name`` it keeps.
+
+    The candidates are the engine's own live group
+    (``engine/legend_rule.live_candidates``), the list the answer is held to.
+    ``seat``/``index`` ride beside the stable ``id`` for the canvas, which
+    addresses a card by its slot; the answer names the kept one by id
+    (``legend_rule_confirm``). Namesakes look alike and the canvas may pile
+    them, so each carries a ``label`` telling it apart (its body, what is
+    attached, tapped, token, the newest) for a button in the panel."""
+    choice = choices[0]
+    live = live_candidates(ctx.game, choice)
+    newest = max((perm.timestamp for perm in live), default=None)
+    return {
+        "player_seat": choice.player_index,
+        "name": choice.data.get("name", ""),
+        "candidates": [
+            {
+                "seat": choice.player_index,
+                "index": ctx.game.battlefield_index_of(perm),
+                "id": ctx.game.permanent_id_of(perm),
+                "name": perm.effective_card.name,
+                "label": _legend_candidate_label(
+                    ctx, perm, newest is not None and perm.timestamp == newest and len(live) > 1
+                ),
+            }
+            for perm in live
         ],
     }
 

@@ -163,6 +163,10 @@ ActionKind = Literal[
     "copy_cast_confirm",
     "retarget_choice_confirm",
     "loyalty_recipient_confirm",
+    # CR 704.5j, the legend rule: ``target_permanent_id``, the one of the
+    # seat's same-name legendary permanents it keeps (the rest go to their
+    # owners' graveyards).
+    "legend_rule_confirm",
     # "…you may move any number of +1/+1 counters from this creature onto
     # other creatures" (Forgotten Ancient): ``divided_targets``, one entry per
     # receiving creature by ``id`` with its ``amount``; an empty list moves none.

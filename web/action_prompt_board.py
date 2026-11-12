@@ -428,6 +428,24 @@ def _action_loyalty_recipient_confirm(session, req, seat_type):
     if not session.game.confirm_loyalty_recipient(req.seat, req.target_permanent_id):
         raise HTTPException(status_code=400, detail="invalid loyalty-counter recipient")
 
+@action_handler("legend_rule_confirm")
+def _action_legend_rule_confirm(session, req, seat_type):
+    # CR 704.5j: which of the seat's same-name legendary permanents it keeps.
+    # By stable id; the engine holds it to the group as it stands
+    # (``engine/legend_rule.live_candidates``), so a client that offers a
+    # whole battlefield cannot keep something else.
+    if session.game.pending_choice_of("legend_rule", req.seat) is None:
+        raise HTTPException(status_code=400, detail="no legend rule choice pending for you")
+    if req.target_permanent_id is None:
+        raise HTTPException(status_code=400, detail="target_permanent_id is required")
+    if not session.game.resolve_pending_choice(
+        "legend_rule", req.seat, permanent_id=req.target_permanent_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="that is not one of your legendary permanents with that name",
+        )
+
 @action_handler("counter_distribution_confirm")
 def _action_counter_distribution_confirm(session, req, seat_type):
     # Forgotten Ancient: how many counters onto which creatures, as one answer

@@ -15,6 +15,7 @@ from ..aura_grants import aura_grants_control
 from ..aura_attachment import auras_attached_to, unsatisfied_enchant_clause
 from ..equipment import is_equipment, unattach_illegal_equipment
 from ..game_result_bans import player_cant_lose
+from ..legend_rule import state_based_legend_rule
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..pt import toughness_has_been_set
@@ -927,36 +928,15 @@ class GameEndingMixin:
             ):
                 changed = True
 
-        # 704.5j: legend rule — same player controlling two legendaries with same name
-        for player in self.players:
-            legendary_by_name: dict[str, list[Permanent]] = {}
-            for perm in self.controlled_by(player):
-                # Both reads are of the **effective** card, because CR 707.2
-                # copies the name and the type line together: a Clone of
-                # Hazezon Tamar is a second Hazezon Tamar, and asking the
-                # printed card asks the copier's own line — where a Clone is
-                # a Shapeshifter named Clone that matches nothing, so the
-                # rule never fired for the one board state it exists for.
-                # Layer 3 rides along for free (a text change rewrites the
-                # type line before anything reads it).
-                #
-                # `has_supertype` and not the printed line: layer 4
-                # computes supertypes now (CR 205.4a), so a "legendary" an
-                # effect added or took away is counted where the printed
-                # read would have missed both.
-                effective = perm.effective_card
-                if perm.has_supertype("legendary"):
-                    legendary_by_name.setdefault(effective.name, []).append(perm)
-            for name, perms in legendary_by_name.items():
-                if len(perms) > 1:
-                    # Keep first; put the rest in graveyard. Collected as
-                    # permanents rather than indices, so the reverse-order
-                    # walk that kept the indices valid is gone with them.
-                    for removed in reversed(perms[1:]):
-                        self.remove_from_battlefield(removed)
-                        died = self._permanent_to_graveyard(player, removed)
-                        self.log.append(f"{name} {'put into graveyard' if died else 'left the battlefield'} (704.5j: legend rule)")
-                    changed = True
+        # 704.5j: the legend rule — a player controlling two or more
+        # legendary permanents with the same name chooses one of them, and
+        # the rest go to their owners' graveyards. A seat a person decides
+        # for is asked (a `legend_rule` prompt; the answer makes this check
+        # again), a seat nobody asks keeps the one worth most to it
+        # (``engine/legend_rule.py``). The name and the supertype are read
+        # off the effective permanent (CR 707.2, 205.4a).
+        if state_based_legend_rule(self):
+            changed = True
 
         # 704.5k: world rule — keep only the most recently timestamped world permanent
         world_perms: list[tuple[PlayerState, Permanent]] = [
