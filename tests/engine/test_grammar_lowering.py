@@ -3972,7 +3972,9 @@ def test_removing_a_counter_matches_the_rule_it_replaces():
     ("line", "why"),
     [
         ("Remove two doom counters from this artifact.", "decrements by exactly one"),
-        ("Remove a doom counter from target artifact.", "reads its own source"),
+        # A chosen object loses one counter (``remove_counter_from_target``,
+        # Spinal Parasite); two is a decrement that handler does not split.
+        ("Remove two doom counters from target artifact.", "takes one counter at a time"),
     ],
 )
 def test_counter_removal_shapes_without_a_handler_refuse(line, why):
@@ -3980,6 +3982,24 @@ def test_counter_removal_shapes_without_a_handler_refuse(line, why):
 
     assert result.parsed, why
     assert not result.lowered, why
+
+
+def test_removing_a_counter_from_a_chosen_object_names_the_target():
+    """"Remove a counter from target permanent." (Spinal Parasite, Ferropede.)
+    No kind printed: any kind (``ANY_COUNTER_KIND``), the remover choosing
+    which at resolution; a printed kind is carried as itself."""
+    from engine.named_counters import ANY_COUNTER_KIND
+
+    (kind, payload), = _full_payloads(
+        "{1}: Remove a counter from target permanent.", "Test",
+    )
+    assert kind == "remove_counter_from_target"
+    assert payload["counter"] == ANY_COUNTER_KIND
+    assert payload["targets"]["quantifier"] == "target"
+    (kind, payload), = _instructions(
+        "{1}: Remove a doom counter from target artifact.", "Test",
+    )
+    assert (kind, payload["counter"]) == ("remove_counter_from_target", "doom")
 
 
 def test_remove_does_not_claim_the_other_sentences_that_start_with_it():
