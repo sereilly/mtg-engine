@@ -47,8 +47,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
+from .aura_restrictions import aura_restriction_active
+from .cast_bans import combat_play_ban, global_play_timing
+from .late_modules import LateModules
+from .oracle import compile_card_oracle
+from .spell_prohibitions import nonmana_activations_forbidden, permanent_activations_forbidden
+from .subject_filters import subject_matches
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
+
+_late = LateModules(__package__)
 
 #: Where the ability's source is: a permanent on the battlefield, or a card in
 #: another zone (a hand's cycling, a graveyard's "exile this card:").
@@ -103,8 +112,6 @@ def _is_mana(ability) -> bool:
 def _permanent_shut_off_this_turn(game, seat, source, ability):
     # "**That permanent's** activated abilities can't be activated this turn."
     # (Interdict, CR 602.5c.) No mana-ability exception: the card prints none.
-    from .spell_prohibitions import permanent_activations_forbidden
-
     if not permanent_activations_forbidden(game, source):
         return None
     return f"{_name(source)}'s activated abilities can't be activated this turn"
@@ -114,8 +121,6 @@ def _nonmana_shut_off_this_turn(game, seat, source, ability):
     # "Until end of turn, … that player can't activate abilities that aren't
     # mana abilities." (Abeyance.) A record on the seat, so it reaches an
     # ability wherever its source is.
-    from .spell_prohibitions import nonmana_activations_forbidden
-
     if not nonmana_activations_forbidden(game, seat) or _is_mana(ability):
         return None
     return (
@@ -130,8 +135,6 @@ def _own_turn_only(game, seat, source, ability):
     # turns." (City of Solitude.) The activation half of the one sentence
     # ``cast_prohibitions`` reads for its casting half, through the same
     # reader. No mana-ability exception: the sentence names none.
-    from .cast_bans import global_play_timing
-
     wrong_turn = global_play_timing(game, seat)
     if wrong_turn is None:
         return None
@@ -144,8 +147,6 @@ def _own_turn_only(game, seat, source, ability):
 def _combat_ban(game, seat, source, ability):
     # "During combat, players can't cast instant spells or **activate
     # abilities that aren't mana abilities**." (Hand to Hand.)
-    from .cast_bans import combat_play_ban
-
     ban = combat_play_ban(game)
     if ban is None or _is_mana(ability):
         return None
@@ -157,7 +158,7 @@ def _global_ban(game, seat, source, ability):
     # "Activated abilities of artifacts can't be activated." (Null Rod.)
     # "…of artifacts and creatures can't be activated unless they're mana
     # abilities." (Damping Matrix: the ability is what the exception asks.)
-    from .activation_restrictions import global_activation_ban
+    global_activation_ban = _late.activation_restrictions.global_activation_ban
 
     banned_by = global_activation_ban(game, source, ability)
     if banned_by is None:
@@ -168,7 +169,7 @@ def _global_ban(game, seat, source, ability):
 def _printed_restriction(game, seat, source, ability):
     # Every printed "Activate only …" clause on *this* ability line
     # (``engine/activation_restrictions.py``).
-    from .activation_restrictions import activation_denial
+    activation_denial = _late.activation_restrictions.activation_denial
 
     denial = activation_denial(game, seat, source, ability.source_line or "")
     if denial is None:
@@ -179,7 +180,7 @@ def _printed_restriction(game, seat, source, ability):
 def _printed_permission(game, seat, source, ability):
     # "Only your opponents may activate this ability" (Clergy of the Holy
     # Nimbus) and the rest of ``engine/activation_permissions.py``.
-    from .activation_permissions import activation_permission_denial
+    activation_permission_denial = _late.activation_permissions.activation_permission_denial
 
     return activation_permission_denial(game, seat, source, ability.source_line or "")
 
@@ -187,8 +188,6 @@ def _printed_permission(game, seat, source, ability):
 def _aura_nonmana_shut_off(game, seat, source, ability):
     # "…and its activated abilities can't be activated unless they're mana
     # abilities." (Faith's Fetters.)
-    from .aura_restrictions import aura_restriction_active
-
     if not aura_restriction_active(source, "activated_abilities_shut_off"):
         return None
     if _is_mana(ability):
@@ -199,8 +198,6 @@ def _aura_nonmana_shut_off(game, seat, source, ability):
 def _aura_all_shut_off(game, seat, source, ability):
     # "…and its activated abilities can't be activated." (Volrath's Curse.)
     # The clause above with CR 605.1a's exception **not** printed.
-    from .aura_restrictions import aura_restriction_active
-
     if not aura_restriction_active(source, "all_activated_abilities_shut_off"):
         return None
     return f"{_name(source)}'s activated abilities can't be activated"
@@ -209,9 +206,6 @@ def _aura_all_shut_off(game, seat, source, ability):
 def _tap_abilities_shut_off(game, seat, source, ability):
     # "…and their activated abilities **with {T} in their costs** can't be
     # activated." (Katabatic Winds.) The narrowing is on the cost.
-    from .oracle import compile_card_oracle
-    from .subject_filters import subject_matches
-
     if not ability.cost.requires_tap:
         return None
     for source_seat, watcher in game.permanents_with_controller():

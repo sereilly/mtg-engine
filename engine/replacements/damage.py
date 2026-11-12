@@ -30,6 +30,9 @@ from .registry import (
     DAMAGE_SOURCE_DELTA, LIFE_FLOOR, NEXT_DAMAGE_DOUBLED, SOURCE_TYPE_SHIELD,
     TURN_DAMAGE_BECOMES, ReplacementOutcome, replacement_effect,
 )
+from ..late_modules import LateModules
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 DAMAGE_LIFE_FLOOR_TEXT = (
@@ -1001,8 +1004,9 @@ def _turn_damage_records(game, payload: dict, *, multiplying: bool) -> list:
     "combat … a creature … to a creature" and Equal Treatment's "any source …
     1 or more … a permanent or player" are one reader.
     """
-    from ..turn_replacements import (DAMAGE, armed_turn_replacements,
-                                    damage_record_answers)
+    DAMAGE = _late.turn_replacements.DAMAGE
+    armed_turn_replacements = _late.turn_replacements.armed_turn_replacements
+    damage_record_answers = _late.turn_replacements.damage_record_answers
 
     return [
         record for record in armed_turn_replacements(game, DAMAGE)

@@ -30,6 +30,15 @@ mana sources, and the readers beside the payment (``board_payment``,
 
 from __future__ import annotations
 
+# `grammar.lower` rather than `lowering.categories` or `lowering.control_flow`
+# for the step walk: it has lived in both, and each move took the old address
+# with it. The name has one home and this is it.
+from .grammar.lower import (
+    OFFER_BRANCH_KEYS, WRAPPER_KINDS, nested_instructions, offer_branches,
+)
+from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+from .oracle_types import OracleInstruction
+
 
 #: Instruction kinds that put mana into a pool. CR 605.1a's "could add mana to
 #: a player's mana pool" is a question about what the ability *does*, so it is
@@ -132,7 +141,7 @@ def has_nonmana_activated_ability(card) -> bool:
 
 def _intrinsic_land_mana_ability():
     from .activated_ability_cost import ActivatedAbilityCost
-    from .oracle_types import OracleInstruction, ParsedActivatedAbility
+    from .oracle_types import ParsedActivatedAbility
 
     return ParsedActivatedAbility(
         source_line="",
@@ -269,7 +278,6 @@ def moves_a_library_card(instruction) -> bool:
     far as CR 605.1a's fourth criterion is concerned: any step it carries out
     now (:func:`steps_carried_out_now`) that moves a card between zones and is
     not one of :data:`LIBRARY_SAFE_ZONE_KINDS`."""
-    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
 
     return any(
         INSTRUCTION_CATEGORIES.get(step.kind) == _ZONE_MOVING_CATEGORY
@@ -293,7 +301,6 @@ def steps_carried_out_now(instruction) -> tuple:
     found = [instruction]
     if instruction.kind in _LATER_ABILITY_KINDS:
         return tuple(found)
-    from .grammar.lower import nested_instructions, offer_branches
 
     inner = nested_instructions(instruction)
     if inner is None:
@@ -313,7 +320,6 @@ def carries_an_offer(instruction) -> bool:
     part-way through a payment — because the mana does not exist until every
     seat it asks has answered.
     """
-    from .grammar.lower import OFFER_BRANCH_KEYS
 
     if instruction is None or not hasattr(instruction, "kind"):
         return False
@@ -365,11 +371,6 @@ def _every_nested_step(instruction) -> tuple:
     ``_sweeps._per_recipient_multiplier``. That the two tables exist at all is
     the real debt, and it belongs to whoever next needs a third reader.
     """
-    # `grammar.lower` rather than `lowering.categories` or
-    # `lowering.control_flow`: the walk has lived in both, and each move took
-    # the old address with it. The name has one home and this is it.
-    from .grammar.lower import nested_instructions, offer_branches
-
     inner = nested_instructions(instruction)
     # **And an offer's branches**, which the category walk must not open and
     # this one must. "Add one mana of that color **unless any player pays
@@ -406,9 +407,6 @@ def answer_color_choices(instruction, color: str | None):
     prompt, which is the safe direction. Rebuilt rather than mutated, because a
     compiled instruction is shared by every copy of the card.
     """
-    from .grammar.lower import OFFER_BRANCH_KEYS, WRAPPER_KINDS
-    from .oracle_types import OracleInstruction
-
     if not color or instruction is None:
         return instruction
     if instruction.kind == "choose_color":

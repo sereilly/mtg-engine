@@ -21,7 +21,11 @@ from ..entry_choices import CHOSEN_COLOR_KEY, own_chosen_protection_color
 from ..aura_grants import (AMONG_CONTROLLED_PROTECTION_COLORS,
                            CHOSEN_PROTECTION_COLOR, aura_protection_colors)
 from ..aura_attachment import auras_attached_to
-from ..keywords import abilities_lost_at, protection_flag_granted_after
+from ..keywords import (
+    EACH_OF_ITS_COLORS, EACH_OF_THE_EXILED_CARDS_CARD_TYPES, PROTECTION_GRANT_STAMPS,
+    abilities_lost_at, printed_protection_clauses, protection_flag_granted_after,
+    protection_qualities_named, protection_removals,
+)
 from ..linked_exile_keywords import (LINKED_EXILE_FAMILY,
                                      linked_exile_protection_clauses)
 from ..lord_buffs import (LORD_BUFF_KIND, is_chosen_color_protection,
@@ -31,6 +35,13 @@ from ..models import CardDefinition, Permanent
 from ..oracle import compile_card_oracle
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..static_bonuses import conditional_static_holds
+from ..object_colors import colors_among, object_colors, spell_colors
+from ..target_immunity import (
+    ABILITY_SOURCE, SPELL_SOURCE, ability_source_immunity_classes, board_target_immunity_classes,
+    narrow_source_immunity_subtypes, shroud_waived_for, source_is_in_class, spell_is_in_class,
+    spell_target_immunity_classes,
+)
+from ..targeting import spec_only_subtype, spell_only_subtype
 
 
 def exiled_card_types(game, permanent: Permanent) -> frozenset[str]:
@@ -72,12 +83,6 @@ class ProtectionMixin:
         """
         qualities: set[tuple[str, str]] = set()
         program = compile_card_oracle(permanent.effective_card)
-        from ..keywords import (EACH_OF_ITS_COLORS,
-                                EACH_OF_THE_EXILED_CARDS_CARD_TYPES,
-                                PROTECTION_GRANT_STAMPS,
-                                printed_protection_clauses,
-                                protection_qualities_named,
-                                protection_removals)
 
         # "Target creature **loses protection from black** until end of
         # turn." (Cephalid Snitch.) A layer-6 removal takes every instance of
@@ -187,8 +192,6 @@ class ProtectionMixin:
                     # An Aura nobody controls contributes nothing rather than
                     # every colour: the widest reading of a set that could not
                     # be read is a creature no coloured thing can touch.
-                    from ..object_colors import colors_among
-
                     aura_seat = self.controller_index_of(aura)
                     if aura_seat is not None:
                         for symbol in colors_among(
@@ -450,7 +453,6 @@ class ProtectionMixin:
                 from ..damage_source_colors import damage_source_colors
 
                 return value in damage_source_colors(self, card, seat=seat)
-            from ..object_colors import spell_colors
 
             return value in spell_colors(self, card, seat)
         if kind == "multicolored":
@@ -458,8 +460,6 @@ class ProtectionMixin:
             # :meth:`_permanent_has_quality` exactly -- see the reason written
             # out there. It *is* read through the layers, because that is a
             # different question and the one this method was getting wrong.
-            from ..object_colors import spell_colors
-
             return len(set(spell_colors(self, card, seat))) >= 2
         if kind == "spell_type":
             # "protection from **instant spells**" (Devoted Caretaker): the
@@ -594,8 +594,6 @@ class ProtectionMixin:
         enumerating, hands it over.
         """
         if self._has_keyword(target, "shroud"):
-            from ..target_immunity import shroud_waived_for
-
             # "Until end of turn, Autumn Willow can be the target of spells and
             # abilities controlled by **target player** as though it didn't
             # have shroud." (CR 702.18 with CR 609.4's hole in it.) The waiver
@@ -621,12 +619,6 @@ class ProtectionMixin:
         # separately targeted (CR 115.1a, CR 115.1c/d) and a card may print
         # either without the other, so neither may answer for both.
         if ability_source is None and source_card is not None:
-            from ..target_immunity import (
-                board_target_immunity_classes,
-                spell_is_in_class,
-                spell_target_immunity_classes,
-            )
-
             # The board-wide subject beside the two relational ones, and asked
             # of the same `spell_is_in_class` reader so a class string means one
             # thing here however the clause reached this permanent. "Creatures
@@ -645,13 +637,6 @@ class ProtectionMixin:
             ):
                 return False
         if ability_source is not None:
-            from ..target_immunity import (
-                ABILITY_SOURCE,
-                ability_source_immunity_classes,
-                board_target_immunity_classes,
-                source_is_in_class,
-            )
-
             # The board-wide subject beside the relational ones, exactly as the
             # spell branch above unions them: "Creatures you control can't be
             # the targets of blue spells **or abilities from blue sources**."
@@ -681,25 +666,15 @@ class ProtectionMixin:
         # must be handed in — ``ability_source`` names the permanent, and a
         # permanent may carry several abilities that target differently.
         if source_card is not None or source_spec is not None:
-            from ..target_immunity import (
-                ABILITY_SOURCE,
-                SPELL_SOURCE,
-                narrow_source_immunity_subtypes,
-            )
-
             forbidden = narrow_source_immunity_subtypes(
                 target, ABILITY_SOURCE if ability_source is not None else SPELL_SOURCE
             )
             if forbidden:
-                from ..targeting import spec_only_subtype, spell_only_subtype
-
                 # A spell is asked across its modes, whichever one the spec
                 # handed in describes (``spell_only_subtype``: Chaos Charm's
                 # Wall mode is no "spell that can target only Walls"); an
                 # ability by the spec its own announcement describes.
                 if ability_source is None and source_card is not None:
-                    from ..oracle import compile_card_oracle
-
                     only = spell_only_subtype(
                         source_card, compile_card_oracle(source_card)
                     )
@@ -748,8 +723,6 @@ class ProtectionMixin:
                 # layers' answer, as protection asks it above). It read the
                 # printed card through the board (``card_colors``), so a Bolt a
                 # Thoughtlace had made blue went on targeting Sporeweb Weaver.
-                from ..object_colors import object_colors, spell_colors
-
                 source_colors = set(
                     object_colors(self, ability_source)
                     if ability_source is not None

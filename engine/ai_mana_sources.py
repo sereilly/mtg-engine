@@ -30,12 +30,22 @@ from dataclasses import dataclass, replace
 
 from .ai_valuation import mana_ability_symbols, planned_mana_yield
 from .activation_permissions import activation_permission_denial
-from .activation_restrictions import activation_denial, global_activation_ban
+from .activation_restrictions import (
+    activation_denial, global_activation_ban, prints_activation_restriction,
+)
 from .game import Game
 from .aura_restrictions import aura_restriction_active
 from .models import Permanent
 from .oracle import compile_card_oracle
 from .targeting import usable_activated_abilities
+from . import land_mana_swaps
+from .late_modules import LateModules
+from .mana_abilities import carries_an_offer, is_mana_ability as is_cr_mana_ability
+from .mana_could_produce import ability_colors_on_offer
+from .mixins.land_mana_taps import is_tap_alone_mana_ability
+from .spell_prohibitions import permanent_activations_forbidden
+
+_late = LateModules(__package__)
 
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
@@ -103,12 +113,6 @@ def _priced_mana_source(
     under a ban or a permission that closes it to this seat.
     """
     import dataclasses
-
-    from .activation_restrictions import prints_activation_restriction
-    from .mana_abilities import carries_an_offer
-    from .mana_abilities import is_mana_ability as is_cr_mana_ability
-    from .mixins.land_mana_taps import is_tap_alone_mana_ability
-    from .spell_prohibitions import permanent_activations_forbidden
 
     if permanent is None or permanent.tapped:
         return None
@@ -281,11 +285,6 @@ def _nonland_mana_source(
     offers on this board (none is no source at all), and the colour a source
     chose as it entered.
     """
-    from .activation_restrictions import prints_activation_restriction
-    from .mana_could_produce import ability_colors_on_offer
-    from .mana_abilities import carries_an_offer
-    from .mixins.land_mana_taps import is_tap_alone_mana_ability
-    from .spell_prohibitions import permanent_activations_forbidden
 
     if permanent is None:
         return None
@@ -370,9 +369,6 @@ def _with_other_free_abilities(game, seat, permanent, usable, first):
     Left as *first* wherever any of them is more than one mana or a run: one
     option per source is what this shape can say.
     """
-    from .activation_restrictions import prints_activation_restriction
-    from .mana_abilities import carries_an_offer
-    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     if first.amount != 1 or first.run:
         return first
@@ -438,7 +434,7 @@ def _spent_on_a_tap_cost_first(game: Game, seat: int):
     then board order. A creature tapped for mana neither attacks nor blocks
     until it untaps, so the cost is paid with the bodies the seat misses least.
     """
-    from .ai_standing import permanent_worth
+    permanent_worth = _late.ai_standing.permanent_worth
 
     order = {id(permanent): slot for slot, permanent in enumerate(game.controlled_by(seat))}
 
@@ -472,8 +468,7 @@ def tap_cost_mana_activations(
     same permanents, which is how the executor binds them by id before the
     first tap.
     """
-    from .board_payment import tap_cost_mana_abilities
-    from .spell_prohibitions import permanent_activations_forbidden
+    tap_cost_mana_abilities = _late.board_payment.tap_cost_mana_abilities
 
     def counted_elsewhere(permanent) -> bool:
         return (
@@ -557,7 +552,7 @@ def _land_tap_options(game: Game, land: Permanent, purpose) -> "tuple[_TapOption
     the choice the executor makes with the colour it asks for; a shared colour
     ("two mana of any one color") is one option per colour.
     """
-    from .board_payment import land_tap_yields
+    land_tap_yields = _late.board_payment.land_tap_yields
 
     singles: set[str] = set()
     options: list[_TapOption] = []
@@ -608,7 +603,6 @@ def _land_mixed_run(game: Game, permanent: Permanent) -> "dict[str, int] | None"
     the amount), and a multiplier or a restriction makes the run something
     this cannot state.
     """
-    from . import land_mana_swaps
 
     if land_mana_swaps.swapped_production(game, permanent) is not None:
         return None
@@ -689,7 +683,6 @@ def _tap_alone_land_symbols(game: Game, land: Permanent) -> set[str]:
     """Every symbol one of *land*'s tap-alone mana abilities makes — the
     abilities the tap seam runs (`ai_payment.planned_tap_ability` picks among them), and
     none it refuses (`land_mana_tap_refusal`)."""
-    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     found: set[str] = set()
     usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(land)))
@@ -708,7 +701,6 @@ def _land_symbols(game: Game, permanent: Permanent) -> tuple[str, ...]:
     is silent. "C" for a land that names neither, which is what this planner
     has always assumed of one.
     """
-    from . import land_mana_swaps
 
     symbols = tuple(game._land_payment_colors(permanent))
     free, _priced = game._land_mana_abilities(permanent)

@@ -24,6 +24,9 @@ from functools import lru_cache
 
 from .oracle_types import compilation_cache, strip_ability_word
 from .cost_modifier_lines import _MANA_SYMBOLS, CostReduction
+from .late_modules import LateModules
+
+_late = LateModules(__package__)
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +273,7 @@ def self_cost_reductions(oracle_text: str) -> tuple[SelfCostReduction, ...]:
     so ``clear_compilation_caches()`` empties the one place a count spec is
     held. This is a substring test, a split and a lookup per line.
     """
-    from .affinity import expand_affinity_lines
+    expand_affinity_lines = _late.affinity.expand_affinity_lines
 
     found: list[SelfCostReduction] = []
     for line in expand_affinity_lines(oracle_text).lower().split("\n"):

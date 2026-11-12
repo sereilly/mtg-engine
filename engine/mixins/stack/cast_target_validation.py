@@ -55,6 +55,9 @@ from ...divided_damage import (
 from ...targeting import instructions_as_announced
 from .cast_announcement import _mode_announcements
 from ...refusals import refuse
+from ...late_modules import LateModules
+
+_late = LateModules(__package__.split(".", 1)[0])
 
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
@@ -650,7 +653,7 @@ class CastTargetValidationMixin:
         # spell uncastable at them rather than ineffective. Asked of the chosen
         # player before the per-type checks below, because it applies whatever
         # the spell's type is.
-        from ...named_protection import protected_from
+        protected_from = _late.named_protection.protected_from
 
         for named_seat in dict.fromkeys(
             [target_player_index, *(target_role_seats or ())]
@@ -732,7 +735,7 @@ class CastTargetValidationMixin:
                         # a graveyard (CR 303.4a: it targets what it will
                         # enchant) has to be asked here as well. The picker
                         # already offered nothing; the cast went through.
-                        from ...target_immunity import graveyard_cards_untargetable
+                        graveyard_cards_untargetable = _late.target_immunity.graveyard_cards_untargetable
 
                         if graveyard_cards_untargetable(self) is not None:
                             return False, f"no valid target for {card.name}"

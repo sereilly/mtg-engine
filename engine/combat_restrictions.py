@@ -32,6 +32,9 @@ from .grammar.vocabulary import (COLOR_WORDS, CREATURE_TYPES,
 from .combat_restriction_table import _PATTERNS
 from .mana_payment import mana_cost_from_symbols
 from .oracle_types import X_FROM_COUNT
+from .late_modules import LateModules
+
+_late = LateModules(__package__)
 
 # Colour words a blocker narrowing can name, as one alternation. Read from the
 # grammar's vocabulary rather than spelled out, so this file and the parser
@@ -1151,7 +1154,7 @@ def declaration_tap_costs(permanent, kind: str) -> list[dict]:
     which creatures pay — needs the board and lives with the steps
     (``CombatPhaseMixin.declaration_tap_plan``).
     """
-    from .oracle import compile_card_oracle
+    compile_card_oracle = _late.oracle.compile_card_oracle
 
     wanted = f"cant_{kind}_unless_tap"
     owed: list[dict] = []

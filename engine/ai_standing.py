@@ -30,6 +30,7 @@ from contextvars import ContextVar
 
 from .game_result_bans import player_cant_lose
 from .phasing_locks import waits_for_its_source
+from .layer_bridge import computed_abilities
 
 
 # --- The measure: what a seat's position is worth -----------------------------
@@ -176,7 +177,6 @@ def permanent_worth(permanent, *, now: bool = True) -> float:
     still be true once the turn's temporary effects are over, where a tap is
     not a difference.
     """
-    from .layer_bridge import computed_abilities
 
     # What it cost, read as CR 613 reads it: a Clone is worth the mana value
     # of what it copies (CR 707.2) — unless a turn-up is being weighed

@@ -28,7 +28,7 @@ import re
 from ..damage_redirects import event_dealing_moment
 from ..damage_source_colors import damage_source_colors
 from ..effect_ordering import source_names
-from ..models import PlayerState
+from ..models import Permanent, PlayerState
 from ..named_counters import add_counters
 from ..next_damage import (DAMAGE_PREVENTED_NEXT, armed_for_event,
                            names_for_event, spend_for_event)
@@ -39,6 +39,10 @@ from .registry import (
     prevention_effect, source_has_type,
 )
 from .shields import _source_label, recipient_label
+from ..late_modules import LateModules
+from ..object_colors import share_a_color
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 #: "If a source would deal damage to you, prevent that damage and put an
@@ -730,7 +734,7 @@ def prevent_all_to_matching(line: str) -> dict | None:
     One matcher, asked by the interceptor below and by the claim reader, so what
     is prevented and what is claimed cannot drift.
     """
-    from ..grammar import subject_filter_payload
+    subject_filter_payload = _late.grammar.subject_filter_payload
 
     match = _PREVENT_ALL_TO_MATCHING_RE.match(
         " ".join((line or "").strip().lower().rstrip(".").split())
@@ -774,8 +778,7 @@ def _matching_blankets(game, event: dict):
     """
     if event["amount"] <= 0:
         return
-    from ..models import Permanent
-    from ..subject_filters import subject_matches
+    subject_matches = _late.subject_filters.subject_matches
 
     recipient = event["recipient"]
     # A player is the controller blanket's business, one reader up: the noun
@@ -963,8 +966,6 @@ def _shared_color_blankets(game, event: dict):
     """
     if event["amount"] <= 0:
         return
-    from ..models import Permanent
-    from ..object_colors import share_a_color
 
     recipient = event["recipient"]
     source = event.get("source")

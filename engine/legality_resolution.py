@@ -24,13 +24,10 @@ from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
 from .text_changes import spell_text_card
 from .modal_triggers import modal_trigger_modes
-from .stack_targets import source_name
+from .stack_targets import _printed_target_instances, source_name
 from .targeting import (
-    derive_cast_spec,
-    derive_instruction_spec,
-    role_is_stack,
-    spec_offers_a_player,
-    spec_roles,
+    derive_cast_spec, derive_instruction_spec, graveyard_target_spec, role_is_stack,
+    spec_offers_a_player, spec_roles,
 )
 from .target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLES_TARGET_KIND
 from .cost_pickers import spec_is_a_cost
@@ -43,6 +40,9 @@ from .legality import (
     announced_by_a_choice,
     targeting_instruction,
 )
+from .late_modules import LateModules
+
+_late = LateModules(__package__)
 
 
 class ResolutionTargetsMixin:
@@ -925,7 +925,7 @@ class ResolutionTargetsMixin:
         * it does not say "up to" — zero targets is then a legal announcement
           (CR 601.2c) and the ability stays to do whatever else it prints.
         """
-        from .target_immunity import graveyard_cards_untargetable
+        graveyard_cards_untargetable = _late.target_immunity.graveyard_cards_untargetable
 
         sealed = graveyard_cards_untargetable(self)
         if sealed is None or not getattr(item, "is_ability", False):
@@ -937,7 +937,6 @@ class ResolutionTargetsMixin:
             return None
         if resolves_with_illegal_targets(spell_text_card(item), item.ability_text):
             return None
-        from .targeting import graveyard_target_spec
 
         said = spell_text_card(item)
         spec = graveyard_target_spec(
@@ -945,7 +944,6 @@ class ResolutionTargetsMixin:
         )
         if spec is None or spec_is_a_cost(spec):
             return None
-        from .stack_targets import _printed_target_instances
 
         if _printed_target_instances(item) != 1:
             return None
@@ -1019,8 +1017,7 @@ class ResolutionTargetsMixin:
         reader: it follows a recorded target that changed controller, and has
         no use for an "every target" it does not ask.
         """
-        from .stack_targets import (_candidates, _printed_target_instances,
-                                    _read, announcements)
+        from .stack_targets import _candidates, _read, announcements
 
         announced = announcements(item)
         if announced is None:

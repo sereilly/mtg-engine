@@ -59,9 +59,18 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from .game_types import OracleExecutionContext
+from .handlers.control_flow import evaluate_condition
+from .late_modules import LateModules
+from .mana_abilities import _every_nested_step
+from .oracle import compile_card_oracle
+from .trigger_utils import iter_triggered_abilities
+
 if TYPE_CHECKING:
     from .game import Game
     from .models import Permanent
+
+_late = LateModules(__package__)
 
 #: What a source given away or destroyed by its own tap is priced at: more
 #: than any tap a board's other sources could charge together.
@@ -150,7 +159,6 @@ def _misses_its_untap_anyway(permanent, instruction) -> bool:
         return True
     if instruction is None:
         return False
-    from .mana_abilities import _every_nested_step
 
     untap_counters = _untap_blocking_counters(permanent)
     for step in (instruction, *_every_nested_step(instruction)):
@@ -201,7 +209,6 @@ def _ability_harm(game, permanent, instruction) -> int:
     """What running the mana ability *instruction* costs beyond its mana."""
     if instruction is None:
         return 0
-    from .mana_abilities import _every_nested_step
 
     harm = 0
     untap_counters = _untap_blocking_counters(permanent)
@@ -224,7 +231,6 @@ def tap_watchers(game: "Game") -> bool:
     """Whether any permanent on the battlefield has an ability that triggers
     on a permanent being tapped — the one board scan a whole board's prices
     need before any trigger is collected for one source."""
-    from .trigger_utils import iter_triggered_abilities
 
     kinds = {*_BECOMES_TAPPED_EVENTS, "land_tapped_for_mana"}
     return next(
@@ -237,7 +243,8 @@ def _standing_price(game, permanent, seat: int, watched: bool = True) -> "tuple[
     """What any tap of *permanent* costs — the triggers a tap fires, and its
     own text about staying tapped — and the counters those triggers put on
     it (``tap_prices`` asks whether the board then keeps it tapped)."""
-    from .events import Event, collect
+    Event = _late.events.Event
+    collect = _late.events.collect
 
     harm = _stays_tapped_harm(game, permanent, seat)
     counters: list = []
@@ -262,7 +269,6 @@ def _standing_price(game, permanent, seat: int, watched: bool = True) -> "tuple[
 def _counters_put_on_it(instruction) -> list:
     """The counter words a tap trigger puts on the permanent tapped — "put a
     wind counter on **it**" (Freyalise's Winds), the event's own subject."""
-    from .mana_abilities import _every_nested_step
 
     return [
         str((step.payload or {}).get("counter") or "")
@@ -276,9 +282,6 @@ def _land_tap_trigger_harm(game, land, seat: int) -> int:
     """"Whenever a player taps a land for mana …" — the seam's own reading of
     which fire for *seat* tapping *land*, intervening "if" included
     (``Game._land_tapped_for_mana``)."""
-    from .game_types import OracleExecutionContext
-    from .handlers.control_flow import evaluate_condition
-    from .trigger_utils import iter_triggered_abilities
 
     harm = 0
     for _index, watcher, trig in iter_triggered_abilities(
@@ -306,7 +309,6 @@ def _land_tap_trigger_harm(game, land, seat: int) -> int:
 
 def _trigger_harm(game, instruction, controller: int, tapper: int, source, tapped) -> int:
     """What a trigger fired by the tap costs the tapping player."""
-    from .mana_abilities import _every_nested_step
 
     harm = 0
     attached = getattr(source, "metadata", {}).get("attached_to") is tapped
@@ -351,7 +353,6 @@ def _stays_tapped_harm(game, permanent, seat: int) -> int:
     step)."""
     card = permanent.effective_card
     harm = 1 if _untap_text(card.name, card.oracle_text or "")[0] else 0
-    from .oracle import compile_card_oracle
 
     for trig in compile_card_oracle(card).triggered_abilities:
         instruction = getattr(trig, "instruction", None)

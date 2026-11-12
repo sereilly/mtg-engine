@@ -52,13 +52,14 @@ from .target_requirements import (
     narrow_offer,
     requirements_binding,
 )
-from .targeting import (
-    derive_cast_spec,
-)
+from .targeting import cast_time_count_spec, derive_cast_spec
 from .target_roles import ROLES_TARGET_KIND, live_roles
 from .cast_targets import cast_announced_entry_trigger
 from .legality import _cast_picker_is_a_target
 from .legality_enumeration import _cast_from_graveyard_slot
+from .bare_announcements import announced_seat
+from .game_types import OracleExecutionContext
+from .handlers._amounts import count_from_payload
 
 
 class CastTargetSpecMixin:
@@ -105,10 +106,6 @@ class CastTargetSpecMixin:
         the caller" while the field meant only the pile, and at three seats
         the count fell to the first opponent whatever the caster meant.
         """
-        from .bare_announcements import announced_seat
-        from .game_types import OracleExecutionContext
-        from .handlers._amounts import count_from_payload
-        from .targeting import cast_time_count_spec
 
         spec = cast_time_count_spec(
             compile_card_oracle(card), mode_index=mode_index
@@ -150,7 +147,6 @@ class CastTargetSpecMixin:
         announcement the spec was derived for.
         """
         from .divided_damage import conditional_division
-        from .game_types import OracleExecutionContext
         from .handlers.control_flow import evaluate_condition
 
         arms = conditional_division(compile_card_oracle(card).instructions)

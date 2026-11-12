@@ -23,6 +23,15 @@ from functools import lru_cache
 
 from .graveyard_statics import GraveyardSource, source_in_its_graveyard
 from .oracle_types import _NUMBER_WORDS
+from .handlers._amounts import evaluate_count
+from .handlers._conditions import _compare_count
+from .handlers._filters import permanent_state_holds
+from .handlers._targets import attached_host
+from .late_modules import LateModules
+from .named_counters import counters_on
+from .object_colors import of_each_color
+
+_late = LateModules(__package__)
 
 # Desert is included alongside the five basics: Arabian Nights prints
 # "as long as you control a Desert", and the check this feeds
@@ -629,7 +638,7 @@ def conditional_static_holds(
     # (Death-Mask Duplicant): the cards its imprint exiled and still in exile,
     # asked now (CR 611.3a).
     if kind == "linked_exile_has":
-        from .linked_exile_keywords import linked_exile_has
+        linked_exile_has = _late.linked_exile_keywords.linked_exile_has
 
         return linked_exile_has(game, source, str(condition.get("quality") or ""))
     # "…as long as **it's** blocking / attacking / untapped". A state read off
@@ -639,9 +648,6 @@ def conditional_static_holds(
     # `handlers/control_flow.evaluate_condition` gives an intervening-if — so
     # the phrase means one thing in the engine.
     if kind == "is_state":
-        from .handlers._filters import permanent_state_holds
-        from .handlers._targets import attached_host
-
         subject = source
         if condition.get("subject") == "attached":
             subject = attached_host(game, source, last_known=False)
@@ -677,7 +683,7 @@ def conditional_static_holds(
         # spells that test their target against it and by Call to Arms over a
         # narrower set — and it reads colours through the layers, so a Lace on
         # anything moves the answer at the next recompute with nothing to undo.
-        from .color_census import color_is_most_common
+        color_is_most_common = _late.color_census.color_is_most_common
 
         return color_is_most_common(
             game, str(condition.get("color") or ""),
@@ -691,8 +697,7 @@ def conditional_static_holds(
         # the sentence's subject: the enchanted creature for an Aura, the
         # source itself otherwise. Colourless shares nothing (CR 105.2), and a
         # board with no coloured permanent has no most common colour.
-        from .color_census import shares_most_common_color
-        from .handlers._targets import attached_host
+        shares_most_common_color = _late.color_census.shares_most_common_color
 
         subject = source
         if condition.get("subject") == "attached":
@@ -715,7 +720,7 @@ def conditional_static_holds(
         #
         # An empty board is vacuously true and buffs nobody either way; saying
         # so explicitly keeps the intersection loop from having to mean it.
-        from .subject_filters import subject_matches
+        subject_matches = _late.subject_filters.subject_matches
 
         described = condition.get("filter") or {}
         shared: set[str] | None = None
@@ -737,8 +742,7 @@ def conditional_static_holds(
         # a land Conversion has turned into a Plains stops being a Mountain and
         # the anthem switches off with nothing to undo, and a nonbasic land
         # Blood Moon has made a Mountain is still not a *basic* one.
-        from .handlers._targets import attached_host
-        from .subject_filters import subject_matches
+        subject_matches = _late.subject_filters.subject_matches
 
         # The live record, not last-known information: this answers a
         # continuous ability on every recompute (CR 611.3b).
@@ -754,7 +758,7 @@ def conditional_static_holds(
         # reader, so the type is read through layer 4 on every recompute: a
         # Mistform Wall that became a Goblin stops having defender with nothing
         # to undo, and gets it back when the change ends at cleanup.
-        from .subject_filters import subject_matches
+        subject_matches = _late.subject_filters.subject_matches
 
         if source is None:
             return False
@@ -776,8 +780,6 @@ def conditional_static_holds(
         # as `handlers/control_flow.evaluate_condition` reads it for the same
         # payload: an at-least test answered as an equality is a bonus that
         # switches off again on the next counter.
-        from .named_counters import counters_on
-
         if source is None:
             return False
         held = counters_on(source, str(condition.get("counter", "")))
@@ -804,9 +806,6 @@ def conditional_static_holds(
         # the other printed sentence about a graveyard ("**an opponent has**
         # eight or more cards in **their** graveyard"), whose existential seat
         # this payload cannot say.
-        from .handlers._amounts import evaluate_count
-        from .handlers._conditions import _compare_count
-
         return _compare_count(
             evaluate_count(
                 game, game.players[seat], dict(condition.get("count") or {}),
@@ -833,7 +832,7 @@ def conditional_static_holds(
         # place a printed noun phrase is tested against a permanent, so "a
         # creature with power 4 or greater" cannot mean one thing on a trigger's
         # intervening-if and another on a continuous ability.
-        from .subject_filters import subject_matches
+        subject_matches = _late.subject_filters.subject_matches
 
         described = condition.get("filter") or {}
         who = condition.get("who", "you")
@@ -848,8 +847,6 @@ def conditional_static_holds(
         # the one.
         pivot = source
         if condition.get("subject") == "attached":
-            from .handlers._targets import attached_host
-
             pivot = attached_host(game, source, last_known=False)
             if pivot is None:
                 return False
@@ -911,7 +908,6 @@ def conditional_static_holds(
             # several boards into one rainbow.
             if who != "you":
                 return False
-            from .object_colors import of_each_color
 
             return of_each_color(game, (
                 perm for perm in game.controlled_by(seat)

@@ -61,11 +61,15 @@ from typing import TYPE_CHECKING
 
 from .copies import FACE_DOWN_AS_IT_LEFT
 from .models import CardDefinition
+from .late_modules import LateModules
+from .special_actions import SpecialActionOffer
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .alternative_costs import AlternativeCost
     from .game import Game
     from .models import Permanent
+
+_late = LateModules(__package__)
 
 #: The keyword, as :attr:`AlternativeCost.keyword` carries it — what a
 #: "morph costs" modifier would be read against
@@ -742,9 +746,9 @@ def _morph_offer(game: "Game", permanent: "Permanent"):
     (CR 601.2f, 118.7a; ``reduce_cost``), the order the cast path keeps; a
     non-mana cost taxed {2} is a mixed one (pay 5 life *and* {2}).
     """
-    from .cost_modifier_lines import CostReduction
-    from .cost_modifiers import keyword_cost_modifiers, reduce_cost
-    from .special_actions import SpecialActionOffer
+    CostReduction = _late.cost_modifier_lines.CostReduction
+    keyword_cost_modifiers = _late.cost_modifiers.keyword_cost_modifiers
+    reduce_cost = _late.cost_modifiers.reduce_cost
 
     printed = face_up_morph_cost(permanent)
     if printed is None:

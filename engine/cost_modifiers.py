@@ -70,6 +70,12 @@ from .self_cost_modifiers import (
     self_per_target_tax_claims_line,
     self_cost_reduction_for_cast,
 )
+from .cast_timing import flash_surcharge_owed
+from .late_modules import LateModules
+from .object_colors import object_colors
+from .subject_filters import subject_matches
+
+_late = LateModules(__package__)
 
 
 def cost_modifier_claims_line(line: str) -> bool:
@@ -233,7 +239,6 @@ def taxed_object_colors(game, obj, seat: int | None) -> tuple[str, ...]:
     caster's. A caller with no seat gets the printed answer, which is what every
     caller here did before this function existed.
     """
-    from .object_colors import object_colors
 
     return object_colors(game, obj, seat)
 
@@ -619,7 +624,7 @@ def _stack_tax(
     object has neither. What the two share is the arithmetic and the scoping
     rules, which are the four checks below in the same order.
     """
-    from .stack_statics import stack_static_cost_sources
+    stack_static_cost_sources = _late.stack_statics.stack_static_cost_sources
 
     colors = taxed_object_colors(game, card, caster_index)
     total = 0
@@ -691,8 +696,6 @@ def spell_cost_tax(
     # this function's own stated reason: a caster asking "what does this cost?"
     # must get one answer, and this price is part of it exactly when the spell
     # is being cast outside sorcery timing. ``cast_timing`` decides when.
-    from .cast_timing import flash_surcharge_owed
-
     flash_price = flash_surcharge_owed(game, caster_index, card)
     if flash_price:
         return (
@@ -902,7 +905,6 @@ def sacrifice_taxes(
     at different moments in their own announcement (CR 601.2h against
     CR 602.2b) and both need the *gate* before anything is spent.
     """
-    from .subject_filters import subject_matches
 
     demands: list[SacrificeDemand] = []
     for seat, permanent in game.permanents_with_controller():

@@ -44,8 +44,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
 from .subject_filters import subject_matches
-from .trigger_utils import (bound_event_object, iter_triggered_abilities,
-                            make_trigger_event)
+from .trigger_utils import (
+    bound_event_object, iter_triggered_abilities, make_trigger_event, matching_triggers,
+)
+from .line_classification import compile_emblem_text
 
 if TYPE_CHECKING:
     from .game import Game
@@ -100,7 +102,6 @@ def emblem_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
     as the source, so the stack item and the resolution context read it like
     any other trigger's.
     """
-    from .line_classification import compile_emblem_text
 
     events: list[dict] = []
     for seat, player in enumerate(game.players):
@@ -212,7 +213,6 @@ def graveyard_trigger_events(
     context, which is where "attached to **that creature**" (the Dragon Auras)
     finds the permanent the event was about.
     """
-    from .trigger_utils import matching_triggers
 
     events: list[dict] = []
     for seat, player in enumerate(game.players):
@@ -267,7 +267,6 @@ def cast_trigger_events(game: Game, event: Event) -> list[dict]:
     """
     if event.kind not in _STACK_CAST_CONDITIONS:
         return []
-    from .trigger_utils import matching_triggers
 
     card = event.payload.get("cast_card")
     seat = event.payload.get("caster_index")
@@ -342,7 +341,6 @@ def moved_card_trigger_events(game: Game, event: Event) -> list[dict]:
     conditions = _MOVED_CARD_CONDITIONS.get(event.kind)
     if conditions is None:
         return []
-    from .trigger_utils import matching_triggers
 
     card = event.subject
     seat = event.payload.get("owner_index")
@@ -402,7 +400,6 @@ def _looking_back_observers(game: Game, event: Event):
     """
     if event.kind not in LOOKS_BACK_IN_TIME:
         return
-    from .trigger_utils import matching_triggers
 
     scoped = list(event.players) if event.players is not None else None
     for gone in game.departed_in_this_event():

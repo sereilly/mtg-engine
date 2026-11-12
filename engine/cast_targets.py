@@ -26,6 +26,7 @@ from .target_roles import payload_own_role
 from .cost_pickers import _cost_picker_spec
 from .instruction_targets import (_WRAPPER_STEP_KEYS, _first_described_slot,
                                   _from_instructions)
+from .target_descriptions import ANNOUNCED_SEAT, _from_targets_payload
 
 
 def _cast_cost_picker(
@@ -387,7 +388,6 @@ def _with_seat_beside_a_division(spec, instructions):
 
     Exactly one plain "target" seat step beside the division, or nothing.
     """
-    from .target_descriptions import ANNOUNCED_SEAT, _from_targets_payload
 
     if not isinstance(spec, dict) or spec.get("kind") != "divided":
         return spec

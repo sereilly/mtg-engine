@@ -35,6 +35,8 @@ from ...self_cost_modifiers import ability_self_reduction_amount
 from ...handlers._filters import _card_matches_filter
 from ...handlers._targets import attached_host
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
+from ...graveyard_order import positions_named
+from ...named_counters import counters_on
 
 
 # Instruction kinds whose handler performs the sacrifice its own cost clause
@@ -109,7 +111,6 @@ def activation_life_cost(cost, permanent, controller=None) -> int:
         return int(cost.pay_life)
     if permanent is None:
         return 0
-    from ...named_counters import counters_on
 
     return int(cost.pay_life) * counters_on(permanent, str(per_counter))
 
@@ -132,7 +133,6 @@ def activation_mana_per_counter(cost, permanent) -> dict[str, int]:
     counter = getattr(cost, "mana_per_counter", None)
     if not rate or not counter or permanent is None:
         return {}
-    from ...named_counters import counters_on
 
     many = counters_on(permanent, str(counter))
     return {
@@ -427,8 +427,6 @@ class ActivationPaymentMixin:
         X (CR 601.2b) a cost sized by X is held to; a caller announcing none
         announces zero, the path's stated default.
         """
-        from ...graveyard_order import positions_named
-        from ...named_counters import counters_on
 
         cost = ability.cost
         controller = self.players[controller_index]

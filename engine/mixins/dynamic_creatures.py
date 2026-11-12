@@ -38,6 +38,11 @@ from ..pt import clear_cda_pt, set_cda_pt
 from ..exiled_card_bodies import refresh_exiled_card_bodies
 from ..static_bonuses import (BASIC_LAND_WORDS, conditional_static_holds,
                               singular_land_type)
+from ..aura_grants import aura_board_counted_penalty
+from ..late_modules import LateModules
+from ..source_tapped_effects import effects_while_tapped
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 # "half the number of <land type>s you control" (Aspect of Wolf). The type is a
@@ -379,7 +384,7 @@ class DynamicCreaturesMixin:
         -- a permission narrowed to one colour, and the restriction that comes
         with it -- is the third field.
         """
-        from ..mana_spending import permissions_for_seat
+        permissions_for_seat = _late.mana_spending.permissions_for_seat
 
         for seat, player in enumerate(self.players):
             permissions = permissions_for_seat(self, seat)
@@ -468,9 +473,6 @@ class DynamicCreaturesMixin:
         1" is what makes Snowblind unable to kill, and reading a toughness this
         effect had already reduced would make the clamp chase itself.
         """
-        from ..aura_grants import aura_board_counted_penalty
-        from ..aura_attachment import auras_attached_to
-        from ..subject_filters import subject_matches
 
         for seat, host in self.permanents_with_controller():
             for aura in auras_attached_to(host):
@@ -524,7 +526,6 @@ class DynamicCreaturesMixin:
         reads in ``_recalculate_lord_buffs``. An entry with no P/T delta is
         that half's alone.
         """
-        from ..source_tapped_effects import effects_while_tapped
 
         for source in all_permanents:
             for record in effects_while_tapped(source):

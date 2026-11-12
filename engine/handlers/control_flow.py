@@ -56,16 +56,22 @@ from ._filters import permanent_matches_filter
 from ._record_conditions import evaluate_record_condition
 from ._role_order import (AskGroupOrder, OrderedTurn, RoleTurn,
                           ask_group_order, ordered_role, role_turns)
-from ._targets import announced_context
+from ._targets import (
+    announced_context, announced_relation_seat, resolve_role_permanent, resolve_role_player,
+)
 from .offers import (_action_is_takeable, _derived_cost_is_unpayable,
                      _exiled_cards_still_in_exile, _narrow_to_takeable_actions,
                      _offered_seats, _resolved_cost, _resolved_life_cost)
 from .registry import effect_handler
 from ..game_types import as_target_slots
+from ..late_modules import LateModules
+from ..target_roles import payload_own_role, payload_role_slot, recorded_role_seats, role_is_seat
 
 if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 def _steps(instruction: OracleInstruction, key: str) -> tuple:
@@ -123,7 +129,6 @@ def _spent_role(step: OracleInstruction) -> dict | None:
     "Put X glyph counters on target creature that target Wall blocked").
     """
     from ..targeting import spec_roles
-    from ..target_roles import payload_own_role
 
     payload = step.payload if isinstance(step.payload, dict) else {}
     described = payload.get("targets")
@@ -214,11 +219,7 @@ def _role_scoped(
     the toll's context — and resolved against the scoped channels that arm
     would have read the payer's own creature.
     """
-    from ..targeting import spec_roles
-    from ..target_roles import (payload_own_role, payload_role_slot,
-                                role_is_seat)
-    from ._targets import (announced_relation_seat, resolve_role_permanent,
-                           resolve_role_player)
+    spec_roles = _late.targeting.spec_roles
 
     payload = step.payload
     role = payload_own_role(payload)
@@ -274,8 +275,6 @@ def _role_scoped(
         # recorded for this slot (``target_roles.ROLE_SEATS``), in the channel
         # a one-target "any target" effect reads its player from. Answered by a
         # permanent it falls through to the permanent arm below.
-        from ..target_roles import recorded_role_seats, payload_role_slot
-
         slot = payload_role_slot(payload, role)
         recorded = recorded_role_seats(announced) or []
         seat = recorded[slot] if slot is not None and slot < len(recorded) else None
@@ -355,7 +354,6 @@ def _named_a_seat(announced: OracleExecutionContext, payload: dict, role: str) -
     """Whether the announcement answered *role* — an "any target" role — with a
     player: its slot recorded a seat (``target_roles.ROLE_SEATS``) and no
     permanent id."""
-    from ..target_roles import payload_role_slot, recorded_role_seats
 
     slot = payload_role_slot(payload, role)
     recorded = recorded_role_seats(announced)
@@ -371,7 +369,6 @@ def _named_a_seat(announced: OracleExecutionContext, payload: dict, role: str) -
 def _named_a_permanent(announced: OracleExecutionContext, payload: dict, role: str) -> bool:
     """Whether the announcement answered *role* with a permanent: its slot of
     the positional id list holds one."""
-    from ..target_roles import payload_role_slot
 
     slot = payload_role_slot(payload, role)
     ids = announced.target_permanent_id
@@ -437,7 +434,6 @@ def _role_its_branches_spend(step: OracleInstruction):
     ones a roles lowering built) or when they name more than one — a wrapper
     over two roles has no single object to be about.
     """
-    from ..target_roles import payload_own_role
 
     found: dict[str, dict] = {}
 
@@ -1299,7 +1295,6 @@ def _announced_target_seats(game: Game, context: OracleExecutionContext) -> list
     resolves with the default opposing seat there. A seat that has left the
     game is nobody (CR 800.4a).
     """
-    from ..target_roles import recorded_role_seats
 
     def live(seat) -> bool:
         return (

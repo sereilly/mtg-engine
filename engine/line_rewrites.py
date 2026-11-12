@@ -31,6 +31,14 @@ from .grammar import ast as grammar_ast
 from .front_ends import _is_ability_line
 from .ability_lines import _bullets_after, _modal_head
 from .derived_static_claims import _derived_static_claims
+from .cast_costs import expand_buyback_lines, expand_kicker_lines
+from .entwine import expand_entwine_lines
+from .fading import expand_fading_lines
+from .late_modules import LateModules
+from .modular import expand_modular_lines
+from .self_reference import expand_short_self_references
+
+_late = LateModules(__package__)
 
 
 def expand_modal_activated_lines(oracle_text: str) -> str:
@@ -229,12 +237,7 @@ def expand_ability_lines(
     unchanged, which is what every reader asking about a line rather than a card
     wants.
     """
-    from .cast_costs import expand_buyback_lines, expand_kicker_lines
-    from .echo import expand_echo_lines
-    from .entwine import expand_entwine_lines
-    from .fading import expand_fading_lines
-    from .modular import expand_modular_lines
-    from .self_reference import expand_short_self_references
+    expand_echo_lines = _late.echo.expand_echo_lines
 
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary

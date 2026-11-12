@@ -32,6 +32,11 @@ from ..models import Permanent, PlayerState
 from ..pending_choices import ChoiceSpec
 from ..pt import add_pt_counters, pt_counter_deltas, set_base_pt
 from ..static_bonuses import BASIC_LAND_WORDS
+from ..announced_creature_type import narrows_by_announced_type
+from ..late_modules import LateModules
+from ..oracle import compile_card_oracle
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 class EntryChoicesMixin:
@@ -663,9 +668,7 @@ class EntryChoicesMixin:
         cards it targets (``announced_creature_type``) — read off the target
         spec the card's own program derives, the description every reader of
         those targets holds."""
-        from ..announced_creature_type import narrows_by_announced_type
-        from ..oracle import compile_card_oracle
-        from ..targeting import derive_cast_spec
+        derive_cast_spec = _late.targeting.derive_cast_spec
 
         # A permanent spell targets nothing (CR 115.1); only an instant's or a
         # sorcery's own targets can be chosen under its announcement.

@@ -59,6 +59,7 @@ import re
 from dataclasses import dataclass
 
 from .shields import END_OF_TURN
+from .subject_filters import card_matches_any
 
 REVEALED_TEXT = "play with the top card of your library revealed"
 
@@ -286,7 +287,6 @@ def top_castable(game, player_index: int, card) -> bool:
     a land play — and both are asked of the *card on top*, never of a card the
     caller merely names: CR 601.3 opens the top of the library, not the library.
     """
-    from .subject_filters import card_matches_any
 
     library = game.players[player_index].library
     if not library or library[0] is not card:
@@ -339,7 +339,6 @@ def granted_top_abilities(game, permanent) -> tuple[str, ...]:
     card says: a Goblin with a triggered ability on top grants nothing, and
     handing over the whole text would give the Snoop abilities it never had.
     """
-    from .subject_filters import card_matches_any
 
     seat = game.controller_index_of(permanent)
     if seat is None:

@@ -52,9 +52,13 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from .late_modules import LateModules
+
 if TYPE_CHECKING:
     from .alternative_costs import AlternativeCost
     from .cast_permissions import CastPermission
+
+_late = LateModules(__package__)
 
 #: The keyword, as :attr:`AlternativeCost.keyword` carries it. One spelling,
 #: because three readers compare against it: the cast path (the wider exile),
@@ -370,10 +374,10 @@ def flashback_permission(
     graveyard one every bin site already routes on, and the wider one the
     stack object is stamped with (see :func:`leaves_stack_to_exile`).
     """
-    from .cast_permissions import CastPermission
-    from .search_filters import card_has_type
+    CastPermission = _late.cast_permissions.CastPermission
+    card_has_type = _late.search_filters.card_has_type
 
-    from .cast_permissions import as_though_yours_seat
+    as_though_yours_seat = _late.cast_permissions.as_though_yours_seat
 
     spell = card if spell is None else spell
     cost = printed_flashback_cost(spell)

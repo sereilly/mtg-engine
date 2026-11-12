@@ -629,7 +629,7 @@ def conditional_ability_lines_for(game, aura, seat: int, host) -> tuple[str, ...
     CR 613 layer 5's answer, not its printed one. *seat* is the Aura's
     controller (CR 109.5), which is who a relative key would be measured from.
     """
-    from .subject_filters import subject_matches
+    subject_matches = _late.subject_filters.subject_matches
 
     lines: list[str] = []
     for frozen, ability in aura_conditional_ability_grants(

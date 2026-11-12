@@ -24,6 +24,13 @@ from functools import lru_cache
 import re
 from typing import Callable
 
+from .grammar.lowering._common import dropped_narrowings
+from .grammar.phrases import parse_subject_filter
+from .late_modules import LateModules
+from .subject_filters import card_only_filter, object_only_filter
+
+_late = LateModules(__package__)
+
 
 # "As this artifact enters, choose an opponent." (Black Vise) / "As this
 # **creature** enters, choose an opponent." (Lost Order of Jarkeld.) The printed
@@ -585,9 +592,6 @@ def pay_any_life_on_enter(line: str, card_name: str | None = None) -> dict | Non
     question, which is why they are two specs rather than one: a card in a zone
     has no computed characteristics at all (CR 613.1).
     """
-    from .grammar.lowering._common import dropped_narrowings
-    from .grammar.phrases import parse_subject_filter
-    from .subject_filters import card_only_filter, object_only_filter
 
     match = PAY_ANY_LIFE_ON_ENTER.match(_self_normalized(line, card_name))
     if match is None:
@@ -658,7 +662,7 @@ def _self_normalized(line: str, card_name: str | None = None) -> str:
     """
     if not card_name:
         return _normalized(line)
-    from .self_reference import _restriction_line
+    _restriction_line = _late.self_reference._restriction_line
 
     return _normalized(_restriction_line(line, card_name))
 

@@ -49,6 +49,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .late_modules import LateModules
+
+_late = LateModules(__package__)
+
 #: The payload key under which an add-mana instruction carries *which* of the
 #: board's lands its "could produce" phrase names — a subject-filter payload
 #: (``{"supertypes": ["basic"]}``), absent when the phrase names them all.
@@ -430,7 +434,7 @@ def ability_colors_on_offer(game, permanent, instruction) -> "tuple[str, ...] | 
 
     The seat is the permanent's controller, through the control seam (CR 109.5).
     """
-    from .mana_abilities import _every_nested_step
+    _every_nested_step = _late.mana_abilities._every_nested_step
 
     seat = game.controller_index_of(permanent)
     if seat is None or instruction is None:

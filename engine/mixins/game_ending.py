@@ -21,6 +21,12 @@ from ..pt import toughness_has_been_set
 from ..trigger_utils import battlefield_triggers, matching_triggers
 from ..target_immunity import cannot_be_enchanted
 from ..tokens import is_token_card
+from ..late_modules import LateModules
+from ..lord_buffs import sacrifice_state_trigger
+from ..named_counters import EMPTIED_KINDS_MARK, counters_on
+from ..subject_filters import subject_matches
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 _COUNTER_CAP_RE = re.compile(r"can't have more than (\d+) (\w+) counters")
 
@@ -169,7 +175,7 @@ class GameEndingMixin:
         with a name, and the next caller that needs only it should not have to
         lift it out a second time.
         """
-        from ..events import emit
+        emit = _late.events.emit
 
         # "Whenever you draw your second card each turn" (Mystic Skyfish).
         # Announced here rather than at each draw site because there is no one
@@ -329,8 +335,6 @@ class GameEndingMixin:
         # (Serendib Djinn, Island Fish Jasconius already covered by no_islands).
         # Modeled alongside SBAs so it fires immediately when the last
         # matching land leaves, not only at the next upkeep (CR 603.8).
-        from ..subject_filters import subject_matches
-
         for seat, player in enumerate(self.players):
             for perm in list(self.controlled_by(player)):
                 # "When you control **no <noun>**, sacrifice this creature."
@@ -518,7 +522,8 @@ class GameEndingMixin:
         # is a record the sweep re-checks, the arrangement the linked
         # control changes above already use. ``engine/linked_sacrifice.py``
         # states why the link is by seat and by id.
-        from ..linked_sacrifice import LINKED_SACRIFICE, linked_sacrifices_owed
+        LINKED_SACRIFICE = _late.linked_sacrifice.LINKED_SACRIFICE
+        linked_sacrifices_owed = _late.linked_sacrifice.linked_sacrifices_owed
 
         for permanent in linked_sacrifices_owed(self):
             permanent.metadata.pop(LINKED_SACRIFICE, None)
@@ -541,8 +546,6 @@ class GameEndingMixin:
         # hangs on: the trigger is that question negated, and two copies of
         # it would be free to disagree — an enchantment that keeps buffing
         # after it should have been sacrificed, or the reverse.
-        from ..lord_buffs import sacrifice_state_trigger
-
         for seat, player in enumerate(self.players):
             for perm in list(self.controlled_by(player)):
                 if not isinstance(perm.metadata.get("chosen_player_index"), int):
@@ -1330,10 +1333,9 @@ class GameEndingMixin:
         # (life, empty library, poison), so settle it once the game is decided.
         self._maybe_award_ante()
 
-        from ..events import emit
-        from ..named_counters import EMPTIED_KINDS_MARK, counters_on
-        from ..state_triggers import (STATE_TRIGGER_LATCH,
-                                      announce_watched_counter_thresholds)
+        emit = _late.events.emit
+        STATE_TRIGGER_LATCH = _late.state_triggers.STATE_TRIGGER_LATCH
+        announce_watched_counter_thresholds = _late.state_triggers.announce_watched_counter_thresholds
 
         # The two draw announcements — "your second card each turn" and CR
         # 121.2's per-card event — are one method, because the draw step asks
@@ -1518,8 +1520,6 @@ class GameEndingMixin:
         # "if this permanent is an enchantment", which is false once the
         # animation has replaced its types (CR 205.1a), so the ability an
         # unchanged board announces again does nothing.
-        from ..subject_filters import subject_matches
-
         for permanent in list(self.all_permanents()):
             observer = self.controller_index_of(permanent)
             if observer is None:

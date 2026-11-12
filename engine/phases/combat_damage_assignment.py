@@ -21,14 +21,13 @@ split out of ``combat_damage_step.py`` at the size band (round kg3).
 
 from __future__ import annotations
 
-from ..combat_assignment import (DEFENDER_ANNOUNCED_THIS_STEP,
-                                 DEFENDER_ASSIGNS_AS_UNBLOCKED,
-                                 MUST_ASSIGN_AS_UNBLOCKED,
-                                 combat_damage_assigned_by,
-                                 divided_among_defenders_events,
-                                 divided_among_defenders_refusal,
-                                 may_assign_as_unblocked)
+from ..combat_assignment import (
+    DEFENDER_ANNOUNCED_THIS_STEP, DEFENDER_ASSIGNS_AS_UNBLOCKED, MUST_ASSIGN_AS_UNBLOCKED,
+    combat_damage_assigned_by, defender_assigns_all_damage, divided_among_defenders_events,
+    divided_among_defenders_refusal, may_assign_as_unblocked,
+)
 from ..models import Permanent
+from ..banding import bands_with_other_pair
 
 
 def _lethal_damage(blocker: Permanent, deathtouch: bool) -> int:
@@ -71,7 +70,6 @@ class CombatDamageAssignmentMixin:
         """
         if self._attacker_blocked_by_banding(attacker_idx):
             return True
-        from ..combat_assignment import defender_assigns_all_damage
 
         defending_index = self.combat_attackers.get(attacker_idx)
         return (
@@ -93,7 +91,6 @@ class CombatDamageAssignmentMixin:
         what the damage step then honours cannot be two different sets of
         attackers.
         """
-        from ..banding import bands_with_other_pair
 
         defending_index = self.combat_attackers.get(attacker_idx)
         if defending_index is None or not (0 <= defending_index < len(self.players)):

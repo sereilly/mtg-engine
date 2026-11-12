@@ -57,6 +57,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from .activation_zones import GRAVEYARD
+from .late_modules import LateModules
+
+_late = LateModules(__package__)
 
 #: The payload key a zone-stating instruction carries — ``events.FUNCTIONS_FROM``'s
 #: spelling, repeated rather than imported because ``engine/events.py`` sits
@@ -107,7 +110,7 @@ def graveyard_static_instructions(card) -> tuple:
     """
     if "graveyard" not in (getattr(card, "oracle_text", None) or "").lower():
         return ()
-    from .oracle import compile_card_oracle
+    compile_card_oracle = _late.oracle.compile_card_oracle
 
     return tuple(
         instruction
@@ -126,7 +129,7 @@ def graveyard_static_sources(game) -> list[tuple[GraveyardSource, Any]]:
     arrival stamps are read only for a seat whose graveyard holds such a card,
     because reading them keeps the record in step with the pile.
     """
-    from .graveyard_order import graveyard_arrival_stamps
+    graveyard_arrival_stamps = _late.graveyard_order.graveyard_arrival_stamps
 
     found: list[tuple[GraveyardSource, Any]] = []
     for seat, player in enumerate(game.players):
