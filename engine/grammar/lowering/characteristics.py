@@ -45,7 +45,7 @@ from ._amounts import (
     _static_x_amount,
 )
 from ._counted_pumps import (_TARGET_PUMP_DURATIONS, lower_counted_pump,
-                             _x_definition_spec)
+                             lower_pump_per_sacrificed, _x_definition_spec)
 from ._events import (binds_block_pair, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_OBJECTS, ROLE_NAMES_EVENT_SUBJECT)
 from ._common import (
@@ -110,6 +110,10 @@ def _lower_pump(
     # sized by its printed number alone.
     if node.per_each_recorded is not None:
         return _lower_pump_per_recorded(node, event, event_subject, produced)
+    # "…for each creature **sacrificed this way**" (Vicious Betrayal): a
+    # cost's or a step's record, decided where `produced` says which ran.
+    if node.per_each_sacrificed is not None:
+        return lower_pump_per_sacrificed(node, produced, event)
     counted = lower_counted_pump(node, event)
     if counted is not None:
         return counted

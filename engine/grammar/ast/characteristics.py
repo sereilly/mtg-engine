@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from ._core import (
     Amount,
     CountOfMillsThisWay,
+    CountOfSacrificesThisWay,
     CountersOnEventSubject,
     CountersOnSource,
     Duration,
@@ -87,6 +88,13 @@ class Pump:
     # objects on a board. The printed P/T is the size of one repetition, as it
     # is for every other count on this node.
     per_each_counters: "CountersOnSource | CountersOnEventSubject | None" = None
+    # "Target creature gets +2/+2 until end of turn **for each creature
+    # sacrificed this way**." (Vicious Betrayal.) What a sacrifice took —
+    # the spell's own additional cost (CR 601.2h) or a step in front of the
+    # sentence — counted against the printed noun phrase: the same node
+    # Reprocess's draw and Renounce's gain carry. Appended last, so every
+    # Pump built before it is byte-identical.
+    per_each_sacrificed: "CountOfSacrificesThisWay | None" = None
 
 
 @dataclass(frozen=True)
@@ -321,6 +329,21 @@ class DoublePower:
     """
     subject: Recipient
     duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class DoubleCounters:
+    """``Double the number of <kind> counters on <subject>.`` (Solarion.)
+
+    CR 701.10e: the permanent is given as many more counters of that kind as it
+    already has — a placement, so whatever modifies counters being put on a
+    permanent (CR 614) meets it — counted as the effect happens (ruling
+    2004-12-01: three become six). Its own node rather than a
+    :class:`PutCounter` whose count is "the counters on it", because that
+    count names the *source's* pile and the subject need not be the source.
+    """
+    subject: Recipient
+    counter: str = "+1/+1"
 
 
 @dataclass(frozen=True)

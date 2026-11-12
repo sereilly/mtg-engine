@@ -172,6 +172,17 @@ class AdditionalCost:
     #: "is there a creature?" would admit the cast and then charge one -- a
     #: spell cast for less than it prints, which is this module's whole subject.
     sacrifice_count: int = 1
+    #: "As an additional cost to cast this spell, **sacrifice any number of
+    #: creatures**." (Vicious Betrayal.) The payer names the set as the spell
+    #: is cast (CR 601.2b) and pays it as the cost is paid (CR 601.2h) —
+    #: ``sacrifice_filter`` says what may be in it, ``sacrifice_count`` is 0,
+    #: and the set is exactly the permanents named: none is a legal payment
+    #: (zero is a number), so nothing is ever picked for a payer who named
+    #: none, and the cost is never part of ``_unpayable_additional_cost``.
+    #: The activation path's "Sacrifice this artifact and any number of
+    #: creatures" (Sword of the Ages) is the same choice one step over and
+    #: records the same set (``sacrificed_set_for_cost``).
+    sacrifice_any_number: bool = False
     #: "As an additional cost to cast this spell, **sacrifice all permanents
     #: you control**." (Kaervek's Spite.) A *quantifier*, not a count, and so
     #: its own field: "all" names however many the board holds, where
@@ -516,7 +527,8 @@ class AdditionalCost:
         if self.sacrifice_filter is not None:
             noun = filter_head_noun(self.sacrifice_filter)
             parts.append(
-                f"sacrifice a {noun}" if self.sacrifice_count == 1
+                f"sacrifice any number of {noun}s" if self.sacrifice_any_number
+                else f"sacrifice a {noun}" if self.sacrifice_count == 1
                 else f"sacrifice {self.sacrifice_count} {noun}s"
             )
         if self.discard_whole_hand:
@@ -729,6 +741,14 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(r"^(?:sacrifice|sacrificing) (?P<noun>all .+)$"),
         "sacrifice_all",
+    ),
+    # "..., **sacrifice any number of creatures**." (Vicious Betrayal.) The
+    # set's size is the payer's, so it is read before the counted row below
+    # for the "all" row's reason: that row's catch-all noun would take "any
+    # number of creatures" for a noun phrase and refuse it.
+    (
+        re.compile(r"^(?:sacrifice|sacrificing) any number of (?P<noun>.+)$"),
+        "sacrifice_any_number",
     ),
     (re.compile(r"^(?:sacrifice|sacrificing) (?P<noun>.+)$"), "sacrifice"),
     # "…, **exile a creature you control**." (Soul Exchange.) The same clause
@@ -1042,7 +1062,8 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
         "discard_filters": (), "discard_count_x": False,
         "discard_at_random": False,
-        "sacrifice_filter": None, "sacrifice_count": 1, "exile_filter": None,
+        "sacrifice_filter": None, "sacrifice_count": 1,
+        "sacrifice_any_number": False, "exile_filter": None,
         "exile_graveyard_filter": None, "exile_graveyard_count": 1,
         "exile_graveyard_count_x": False,
         "sacrifice_all_filter": None, "discard_whole_hand": False,
@@ -1181,6 +1202,19 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 if described is None:
                     return None
                 fields["sacrifice_all_filter"] = described
+            elif field == "sacrifice_any_number":
+                if fields["sacrifice_filter"] is not None:
+                    # One sacrifice field holds one noun phrase; a second
+                    # sacrifice clause folded into it would be a union.
+                    return None
+                described = _chargeable_object(
+                    found.group("noun"), "sacrifice", plural=True,
+                )
+                if described is None:
+                    return None
+                fields["sacrifice_filter"] = described
+                fields["sacrifice_count"] = 0
+                fields["sacrifice_any_number"] = True
             elif field == "sacrifice":
                 read = read_sacrifice_clause(found.group("noun"))
                 if read is None:

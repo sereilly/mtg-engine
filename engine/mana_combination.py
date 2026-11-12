@@ -261,3 +261,45 @@ def default_split(
     if remaining > 0:
         split[chosen if chosen in symbols else symbols[0]] += remaining
     return {symbol: amount for symbol, amount in split.items() if amount}
+
+
+#: The five colours (CR 105.1) a split "in any combination of **colors**" is
+#: over — never {C}, which is no colour.
+ANY_COLOR_SYMBOLS: tuple[str, ...] = ("W", "U", "B", "R", "G")
+
+
+def triggered_split(
+    game: "Game", seat: int, total: int, chosen: "str | None", split=None,
+) -> "list[str]":
+    """The symbols, one per unit, of *total* mana "in any combination of
+    colors" a **triggered** mana ability adds as a land is tapped —
+    "Whenever enchanted land is tapped for mana, its controller adds an
+    additional two mana in any combination of colors." (Dawn's Reflection.)
+
+    CR 605.4a: it resolves at once, inside the tap, so its choice is made
+    with the tap (CR 605.3b): *split* is the ``{symbol: count}`` the seat
+    sent with it (the wire's ``mana_combination``, the channel an activated
+    ability's split rides), honoured only when it names colours alone and
+    adds up to *total* exactly; otherwise — no split, or a malformed one —
+    :func:`default_split`, toward what the seat's held cards ask for, the
+    rest the colour the seat asked the land for. Never partial: a split the
+    seat got wrong is replaced whole rather than topped up.
+    """
+    if total <= 0:
+        return []
+    wanted = normalized_split(split)
+    if not (
+        wanted is not None
+        and all(symbol in ANY_COLOR_SYMBOLS for symbol in wanted)
+        and all(amount >= 0 for amount in wanted.values())
+        and sum(wanted.values()) == total
+    ):
+        asked = (chosen or "").strip().upper()
+        wanted = default_split(
+            game, seat, ANY_COLOR_SYMBOLS, total,
+            asked if asked in ANY_COLOR_SYMBOLS else None,
+        )
+    return [
+        symbol for symbol in ANY_COLOR_SYMBOLS
+        for _ in range(int(wanted.get(symbol, 0)))
+    ]

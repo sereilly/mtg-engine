@@ -826,6 +826,13 @@ def parse_imperative_verb(
         if stream.accept_phrase("pay", "any", "amount", "of", "mana"):
             return ast.PayAnyAmountOfMana(ast.PlayerRef("you"))
         stream.reset(mark_any)
+        # "**Pay any amount of life**, then look at that many cards …"
+        # (Plunge into Darkness.) The same choice in the other currency, read
+        # here for the same reason: the life reader below parses "any amount
+        # of" as an unbounded quantity nobody chooses, which this is not.
+        if stream.accept_phrase("pay", "any", "amount", "of", "life"):
+            return ast.PayAnyAmountOfLife(ast.PlayerRef("you"))
+        stream.reset(mark_any)
         paid = _parse_pay_life(stream)
         if paid is not None:
             return paid

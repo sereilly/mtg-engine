@@ -519,6 +519,10 @@ def _action_tap(session, req, seat_type):
             # click that names none must not be read as asking for green.
             chosen_color=req.mana_color,
             permanent_index=permanent_index,
+            # "…adds an additional two mana in any combination of colors"
+            # (Dawn's Reflection): the split of what the tap sets off,
+            # chosen with it; absent, the seat's default.
+            mana_combination=req.mana_combination,
         )
         if refused is not None:
             raise HTTPException(status_code=400, detail=refused)
@@ -663,6 +667,7 @@ def _action_activate(session, req, seat_type):
             chosen_color=req.mana_color,
             permanent_index=permanent_index,
             ability_index=seam_ability_index,
+            mana_combination=req.mana_combination,
         )
         if refused is not None:
             raise HTTPException(status_code=400, detail=refused)

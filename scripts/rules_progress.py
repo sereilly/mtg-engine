@@ -89,6 +89,8 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "701.7",   # Create
         "701.8",   # Destroy
         "701.9",   # Discard
+        "701.10",  # Double (M21: Unleash Fury; 5DN: Doubling Cube, Solarion,
+                   # Beacon of Immortality; Furnace of Rath's 701.10g)
         "701.12",  # Exchange
         "701.13",  # Exile
         "701.14",  # Fight (M21: Brash Taunter, Primal Might)

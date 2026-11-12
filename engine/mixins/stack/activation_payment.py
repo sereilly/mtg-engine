@@ -588,9 +588,11 @@ class ActivationPaymentMixin:
                 cost, controller_index, permanent
             )
         ):
+            from ...named_counters import counter_kind_words
+
             return (
                 f"{name}: no {filter_head_noun(cost.remove_counter_filter)} "
-                f"with a {cost.remove_counter} counter to remove"
+                f"with a {counter_kind_words(cost.remove_counter)}counter to remove"
             )
         # "Sacrifice a creature **and a Swamp**": the second must be another
         # permanent than the one the first sacrifice takes.

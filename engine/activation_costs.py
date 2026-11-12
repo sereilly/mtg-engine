@@ -1083,6 +1083,28 @@ def parse_activated_ability_cost(
         remove_counter_filter = _chargeable_counter_target(chosen_removal.group(2))
         if remove_counter_filter is not None:
             remove_counter = chosen_removal.group(1)
+    # "{1}{R}, Remove a +1/+1 counter **or a charge counter** from a permanent
+    # you control" (Ion Storm). The chosen spelling with two kinds listed:
+    # one counter of either, off the permanent the payer picks, carried as
+    # ``named_counters.counter_kind_alternatives`` and turned into a real kind
+    # at payment (``Game.cost_counter_removal_kind``). The row above cannot
+    # read it (its kind must be followed by "counter from"), and neither can
+    # the self-referring rows below; a chargeless target leaves the field
+    # empty, which the support gate reports as an uncharged cost.
+    either_removal = re.search(
+        r"\bremove an? ([a-z]+|[+-]\d+/[+-]\d+) counter or an? "
+        r"([a-z]+|[+-]\d+/[+-]\d+) counter from (an? [^,:]+?)\s*(?=,|:|$)",
+        cost_lower,
+    )
+    if either_removal is not None:
+        from .named_counters import counter_kind_alternatives
+
+        remove_counter = None
+        remove_counter_filter = _chargeable_counter_target(either_removal.group(3))
+        if remove_counter_filter is not None:
+            remove_counter = counter_kind_alternatives(
+                (either_removal.group(1), either_removal.group(2))
+            )
     # "{T}, Remove **a counter** from a permanent you control" (Power Conduit).
     # The chosen spelling with no kind printed: any kind pays, so the field
     # carries ``named_counters.ANY_COUNTER_KIND`` and the charger turns it into

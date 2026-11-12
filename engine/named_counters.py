@@ -176,6 +176,48 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
 #: store; :func:`counter_kind_to_remove` turns it into a real kind at payment.
 ANY_COUNTER_KIND = "<counter of any kind>"
 
+#: "{1}{R}, Remove **a +1/+1 counter or a charge counter** from a permanent you
+#: control: …" (Ion Storm.) The same open choice narrowed to the kinds the
+#: cost lists — the payer gives up one counter of whichever listed kind the
+#: chosen permanent holds (CR 602.2b). Spelled into the one string field
+#: ``ActivatedAbilityCost.remove_counter`` the way :data:`ANY_COUNTER_KIND`
+#: is, and for its reason: a reader not taught it asks for counters of a kind
+#: named this, which nothing places, and refuses the payment. Built and read
+#: by the two functions below only.
+_KINDS_OPEN = "<counter of kind "
+_KINDS_OR = " or "
+_KINDS_CLOSE = ">"
+
+
+def counter_kind_alternatives(kinds) -> str:
+    """The ``remove_counter`` spelling of "a <kind> counter or a <kind>
+    counter" — one of *kinds*, in printed order."""
+    return f"{_KINDS_OPEN}{_KINDS_OR.join(kinds)}{_KINDS_CLOSE}"
+
+
+def listed_counter_kinds(kind: str) -> "tuple[str, ...] | None":
+    """The kinds a :func:`counter_kind_alternatives` spelling lists, or None
+    for any other kind (a printed one, or :data:`ANY_COUNTER_KIND`)."""
+    if not (
+        isinstance(kind, str) and kind.startswith(_KINDS_OPEN)
+        and kind.endswith(_KINDS_CLOSE)
+    ):
+        return None
+    return tuple(kind[len(_KINDS_OPEN):-len(_KINDS_CLOSE)].split(_KINDS_OR))
+
+
+def counter_kind_words(kind: str) -> str:
+    """*kind* as a sentence says it before "counter": the printed word, the
+    listed words joined by "or", or nothing for :data:`ANY_COUNTER_KIND` —
+    so a refusal reads "a +1/+1 or charge counter" and "a counter", never
+    the sentinel spelling."""
+    if kind == ANY_COUNTER_KIND:
+        return ""
+    listed = listed_counter_kinds(kind)
+    if listed is not None:
+        return _KINDS_OR.join(listed) + " "
+    return f"{kind} "
+
 #: The CR 122.1a kinds this engine keeps under a key of their own, read back
 #: from the key. The inverse of ``pt._PT_COUNTER_KEYS``, spelled here rather
 #: than imported because a store reader must not depend on the layer module.
@@ -211,6 +253,9 @@ def counters_held(permanent, kind: str) -> int:
     :data:`ANY_COUNTER_KIND`."""
     if kind == ANY_COUNTER_KIND:
         return sum(counter_kinds_on(permanent).values())
+    listed = listed_counter_kinds(kind)
+    if listed is not None:
+        return sum(counters_on(permanent, each) for each in listed)
     return counters_on(permanent, kind)
 
 
@@ -222,7 +267,9 @@ _UNASKED_REMOVAL_ORDER = ("-1/-1",)
 _UNASKED_REMOVAL_LAST = ("+1/+0", "+1/+1", "loyalty")
 
 
-def counter_kind_to_remove(permanent, named: "str | None" = None) -> "str | None":
+def counter_kind_to_remove(
+    permanent, named: "str | None" = None, *, among: "tuple[str, ...] | None" = None,
+) -> "str | None":
     """Which counter "remove a counter from <it>" takes off *permanent*, or None.
 
     *named* is the payer's announcement (CR 602.2b's choices through CR
@@ -230,8 +277,14 @@ def counter_kind_to_remove(permanent, named: "str | None" = None) -> "str | None
     when it does not — a named payment is paid as named or not at all. With
     nothing named, a permanent holding one kind needs no choice, and one
     holding several takes :data:`_UNASKED_REMOVAL_ORDER`'s deterministic pick.
+
+    *among* narrows every answer to the kinds a cost lists ("a +1/+1 counter
+    or a charge counter", Ion Storm): a kind named outside them is refused
+    like a kind the permanent does not hold.
     """
     held = counter_kinds_on(permanent)
+    if among is not None:
+        held = {kind: count for kind, count in held.items() if kind in among}
     if named:
         return named if held.get(str(named), 0) > 0 else None
     if not held:
@@ -311,10 +364,13 @@ __all__ = [
     "add_counters",
     "counter_cap",
     "counter_cap_line",
+    "counter_kind_alternatives",
     "counter_kind_to_remove",
+    "counter_kind_words",
     "counter_kinds_on",
     "counters_held",
     "counters_key",
     "counters_on",
+    "listed_counter_kinds",
     "remove_counters",
 ]

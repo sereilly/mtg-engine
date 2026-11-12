@@ -308,6 +308,12 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
         # flag the cast side's X box already reads — rather than a number.
         if sacrifice_count == "x":
             spec["announces_x"] = True
+        # "As an additional cost to cast this spell, sacrifice **any number
+        # of** creatures" (Vicious Betrayal): the payer names a set of any
+        # size, none included, so the client lets them pick freely and send
+        # what they picked on ``cost_permanent_ids``.
+        if getattr(cost, "sacrifice_any_number", False):
+            spec["any_number"] = True
         # `kind` already *is* the head noun, so re-stating it in the carried
         # filter would be the same restriction written twice. A type *union* has
         # no head noun (`kind` falls back to "permanent"), so it rides along.
@@ -427,11 +433,19 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             # where the chosen permanent holds two kinds — may name one on
             # ``cost_counter_kind``; unnamed, the charger takes
             # ``named_counters.counter_kind_to_remove``'s pick.
-            from .named_counters import ANY_COUNTER_KIND
+            from .named_counters import ANY_COUNTER_KIND, listed_counter_kinds
 
             if cost.remove_counter == ANY_COUNTER_KIND:
                 spec["counter"] = "any"
                 spec["any_counter_kind"] = True
+            # "Remove a +1/+1 counter **or a charge counter** …" (Ion Storm):
+            # the same naming, over the kinds the cost lists — sent, so the
+            # client offers only those (a kind outside them is refused).
+            listed = listed_counter_kinds(cost.remove_counter)
+            if listed is not None:
+                spec["counter"] = " or ".join(listed)
+                spec["any_counter_kind"] = True
+                spec["counter_kinds"] = list(listed)
             specs.append(spec)
     if getattr(cost, "hand_to_library_top", 0):
         # "**Put a card from your hand on top of your library**: …" (Hidden

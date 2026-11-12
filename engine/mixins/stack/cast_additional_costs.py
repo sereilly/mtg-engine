@@ -333,7 +333,9 @@ class AdditionalCastCostsMixin:
                         f"{card.name} can't be cast: {refused} "
                         f"(CR 601.2b)"
                     )
-            if cost.sacrifice_filter is not None:
+            # "…, sacrifice **any number of** creatures" (Vicious Betrayal) is
+            # payable off any board: none is a number (CR 601.2h).
+            if cost.sacrifice_filter is not None and not cost.sacrifice_any_number:
                 # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
                 # *count* is what makes such a cost unpayable: one creature is
                 # no more a payment than none, and a gate that asked only
@@ -460,7 +462,7 @@ class AdditionalCastCostsMixin:
         *,
         x_value: int | None,
         taken: dict[str, int] | None,
-    ) -> "list[tuple[str, AdditionalCost, int]]":
+    ) -> "list[tuple[str, AdditionalCost, int | None]]":
         """Every chosen-permanent price this cast charges, as ``(verb, cost,
         how many)`` in the order :meth:`_pay_additional_costs` collects them.
 
@@ -468,15 +470,19 @@ class AdditionalCastCostsMixin:
         takes it, so the two cannot count different prices: an offer nobody
         took is not in it (CR 601.2b), and an X is the announced one
         (CR 107.3a). "Sacrifice **all** permanents you control" is not in it
-        either — a quantifier leaves nothing to choose.
+        either — a quantifier leaves nothing to choose. "Sacrifice **any
+        number of** creatures" (Vicious Betrayal) is, with ``None`` for how
+        many: the named set is the count, whatever its size.
         """
-        demands: list[tuple[str, AdditionalCost, int]] = []
+        demands: list[tuple[str, AdditionalCost, int | None]] = []
         for cost in costs:
             if not optional_cost_taken(cost, taken):
                 continue
             if cost.exile_filter is not None:
                 demands.append(("exile", cost, 1))
-            if cost.sacrifice_filter is not None:
+            if cost.sacrifice_filter is not None and cost.sacrifice_any_number:
+                demands.append(("sacrifice", cost, None))
+            elif cost.sacrifice_filter is not None:
                 demands.append(("sacrifice", cost, max(1, cost.sacrifice_count)))
             if cost.return_filter is not None:
                 demands.append(("return", cost, cost.returned_count(x_value)))
@@ -604,8 +610,12 @@ class AdditionalCastCostsMixin:
             claimed = [
                 found for found in unclaimed
                 if any(found is option for option in options)
-            ][:wanted]
-            if len(claimed) < wanted:
+            ]
+            # "Any number of" (``None``) takes every name it can; a count
+            # takes that many and no fewer.
+            if wanted is not None:
+                claimed = claimed[:wanted]
+            if wanted is not None and len(claimed) < wanted:
                 return (
                     f"{card.name} can't be cast: its additional cost takes "
                     f"{wanted} permanent(s) to {verb} and {len(claimed)} "
@@ -896,6 +906,8 @@ class AdditionalCastCostsMixin:
         """
         caster = self.players[caster_index]
         sacrificed: Permanent | None = None
+        # Every permanent an "any number of" sacrifice took (Vicious Betrayal).
+        sacrificed_set: list[Permanent] = []
         exiled: Permanent | None = None
         # Every card a printed discard took, in the order it took them — the
         # channel an activation's discard cost has recorded on since Land's
@@ -1034,7 +1046,39 @@ class AdditionalCastCostsMixin:
                     self.log.append(
                         f"{caster.name} exiled {exiled_card.name} to cast {card.name}"
                     )
-            if cost.sacrifice_filter is not None:
+            if cost.sacrifice_filter is not None and cost.sacrifice_any_number:
+                # "…, sacrifice **any number of** creatures." (Vicious
+                # Betrayal.) Exactly the permanents the payer named that the
+                # noun phrase admits (``_named_cast_cost_refusal`` held the
+                # names to that before anything was spent), and **no default
+                # pick**: none is a legal payment, and choosing creatures for a
+                # seat that named none would sacrifice a board to pay a cost of
+                # zero — the activation path's rule for Sword of the Ages.
+                # Snapshotted by identity before the first goes, and gone
+                # together (CR 603.10a). The set is recorded for "for each
+                # creature sacrificed this way" (``sacrificed_set_for_cost``).
+                candidates = self._additional_cost_candidates(caster_index, cost)
+                chosen_set = [
+                    named for named in named_payers
+                    if any(named is option for option in candidates)
+                ]
+                named_payers = [
+                    named for named in named_payers
+                    if not any(named is taken_one for taken_one in chosen_set)
+                ]
+                with self.leaving_together():
+                    for chosen in chosen_set:
+                        name = chosen.card.name
+                        if self.sacrifice_permanent(chosen) is not None:
+                            sacrificed_set.append(chosen)
+                            self.log.append(
+                                f"{caster.name} sacrificed {name} to cast {card.name}"
+                            )
+                if not chosen_set:
+                    self.log.append(
+                        f"{caster.name} sacrificed no permanents to cast {card.name}"
+                    )
+            elif cost.sacrifice_filter is not None:
                 # Whom the payer named, in the order they named them
                 # (``_named_cast_cost_payers`` says why there are two
                 # channels).
@@ -1205,6 +1249,7 @@ class AdditionalCastCostsMixin:
         return {
             "sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled,
             "discarded_for_cost": discarded_cards,
+            "sacrificed_set_for_cost": sacrificed_set,
         }
 
     def _checked_cast_costs(

@@ -50,6 +50,10 @@ MANA_PRODUCING_KINDS: frozenset[str] = frozenset({
     "sacrifice_creature_for_mana",
     "sacrifice_self_for_mana",
     "channel_life_for_mana",
+    # "Double the amount of each type of unspent mana you have." (Doubling
+    # Cube; CR 701.10f adds that much mana, and its ruling of 2004-12-01:
+    # "Doubling Cube's ability is a mana ability".)
+    "double_unspent_mana",
 })
 
 #: Costs that move a card to or from a library, as fields of

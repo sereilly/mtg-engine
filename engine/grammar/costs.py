@@ -305,6 +305,34 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     count = ast.Fixed(1) if stream.accept_word("a", "an") else parse_amount(stream)
     counter = _expect_counter_kind(stream, " to remove").text
     stream.expect_word("counter", "counters")
+    # "{1}{R}, Remove a +1/+1 counter **or a charge counter** from a permanent
+    # you control: …" (Ion Storm.) One counter of either listed kind, off a
+    # permanent the payer picks — the Power Conduit branch above narrowed to
+    # the kinds printed (``named_counters.counter_kind_alternatives``). Only
+    # one counter and only the chosen spelling: the source charger names one
+    # kind, and a count above one would leave open how many of each.
+    if stream.accept_word("or"):
+        if count != ast.Fixed(1) or not stream.accept_word("a", "an"):
+            raise stream.error("a choice of counter kinds removes one counter")
+        other = _expect_counter_kind(stream, " to remove").text
+        stream.expect_word("counter")
+        stream.expect_word("from")
+        if accept_source_reference(stream):
+            raise stream.error(
+                "a choice of counter kinds is removed only from a permanent "
+                "the payer is asked for"
+            )
+        subject = _parse_cost_object(stream, "remove a counter from")
+        if not _is_chargeable_counter_target(subject, removal=True):
+            raise stream.error(
+                "a choice of counter kinds is removed from a permanent the "
+                "payer can be asked for"
+            )
+        from ..named_counters import counter_kind_alternatives
+
+        return ast.RemoveCounterCost(
+            counter_kind_alternatives((counter, other)), count, subject=subject,
+        )
     stream.expect_word("from")
     # "Remove **X** winch counters from this artifact" (Mercadian Lift, Kyren
     # Toy). **Four** count shapes reach a charger now -- a printed number, "any

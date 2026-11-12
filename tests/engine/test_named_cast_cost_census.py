@@ -101,8 +101,23 @@ def _chosen_costs(pool) -> list[tuple]:
     return found
 
 
+#: How many payers a probe of an "any number of" sacrifice names (Vicious
+#: Betrayal): a set the caster sizes, so two — one more than a single
+#: sacrifice, to tell a set from a pick.
+_ANY_NUMBER_NAMED = 2
+
+
+def _any_number(cost, verb) -> bool:
+    """Whether the cost is "sacrifice **any number of** …" — a set the caster
+    names (CR 601.2b), none included, and never a default pick."""
+    return verb == "sacrifice" and bool(getattr(cost, "sacrifice_any_number", False))
+
+
 def _wanted(cost, verb) -> int:
-    """How many permanents the cost takes. An X cost is announced as 2."""
+    """How many permanents the cost takes. An X cost is announced as 2, and so
+    is an "any number of" set (:data:`_ANY_NUMBER_NAMED`)."""
+    if _any_number(cost, verb):
+        return _ANY_NUMBER_NAMED
     if verb == "sacrifice":
         return max(1, cost.sacrifice_count)
     if verb == "return":
@@ -324,13 +339,18 @@ def run_census(pool, by_name) -> dict:
         table = _Table(by_name, pristine, card, cost, verb)
 
         # The convention every other probe is measured against: a cast that
-        # names no payer is cast, and pays the cost's count by default.
+        # names no payer is cast, and pays the cost's count by default — or,
+        # for "any number of" (Vicious Betrayal), pays **nothing**: none is a
+        # legal answer and no default is ever picked for it.
+        any_number = _any_number(cost, verb)
         result, _named, left = table.cast(lambda g, c: ({}, []))
-        if not result.supported or len(left) != wanted:
+        if not result.supported or len(left) != (0 if any_number else wanted):
             unprobed.append(f"{label}: bare cast -> {result.details[:80]!r}, paid {len(left)}")
             boards += table.boards
             continue
         examined["bare cast pays by default"] += 1
+        if any_number:
+            examined["any number: a bare cast pays nothing"] += 1
         examined["optional" if cost.optional_key else "mandatory"] += 1
 
         def probe(kind: str, naming, *, legal: bool = False, table=table, label=label) -> None:
@@ -381,11 +401,15 @@ def run_census(pool, by_name) -> dict:
         probe("names a slot that cannot pay", an_outsider_by_slot)
 
         if wanted > 1:
-            # CR 601.2h: "Partial payments are not allowed."
+            # CR 601.2h: "Partial payments are not allowed." An "any number
+            # of" set has no count to fall short of: one is a whole payment.
             def a_short_list(g, c, wanted=wanted):
                 payers = _least_preferred(g, c, wanted - 1)
                 return _ids(payers), payers
-            probe("names fewer than the cost takes", a_short_list)
+            if any_number:
+                probe("any number: names a smaller set", a_short_list, legal=True)
+            else:
+                probe("names fewer than the cost takes", a_short_list)
 
             def one_twice(g, c, wanted=wanted):
                 payers = _least_preferred(g, c, 1) * wanted
@@ -395,7 +419,11 @@ def run_census(pool, by_name) -> dict:
         def a_long_list(g, c, wanted=wanted):
             payers = _least_preferred(g, c, wanted + 1)
             return _ids(payers), payers
-        probe("names more than the cost takes", a_long_list)
+        if any_number:
+            # …nor a count to exceed: a larger set is a larger payment.
+            probe("any number: names a larger set", a_long_list, legal=True)
+        else:
+            probe("names more than the cost takes", a_long_list)
 
         # And the half that must keep working: the payers the caster names are
         # the payers — the ones the default would have kept.
@@ -462,3 +490,11 @@ def test_a_named_cast_cost_payer_pays_or_the_cast_is_refused(pool, by_name):
     assert examined["names legal payers by id"] >= 43, examined
     assert examined["names a legal payer by slot"] >= 38, examined
     assert examined["declines the offer and names a payer anyway"] >= 11, examined
+    # "Sacrifice any number of creatures" (Vicious Betrayal, 5DN W1G7): a set
+    # of any size is a payment, so a bare cast pays nothing and a smaller or a
+    # larger named set pays as named. Before the set was charged the card was
+    # unsupported and absent from the population; a gate that took a default
+    # pick for it reads here as a bare cast that paid one.
+    assert examined["any number: a bare cast pays nothing"] >= 1, examined
+    assert examined["any number: names a smaller set"] >= 1, examined
+    assert examined["any number: names a larger set"] >= 1, examined

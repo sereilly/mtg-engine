@@ -504,3 +504,20 @@ class LoseUnspentMana:
 
     player: PlayerRef
 
+
+@dataclass(frozen=True)
+class DoubleUnspentMana:
+    """"**Double the amount of each type of unspent mana you have.**"
+    (Doubling Cube.)
+
+    CR 701.10f: the player adds, per type, as much mana of that type as the
+    pool already holds — an *addition*, so whatever modifies mana being added
+    (CR 614.1a, False Dawn) meets it. A type is a colour or colourless (ruling
+    2004-12-01), and restrictions on the doubled mana are not copied (the same
+    ruling): what is added is plain mana. Its own node beside
+    :class:`LoseUnspentMana` because the two read the same pool and do
+    opposite things with it.
+    """
+
+    player: PlayerRef
+

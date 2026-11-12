@@ -83,6 +83,20 @@ class SetLifeTotal:
 
 
 @dataclass(frozen=True)
+class DoubleLifeTotal:
+    """"**Double target player's life total.**" (Beacon of Immortality.)
+
+    CR 701.10d: the player gains or loses the amount that makes the new total
+    twice the current one — a gain or a loss, never an assignment, so life-gain
+    replacements and triggers meet it (ruling 2007-07-15), and a negative total
+    doubles by the real arithmetic into a loss (ruling 2007-02-01: -10 becomes
+    -20). Its own node rather than a :class:`SetLifeTotal` because the printed
+    words name no result: the result is read off the player at resolution.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class ExchangeLifeTotals:
     """"Exchange life totals with target opponent." (Mirror Universe.)
 
@@ -154,6 +168,21 @@ class PayAnyAmountOfMana:
     wrapping it, exactly as Mind Bomb's ceiling collapses the offer above its
     discard: zero is already a legal answer, so the offer adds no answer the
     prompt does not have.
+    """
+
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
+class PayAnyAmountOfLife:
+    """``Pay any amount of life`` as a step of a resolution (Plunge into
+    Darkness: "Pay any amount of life, then look at that many cards …").
+
+    :class:`PayAnyAmountOfMana`'s twin in the other currency: the payer names
+    the amount (its ruling, 2004-12-01: "choose X, pay X life" on resolution),
+    CR 119.4 caps it at their life total, and the sentence behind it reads
+    the answer ("that many"). Not a :class:`PayLife` whose amount is "any":
+    a printed amount is a payment, and this is a choice and then a payment.
     """
 
     player: PlayerRef

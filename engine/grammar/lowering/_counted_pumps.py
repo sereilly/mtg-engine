@@ -215,6 +215,68 @@ def _lower_pump_per_milled(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     )
 
 
+def lower_pump_per_sacrificed(
+    node: ast.Pump, produced: frozenset[str], event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """"Target creature gets +2/+2 until end of turn **for each creature
+    sacrificed this way**." (Vicious Betrayal.)
+
+    Two producers write a sacrifice "this way" names, and which one ran is
+    decided here: a step in front of the sentence ("sacrifice any number of
+    creatures. …", the ``sacrificed_cards`` scratchpad list Reprocess's draw
+    counts) or the spell's or ability's own cost (CR 601.2h; the payment
+    path's ``sacrificed_set_for_cost``). A trigger pays no cost, so under one
+    the words name only a step, and with none they name nothing and refuse.
+
+    A one-shot boost on one chosen target, the shape every "for each" pump
+    onto a target takes (``pump_target_creature_until_eot``, the count not
+    *about* the target). The noun phrase is counted, not dropped: a cost
+    record holds the departed permanents (CR 608.2h), so an object filter
+    answers them; a step's record holds cards, so a card filter does.
+    """
+    duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind or "")
+    if duration is None:
+        raise LoweringError("no pump handler ends at this duration", node=node)
+    if not _is_target(node.subject):
+        raise LoweringError(
+            "a pump counted off a sacrifice lands on one chosen target",
+            node=node,
+        )
+    printed = node.per_each_sacrificed.filter
+    if "sacrificed_cards" in produced:
+        described = chargeable_card_filter(printed)
+        if not described:
+            raise LoweringError(
+                "a sacrificed-card count cannot test this restriction", node=node
+            )
+        spec: dict[str, object] = {
+            "recorded_cards": "sacrificed_cards", "filter": described,
+        }
+    elif event is None:
+        described = object_only_filter(_filter_payload(printed))
+        if described is None:
+            raise LoweringError(
+                "a sacrificed-permanent count cannot test this restriction",
+                node=node,
+            )
+        spec = {"cost_sacrificed_count": True, "filter": described}
+    else:
+        raise LoweringError(
+            "back-reference to a sacrifice with no producer in this effect",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "power": _per_each_amount(node.power, node.power_negative, node),
+        "toughness": _per_each_amount(
+            node.toughness, node.toughness_negative, node
+        ),
+        "x_from_count": spec,
+        "duration": duration,
+    }
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
+
+
 def _lower_pump_per_counter(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     """"Target creature gets +1/+1 until end of turn **for each +1/+1 counter on
     this creature**." (Canopy Crawler.)

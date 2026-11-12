@@ -1221,6 +1221,15 @@ SACRIFICED_COUNT = "sacrificed_count"
 #: agreement every other record on this channel has.
 LIFE_LOST_THIS_WAY = "life_lost_this_way"
 
+#: How much life a "pay any amount of life" step paid — the amount its payer
+#: named (Plunge into Darkness: "Pay any amount of life, then look at **that
+#: many** cards …"). Written by ``handlers/life_and_game.pay_any_amount_of_life``
+#: (stamped with the default as the prompt is armed, and overwritten by the
+#: ``number_choice`` answer that pays it), declared by ``_records._PRODUCES``
+#: and named a quantity by ``_record_keys._PRODUCED_QUANTITIES`` — the same
+#: three-way agreement ``LIFE_LOST_THIS_WAY`` above keeps.
+LIFE_PAID_THIS_WAY = "life_paid_this_way"
+
 
 #: The life a permanent's **own entry trigger** made its controller lose, noted
 #: on the ``Permanent`` (CR 607.1: "…gain life equal to **the life you lost when

@@ -559,39 +559,51 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
     # Harbinger.) The count is the firing event's number, and the word order is
     # the other one this template prints — "cards from the top of" rather than
     # "the top … cards of".
-    if stream.accept_phrase("that", "many"):
+    #
+    # …and "**Pay any amount of life, then** look at that many cards from the
+    # top of your library. Put one of those cards into your hand and exile the
+    # rest." (Plunge into Darkness), whose number is an earlier step's. Either
+    # way the pile is your own library's top, so the sorting sentence behind
+    # it is read by the same tail as "the top N cards" below — which is where
+    # Garruk's Harbinger's reveal was already read for the "the top" spelling.
+    that_many = stream.accept_phrase("that", "many")
+    if that_many:
         for word in ("cards", "from", "the", "top", "of", "your", "library"):
             stream.expect_word(word)
-        return _parse_look_pick_tail(stream, ast.ThatMuch(None))
-    if stream.accept_phrase("the", "top"):
-        # "Look at the top **card**" (Coral Fighters), beside "the top N
-        # **cards**". The singular prints no number at all, so a reader that
-        # went straight to `parse_amount` refused the line at the noun — the
-        # same one-line gap `_parse_exile_top_of_library` already answers this
-        # way, in `zones` since that module took the moves at Mirage.
-        if stream.accept_word("card"):
-            count: ast.Amount = ast.Fixed(1)
-        else:
-            count = parse_amount(stream)
-            stream.expect_word("cards")
-        stream.expect_word("of")
-        # Whose library, read rather than assumed to be the word "your": "the
-        # top five cards of **target player's** library" (Visions) is this same
-        # sentence about somebody else's deck. Everything below — the pick, the
-        # bottoming, the cast-zone rider — is only ever about your own library,
-        # which is why the other library's tail is read separately.
-        if stream.accept_word("your"):
-            owner = ast.PlayerRef("you")
-        else:
-            owner = parse_player_ref(stream)
-            # The lexer splits "player's" into "player" + "'s"; the marker is
-            # consumed here for the reason `_parse_look_at_hand`'s is — a token
-            # left behind fails the line's full-token consumption.
-            if owner is None or not stream.accept_word("'s"):
-                raise stream.error("expected whose library is looked at")
-        stream.expect_word("library")
-        if owner.kind != "you":
-            return _parse_look_other_library_tail(stream, count, owner)
+        count: ast.Amount = ast.ThatMuch(None)
+        owner = ast.PlayerRef("you")
+    if that_many or stream.accept_phrase("the", "top"):
+        if not that_many:
+            # "Look at the top **card**" (Coral Fighters), beside "the top N
+            # **cards**". The singular prints no number at all, so a reader
+            # that went straight to `parse_amount` refused the line at the noun
+            # — the same one-line gap `_parse_exile_top_of_library` already
+            # answers this way, in `zones` since that module took the moves at
+            # Mirage.
+            if stream.accept_word("card"):
+                count = ast.Fixed(1)
+            else:
+                count = parse_amount(stream)
+                stream.expect_word("cards")
+            stream.expect_word("of")
+            # Whose library, read rather than assumed to be the word "your":
+            # "the top five cards of **target player's** library" (Visions) is
+            # this same sentence about somebody else's deck. Everything below —
+            # the pick, the bottoming, the cast-zone rider — is only ever about
+            # your own library, which is why the other library's tail is read
+            # separately.
+            if stream.accept_word("your"):
+                owner = ast.PlayerRef("you")
+            else:
+                owner = parse_player_ref(stream)
+                # The lexer splits "player's" into "player" + "'s"; the marker
+                # is consumed here for the reason `_parse_look_at_hand`'s is — a
+                # token left behind fails the line's full-token consumption.
+                if owner is None or not stream.accept_word("'s"):
+                    raise stream.error("expected whose library is looked at")
+            stream.expect_word("library")
+            if owner.kind != "you":
+                return _parse_look_other_library_tail(stream, count, owner)
         # "…of your library**, where X is the number of basic land types among
         # lands you control**." (Worldly Counsel.) Read through the one
         # where-clause reader and handed up; absent, nothing is consumed. A

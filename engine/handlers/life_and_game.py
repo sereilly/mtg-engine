@@ -435,9 +435,16 @@ def set_life_total(game: Game, instruction: OracleInstruction, context: OracleEx
     # control**." (Biorhythm.) One number per seat, through the channel's one
     # reader — each seat's own board, counted as its total is set.
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
+    # "**Double** target player's life total." (Beacon of Immortality.) CR
+    # 701.10d: the result is twice the total as it is now, so it is read here
+    # rather than printed — and a negative total doubles by the real
+    # arithmetic, into a loss (ruling 2007-02-01: -10 becomes -20).
+    doubled = bool(instruction.payload.get("doubled"))
     for player in players:
         if per_seat is not None:
             total = per_recipient_amount(game, context, per_seat, player)
+        if doubled:
+            total = 2 * player.life
         before = player.life
         if total > before:
             game._gain_life(player, total - before, context.card.name)
@@ -1062,6 +1069,46 @@ def pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutio
     game.log.append(
         f"{context.card.name}: {player.name} paid {amount} life "
         f"({before} -> {player.life})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("pay_any_amount_of_life")
+def pay_any_amount_of_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Pay any amount of life**, then look at that many cards from the top
+    of your library." (Plunge into Darkness.)
+
+    The ruling (2004-12-01) orders it: "choose X, pay X life" — on
+    resolution, the controller naming the amount. One ``number_choice``
+    prompt, 0 up to the life total (CR 119.4: a payment larger than the total
+    cannot be made; 0 always can), whose answer *pays* that much
+    (``pay_life_this_way``) and records it as ``LIFE_PAID_THIS_WAY`` for the
+    sentence behind, which waits for it (the prompt suspends, CR 608.2).
+
+    The record is stamped first, the discipline ``choose_number`` keeps — with
+    zero, since nothing is paid until the answer pays it — and a seat nobody
+    asks names ``ai_prompt_readers.life_paid_for_a_look``: a real amount kept
+    clear of the life the AI holds back from every optional price.
+    """
+    from ..ai_prompt_readers import life_paid_for_a_look
+    from ..oracle_types import LIFE_PAID_THIS_WAY
+
+    player = context.caster
+    if player not in game.players:
+        return True, "resolved"
+    seat = game.players.index(player)
+    maximum = max(0, int(player.life))
+    default = life_paid_for_a_look(game, seat, maximum)
+    context.results[LIFE_PAID_THIS_WAY] = 0
+    if maximum <= 0:
+        game.log.append(f"{context.card.name}: {player.name} has no life to pay")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "number_choice", seat,
+        card_name=context.card.name if context.card is not None else "",
+        permanent=None, minimum=0, maximum=maximum, default_number=default,
+        result_key=LIFE_PAID_THIS_WAY, _context=context,
+        pay_life_this_way=True,
     )
     return True, "resolved"
 
