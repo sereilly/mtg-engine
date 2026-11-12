@@ -71,6 +71,7 @@ from ..cost_x_definitions import (cast_x_ceiling_line, cast_x_definition_line,
 from ..damage_source_colors import colorless_source_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
+from ..equipment import self_cant_be_equipped_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..object_creature_types import (EVERY_CREATURE_TYPE_CLAIM,
                                      every_creature_type_line)
@@ -574,6 +575,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # instruction; claimed through the reader the seed asks.
     if every_creature_type_line(line, card_name):
         return EVERY_CREATURE_TYPE_CLAIM
+
+    # engine/equipment.py — "This creature can't be equipped." (Goblin
+    # Brawler.) CR 301.5b's "can't be equipped by it", printed by the creature
+    # about itself and read off its effective text by ``equip_refusal`` — the
+    # one predicate the attach, the CR 704.5n sweep and the AI's equip planner
+    # ask — so there is nothing to lower. Not a targeting restriction (the
+    # card's 2004-12-01 ruling), which is why no target reader asks it.
+    if self_cant_be_equipped_line(line):
+        return "equipment"
 
     return None
 

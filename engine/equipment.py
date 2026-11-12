@@ -58,6 +58,7 @@ import re
 from typing import TYPE_CHECKING
 
 from .aura_attachment import attach_aura, auras_attached_to, detach_aura
+from .aura_vocabulary import _NOUN, _line_text
 
 if TYPE_CHECKING:
     from .game import Game
@@ -299,6 +300,43 @@ def attachment_target_refusal(
     return attachment_refusal(game, attachment, host)
 
 
+#: "This creature can't be equipped." (Goblin Brawler.) A restriction the
+#: permanent prints about **itself**, the Equipment twin of the Tetravite's
+#: "This token can't be enchanted" (``aura_restrictions.self_cant_be_enchanted_line``),
+#: and read the same way: anchored on the whole sentence, off the permanent's
+#: effective text, so a copy carries it (CR 707.2) and a text change can take it
+#: away.
+#:
+#: **It is not a targeting restriction.** "You can activate an equip ability
+#: that targets Goblin Brawler, but the Equipment will fail to move onto it."
+#: (Goblin Brawler ruling, 2004-12-01.) CR 301.5b says the same of every
+#: attach: "If an effect attempts to attach an Equipment to an object that
+#: can't be equipped by it, the Equipment doesn't move." So it is asked by
+#: :func:`equip_refusal` — the resolution, the CR 704.5n sweep and the AI's
+#: equip planner — and deliberately **not** by :func:`equip_target_refusal`,
+#: the picker's half.
+_SELF_CANT_BE_EQUIPPED = re.compile(rf"^this (?:token|{_NOUN}) can't be equipped$")
+
+
+def self_cant_be_equipped_line(line: str) -> bool:
+    """Whether one printed line is "this <noun> can't be equipped", in full.
+
+    Read by the support gate, by the grammar's registry claim and by
+    :func:`cant_be_equipped_by_own_text`, so what is claimed and what is
+    enforced cannot drift.
+    """
+    return _SELF_CANT_BE_EQUIPPED.match(_line_text(line or "")) is not None
+
+
+def cant_be_equipped_by_own_text(permanent: "Permanent") -> bool:
+    """Whether *permanent*'s own text forbids Equipment attaching to it."""
+    card = getattr(permanent, "effective_card", None) or getattr(permanent, "card", None)
+    text = getattr(card, "oracle_text", "") or ""
+    if "equipped" not in text:
+        return False
+    return any(self_cant_be_equipped_line(line) for line in text.splitlines())
+
+
 def equip_target_refusal(
     game: "Game", equipment: "Permanent", creature: "Permanent"
 ) -> str | None:
@@ -307,7 +345,10 @@ def equip_target_refusal(
     :func:`equip_refusal` whenever the Equipment can equip at all — a creature
     it may not be attached to (protection, CR 702.16b/d; itself) is a creature
     the ability may not choose, and offering it would be offering an attach
-    that lands nowhere. When the Equipment is itself a creature (CR 301.5c),
+    that lands nowhere — **except** a creature whose own text says it can't be
+    equipped, which is a legal target the Equipment then fails to move onto
+    (Goblin Brawler ruling, 2004-12-01; CR 301.5b; see
+    :data:`_SELF_CANT_BE_EQUIPPED`). When the Equipment is itself a creature (CR 301.5c),
     nothing can be equipped and the target is asked only what the printed
     words ask: a creature, on the battlefield, that the ability's source may
     target (CR 702.16b — an artifact source and a creature with protection
@@ -315,7 +356,7 @@ def equip_target_refusal(
     controls, and the attach that follows does nothing (CR 701.3b) either way.
     """
     if not equipment.is_creature:
-        return equip_refusal(game, equipment, creature)
+        return _equip_refusal(game, equipment, creature, chosen_as_target=True)
     if creature is None or not game.is_on_battlefield(creature):
         return "the equipped creature is no longer on the battlefield"
     if not creature.is_creature:
@@ -357,7 +398,18 @@ def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -
       happily. The rule names "a quality"; reading one family of quality is how
       the E in protection's DEBT goes missing for exactly the cards a new
       quality arrives with.
+    * CR 301.5b — a creature that can't be equipped by it ("This creature
+      can't be equipped", Goblin Brawler) doesn't receive it.
     """
+    return _equip_refusal(game, equipment, creature, chosen_as_target=False)
+
+
+def _equip_refusal(
+    game: "Game", equipment: "Permanent", creature: "Permanent", *,
+    chosen_as_target: bool,
+) -> str | None:
+    """:func:`equip_refusal`, with the one clause that is not about choosing a
+    target held back when *chosen_as_target* (see :func:`equip_target_refusal`)."""
     if creature is equipment:
         return "an Equipment can't equip itself (CR 301.5c)"
     if creature is None or not game.is_on_battlefield(creature):
@@ -378,6 +430,8 @@ def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -
             f"{creature.card.name} has protection from {equipment.card.name} "
             "(CR 702.16d)"
         )
+    if not chosen_as_target and cant_be_equipped_by_own_text(creature):
+        return f"{creature.card.name} can't be equipped (CR 301.5b)"
     return None
 
 
@@ -486,6 +540,7 @@ __all__ = [
     "EQUIP_RULES_TEXT",
     "attach_equipment",
     "attachment_target_refusal",
+    "cant_be_equipped_by_own_text",
     "equip_line_parts",
     "equip_refusal",
     "equip_target_refusal",
@@ -497,6 +552,7 @@ __all__ = [
     "is_equip_ability_text",
     "is_equip_line",
     "is_equipment",
+    "self_cant_be_equipped_line",
     "unattach_equipment",
     "unattach_illegal_equipment",
 ]

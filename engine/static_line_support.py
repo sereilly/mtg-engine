@@ -374,6 +374,12 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if self_cant_be_enchanted_line(normalized):
         return True
+    # "This creature can't be equipped." (Goblin Brawler.) Its Equipment twin,
+    # asked of the reader ``equipment.equip_refusal`` enforces with.
+    from .equipment import self_cant_be_equipped_line
+
+    if self_cant_be_equipped_line(normalized):
+        return True
     # "The chosen player's maximum hand size is four." (Cursed Rack.) Asked of
     # the reader the cleanup step enforces with, so what is claimed and what is
     # carried out are one table.
