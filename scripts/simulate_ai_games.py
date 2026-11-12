@@ -1,6 +1,23 @@
+"""AI-vs-AI games over one set's pool (or the whole pool), deterministic per seed.
+
+    simulate_ai_games.py --set DST --games 4 --seed 4242
+    simulate_ai_games.py --set DST --require "Leonin Bola,Heartseeker"
+
+``--require`` pins named cards into both seats' decks
+(``run_ai_simulation(required_cards=...)``), for a run whose subject has to
+reach the battlefield to be watched: ten of Darksteel's twelve groups each
+wrote the same wrapper around that argument. Names are comma-separated (a name that
+prints a comma, "Akroma, Angel of Wrath", is read whole), the flag may repeat,
+and each is checked against the pool the run deals from: an unknown name exits
+naming it, never a run that quietly dealt without it. The report then says how
+many log lines name each pinned card — one that no line names was dealt and
+never drawn or played, and the run says nothing about it.
+"""
+
 from __future__ import annotations
 
 import argparse
+import difflib
 import sys
 from pathlib import Path
 
@@ -8,6 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.ai_simulator import run_ai_simulation
+from engine.card_loader import load_cards
+from engine.limited_deck import LIMITED_DECK_SIZE, LIMITED_LAND_COUNT
 from set_argument import add_set_argument, resolve_set
 
 
@@ -22,13 +41,73 @@ def build_parser() -> argparse.ArgumentParser:
         default="simulation_interactions.log",
         help="Path to write full interaction log",
     )
+    parser.add_argument(
+        "--require",
+        action="append",
+        default=[],
+        metavar="NAMES",
+        help='cards pinned into both decks, comma-separated ("Card A,Card B"; may repeat); '
+             "each is checked against the pool",
+    )
     return parser
+
+
+def required_names(values: list[str], pool_names) -> tuple[list[str], list[str]]:
+    """The pinned names out of ``--require``'s values, and the ones the pool
+    does not hold. Split on commas, then a run of pieces that joins back into a
+    pool name (", ") is that one name; matched case-insensitively, answered in
+    the pool's spelling. Pieces no name takes are reported joined back as they
+    were written, so "Akroma, Angel of Wrath" missing reads as one name."""
+    canonical = {name.lower(): name for name in pool_names}
+    found: list[str] = []
+    unknown: list[str] = []
+    for value in values:
+        pieces = [piece.strip() for piece in value.split(",") if piece.strip()]
+        start = 0
+        stray: list[str] = []
+        while start < len(pieces):
+            for end in range(len(pieces), start, -1):
+                name = canonical.get(", ".join(pieces[start:end]).lower())
+                if name is not None:
+                    found.append(name)
+                    start = end
+                    break
+            else:
+                stray.append(pieces[start])
+                start += 1
+                continue
+            if stray:
+                unknown.append(", ".join(stray))
+                stray = []
+        if stray:
+            unknown.append(", ".join(stray))
+    return list(dict.fromkeys(found)), unknown
+
+
+def resolve_required(parser: argparse.ArgumentParser, args, selection) -> list[str]:
+    """``--require`` checked against the cards *selection* deals from: an
+    unknown name, or more than a deck's spells, exits (code 2) naming it."""
+    if not args.require:
+        return []
+    pool = [card.name for card in load_cards(selection.paths)]
+    names, unknown = required_names(args.require, pool)
+    if unknown:
+        hints = []
+        for name in unknown:
+            close = difflib.get_close_matches(name, pool, n=3)
+            hints.append(f"{name!r}" + (f" (did you mean {', '.join(close)}?)" if close else ""))
+        parser.error(f"--require: {selection.label} has no {'; no '.join(hints)}")
+    room = LIMITED_DECK_SIZE - LIMITED_LAND_COUNT
+    if len(names) > room:
+        parser.error(f"--require: {len(names)} cards pinned, and a deck holds {room} beside its lands")
+    return names
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     selection = resolve_set(parser, args)
+    required = resolve_required(parser, args, selection)
 
     try:
         report = run_ai_simulation(
@@ -36,6 +115,7 @@ def main() -> int:
             games=args.games,
             seed=args.seed,
             max_turns=args.max_turns,
+            required_cards=required,
         )
     except ValueError as exc:
         parser.error(f"{selection.label}: {exc}")
@@ -44,6 +124,16 @@ def main() -> int:
     log_path.write_text("\n".join(report.log_lines), encoding="utf-8")
 
     print(f"Pool: {selection.label}")
+    if required:
+        # A pinned card is in both decks, not in play: one that no log line
+        # names was never drawn, cast or met, and the run says nothing about it.
+        lines = {name: sum(name in line for line in report.log_lines) for name in required}
+        print("Pinned into both decks: " + ", ".join(
+            f"{name} ({count} log line{'s' if count != 1 else ''})" for name, count in lines.items()
+        ))
+        silent = [name for name, count in lines.items() if not count]
+        if silent:
+            print(f"  never in the log (dealt, never met): {', '.join(silent)}")
     print(f"Games simulated: {report.games_completed}/{report.games_requested}")
     print(f"Interactions logged: {report.interaction_count}")
     # Land drops are a special action, not an interaction (CR 116.2a), so they

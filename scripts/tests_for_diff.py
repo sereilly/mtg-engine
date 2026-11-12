@@ -6,9 +6,16 @@
     tests_for_diff.py --run --full       ... with their `full` tests and whole censuses
     tests_for_diff.py --censuses --list  only the registry censuses, one path a line
                                          (what `scripts/integration/meeting.sh` adds)
+    tests_for_diff.py --ingest CODE      every test whose population walks the measured
+                                         set CODE: Phase 1's yield, named before it runs
+    tests_for_diff.py --ingest CODE --run [-n N]   ... run in the full pass, longest first
 
-The diff is the working tree against ``--base`` (default: the merge-base of
-HEAD and ``main``), untracked files included. Three reasons put a test file
+The diff is the working tree against ``--base``, untracked files included. With
+no ``--base`` it is read from ``$MTG_DIFF_BASE``, else from where this branch
+started (its reflog's ``branch: Created from``), else its upstream's fork
+point, else the merge-base with ``main`` — and the base used is printed, with
+where it came from. The merge-base alone listed a whole chain's files for a
+branch cut from a chain link (Darksteel's W2G3: 512). Four reasons put a test
 on the list:
 
 1. **changed** — the diff added or edited it, or edited a test helper it imports.
@@ -24,6 +31,22 @@ on the list:
    gate found eight reds, each a census "every member of registry R is
    classified" in a file no branch had edited, after a branch added to R
    from a module the census never imports.
+4. **measured** — while the manifest measures a set, a diff under ``engine/``,
+   ``web/``, ``data/`` or ``cards/`` owes the tests whose population walks it
+   (``scripts/measured_censuses.py``), listed by node id: a wave's every branch
+   is moving that set's cards, and a census is where a moved card meets a
+   reader nobody imported. Darksteel's three reds of this class — W1G3's
+   graveyard-denial and conditional-grants censuses, W1G5's upkeep window —
+   were each red in a quick run on the branch that caused it, reached through
+   the AI's choice or a trigger-condition kind (an import of a hub, or none),
+   and none named a card or a function the branch had touched. ``--no-measured``
+   leaves them off.
+
+``--ingest CODE`` is the fourth reason alone, for the ingest of *CODE* — the
+diff that adds the set's card file and nothing else, so nothing but a test
+whose population includes the set can move. Its ``--run`` is the full pass
+(``pytest --full``: the ``full`` tests and every sampled census whole), files
+in order of their recorded time, longest first.
 
 The times are ``tests/passes.py``'s record (``.test_timings.json``: this tree's,
 over the main checkout's), split into the quick tests and the ``full`` ones,
@@ -32,6 +55,8 @@ record is marked ``?``.
 
 Named files run whole in pytest (their ``full`` tests too); ``--run`` passes
 ``--quick`` so the list costs what its quick tests cost, unless ``--full``.
+Output is LF on every platform (a CRLF path ends in a carriage return in a
+shell loop, and pytest reads it as a file that is not there).
 """
 
 from __future__ import annotations
@@ -61,9 +86,9 @@ DUMP_FLAG = "--dump-registries"
 # ---------------------------------------------------------------------------
 
 
-def git(*args: str, cwd: Path = ROOT) -> str:
+def git(*args: str, cwd: Path | None = None) -> str:
     return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
+        ["git", *args], cwd=cwd or ROOT, check=True, capture_output=True, text=True,
         encoding="utf-8",
     ).stdout
 
@@ -73,10 +98,64 @@ def main_checkout() -> Path:
     return Path(common).parent
 
 
-def resolve_base(base: str | None) -> str:
+#: The integrator's briefs set this to a branch's base when it is not ``main``.
+BASE_ENV = "MTG_DIFF_BASE"
+
+
+def _git_or_none(*args: str) -> str | None:
+    try:
+        return git(*args).strip() or None
+    except subprocess.CalledProcessError:
+        return None
+
+
+def _is_ancestor(sha: str) -> bool:
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", sha, "HEAD"], cwd=ROOT, capture_output=True,
+    ).returncode == 0
+
+
+def _branch_start() -> tuple[str, str] | None:
+    """The commit this branch was created at, from its reflog's first entry
+    (``branch: Created from <ref>``) — the base of a branch cut from a chain
+    link as well as of one cut from ``main``."""
+    branch = _git_or_none("symbolic-ref", "--quiet", "--short", "HEAD")
+    if branch is None:
+        return None
+    log = _git_or_none("reflog", "show", "--format=%H%x09%gs", f"refs/heads/{branch}")
+    if not log:
+        return None
+    sha, _, subject = log.splitlines()[-1].partition("\t")
+    if not subject.startswith("branch: Created from") or not _is_ancestor(sha):
+        return None
+    return sha, f"where {branch} started ({subject.removeprefix('branch: ').strip()})"
+
+
+def resolve_base(base: str | None) -> tuple[str, str]:
+    """The ref the diff is read from, and where it came from — ``--base``, then
+    :data:`BASE_ENV`, then the branch's own start, then its upstream's fork
+    point, then the merge-base with ``main``. The merge-base alone listed every
+    link of a chain under a branch cut from one (Darksteel's W2G3: 512 files)."""
     if base:
-        return git("rev-parse", base).strip()
-    return git("merge-base", "HEAD", "main").strip()
+        return git("rev-parse", base).strip(), "--base"
+    if os.environ.get(BASE_ENV, "").strip():
+        return git("rev-parse", os.environ[BASE_ENV].strip()).strip(), f"${BASE_ENV}"
+    start = _branch_start()
+    if start is not None:
+        return start
+    upstream = _git_or_none("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if upstream is not None:
+        fork = _git_or_none("merge-base", "--fork-point", upstream, "HEAD")
+        if fork is not None:
+            return fork, f"the fork point from {upstream}"
+    return git("merge-base", "HEAD", "main").strip(), "the merge-base with main"
+
+
+def changed_paths(base: str) -> list[str]:
+    """Every path the diff adds, edits or deletes, untracked files included."""
+    tracked = git("diff", "--name-only", base).splitlines()
+    untracked = git("ls-files", "--others", "--exclude-standard").splitlines()
+    return sorted(set(tracked + untracked))
 
 
 def changed_files(base: str) -> list[str]:
@@ -412,11 +491,36 @@ def _with_helper_importers(
     return hits
 
 
-def pick(base: str, *, hub: int, censuses_only: bool = False) -> dict:
+#: The directories whose change can move how a measured card compiles or plays.
+MEASURED_MOVERS = ("engine", "web", "data", "cards")
+
+
+def measured_codes() -> list[str]:
+    """The sets this tree's manifest measures (``engine.card_loader``'s reading)."""
+    sys.path.insert(0, str(ROOT))
+    from engine.card_loader import manifest_measured_codes
+
+    return manifest_measured_codes()
+
+
+def measured_rows(codes: list[str]) -> dict[str, tuple[int, str]]:
+    """``{node id: (line, why)}``: each test whose population walks one of
+    *codes* (``scripts/measured_censuses.py``)."""
+    import measured_censuses
+
+    rows: dict[str, tuple[int, str]] = {}
+    for code in codes:
+        for node, (line, why) in measured_censuses.scan(ROOT, code).selection().items():
+            rows.setdefault(node, (line, f"{code}: {why}"))
+    return rows
+
+
+def pick(base: str, *, hub: int, censuses_only: bool = False, measured: bool = True) -> dict:
     changed = changed_files(base)
     modules = _test_modules()
     picked: dict[Path, tuple[str, str]] = {}   # path -> (reason, detail)
     hubs: list[tuple[str, int]] = []
+    nodes: dict[str, tuple[int, str]] = {}    # node id -> (line, why), the measured reason
 
     def take(hits: dict[Path, str], reason: str) -> None:
         for path, detail in _with_helper_importers(hits, modules, hub, hubs).items():
@@ -454,9 +558,19 @@ def pick(base: str, *, hub: int, censuses_only: bool = False) -> dict:
             if any(imports.enumerates(m, a) for m, a in entry["aliases"]):
                 hits[path] = key
         take(hits, "census")
+    codes: list[str] = []
+    if measured and not censuses_only and any(
+        p.split("/", 1)[0] in MEASURED_MOVERS for p in changed_paths(base)
+    ):
+        codes = measured_codes()
+        whole = {p.relative_to(ROOT).as_posix() for p in picked}
+        nodes = {
+            node: row for node, row in measured_rows(codes).items()
+            if node.split("::", 1)[0] not in whole
+        }
     return {
         "base": base, "changed": changed, "picked": picked, "hubs": hubs,
-        "moved": moved, "unreadable": after["failed"],
+        "moved": moved, "unreadable": after["failed"], "nodes": nodes, "measured": codes,
     }
 
 
@@ -484,6 +598,53 @@ def file_times(times: dict[str, list]) -> dict[str, tuple[float, float]]:
     return {path: (q, f) for path, (q, f) in per_file.items()}
 
 
+def node_times(times: dict[str, list]) -> dict[str, tuple[float, float]]:
+    """Each test's recorded (quick, full) seconds by node id, its
+    parametrizations summed."""
+    per_node: dict[str, list[float]] = {}
+    for nodeid, (seconds, full) in times.items():
+        quick_full = per_node.setdefault(nodeid.split("[", 1)[0], [0.0, 0.0])
+        quick_full[1 if full else 0] += seconds
+    return {node: (q, f) for node, (q, f) in per_node.items()}
+
+
+def rows_of(picked: dict[Path, tuple[str, str]], nodes: dict[str, tuple[int, str]],
+            times: dict[str, list]) -> list[dict]:
+    """One row a file: a whole file a reason names, or the measured tests in one."""
+    per_file, per_node = file_times(times), node_times(times)
+    rows = []
+    for path, (reason, detail) in picked.items():
+        rel = path.relative_to(ROOT).as_posix()
+        rows.append({"file": rel, "reason": reason, "detail": detail, "targets": [rel],
+                     "times": per_file.get(rel)})
+    by_file: dict[str, list[str]] = {}
+    for node in nodes:
+        by_file.setdefault(node.split("::", 1)[0], []).append(node)
+    for rel, members in by_file.items():
+        members = sorted(members)
+        known = [per_node[node] for node in members if node in per_node]
+        total = (sum(q for q, _ in known), sum(f for _, f in known)) if known else None
+        line, why = nodes[members[0]]
+        rows.append({"file": rel, "reason": "measured", "targets": members,
+                     "detail": f"{len(members)} test(s); first, line {line}: {why}",
+                     "times": total, "why": {n: nodes[n] for n in members}})
+    return rows
+
+
+def targets_longest_first(rows: list[dict]) -> list[str]:
+    """Each row's paths or node ids, the rows in order of recorded time, longest
+    first — a file's tests stay together, so its module fixtures build once."""
+    def cost(row):
+        quick, full = row["times"] or (0.0, 0.0)
+        return (-(quick + full), row["file"])
+    return [target for row in sorted(rows, key=cost) for target in row["targets"]]
+
+
+#: More files than the first, or more changed modules than the second, and the
+#: base is likely behind this branch's own start: said, beside the base it used.
+LARGE_LIST, LARGE_DIFF = 200, 50
+
+
 # ---------------------------------------------------------------------------
 # the command
 # ---------------------------------------------------------------------------
@@ -491,16 +652,33 @@ def file_times(times: dict[str, list]) -> dict[str, tuple[float, float]]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--base", help="the ref to diff against (default: merge-base of HEAD and main)")
+    parser.add_argument("--base", help=f"the ref to diff against (default: ${BASE_ENV}, "
+                                       "else where this branch started, else its upstream's "
+                                       "fork point, else the merge-base with main)")
     parser.add_argument("--why", action="store_true", help="say why each file is listed")
-    parser.add_argument("--list", action="store_true", help="paths only, one a line")
+    parser.add_argument("--list", action="store_true", help="paths (or node ids) only, one a line")
     parser.add_argument("--censuses", action="store_true", help="only the registry censuses")
+    parser.add_argument("--ingest", metavar="CODE",
+                        help="every test whose population walks the measured set CODE")
+    parser.add_argument("--no-measured", action="store_true",
+                        help="leave off the tests that walk a measured set (reason 4)")
     parser.add_argument("--hub", type=int, default=HUB_DEFAULT,
                         help=f"name, not list, a module more test files import (default {HUB_DEFAULT})")
     parser.add_argument("--run", action="store_true", help="run the listed files")
-    parser.add_argument("--full", action="store_true", help="with --run: their full tests too")
+    parser.add_argument("--full", action="store_true",
+                        help="with --run: their full tests too (always, with --ingest)")
     parser.add_argument("-n", "--workers", type=int, default=2, help="with --run: xdist workers (default 2)")
     return parser
+
+
+def _ingest(code: str) -> dict:
+    import measured_censuses
+
+    try:
+        selection = measured_censuses.scan(ROOT, code).selection()
+    except KeyError as error:
+        raise SystemExit(f"tests_for_diff.py --ingest: {error.args[0]}") from None
+    return {node: (line, f"{code.upper()}: {why}") for node, (line, why) in selection.items()}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -509,55 +687,107 @@ def main(argv: list[str] | None = None) -> int:
         json.dump(dump_registries(), sys.stdout)
         return 0
     args = build_parser().parse_args(argv)
+    # LF on every platform: a path a shell loop reads off a CRLF line ends in \r.
+    sys.stdout.reconfigure(newline="\n")
     os.chdir(ROOT)
-    base = resolve_base(args.base)
-    result = pick(base, hub=args.hub, censuses_only=args.censuses)
-    picked = result["picked"]
-    paths = sorted(p.relative_to(ROOT).as_posix() for p in picked)
+    if args.ingest:
+        result = {"picked": {}, "nodes": _ingest(args.ingest)}
+    else:
+        base, source = resolve_base(args.base)
+        result = pick(base, hub=args.hub, censuses_only=args.censuses,
+                      measured=not args.no_measured)
+    rows = rows_of(result["picked"], result["nodes"], recorded_times())
+    if args.ingest:
+        targets = targets_longest_first(rows)
+    else:
+        targets = sorted(target for row in rows for target in row["targets"])
     if args.list:
-        print("\n".join(paths))
+        sys.stdout.write("".join(f"{target}\n" for target in targets))
         return 0
 
-    times = file_times(recorded_times())
-    print(f"base {base[:10]}; {len(result['changed'])} changed .py file(s)")
-    for key, entry in sorted(result["moved"].items()):
-        print(f"registry moved: {key} (+{len(entry['added'])} -{len(entry['removed'])})"
-              + (f"  e.g. {', '.join(entry['added'][:3])}" if entry["added"] else ""))
-    for module, count in dict.fromkeys(result["hubs"]):
-        print(f"hub, not listed: {module} ({count} test files import it) — it owes the quick pass")
-    if result["unreadable"]:
-        print(f"modules that would not import (their registries unread): {result['unreadable']}")
+    if args.ingest:
+        print(f"ingest {args.ingest.upper()}: every test whose population walks it "
+              "(scripts/measured_censuses.py)")
+    else:
+        print(f"base {base[:10]} ({source}); {len(result['changed'])} changed .py file(s)")
+        for key, entry in sorted(result["moved"].items()):
+            print(f"registry moved: {key} (+{len(entry['added'])} -{len(entry['removed'])})"
+                  + (f"  e.g. {', '.join(entry['added'][:3])}" if entry["added"] else ""))
+        for module, count in dict.fromkeys(result["hubs"]):
+            print(f"hub, not listed: {module} ({count} test files import it) — it owes the quick pass")
+        if result["unreadable"]:
+            print(f"modules that would not import (their registries unread): {result['unreadable']}")
+        if result["measured"]:
+            print(f"measured: {', '.join(result['measured'])} — the tests that walk it are listed "
+                  "by node id (--no-measured leaves them off)")
+    report(rows, args)
+    whole = sum(1 for row in rows if row["reason"] != "measured")
+    if not args.ingest and (whole > LARGE_LIST or len(result["changed"]) > LARGE_DIFF):
+        print(f"warning: {whole} file(s) for {len(result['changed'])} changed .py file(s) — if "
+              f"this branch did not start at {base[:10]}, pass --base <its start> "
+              f"(or set ${BASE_ENV})")
+    if not args.run or not targets:
+        return 0
+    return run(targets, workers=args.workers, full=bool(args.ingest or args.full))
+
+
+def report(rows: list[dict], args) -> None:
+    """The table: a row a file, longest quick time first, and the totals."""
     quick_total = full_total = 0.0
     unknown = 0
-    rows = []
-    for path in paths:
-        quick, full = times.get(path, (None, None))
-        reason, detail = picked[ROOT / path]
-        if quick is None:
+    table = []
+    for row in rows:
+        if row["times"] is None:
             unknown += 1
+            quick, full = -1.0, 0.0
         else:
+            quick, full = row["times"]
             quick_total += quick
             full_total += full
-        rows.append((quick if quick is not None else -1.0, full, path, reason, detail))
-    if rows:
+        table.append((quick, full, row["file"], row))
+    if table:
         print(f"{'quick s':>8} {'full s':>8}  {'why':<8} file")
-    for quick, full, path, reason, detail in sorted(rows, reverse=True):
+    # Longest quick time first; an ingest's run is the full pass, so its whole time.
+    order = (lambda r: (r[0] + r[1], r[2])) if args.ingest else (lambda r: r[:3])
+    for quick, full, _, row in sorted(table, key=order, reverse=True):
         q = "?" if quick < 0 else f"{quick:.1f}"
         f = "" if quick < 0 or not full else f"{full:.1f}"
-        line = f"{q:>8} {f:>8}  {reason:<8} {path}"
-        print(line + (f"   [{detail}]" if args.why else ""))
-    print(
-        f"{len(paths)} file(s): quick {quick_total:.0f} s serial "
-        f"(~{quick_total / max(args.workers, 1):.0f} s at -n {args.workers}); "
+        count = f" ({len(row['targets'])} tests)" if row["reason"] == "measured" else ""
+        print(f"{q:>8} {f:>8}  {row['reason']:<8} {row['file']}{count}"
+              + (f"   [{row['detail']}]" if args.why else ""))
+        if args.why and row["reason"] == "measured":
+            for node in row["targets"]:
+                line, why = row["why"][node]
+                print(f"{'':>28}::{node.split('::', 1)[1]}  (line {line}: {why})")
+    tests = sum(len(row["targets"]) for row in rows if row["reason"] == "measured")
+    workers = max(args.workers, 1)
+    line = (
+        f"{len(rows)} file(s)" + (f", {tests} test(s) of them by node id" if tests else "")
+        + f": quick {quick_total:.0f} s serial (~{quick_total / workers:.0f} s at -n {workers}); "
         f"their full tests {full_total:.0f} s more"
         + (f"; {unknown} with no recorded time" if unknown else "")
     )
-    if not args.run or not paths:
-        return 0
-    command = [sys.executable, "-m", "pytest", "-n", str(args.workers), "--dist", "worksteal",
-               "-q", "-p", "no:cacheprovider", *([] if args.full else ["--quick"]), *paths]
-    print("running:", " ".join(command[1:6]), "...", f"({len(paths)} files)", flush=True)
-    return subprocess.run(command, cwd=ROOT).returncode
+    if args.ingest:
+        line += (f" — the run is the full pass: ~{(quick_total + full_total) / workers:.0f} s "
+                 f"at -n {workers}")
+    print(line)
+
+
+def run(targets: list[str], *, workers: int, full: bool) -> int:
+    """pytest over *targets*, read from an argument file (``pytest @file``): a
+    few hundred node ids are longer than a Windows command line."""
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8",
+                                     newline="\n") as handle:
+        handle.write("".join(f"{target}\n" for target in targets))
+    command = [sys.executable, "-m", "pytest", "-n", str(workers), "--dist", "worksteal",
+               "-q", "-p", "no:cacheprovider", "--full" if full else "--quick", f"@{handle.name}"]
+    print("running:", " ".join(command[1:-1]), f"@<{len(targets)} targets>", flush=True)
+    try:
+        return subprocess.run(command, cwd=ROOT).returncode
+    finally:
+        os.unlink(handle.name)
 
 
 if __name__ == "__main__":
