@@ -291,6 +291,20 @@ class NumberChoicesMixin:
             # The number *defines* a characteristic (CR 604.3), so the P/T that
             # reads it is stale until the layers are recomputed.
             self._refresh_dynamic_creatures()
+        elif choice.data.get("pay_life_this_way"):
+            # "Pay any amount of life, then look at that many cards …" (Plunge
+            # into Darkness.) The number *is* an amount of life, so it is paid
+            # as it is named — Nameless Race's branch above, on a resolution
+            # rather than a permanent — the way the ``pay_life`` handler pays a
+            # printed amount (CR 119.4). The scratchpad already holds it for
+            # the sentence behind.
+            player = self.players[choice.player_index]
+            before = player.life
+            player.life -= value
+            self.log.append(
+                f"{choice.data.get('card_name')}: {player.name} paid {value} "
+                f"life ({before} -> {player.life})"
+            )
         else:
             # A spell's number (Void): nothing but the scratchpad keeps it, so
             # the log is the only place the table can read what was named.

@@ -86,7 +86,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_pay_life, _lower_ante, _lower_exchange_life_totals,
                        _lower_set_life_total, _lower_double_power, _lower_switch_pt,
                        _lower_double_counters, _lower_double_unspent_mana,
-                       _lower_double_life_total,
+                       _lower_double_life_total, _lower_pay_any_amount_of_life,
                        _lower_lose_ability_text,
                        _lower_exile_cost_sacrifices, _lower_exile_graveyard,
                        _lower_exile_graveyard_arrivals_this_turn,
@@ -284,6 +284,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.DoubleCounters: _lower_double_counters,
     ast.DoubleUnspentMana: _lower_double_unspent_mana,
     ast.DoubleLifeTotal: _lower_double_life_total,
+    ast.PayAnyAmountOfLife: _lower_pay_any_amount_of_life,
     ast.SwitchPT: _lower_switch_pt,
     ast.Ante: _lower_ante,
     ast.ExchangeLifeTotals: _lower_exchange_life_totals,
@@ -526,7 +527,6 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # name-only table above the moment it started deciding that.
     ast.LookAtHand: _lower_look_at_hand,
     ast.PlayerGetsCounters: _lower_player_gets_counters,
-    ast.LookTopPickToHand: _lower_look_top_pick,
     # Four more of the chain's `return _lower_x(statement, event)` arms, moved
     # at Weatherlight's Phase 0 with `statement_dispatch.py` thirteen lines
     # from the guard — the move this table's own comment asks the next round
@@ -580,6 +580,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
+    # "Look at **that many** cards from the top of your library" reads the
+    # firing event's number (Garruk's Harbinger) or an earlier step's
+    # (Plunge into Darkness: "Pay any amount of life, then …"). Moved here
+    # from the event table when the second arrived.
+    ast.LookTopPickToHand: _lower_look_top_pick,
     # "Exchange control of target artifact … and target permanent …"
     # (Gauntlets of Chaos) reads neither; "Exchange control of **those
     # permanents**" (Confusion in the Ranks) reads both — the object the

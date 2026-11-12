@@ -463,6 +463,7 @@ from .life import (
     _lower_pay_life,
     _lower_set_life_total,
     _lower_double_life_total,
+    _lower_pay_any_amount_of_life,
 )
 
 __all__ = [
@@ -791,6 +792,7 @@ __all__ = [
     "_lower_exchange_life_totals",
     "_lower_set_life_total",
     "_lower_double_life_total",
+    "_lower_pay_any_amount_of_life",
     "_lower_gain_life",
     "_title",
     "_lower_count_objects",

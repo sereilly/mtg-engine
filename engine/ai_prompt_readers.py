@@ -620,6 +620,26 @@ _OWN_ZONE_NAME_READERS = {
 #: larger prize at the same expectation.
 FLIP_RUN_LENGTH = 2
 
+#: The life a seat nobody asks keeps when it names how much to pay for a look
+#: ("Pay any amount of life, then look at that many cards from the top of your
+#: library", Plunge into Darkness): the reserve every other optional life
+#: price in the AI keeps (``ai_scoring.X_LIFE_RESERVE``'s ten), for its
+#: reason — the last points of life are the ones that lose the game.
+LOOK_LIFE_RESERVE = 10
+#: …and the most it pays: one card is taken whatever the pile's size, so a
+#: deeper look buys a better pick at a falling rate, and four cards is the
+#: dig the set's own fixed-size looks print (Impulse, Diabolic Vision).
+LOOK_LIFE_CAP = 4
+
+
+def life_paid_for_a_look(game, seat: int, maximum: int) -> int:
+    """How much life *seat* names when nobody asks it to — see
+    :data:`LOOK_LIFE_RESERVE` and :data:`LOOK_LIFE_CAP`. Never more than
+    *maximum* (CR 119.4's life total), never below zero, and nothing at all
+    from a seat at or under the reserve. Deterministic: its own life alone."""
+    life = int(game.players[seat].life)
+    return max(0, min(int(maximum), LOOK_LIFE_CAP, life - LOOK_LIFE_RESERVE))
+
 
 def chosen_number_bounds_flip_run(card: CardDefinition, instruction) -> bool:
     """Whether the number *instruction* chooses is the length of a run of coin

@@ -705,6 +705,10 @@ def _number_choice(ctx: PromptContext, choices: list) -> dict:
         # card says it, so its text rides along (``offer_wording``'s reader of
         # the source) for the prompt to quote.
         "card_text": getattr(_offer_source_card(data), "oracle_text", "") or "",
+        # "Pay any amount of life, then …" (Plunge into Darkness): the number
+        # is life paid as it is named, so the client can say so. Emitted only
+        # there, so every other number prompt's payload is unchanged.
+        **({"pays_life": True} if data.get("pay_life_this_way") else {}),
     }
 
 

@@ -76,6 +76,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              EXILED_THIS_WAY_OBJECTS, HAND_CARDS_TO_LIBRARY,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
                              LAST_TARGET_OWNER, LIFE_LOST_THIS_WAY,
+                             LIFE_PAID_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
                              NAMED_CARD_GUESS,
@@ -282,6 +283,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # "You gain life equal to **the life lost this way**." (Subversion.) See
     # ``oracle_types.LIFE_LOST_THIS_WAY``.
     "target_loses_life": LIFE_LOST_THIS_WAY,
+    # "Pay any amount of life, then look at **that many** cards …" (Plunge
+    # into Darkness.) See ``oracle_types.LIFE_PAID_THIS_WAY``.
+    "pay_any_amount_of_life": LIFE_PAID_THIS_WAY,
     # CR 705.2: only the player who flipped wins or loses that flip, and both
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each

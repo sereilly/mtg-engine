@@ -1016,6 +1016,26 @@ def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ..
     )
 
 
+def _lower_pay_any_amount_of_life(
+    node: ast.PayAnyAmountOfLife,
+) -> tuple[OracleInstruction, ...]:
+    """"**Pay any amount of life**, then look at that many cards from the top
+    of your library." (Plunge into Darkness.)
+
+    The amount is the payer's, named at resolution (its ruling, 2004-12-01:
+    "choose X, pay X life") on the ``number_choice`` prompt, capped by CR
+    119.4 at their life total, and written to the scratchpad as
+    ``LIFE_PAID_THIS_WAY`` — the number "that many" behind it reads. Only the
+    controller pays: a printed seat other than "you" is another sentence.
+    """
+    if node.player.kind != "you":
+        raise LoweringError(
+            f"no handler makes {node.player.kind!r} pay any amount of life",
+            node=node,
+        )
+    return (OracleInstruction("pay_any_amount_of_life", "", {}),)
+
+
 def _lower_double_life_total(
     node: ast.DoubleLifeTotal,
 ) -> tuple[OracleInstruction, ...]:

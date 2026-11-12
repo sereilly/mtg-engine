@@ -309,6 +309,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # that life, so the family is the same one; what it is not is the same
     # *kind* — see ``lowering/life._lower_pay_life``.
     "pay_life": "life",
+    # "Pay any amount of life" as a resolution step (Plunge into Darkness):
+    # the payer names the amount on a number prompt, then pays it.
+    "pay_any_amount_of_life": "life",
     "destroy_target_permanent": "destruction",
     "destroy_all_artifacts": "destruction",
     "destroy_all_creatures": "destruction",

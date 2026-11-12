@@ -51,7 +51,7 @@ from ...oracle_types import (BASE_PT_SET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERS_PLACED_THIS_WAY,
                              COUNTERS_REMOVED, EXILED_THIS_WAY,
                              HAND_CARDS_TO_LIBRARY,
-                             LIFE_LOST_THIS_WAY,
+                             LIFE_LOST_THIS_WAY, LIFE_PAID_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS)
 from ...oracle_types import (
@@ -293,6 +293,9 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     # has to be a record rather than a board read is the loop: the printed
     # number is per seat and the sentence behind it reads the total.
     LIFE_LOST_THIS_WAY,
+    # How much life a "pay any amount of life" step paid (Plunge into
+    # Darkness's "look at that many cards").
+    LIFE_PAID_THIS_WAY,
 })
 
 # The scratchpad keys that hold *permanents*, by id — what an earlier step of

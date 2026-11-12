@@ -538,8 +538,15 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     # event carried, frozen by the fire site. An absent record looks at nothing
     # rather than falling back to a count the card never printed.
     from_trigger = payload.get("amount_from_trigger")
+    # …or the number an earlier step of this same resolution recorded: "Pay
+    # any amount of life, then look at **that many** cards" (Plunge into
+    # Darkness) reads the life the payment step paid, out of the scratchpad
+    # (``_back_reference_payload``'s ``amount_from``).
+    from_step = payload.get("amount_from")
     if from_trigger is not None:
         amount = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
+    elif from_step is not None:
+        amount = max(0, int((context.results or {}).get(str(from_step), 0) or 0))
     else:
         amount = resolve_amount(payload.get("amount", 0), context.x_value)
     top_count = min(amount, len(caster.library))

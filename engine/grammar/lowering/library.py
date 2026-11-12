@@ -441,6 +441,7 @@ def _lower_look_at_library_top(
 
 def _lower_look_top_pick(
     node: ast.LookTopPickToHand, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Look at the top three cards of your library. Put one of those cards
     into your hand and the rest on the bottom of your library in any order.
@@ -465,7 +466,10 @@ def _lower_look_top_pick(
     # than assumed: under a trigger that records no quantity the words name
     # nothing, and a silent zero would look at no cards at all.
     elif isinstance(node.count, ast.ThatMuch):
-        payload.update(_back_reference_payload(node.count, frozenset(), event))
+        # …or an earlier step's (Plunge into Darkness: "Pay any amount of
+        # life, then look at that many cards …"), the nearer antecedent
+        # ``_back_reference_payload`` reads first.
+        payload.update(_back_reference_payload(node.count, produced, event))
     else:
         amount = _amount_payload(node.count)
         # "…the top **X** cards" (Sealed Fate). The announced value (CR 601.2b),

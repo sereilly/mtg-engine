@@ -1073,6 +1073,46 @@ def pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutio
     return True, "resolved"
 
 
+@effect_handler("pay_any_amount_of_life")
+def pay_any_amount_of_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Pay any amount of life**, then look at that many cards from the top
+    of your library." (Plunge into Darkness.)
+
+    The ruling (2004-12-01) orders it: "choose X, pay X life" — on
+    resolution, the controller naming the amount. One ``number_choice``
+    prompt, 0 up to the life total (CR 119.4: a payment larger than the total
+    cannot be made; 0 always can), whose answer *pays* that much
+    (``pay_life_this_way``) and records it as ``LIFE_PAID_THIS_WAY`` for the
+    sentence behind, which waits for it (the prompt suspends, CR 608.2).
+
+    The record is stamped first, the discipline ``choose_number`` keeps — with
+    zero, since nothing is paid until the answer pays it — and a seat nobody
+    asks names ``ai_prompt_readers.life_paid_for_a_look``: a real amount kept
+    clear of the life the AI holds back from every optional price.
+    """
+    from ..ai_prompt_readers import life_paid_for_a_look
+    from ..oracle_types import LIFE_PAID_THIS_WAY
+
+    player = context.caster
+    if player not in game.players:
+        return True, "resolved"
+    seat = game.players.index(player)
+    maximum = max(0, int(player.life))
+    default = life_paid_for_a_look(game, seat, maximum)
+    context.results[LIFE_PAID_THIS_WAY] = 0
+    if maximum <= 0:
+        game.log.append(f"{context.card.name}: {player.name} has no life to pay")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "number_choice", seat,
+        card_name=context.card.name if context.card is not None else "",
+        permanent=None, minimum=0, maximum=maximum, default_number=default,
+        result_key=LIFE_PAID_THIS_WAY, _context=context,
+        pay_life_this_way=True,
+    )
+    return True, "resolved"
+
+
 def _event_subject_seat(game: Game, context: OracleExecutionContext) -> "int | None":
     """The seat the firing event was about (``event_subject_player``, frozen by
     the fire site, CR 603.10), or None when nothing recorded one or that

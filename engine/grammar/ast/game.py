@@ -174,6 +174,21 @@ class PayAnyAmountOfMana:
 
 
 @dataclass(frozen=True)
+class PayAnyAmountOfLife:
+    """``Pay any amount of life`` as a step of a resolution (Plunge into
+    Darkness: "Pay any amount of life, then look at that many cards …").
+
+    :class:`PayAnyAmountOfMana`'s twin in the other currency: the payer names
+    the amount (its ruling, 2004-12-01: "choose X, pay X life" on resolution),
+    CR 119.4 caps it at their life total, and the sentence behind it reads
+    the answer ("that many"). Not a :class:`PayLife` whose amount is "any":
+    a printed amount is a payment, and this is a choice and then a payment.
+    """
+
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class CreateToken:
     count: Amount
     # None for a **noncreature** token (a Treasure): CR 208.1 gives P/T only to
