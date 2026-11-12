@@ -60,6 +60,12 @@ OTHER_COPY_KINDS = {
     # (``ai_policy.choose_copy_cast``). Driven below
     # (``test_a_copy_cast_from_exile_by_a_seat_nobody_asks_aims_away_from_its_side``).
     "cast_copy_of_exiled_card": "a copy cast: its caster announces targets (CR 707.12)",
+    # Reversal of Fortune: the same copy cast, of a card in a revealed hand
+    # rather than an exiled one — one offer road (``engine/copy_casts.py``),
+    # so a seat nobody asks announces the copy's targets through the same
+    # rehearsed cast chooser. Driven below
+    # (``test_a_copy_cast_from_a_revealed_hand_by_a_seat_nobody_asks_aims_away_from_its_side``).
+    "cast_copy_of_revealed_card": "a copy cast: its caster announces targets (CR 707.12)",
 }
 
 
@@ -345,3 +351,41 @@ def test_a_copy_cast_from_exile_by_a_seat_nobody_asks_aims_away_from_its_side(se
     assert not game.is_on_battlefield(giant) or you.life == 17, game.log[log:]
     assert game.pending_choices == []
     assert [card.name for card in me.exile] == ["Lightning Bolt"]
+
+
+@pytest.mark.cr("707.12")
+def test_a_copy_cast_from_a_revealed_hand_by_a_seat_nobody_asks_aims_away_from_its_side(set_pool):
+    """``cast_copy_of_revealed_card``'s row above, driven: Reversal of Fortune
+    cast by a seat nobody asks, with a Grizzly Bears beside an opponent's
+    Hill Giant, at an opponent holding Lightning Bolt. The copy is *cast*
+    (CR 707.12), so it announces its own target (CR 601.2c) through the
+    rehearsed cast chooser — at the opponent's side, never at the caster's
+    Bears or face; the original never leaves the opponent's hand."""
+    fdn, lea = set_pool("5DN"), set_pool("LEA")
+    me = PlayerState(name="P0", library=[lea["Mountain"]] * 5,
+                     hand=[fdn["Reversal of Fortune"]])
+    you = PlayerState(name="P1", library=[lea["Mountain"]] * 5,
+                      hand=[lea["Lightning Bolt"]])
+    game = Game(players=[me, you])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.active_player_index = game.priority_player_index = 0
+    game.current_phase = "main"
+    game.current_turn_phase, game.current_step = "precombat_main", None
+    bears = Permanent(card=lea["Grizzly Bears"])
+    giant = Permanent(card=lea["Hill Giant"])
+    game._put_permanent_onto_battlefield(0, bears, None)
+    game._put_permanent_onto_battlefield(1, giant, None)
+
+    log = len(game.log)
+    assert game.queue_from_hand(0, "Reversal of Fortune", target_player_index=1).supported
+    resolve_stack(game)
+    game.check_state_based_actions()
+
+    assert any("cast a copy of Lightning Bolt" in line for line in game.log[log:]), game.log[log:]
+    assert game.is_on_battlefield(bears)
+    assert me.life == 20
+    assert not game.is_on_battlefield(giant) or you.life == 17, game.log[log:]
+    assert game.pending_choices == []
+    assert [card.name for card in you.hand] == ["Lightning Bolt"]
+    assert me.exile == []

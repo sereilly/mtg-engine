@@ -1064,12 +1064,14 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
     # card itself rides along (``card``), because an opponent's hand is
     # hidden in every player's view of it and the dialog needs a card to
     # show; its targets come from ``card_target_spec`` by name, as an exiled
-    # card of another seat's does.
+    # card of another seat's does. It is shown as its **owner** shows it
+    # (``ctx.owned_card``: the hand's seat, whose Celestial Dawn colours it),
+    # as every other revealed-hand list is.
     hand_of = choice.data.get("_from_hand_of")
     hand_place: dict = {}
     if isinstance(hand_of, int) and 0 <= hand_of < len(ctx.game.players):
         hand_place = {
-            "card": ctx.serialize_card(card) if card is not None else None,
+            "card": ctx.owned_card(card, hand_of) if card is not None else None,
             "hand_seat": hand_of,
             "hand_index": next(
                 (
