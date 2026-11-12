@@ -84,46 +84,50 @@ def state_based_legend_rule(game) -> bool:
     for, and answered on the spot by a seat nobody asks (``default_at_arm``,
     :func:`default_legend_rule`)."""
     changed = False
-    for seat in game.apnap_seats(include_lost=True):
-        groups = legend_groups(game, seat)
-        owed = {
-            choice.data.get("name"): choice
-            for choice in game.pending_choices_of(LEGEND_RULE, seat)
-        }
-        if not groups and not owed:
-            continue
-        for name, perms in groups:
-            choice = owed.pop(name, None)
-            if choice is None:
-                game.arm_pending_choice(
-                    "legend_rule", seat,
-                    name=name,
-                    candidates=[perm.permanent_id for perm in perms],
-                    # A state-based action is nobody's spell or ability
-                    # (CR 704.3), and no object waits on the stack for it:
-                    # stamped empty so the queue's stamps never tie the
-                    # prompt to whatever happens to be resolving.
-                    _stack_item=None,
-                    _cause_seat=None,
-                    _resolving_targets=None,
-                )
+    # One departure event (CR 603.10a): inside the state-based pass this is
+    # the pass's own (``leaving_together`` is re-entrant), so what the rule
+    # puts away leaves together with every other sweep's.
+    with game.leaving_together():
+        for seat in game.apnap_seats(include_lost=True):
+            groups = legend_groups(game, seat)
+            owed = {
+                choice.data.get("name"): choice
+                for choice in game.pending_choices_of(LEGEND_RULE, seat)
+            }
+            if not groups and not owed:
+                continue
+            for name, perms in groups:
+                choice = owed.pop(name, None)
+                if choice is None:
+                    game.arm_pending_choice(
+                        "legend_rule", seat,
+                        name=name,
+                        candidates=[perm.permanent_id for perm in perms],
+                        # A state-based action is nobody's spell or ability
+                        # (CR 704.3), and no object waits on the stack for it:
+                        # stamped empty so the queue's stamps never tie the
+                        # prompt to whatever happens to be resolving.
+                        _stack_item=None,
+                        _cause_seat=None,
+                        _resolving_targets=None,
+                    )
+                    changed = True
+                    continue
+                kept = _recorded_keep(choice, perms)
+                if kept is None:
+                    ids = [perm.permanent_id for perm in perms]
+                    if choice.data.get("candidates") != ids:
+                        # A copy arrived or left while the prompt was owed: the
+                        # payload says what the answer will be held to.
+                        choice.data["candidates"] = ids
+                    continue
+                game.discard_pending_choice(choice)
+                put_the_rest_into_graveyards(game, seat, name, kept, perms)
                 changed = True
-                continue
-            kept = _recorded_keep(choice, perms)
-            if kept is None:
-                ids = [perm.permanent_id for perm in perms]
-                if choice.data.get("candidates") != ids:
-                    # A copy arrived or left while the prompt was owed: the
-                    # payload says what the answer will be held to.
-                    choice.data["candidates"] = ids
-                continue
-            game.discard_pending_choice(choice)
-            put_the_rest_into_graveyards(game, seat, name, kept, perms)
-            changed = True
-        # What is left owed no longer has a group behind it.
-        for choice in owed.values():
-            game.discard_pending_choice(choice)
-            changed = True
+            # What is left owed no longer has a group behind it.
+            for choice in owed.values():
+                game.discard_pending_choice(choice)
+                changed = True
     return changed
 
 
@@ -141,14 +145,15 @@ def _recorded_keep(choice, perms):
 
 def put_the_rest_into_graveyards(game, seat: int, name: str, kept, perms) -> None:
     """Everything in *perms* but *kept* to its owner's graveyard (a token
-    ceases to exist, CR 111.7), last first, each with its log line."""
-    for removed in reversed([perm for perm in perms if perm is not kept]):
-        game.remove_from_battlefield(removed)
-        died = game._permanent_to_graveyard(game.players[seat], removed)
-        game.log.append(
-            f"{name} {'put into graveyard' if died else 'left the battlefield'} "
-            "(704.5j: legend rule)"
-        )
+    ceases to exist, CR 111.7), last first, each with its log line — one
+    departure event (CR 603.10a), which inside the state-based pass is the
+    pass's own (``leaving_together`` is re-entrant)."""
+    with game.leaving_together():
+        for removed in reversed([perm for perm in perms if perm is not kept]):
+            game.remove_from_battlefield(removed)
+            died = game._permanent_to_graveyard(game.players[seat], removed)
+            went = 'put into graveyard' if died else 'left the battlefield'
+            game.log.append(f"{name} {went} (704.5j: legend rule)")
 
 
 def _keep(game, choice, kept, live) -> None:

@@ -134,8 +134,13 @@ def test_the_acknowledged_lines_are_still_written_unasked():
 def test_the_sweeps_say_where_a_permanent_went():
     """The state-based sweeps' "put into graveyard" is written from what
     ``_permanent_to_graveyard`` answered (True: it died; False: a replacement
-    sent it elsewhere), never as a constant."""
-    source = (ENGINE / "mixins" / "game_ending.py").read_text(encoding="utf-8")
+    sent it elsewhere), never as a constant. The legend rule's sweep is
+    ``engine/legend_rule.py`` since it asks the player (5DN W2G4), read here
+    with the pass it is called from."""
+    source = "\n".join(
+        (ENGINE / relative).read_text(encoding="utf-8")
+        for relative in ("mixins/game_ending.py", "legend_rule.py")
+    )
     constant = [
         number for number, line in enumerate(source.splitlines(), start=1)
         if "put into graveyard (" in line
