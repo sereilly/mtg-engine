@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| 5DN *(measured)* | 165 | 273 | 84.2% | 83.5% | 57.5% | 137 |
+| 5DN *(measured)* | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | **All (shipped)** | **9448** | **14064** | **89.7%** | **89.2%** | **62.1%** | **7410** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -70,7 +70,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 941 | 477 | expected a subject |  |
+| 939 | 475 | expected a subject |  |
 | 194 | 97 | unrecognized effect verb |  |
 | 143 | 72 | unconsumed text |  |
 | 78 | 59 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -90,10 +90,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 1 | 'that land' names a land no earlier step of this effect chose |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 2 | 2 | expected what to gain control of |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
@@ -4629,6 +4629,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: Regenerate this creature.`
 - **Foil**
   - `Counter target spell.`
+- **Fold into Aether**
+  - `Counter target spell. If that spell is countered this way, its controller may put a creature card from their hand onto the battlefield.`
 - **Folk Medicine**
   - `You gain 1 life for each creature you control.`
 - **Folk of An-Havva**
@@ -8715,6 +8717,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +3/+0 and attacks each combat if able.`
 - **Oubliette**
   - `When this enchantment enters, target creature phases out until this enchantment leaves the battlefield. Tap that creature as it phases in this way. (Auras and Equipment phase out with it. While permanents are phased out, they're treated as though they don't exist.)`
+- **Ouphe Vandals**
+  - `{G}, Sacrifice this creature: Counter target activated ability from an artifact source and destroy that artifact if it's on the battlefield. (Mana abilities can't be targeted.)`
 - **Outbreak**
   - `Choose a creature type. All creatures of that type get -1/-1 until end of turn.`
 - **Outmaneuver**
@@ -10101,6 +10105,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Choose a color. All creatures gain protection from the chosen color until end of turn.`
 - **Reverent Silence**
   - `Destroy all enchantments.`
+- **Reversal of Fortune**
+  - `Target opponent reveals their hand. You may copy an instant or sorcery card in it. If you do, you may cast the copy without paying its mana cost.`
 - **Reverse Damage**
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
@@ -12259,6 +12265,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You may play up to three additional lands this turn.`
 - **Summoner's Egg**
   - `Imprint — When this creature enters, you may exile a card from your hand face down.`
+  - `When this creature dies, turn the exiled card face up. If it's a creature card, put it onto the battlefield under your control.`
 - **Summoning Station**
   - `{T}: Create a 2/2 colorless Pincher creature token.`
   - `Whenever an artifact is put into a graveyard from the battlefield, you may untap this artifact.`
@@ -13602,6 +13609,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add two mana of any one color. Spend this mana only to cast artifact spells or activate abilities of artifacts.`
 - **Vedalken Mastermind**
   - `{U}, {T}: Return target permanent you control to its owner's hand.`
+- **Vedalken Shackles**
+  - `{2}, {T}: Gain control of target creature with power less than or equal to the number of Islands you control for as long as this artifact remains tapped.`
 - **Veil of Birds**
   - `When an opponent casts a spell, if this permanent is an enchantment, it becomes a 1/1 Bird creature with flying.`
 - **Veiled Apparition**
