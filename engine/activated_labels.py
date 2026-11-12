@@ -181,6 +181,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     "pump_self": "activated_pump",
     "pump_target_creature_until_eot": "activated_pump",
     "remove_counter_from_self": "activated_counters",
+    # Spinal Parasite: one counter off a chosen permanent, its kind picked by
+    # the remover at resolution — the same counter family as the row above.
+    "remove_counter_from_target": "activated_counters",
     # A composed effect (Orcish Artillery's "deals damage to X and damage to
     # you"). A wrapper kind cannot say what the ability is *for* — it says only
     # that there is more than one step — so the label names the shape, exactly
