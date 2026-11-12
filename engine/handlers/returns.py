@@ -160,6 +160,11 @@ _GRAVEYARD_NARROWING_KEYS = (
     # "target **noncreature** artifact card" (Salvaging Station): a type the
     # card must not have.
     "graveyard_excluded_types",
+    # "For each color, … one target card of that color" (All Suns' Dawn): a
+    # narrowing of the *set*, read on the several-slot path before any
+    # fallback (``_one_per_color_eligible``) — listed so no single-card scan
+    # ever answers it unread.
+    ONE_TARGET_PER_COLOR,
     # "target **artifact creature** card" (Skeleton Shard, Moriok
     # Scavenger): every printed type at once. With ``card_type`` None and no
     # ``card_types`` union, the payload fell through to the "first creature
