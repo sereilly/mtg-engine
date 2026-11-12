@@ -352,19 +352,41 @@ def test_104_3e_caster_wins_after_opponent_spell_loss():
     assert game.get_winner() is p1
 
 
-@pytest.mark.cr("104.3e")
+@pytest.mark.cr("104.3e", "104.5", "601.2c")
 def test_104_3e_effect_on_already_lost_player_is_safe():
-    """104.3e: Applying a 'loses the game' effect to an already-lost player is a no-op."""
+    """104.3e: Applying a 'loses the game' effect to an already-lost player is a
+    no-op — and a player who has lost cannot be *targeted* by one at all.
+
+    CR 104.5: "If a player loses the game, that player leaves the game." A
+    target is "an appropriate object or player" announced as the spell is cast
+    (CR 601.2c), and a player who has left the game is no longer one: the
+    "Target player loses the game." spell aimed at them is refused, as every
+    player-targeted spell is (this test used to assert the cast went through,
+    which held only while the sentence described no target and the cast gate
+    had nothing to judge — Door to Nothingness's round gave it one). Three
+    seats, because in a two-player game the game ends the moment one player
+    loses (CR 104.2a) and nobody casts anything afterwards.
+
+    The no-op itself is the loss funnel's: losing again changes nothing and
+    says nothing, and the spell still makes a player in the game lose."""
     lose_spell = _mk_card("Overkill", "Sorcery", "Target player loses the game.")
-    p1 = PlayerState(name="P1", hand=[lose_spell])
+    p1 = PlayerState(name="P1", hand=[lose_spell, lose_spell])
     p2 = PlayerState(name="P2")
+    p3 = PlayerState(name="P3")
     p2.lost = True
-    game = Game(players=[p1, p2])
+    game = Game(players=[p1, p2, p3])
 
-    result = game.cast_from_hand(0, "Overkill", target_player_index=1)
+    refused = game.cast_from_hand(0, "Overkill", target_player_index=1)
+    assert not refused.supported
+    assert p2.lost and len(p1.hand) == 2
 
-    assert result.supported
-    assert p2.lost  # still lost, unchanged
+    logged = len(game.log)
+    assert game.lose_the_game(p2, "P2 lost again") is False
+    assert p2.lost and len(game.log) == logged
+
+    result = game.cast_from_hand(0, "Overkill", target_player_index=2)
+    assert result.supported, result
+    assert p3.lost and game.get_winner() is p1
 
 
 # ---------------------------------------------------------------------------

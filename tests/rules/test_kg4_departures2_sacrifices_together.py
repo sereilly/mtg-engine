@@ -38,7 +38,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.models import Permanent
 from engine.oracle import compiled_units
 from tests.helpers import settle
@@ -275,6 +275,40 @@ def test_each_opponents_sacrifice_unless_they_pay_is_one_event():
     assert game.players[1].life == 21, game.log[-10:]
 
 
+@pytest.mark.cr("603.10a", "101.4")
+def test_possessed_portal_each_players_sacrifice_unless_they_discard_is_one_event(
+    set_pool,
+):
+    """Possessed Portal (5DN): "At the beginning of each end step, each player
+    sacrifices a permanent of their choice unless they discard a card." The
+    offer is each player's in turn, the active player's first (CR 101.4), and
+    with empty hands (the Portal's own "skips that draw" sees to that) each
+    sacrifices: the active player gives up its Moonlit Wake and the other its
+    Grizzly Bears, and the two sacrifices are one event — the Wake, given up
+    first, sees the Bears die with it."""
+    game = _table((0, 1))
+    portal = Permanent(card=set_pool("5DN")["Possessed Portal"])
+    portal.metadata["summoning_sickness_turn"] = -99
+    game.players[0].battlefield.append(portal)
+    game._sync_control()
+    _set_down(game, 0, "Moonlit Wake")
+    _set_down(game, 1, "Grizzly Bears")
+    asked: list[int] = []
+    confirm = game.confirm_sacrifice
+
+    def sacrifice(seat, *args, **kwargs):
+        asked.append(seat)
+        return confirm(seat, *args, **kwargs)
+
+    game.confirm_sacrifice = sacrifice
+    game.resolve_end_step(0)
+    _answer(game, ["Moonlit Wake", "Grizzly Bears"], take_offers=False)
+    settle(game)
+    assert asked == [0, 1]
+    assert _names(game, 0) == ["Possessed Portal"] and _names(game, 1) == []
+    assert game.players[0].life == 21, game.log[-10:]
+
+
 # --- The census ----------------------------------------------------------------
 
 #: Every loop in the pool whose body sacrifices at an answer, and the board
@@ -287,6 +321,9 @@ _DRIVEN = {
     "Rishadan Brigand": "test_each_opponents_sacrifice_unless_they_pay_is_one_event",
     "Rishadan Cutpurse": "test_each_opponents_sacrifice_unless_they_pay_is_one_event",
     "Rishadan Footpad": "test_each_opponents_sacrifice_unless_they_pay_is_one_event",
+    # The same offer to every player with a discard for the price (Fifth Dawn,
+    # measured: in this census's population under MTG_PROMOTE=5DN).
+    "Possessed Portal": "test_possessed_portal_each_players_sacrifice_unless_they_discard_is_one_event",
     "Read the Runes": "test_read_the_runes_*",
     "Oath of Lim-Dûl": "test_oath_of_lim_dul_*",
     "Tariff": "test_tariff_*",
@@ -348,10 +385,16 @@ _SEVERAL_SEATS = frozenset({"each_player", "each_opponent"})
 def test_every_loop_whose_body_sacrifices_is_driven():
     """By shape, over every compiled unit: a ``for_each`` with any sacrifice
     kind anywhere in its body, an offer to several seats with one in a
-    branch, or a looping handler from the table above."""
+    branch, or a looping handler from the table above.
+
+    Over **both manifest roles**, so a measured set's loop is found the day
+    its card compiles rather than at its promotion rehearsal (Possessed
+    Portal was found only under ``MTG_PROMOTE=5DN``), and the table above
+    names the same cards whether or not the set is promoted."""
     examined = 0
     found: dict[str, set[str]] = {}
-    for card, program in compiled_units(load_catalog()):
+    pool = load_cards(manifest_set_paths(include_measured=True))
+    for card, program in compiled_units(pool):
         if not program.supported:
             continue
         for root in _roots(program):
