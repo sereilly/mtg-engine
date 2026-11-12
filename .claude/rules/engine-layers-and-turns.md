@@ -213,9 +213,12 @@ and you can open this file directly whenever its subject is yours.
   method by `tests/engine/test_scg_p5_game_over_stepping.py`.
 - `engine/mixins/stack/` — the stack (CR 405), one family of mixins per stage:
   `casting` with `cast_announcement`, `cast_additional_costs`,
-  `cast_alternative_costs`, `cast_target_validation` and `pool_payment`
-  (CR 601; `_cast_onto_stack` calls one helper per CR 601.2 step); `activation`
-  with `activation_checks`, `activation_payment`, `activation_charges` and
-  `card_activation` (CR 602); `resolution` with `trigger_targets` and
+  `cast_alternative_costs`, `cast_target_validation`, `pool_payment` and
+  `cast_completion` (CR 601; `_cast_onto_stack` calls one helper per CR 601.2
+  step — the announced costs, the payment below the mana hinge, the push);
+  `activation` with `activation_checks`, `activation_payment`,
+  `activation_charges` and `card_activation` (CR 602); `resolution` with
+  `permanent_spell_resolution` (CR 608.3's permanent arm, where every stamp a
+  cast leaves on the permanent it becomes is written), `trigger_targets` and
   `triggered_abilities` (CR 603/608); and the `choices` package (the prompt
   queue, one module per prompt family, and `table.py`).

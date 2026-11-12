@@ -141,7 +141,7 @@ and you can open this file directly whenever its subject is yours.
   names both for the length of a payment (`payment_wants_in_force`,
   `payment_prices_in_force`). A cost is a symbol dict everywhere
   (`generic_cost(n)`).
-- **What a mana ability is** is one predicate, `is_mana_ability` (CR 605.1a's
+- **What a mana ability is** is one predicate, `engine/mana_abilities.is_mana_ability` (CR 605.1a's
   four criteria, including "doesn't move a card to or from a library"), asked
   **fail-closed**: a zone-moving step beside an add-mana step is presumed to
   reach a library unless listed in `LIBRARY_SAFE_ZONE_KINDS`

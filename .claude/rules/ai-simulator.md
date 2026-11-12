@@ -233,11 +233,13 @@ first combat and in response to another seat's object
   `ai_rehearsal.rehearsing()`. The AI is two families of modules: the
   choosers (`ai_policy` and the `ai_*` modules it fronts — among them
   `ai_prompt_picks`, what a seat nobody asks picks, by worth, for every
-  prompt kind's default) and what a card or a position is worth
+  prompt kind's default, `ai_slot_targets`, several targets and roles, and
+  `ai_offer_answers`, the weighed answers to an offer) and what a card or a position is worth
   (`ai_valuation`, `ai_standing` — the one measure of a seat's position —,
   `ai_rehearsal`, `ai_scratch_copy`, `ai_weighed_cast`, `ai_target_sides` and
   `ai_slot_sides` — one target's side, and each slot's of an announcement
-  naming several —, `ai_prompt_readers`, `ai_compelled_blocks` — a fight's
+  naming several —, `ai_prompt_readers`, `ai_offer_readers` — what an offer
+  costs and buys, and a toll's branches —, `ai_compelled_blocks` — a fight's
   outcome, read by the blocks and by a trigger that compels a block — and
   `ai_combat_triggers`, what a creature's own attack or block trigger
   gambles, read by the declarations).

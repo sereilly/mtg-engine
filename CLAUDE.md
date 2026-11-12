@@ -113,7 +113,10 @@ A file or test named on the command line runs whole, unless `--quick` keeps
 the quick pass in it too; `-m full` turns the full pass on (it used to collect
 nothing). `python scripts/tests_for_diff.py` lists the test files a diff owes
 — edited tests, importers of an edited module, every census enumerating a
-registry the diff moved — with their quick and full seconds from the last run
+registry the diff moved, and, while a set is measured and the diff touches
+`engine/`, `web/`, `data/` or `cards/`, every test whose population walks it
+(by node id; `--no-measured` drops them) — read from where the branch started
+(`--base` / `$MTG_DIFF_BASE` override), with their quick and full seconds from the last run
 that timed them (every run merges its times into `.test_timings.json`), and
 `--run` runs their quick tests. The quick pass ends by
 naming any unmarked test that took 20 s or more: make it faster or mark it
@@ -152,18 +155,21 @@ python scripts/serve_lan.py --port 8010   # same app, dual-stack IPv4+IPv6 for L
 # Engine scripts
 python scripts/run_duel.py            # scripted deterministic duel, no server (default LEA)
 python scripts/simulate_ai_games.py --set DRK   # AI-vs-AI batch over one set; deterministic per seed (default LEA)
+python scripts/simulate_ai_games.py --set DST --require "Card A,Card B"   # ... with those cards pinned into both decks (each name checked against the pool; repeatable)
 python scripts/support_report.py      # per-category card-support coverage (whole pool)
 python scripts/support_report.py --set ATQ --hollow-lines   # supported cards carrying an ability with no instruction behind it
 python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its refusal site — the work list rounds are planned from
 python scripts/support_report.py --set HML --fragments   # n-gram census over the refused lines, ranked by how many cards share each fragment (--json emits every census as one object)
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
-python scripts/probe_line.py --card "<NAME>"   # why a line is refused: every layer the compiler consults, in order, one verdict a line (--json; raw lines: probe_line.py "<line>" [--type ...])
+python scripts/probe_line.py --card "<NAME>"   # why a line is refused: every layer the compiler consults, in order, one verdict a line, a lowering refusal's innermost raise site (--ast: each line's parsed tree, and each sentence alone; --json; raw lines: probe_line.py "<line>" [--type ...])
 python scripts/picker_sweep.py --set <CODE>   # supported cards whose cast/activation picker disagrees with the printed line — run over a measured set in Phase 3
 python scripts/oracle_diff.py snapshot   # record every card's full compiled program (both manifest roles) before a change
-python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot; exit 1 if any did
-python scripts/sim_fingerprint.py snapshot   # twelve seeded AI games' logs, before a change
+python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot; exit 1 if any did (a card moved only by a new defaulted field's spelling is counted on that field's line, not as a move; --against B compares two stored snapshots)
+python scripts/sim_fingerprint.py snapshot   # twelve seeded AI games' logs, before a change (--rev <commit>: of another commit, in a throwaway worktree)
 python scripts/sim_fingerprint.py compare    # which of those games played differently; exit 1 if any did (whole diffs in .sim_fingerprint/compare/)
-python scripts/tests_for_diff.py --why   # the tests this diff owes and their recorded times; --run runs their quick tests
+python scripts/tests_for_diff.py --why   # the tests this diff owes (read from where the branch started; --base / $MTG_DIFF_BASE override) and their recorded times; --run runs their quick tests
+python scripts/tests_for_diff.py --ingest <CODE> --run -n 4   # Phase 1, first: every test whose population walks the measured set, by node id, in the full pass, longest first
+bash scripts/integration/fails_before.sh <base-ref> <test-id> <file>...   # a test red with the files at the base, green as they are
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md; --refresh re-fetches Scryfall data
 python scripts/check_all.py           # every CI guard check, in ci.yml's order (--freshness adds the tracker regenerations + a clean-tree check; --caps the size-guard headroom; --workers N for parse_coverage)
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md; --check fails on unannotated tests

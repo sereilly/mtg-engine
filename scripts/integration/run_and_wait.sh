@@ -12,7 +12,10 @@
 #   - the command runs detached, its output in <log>; when it ends, its exit
 #     code is the log's last line (`exit=N`) and the whole of <log>.exit, so a
 #     result is readable from the log alone, after a session break too;
-#   - the wait is bounded: RUN_WAIT seconds (default 170). Done: prints the
+#   - the wait is bounded: RUN_WAIT seconds from this call (default 110 —
+#     under the agent shell tool's 120-second foreground limit, which a
+#     170-second default outlasted, pushing the wait itself into the
+#     background). Done: prints the
 #     exit and any FAILED/ERROR lines, and exits with the command's code.
 #     Not done: says so, with the command to resume, and exits 75 — "still
 #     running", never a red. Re-run `--wait <log>` (or anything else) and come
@@ -20,7 +23,7 @@
 #
 # Starting a second run on a log whose run is still going refuses (exit 2).
 set -u
-RUN_WAIT="${RUN_WAIT:-170}"
+RUN_WAIT="${RUN_WAIT:-110}"
 if [ "${1:-}" = "--wait" ]; then
   log="${2:?usage: run_and_wait.sh --wait <log>}"
   [ -f "$log.started" ] || { echo "no run was started on $log"; exit 2; }
@@ -40,13 +43,16 @@ else
   disown
 fi
 start=$(cat "$log.started")
-deadline=$(( $(date +%s) + RUN_WAIT ))
+called=$(date +%s)
+deadline=$(( called + RUN_WAIT ))
 while [ ! -f "$log.exit" ] && [ "$(date +%s)" -lt "$deadline" ]; do
   sleep 2
 done
 elapsed=$(( $(date +%s) - start ))
 if [ ! -f "$log.exit" ]; then
-  echo "still running after ${elapsed}s (log $log); resume with: $0 --wait $log"
+  # Both numbers: the run's age alone read as "this wait took that long", and
+  # an agent concluded the bound counted from the run's start (pre5dn T2).
+  echo "still running: started ${elapsed}s ago, waited $(( $(date +%s) - called ))s this call (log $log); resume with: $0 --wait $log"
   exit 75
 fi
 code=$(cat "$log.exit")
