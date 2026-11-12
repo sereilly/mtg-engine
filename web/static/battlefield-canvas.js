@@ -2718,6 +2718,147 @@ class BattlefieldCanvas {
   }
 
   // ---------------------------------------------------------------------------
+  // Debug accessor: where things are on the page (window.__boardPositions)
+  // ---------------------------------------------------------------------------
+
+  // Every drawn object's page rectangle and a page point a real click lands
+  // on, recomputed from the layout as it stands — so a browser harness clicks
+  // a permanent by its id instead of by a coordinate read off a screenshot
+  // (.claude/skills/run-magic). Read-only: nothing here moves, hovers or
+  // redraws anything.
+  //
+  // The click point is found the way a click is resolved: a grid of
+  // candidate points over the object, each taken back through
+  // _pointerContext and _pressTarget (what _handleMouseDown asks, in its
+  // order) and kept only where the press lands on this object and the page's
+  // topmost element is this canvas (at narrow widths the prompt dock covers
+  // part of the board). The kept point nearest the middle of the kept ones is
+  // the click; `share` is the fraction of the grid kept. An Equipment tucked
+  // under its creature reports a point on its visible strip, and an object
+  // nothing can reach reports `click: null`. `settled` is false while a card,
+  // the stack or a camera is still easing — a point read then can move.
+  debugPositions() {
+    const sameCam = (a, b) => a.x === b.x && a.y === b.y && a.zoom === b.zoom;
+    const camTarget = this.camTarget;
+    const settled =
+      this.cardItems.every((it) => it.x === it.tx && it.y === it.ty) &&
+      this.stackVisuals.every((v) => v.cx === v.tcx && v.cy === v.tcy && v.scale === v.tScale) &&
+      (!camTarget || sameCam(camTarget, { x: this.camX, y: this.camY, zoom: this.zoom })) &&
+      [...this.seatCams.values()].every((cam) => !cam.target || sameCam(cam.target, cam));
+    const overlayCam = this._isFfa() ? this._camFor(this.viewerSeat) : this._camFor(null);
+
+    const permanents = this.cardItems.map((item) => {
+      const card = item.card || {};
+      const stack = this.stacks.find((s) => s.keys.includes(item.key));
+      const camSeat = this._itemRegionSeat(item) ?? item.seat;
+      const where = this._debugLocate(this._cardBounds(item.key), this._camFor(camSeat), (hit) => hit?.item === item);
+      return {
+        id: item.pid,
+        seat: item.seat,
+        index: item.idx,
+        name: card.name ?? null,
+        printed_name: card.printed_name ?? null,
+        tapped: !!card.tapped,
+        attached_to_id: card.attached_to_id ?? null,
+        // "aura" (an attachment fan, keys[0] the host) or "pile" (identical
+        // permanents collapsed together), and this card's place in it.
+        group: stack ? { kind: stack.kind, position: stack.keys.indexOf(item.key), size: stack.keys.length } : null,
+        ...where,
+      };
+    });
+
+    const stack = this.stackVisuals.map((v, index) => {
+      const w = BF_FULL_CARD_W * v.scale;
+      const h = BF_CARD_H * v.scale;
+      const box = { x: v.cx - w / 2, y: v.cy - h / 2, w, h };
+      const item = v.item || {};
+      return {
+        index,
+        name: item.card?.name || item.label || item.description || null,
+        ...this._debugLocate(box, overlayCam, (hit) => hit?.stackHit?.index === index),
+      };
+    });
+
+    const zones = this.zonePiles.map((pile) => ({
+      seat: pile.seat,
+      kind: pile.kind,
+      count: pile.count,
+      ...this._debugLocate(
+        { x: pile.cx - pile.w / 2, y: pile.cy - pile.h / 2, w: pile.w, h: pile.h },
+        this._camFor(pile.seat),
+        (hit) => hit?.zoneHit === pile,
+      ),
+    }));
+
+    const emblems = (this.emblemItems || []).map((item) => ({
+      index: item.index,
+      name: item.emblem?.source || item.emblem?.label || null,
+      ...this._debugLocate(this._emblemBounds(item), overlayCam, (hit) => hit?.emblemHit === item),
+    }));
+
+    return {
+      settled,
+      viewer_seat: this.viewerSeat,
+      // A modal mana fan takes every press, so nothing else has a click point.
+      mana_fan_open: !!this.manaFan,
+      permanents,
+      stack,
+      zones,
+      emblems,
+    };
+  }
+
+  // A page point -> what a press there lands on (_pressTarget), or null when
+  // the page's topmost element at that point is not this canvas.
+  _debugPressAt(pageX, pageY) {
+    if (document.elementFromPoint(pageX, pageY) !== this.canvas) return null;
+    return this._pressTarget(this._pointerContext(pageX, pageY));
+  }
+
+  // A world box seen through `cam`: its page bounding rectangle, and the page
+  // point of it a press lands on where `owns(hit)` (see debugPositions).
+  _debugLocate(box, cam, owns) {
+    if (!box) return { rect: null, click: null, share: 0 };
+    const toPage = (wx, wy) => {
+      const c = this._withCam(cam, () => this.worldToCanvas(wx, wy));
+      return this._canvasToPage(c.x, c.y);
+    };
+    const corners = [
+      toPage(box.x, box.y), toPage(box.x + box.w, box.y),
+      toPage(box.x, box.y + box.h), toPage(box.x + box.w, box.y + box.h),
+    ];
+    const xs = corners.map((p) => p.x);
+    const ys = corners.map((p) => p.y);
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    const rect = {
+      x: Math.round(left), y: Math.round(top),
+      w: Math.round(Math.max(...xs) - left), h: Math.round(Math.max(...ys) - top),
+    };
+    const cols = 9;
+    const rows = 11;
+    const kept = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const p = toPage(box.x + (box.w * (c + 0.5)) / cols, box.y + (box.h * (r + 0.5)) / rows);
+        if (owns(this._debugPressAt(p.x, p.y))) kept.push(p);
+      }
+    }
+    if (!kept.length) return { rect, click: null, share: 0 };
+    const mx = kept.reduce((sum, p) => sum + p.x, 0) / kept.length;
+    const my = kept.reduce((sum, p) => sum + p.y, 0) / kept.length;
+    let best = kept[0];
+    for (const p of kept) {
+      if ((p.x - mx) ** 2 + (p.y - my) ** 2 < (best.x - mx) ** 2 + (best.y - my) ** 2) best = p;
+    }
+    // Whole pixels for a shell to hand to `mousemove`, when the rounded point
+    // still lands on the object; otherwise the exact one.
+    const rounded = { x: Math.round(best.x), y: Math.round(best.y) };
+    const click = owns(this._debugPressAt(rounded.x, rounded.y)) ? rounded : best;
+    return { rect, click, share: Math.round((kept.length / (rows * cols)) * 100) / 100 };
+  }
+
+  // ---------------------------------------------------------------------------
   // Image loading
   // ---------------------------------------------------------------------------
 
@@ -5268,20 +5409,50 @@ class BattlefieldCanvas {
     return chooser === this.viewerSeat ? defender : null;
   }
 
+  // What a press at this pointer position (a _pointerContext) lands on, in
+  // the order a press tries them — the open mana fan takes every press, then
+  // the Raging River and Camouflage buttons, the floating stack, the zone
+  // piles, the emblems, and last the permanents — as one of { manaFan,
+  // manaFanIndex }, { riverHit }, { camoHit }, { stackHit }, { zoneHit },
+  // { emblemHit }, { item }, or null. One function, so the debug accessor
+  // (debugPositions) asks exactly what a real press asks.
+  _pressTarget(pt) {
+    const { cx, cy, world } = pt;
+    const regionSeat = pt.region ? pt.region.seat : null;
+    if (this.manaFan) {
+      const fanWorld = this._manaFanWorldPoint(cx, cy);
+      return { manaFan: true, manaFanIndex: this._manaFanHitIndex(fanWorld.x, fanWorld.y) };
+    }
+    const riverHit = this._hitTestRiverButton(world.x, world.y);
+    if (riverHit) return { riverHit };
+    const camoHit = this._hitTestCamoButton(world.x, world.y);
+    if (camoHit) return { camoHit };
+    const stackHit = this._hitTestStack(pt.overlayWorld.x, pt.overlayWorld.y);
+    if (stackHit) return { stackHit };
+    const zoneHit = this._hitTestZonePile(world.x, world.y, regionSeat);
+    if (zoneHit) return { zoneHit };
+    // Emblems only render in the viewer's viewport.
+    const emblemHit = regionSeat === null || regionSeat === this.viewerSeat
+      ? this._hitTestEmblem(world.x, world.y)
+      : null;
+    if (emblemHit) return { emblemHit };
+    const item = this._hitTest(world.x, world.y, regionSeat);
+    return item ? { item } : null;
+  }
+
   _handleMouseDown(event) {
     if (event.button !== 0) return;
     event.preventDefault();
     const pt = this._pointerContext(event.clientX, event.clientY);
-    const { cx, cy, world } = pt;
-    const regionSeat = pt.region ? pt.region.seat : null;
+    const { cx, cy } = pt;
+    const hit = this._pressTarget(pt);
 
     // The mana fan is modal while open: it captures every press, so a wedge
     // picks a color and a press anywhere else dismisses it.
-    if (this.manaFan) {
-      const fanWorld = this._manaFanWorldPoint(cx, cy);
+    if (hit?.manaFan) {
       this.pressState = {
         manaFan: true,
-        manaFanIndex: this._manaFanHitIndex(fanWorld.x, fanWorld.y),
+        manaFanIndex: hit.manaFanIndex,
         startCX: cx, startCY: cy, currentCX: cx, currentCY: cy,
         cancelled: false,
       };
@@ -5289,7 +5460,7 @@ class BattlefieldCanvas {
     }
 
     // Raging River Left/Right buttons float above their creature and win the press.
-    const riverHit = this._hitTestRiverButton(world.x, world.y);
+    const riverHit = hit?.riverHit;
     if (riverHit) {
       this.pressState = {
         riverButton: { seat: riverHit.seat, idx: riverHit.idx, side: riverHit.side },
@@ -5301,7 +5472,7 @@ class BattlefieldCanvas {
     }
 
     // Camouflage pile buttons likewise float above their creature.
-    const camoHit = this._hitTestCamoButton(world.x, world.y);
+    const camoHit = hit?.camoHit;
     if (camoHit) {
       this.pressState = {
         camoButton: { seat: camoHit.seat, idx: camoHit.idx, pile: camoHit.pile },
@@ -5313,7 +5484,7 @@ class BattlefieldCanvas {
     }
 
     // Floating stack cards draw above the battlefield, so they win the press.
-    const stackHit = this._hitTestStack(pt.overlayWorld.x, pt.overlayWorld.y);
+    const stackHit = hit?.stackHit;
     if (stackHit) {
       this.pressState = {
         stackIndex: stackHit.index,
@@ -5332,7 +5503,7 @@ class BattlefieldCanvas {
     }
 
     // Zone piles are pinned to the view above battlefield cards.
-    const zoneHit = this._hitTestZonePile(world.x, world.y, regionSeat);
+    const zoneHit = hit?.zoneHit;
     if (zoneHit) {
       this.pressState = {
         zonePile: { seat: zoneHit.seat, kind: zoneHit.kind },
@@ -5343,10 +5514,7 @@ class BattlefieldCanvas {
       return;
     }
 
-    // Emblems only render in the viewer's viewport.
-    const emblemHit = regionSeat === null || regionSeat === this.viewerSeat
-      ? this._hitTestEmblem(world.x, world.y)
-      : null;
+    const emblemHit = hit?.emblemHit;
     if (emblemHit) {
       this.pressState = {
         key: null,
@@ -5365,7 +5533,7 @@ class BattlefieldCanvas {
       return;
     }
 
-    const item = this._hitTest(world.x, world.y, regionSeat);
+    const item = hit?.item;
     if (!item) return;
 
     this.pressState = {

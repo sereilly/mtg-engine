@@ -146,7 +146,7 @@ Invoke-WebRequest -UseBasicParsing -Method Post "http://127.0.0.1:8010/api/sessi
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest                     # full suite
-.\.venv\Scripts\python.exe -m pytest tests/test_web_api.py -q   # fast HTTP-layer subset (39 tests)
+.\.venv\Scripts\python.exe -m pytest tests/ui/test_web_api.py -q   # fast HTTP-layer subset
 ```
 
 ## Run (human path)
@@ -176,8 +176,9 @@ failing row — only a recorded in-game check does.
 & $pw click "#debugCloseBtn"
 ```
 
-Then **click the permanent on the canvas** (below), drive whatever prompts
-appear, and check the result against the state API rather than the picture:
+Then **click the permanent on the canvas** by its id (next section), drive
+whatever prompts appear, and check the result against the state API rather
+than the picture:
 
 ```powershell
 $sid = (& $pw requests) -match 'api/sessions/(\w+)' | Out-Null; $matches[1]
@@ -195,6 +196,85 @@ Record the result the way the tracker expects — the Debug Menu, not the JSON:
 ```
 
 That rewrites `CARD_VERIFICATION.md` and `card_verification.json` on disk.
+
+## Clicking a card by its id
+
+The board is a canvas, so no selector reaches a permanent. The page carries a
+read-only debug accessor instead (`web/static/app.js`,
+`BattlefieldCanvas.debugPositions`): **`window.__boardPositions()`** returns,
+as the page stands now, every drawn object's page rectangle and a point a
+real click lands on, and **`window.__boardPoint(ref)`** is that point as
+`"x y"` (`""` when there is none). The point is found by sending candidate
+points back through the canvas's own press path (`_pressTarget`, what a
+mouse-down asks), so an Equipment or Aura tucked under its creature, or a
+lower card of a pile, gets a point on its **visible strip**, and a point a
+DOM panel covers (the prompt dock at narrow widths) is never reported.
+
+`ref` is a permanent id (the payload's `id`, stable while the permanent
+stays — CR 400.7), `"hand:N"`, `"stack:N"`, `"emblem:N"`, `"<zone>:<seat>"`
+(`library`, `graveyard`, `exile`, `command`, `ante`, `sideboard`), or a name
+(the first permanent, else hand card, so named).
+
+```sh
+# Git Bash, your own playwright-cli session (-s=<name>)
+XY=$(playwright-cli -s=me --raw eval "__boardPoint(12)" | tr -d '"')
+[ -n "$XY" ] && { playwright-cli -s=me mousemove $XY; playwright-cli -s=me mousedown; playwright-cli -s=me mouseup; }
+```
+```powershell
+$xy = (& $pw --raw eval "__boardPoint(12)").Trim('"')
+if ($xy) { $x, $y = $xy.Split(' '); & $pw mousemove $x $y; & $pw mousedown; & $pw mouseup }
+```
+
+`mousedown`/`mouseup` take `right` for the context menu. What
+`__boardPositions()` holds:
+
+| Field | What |
+|---|---|
+| `settled` | false while a card, the stack or a camera is still easing — a point read then can move; read again |
+| `mana_fan_open` | the land mana fan is modal and takes every press |
+| `permanents[]` | `id`, `seat`, `index` (battlefield slot), `name`, `printed_name`, `tapped`, `attached_to_id`, `group` (`{kind: "aura"\|"pile", position, size}` — position 0 is the host / bottom), `rect` `{x,y,w,h}`, `click` `{x,y}` or null, `share` (how much of the card a click can reach: ~0.18 for a tucked attachment) |
+| `stack[]`, `zones[]`, `emblems[]` | the floating stack cascade by index, the zone piles by seat and kind, the viewer's emblems — each with `rect`, `click`, `share` |
+| `hand[]` | the viewer's hand: `index`, `name`, `selector` (`#selfHand .hand-fan-slot[data-hand-index="N"]`), `rect`, `click`, `share` — fanned cards overlap, so click the point, not the selector's centre |
+
+```sh
+playwright-cli -s=me --raw eval "JSON.stringify(__boardPositions().permanents.map(p => [p.id, p.name, p.click, p.share]))"
+```
+
+## Keeping a board across a code change
+
+Every server-side edit used to mean restarting the server and rebuilding the
+game. `scripts/integration/serve_board.py --reload` supervises the app
+process: on a change to a `.py` under `engine/` or `web/` (or a card file) it
+saves every session, starts the app on the new code and loads them back
+before it serves — same session id, same permanent ids, the stack and any
+prompt still open (a resolution suspended for an answer included), the log
+and the undo history. **The page does not reload**: its event stream
+reconnects and re-fetches. A `web/` edit is serving again in ~5 s, an engine
+edit in ~25 s (the pool's compile).
+
+```powershell
+$scr = "<your scratch>"   # holds cmd/ (the command folder), and the logs
+$p = Start-Process -FilePath "$root\.venv\Scripts\python.exe" `
+  -ArgumentList "-u","scripts/integration/serve_board.py","--port","<port>","--cmd","$scr\cmd","--reload" `
+  -WorkingDirectory $root -RedirectStandardOutput "$scr\server.log" -RedirectStandardError "$scr\server.err.log" `
+  -WindowStyle Hidden -PassThru
+# Stop-Process -Id $p.Id stops the supervisor and the app with it.
+```
+
+After an edit, wait for `<cmd>/serve_board.state` to read `state=up` with
+the next `generation`; `server.log` says what changed, what was saved and
+restored. A session that cannot be saved keeps the old process serving on
+the old code (`state=up-old-code`, the reason in the log), retried every ten
+seconds. `--restore <cmd>/board.pickle` without `--reload` starts a server on
+the last saved board. What a session keeps and does not is
+`scripts/integration/board_pickle.py`'s docstring.
+
+**A client edit** (`web/static/`) restarts nothing: bump `index.html`'s `?v=`,
+then reload the page **into the same game** — open
+`http://127.0.0.1:<port>/?session=<sessionId>`, wait out the 5 s presence
+grace (`web/presence.py`), and click the seat's **Rejoin** button
+(`.rejoin-seat-btn[data-seat='0']`). `sessionId` is a page global
+(`playwright-cli --raw eval "sessionId"`).
 
 ## Gotchas
 
@@ -216,14 +296,16 @@ That rewrites `CARD_VERIFICATION.md` and `card_verification.json` on disk.
   missing field). `"tap"` with the same shape taps a land for mana, which is how
   you pay for the ability without hunting for the debug mana rail.
 - **Clicking a permanent means clicking a coordinate.** There is no selector for
-  one, so read the position off a screenshot and use real mouse events:
-  `mousemove <x> <y>`, then `mousedown`, then `mouseup` (three separate
-  commands). `click` needs a selector and cannot reach the board.
+  one: take its point from `__boardPoint(<id>)` ("Clicking a card by its id"
+  above) and use real mouse events — `mousemove <x> <y>`, then `mousedown`,
+  then `mouseup` (three separate commands). `click` needs a selector and
+  cannot reach the board.
 - **Resize to 1920x1080 before touching the board.** At the default width the
   Current Prompt panel sits on top of the right-hand half of your own
   battlefield row, so a permanent that exists is unclickable — and the board
   **re-lays out** whenever a permanent enters either side, which silently moves
-  whatever you were about to click. Re-screenshot after every state change.
+  whatever you were about to click. Ask `__boardPoint` again after every state
+  change, once `__boardPositions().settled` is true.
 - **The battlefield is canvas-rendered.** `web/static/battlefield-canvas.js`
   paints cards/permanents onto a `<canvas>`. DOM selectors like `.card` find
   **nothing** on the board — `document.querySelectorAll(".card").length` is 0
@@ -242,9 +324,11 @@ That rewrites `CARD_VERIFICATION.md` and `card_verification.json` on disk.
   `#hostGamePage`, the `#mode` `<select>`, `#startBtn` ("Create Session"),
   board container `#boardPanel` (loses its `hidden` class when the game starts).
 - **playwright-cli is a persistent daemon.** Commands share one default browser
-  session across invocations until `close`/`close-all`. Start each fresh run
-  with `playwright-cli close-all` if a stale session may be lingering. Session
-  artifacts (snapshots, console logs) land in `.playwright-cli/` — gitignored.
+  session across invocations until `close`. When agents drive browsers in
+  parallel, each uses its own session (`playwright-cli -s=<name> …`) and its
+  own server port, and closes only that session — `close-all` closes every
+  agent's browser. Session artifacts (snapshots, console logs) land in
+  `.playwright-cli/` — gitignored.
 
 ## Troubleshooting
 
