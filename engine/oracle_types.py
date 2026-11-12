@@ -240,6 +240,11 @@ DREW_COUNT = "drew_count"
 # or random-from-hand reveal named: one is a set and the other is an object, and
 # a reader handed the wrong one would ask a list what its mana value is.
 REVEALED_HAND_CARDS = "revealed_hand_cards"
+# …and **whose** hand that was, for a sentence that acts on a card still in it:
+# "Target opponent reveals their hand. You may copy an instant or sorcery card
+# **in it**." (Reversal of Fortune.) A seat, written by the one-hand reveal
+# only — "each player reveals their hand" names no one hand for "it" to be.
+REVEALED_HAND_SEAT = "revealed_hand_seat"
 
 # "Reveal any number of blue cards in your hand. **Counter target spell unless
 # its controller pays {1} for each card revealed this way.**" (Brine Seer and
@@ -1044,6 +1049,17 @@ OTHER_THAN_EVENT_SUBJECT_PLAYER = "other_than_event_subject_player"
 #: only one of them knew would be an offer made to nobody.
 STACK_TARGET_CONTROLLER = "stack_target_controller"
 
+#: The ``actor`` word of an offer made, **after** a counter step chose its
+#: spell, to that spell's controller — who then performs the offer. "If that
+#: spell is countered this way, **its controller may put a creature card from
+#: their hand onto the battlefield**." (Fold into Aether.) The seat is the
+#: counter's own record (``COUNTERED_SPELL_CONTROLLER``, last-known information
+#: once the spell is a card in a graveyard, CR 608.2h), never the stack; and
+#: where :data:`STACK_TARGET_CONTROLLER` only *aims* the offer (a punisher's
+#: damage stays the spell's), this one moves the performer too, because the
+#: card it puts comes out of that player's hand under that player's control.
+COUNTERED_SPELL_CONTROLLER_ACTOR = "countered_spell_controller"
+
 #: What "**that color**" names (Persecute). One colour symbol, chosen by the
 #: controller of the resolving spell (CR 608.2d) in the sentence in front, and
 #: read back by the sentence that spends it through a ``color_filter_from`` key.
@@ -1457,6 +1473,18 @@ COUNTERED_SPELL_CONTROLLER = "countered_spell_controller_seat"
 #: and a record written only on success would silently drop the whole second
 #: sentence.
 COUNTERED_SPELL_NAME = "countered_spell_name"
+
+#: Whether the counter step **did** counter the spell it chose — the record
+#: "If that spell is countered this way, its controller may put a creature card
+#: from their hand onto the battlefield" (Fold into Aether) reads. Written by
+#: ``counter_top_stack_spell`` only once CR 701.6a has removed the spell, so a
+#: spell that can't be countered leaves it unwritten and "nothing happens"
+#: (the card's ruling, 2004-12-01) — the opposite moment from
+#: ``COUNTERED_SPELL_NAME`` beside it, which is written when the spell is
+#: chosen. A priced counter ("unless its controller pays …") counters later,
+#: from the payment prompt, with no resolution to write into, so it declares
+#: none (``grammar/lowering/_records._PRODUCES_FOR_PAYLOAD_WITHOUT``).
+COUNTERED_SPELL_THIS_WAY = "countered_spell_this_way"
 
 
 #: The seat that won an auction of life (``bid_life``): the high bidder when

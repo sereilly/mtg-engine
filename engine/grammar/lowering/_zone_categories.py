@@ -202,6 +202,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # named, exile and the battlefield, which is this table's own line.
     "put_exiled_this_way": "zones",
     "put_exiled_with_source": "zones",
+    # Summoner's Egg turning its imprinted card face up where it lies: the
+    # linked exile's state, which is this row's neighbour's subject.
+    "turn_linked_exile_face_up": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",
     "take_ownership_of_exiled": "zones",

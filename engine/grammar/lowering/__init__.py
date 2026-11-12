@@ -235,6 +235,7 @@ from .linked_exile import (
     _lower_put_exiled_pile_on_library,
     _lower_put_exiled_with_source,
     _lower_search_and_exile,
+    _lower_turn_exiled_card_face_up,
     _lower_transmute_by_sacrifice,
 )
 from ._piles import _SEARCH_EXILE_HONOURED
@@ -396,6 +397,7 @@ from .stack import (
     _lower_modal_head,
     _lower_put_exiled_card_on_stack_as_copy,
     _lower_cast_copy_of_exiled_card,
+    _lower_cast_copy_of_revealed_card,
 )
 from .delayed import (
     _lower_delayed_self_action,
@@ -744,6 +746,7 @@ __all__ = [
     "_lower_exile_entire_library",
     "_lower_exile_random_from_hand",
     "_lower_put_exiled_with_source",
+    "_lower_turn_exiled_card_face_up",
     "_lower_look_top_exile_random",
     "_lower_look_top_pick",
     "_lower_search_and_exile",
@@ -765,6 +768,7 @@ __all__ = [
     "_lower_copy_target_spell",
     "_lower_put_exiled_card_on_stack_as_copy",
     "_lower_cast_copy_of_exiled_card",
+    "_lower_cast_copy_of_revealed_card",
     "_lower_create_delayed_trigger",
     "_lower_modal_head",
     "_lower_combat_restriction",

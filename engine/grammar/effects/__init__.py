@@ -175,6 +175,7 @@ from .linked_exile import (
     _parse_player_returns_exiled_with_source,
     _parse_put_exiled_this_way,
     parse_put_exiled_pile_on_library,
+    parse_turn_exiled_card_face_up,
 )
 from .cards import (
     _parse_draw,
@@ -462,6 +463,7 @@ __all__ = [
     "_parse_cast_copy_of_exiled_card",
     "_parse_put_exiled_this_way",
     "parse_put_exiled_pile_on_library",
+    "parse_turn_exiled_card_face_up",
     "parse_put_milled_card_onto_battlefield",
     "parse_put_outside_game_card_into_hand",
     "_parse_put_hand_cards_on_library",

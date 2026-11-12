@@ -1057,6 +1057,28 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
         for other in choices[1:]
         if one_of is not None and other.data.get("_one_of") is one_of
     ]
+    # "…copy an instant or sorcery card **in it**" (Reversal of Fortune): the
+    # card copied is in a revealed hand rather than in exile, so its place is
+    # that hand's — public since the reveal (CR 701.20b), and the slot the
+    # client opens its cast dialog on. Absent for every exiled offer. The
+    # card itself rides along (``card``), because an opponent's hand is
+    # hidden in every player's view of it and the dialog needs a card to
+    # show; its targets come from ``card_target_spec`` by name, as an exiled
+    # card of another seat's does.
+    hand_of = choice.data.get("_from_hand_of")
+    hand_place: dict = {}
+    if isinstance(hand_of, int) and 0 <= hand_of < len(ctx.game.players):
+        hand_place = {
+            "card": ctx.serialize_card(card) if card is not None else None,
+            "hand_seat": hand_of,
+            "hand_index": next(
+                (
+                    index for index, held in
+                    enumerate(ctx.game.players[hand_of].hand) if held is card
+                ),
+                None,
+            ),
+        }
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
@@ -1064,6 +1086,7 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
         **({"then_offers": then_offers} if then_offers else {}),
         "exile_seat": where[0],
         "exile_index": where[1],
+        **hand_place,
         "prompt": (
             f"Cast a copy of {name} without paying its mana cost "
             f"({choice.data.get('source_name', '')})?"

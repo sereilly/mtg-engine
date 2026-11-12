@@ -810,6 +810,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # paying its mana cost." (Isochron Scepter.) CR 707.12's copy of a card,
     # the copy family above.
     "cast_copy_of_exiled_card": "counterspells",
+    # "…copy an instant or sorcery card in it. If you do, you may cast the
+    # copy without paying its mana cost." (Reversal of Fortune.) The same
+    # copy of a card, out of a revealed hand.
+    "cast_copy_of_revealed_card": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack
     # and a retarget leaves it there resolving in full, so filing them together

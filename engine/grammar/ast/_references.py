@@ -218,7 +218,10 @@ class ObjectFilter:
     #: your graveyard**…" (Temporary Insanity). The hand bound above over any
     #: pile and any comparison: a ``Comparison`` whose value is a
     #: :class:`CountOf` cards in one of the controller's own zones
-    #: (``bounds.accept_pile_count_bound`` admits nothing wider). Read at
+    #: (``bounds.accept_pile_count_bound`` admits nothing wider) — or of the
+    #: controller's own permanents narrowed by type ("the number of Islands
+    #: you control", Vedalken Shackles; ``bounds.accept_board_count_bound``,
+    #: whose ``CountOf`` carries ``controller`` rather than a zone owner). Read at
     #: announcement and again at resolution (CR 608.2b) by ``subject_matches``,
     #: which holds the seat "your" names; the pure matcher refuses it.
     power_vs_count: "Comparison | None" = None

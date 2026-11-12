@@ -106,6 +106,7 @@ from .effects import (
     _parse_put_iterated_card_on_library,
     parse_put_library_top_into_hand,
     parse_put_exiled_pile_on_library,
+    parse_turn_exiled_card_face_up,
     _parse_distribute_counters,
     _parse_put_counter,
     _parse_put_exiled_with_source,
@@ -186,6 +187,11 @@ def parse_imperative_verb(
     # "Turn target face-down creature face up." (Ixidor.) CR 708's status
     # turned by an effect; declines without consuming.
     if stream.at_word("turn"):
+        # "Turn **the exiled card** face up." (Summoner's Egg.) The linked
+        # pile rather than a permanent — read first, declining unmoved.
+        exiled = parse_turn_exiled_card_face_up(stream)
+        if exiled is not None:
+            return exiled
         turned = parse_turn_face(stream)
         if turned is not None:
             return turned

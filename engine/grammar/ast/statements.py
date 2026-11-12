@@ -243,6 +243,7 @@ from .exile import (
     ExileGraveyardPosition,
     ExileEntireLibrary,
     PutExiledWithSource,
+    TurnExiledCardFaceUp,
     ExileGraveyardUntilLeaves,
     CastFromExiledWith,
     SearchAndExile,
@@ -269,6 +270,7 @@ from .stack import (
     NextSpellUncounterable,
     PutExiledCardOnStackAsCopy,
     CastCopyOfExiledCard,
+    CastCopyOfRevealedCard,
     WaiveShroud,
 )
 from .combat import (
@@ -362,7 +364,7 @@ Effect = Union[
     PayOrSacrificeGreatestManaValue,
     PayAnyAmountOfMana,
     PayAnyAmountOfLife,
-    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChangeEventTargets, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, NextSpellUncounterable, CopySpellForEachOtherTarget, CopyTargetSpell, BidLifeContest, DestroyCounteredAbilitySource, ModalNode, PutExiledCardOnStackAsCopy, CastCopyOfExiledCard, ReturnToZone, ChoosePermanent, ChooseGraveyardCard, CreateToken, CreateCopyToken, AddMana,
+    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChangeEventTargets, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, NextSpellUncounterable, CopySpellForEachOtherTarget, CopyTargetSpell, BidLifeContest, DestroyCounteredAbilitySource, ModalNode, PutExiledCardOnStackAsCopy, CastCopyOfExiledCard, CastCopyOfRevealedCard, ReturnToZone, ChoosePermanent, ChooseGraveyardCard, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
     PutOntoBattlefield, PutGraveyardPositionOntoBattlefield,
     RevealTopToHandOrBottom, CreateEmblem, SkipPhase, SkipStep,
@@ -396,7 +398,7 @@ Effect = Union[
     AnteOfferOwnershipExchange,
     OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
-    ExileTopOfLibrary, ExileGraveyardPosition, ExileEntireLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,
+    ExileTopOfLibrary, ExileGraveyardPosition, ExileEntireLibrary, PutExiledWithSource, TurnExiledCardFaceUp, ExileGraveyard, ExileCostSacrifices,
     CastPermission, LookTopExileRandom, LookTopPickToHand,
     RevealTopOpponentChooses,
     RevealLibraryOpponentChooses,

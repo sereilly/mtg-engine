@@ -91,8 +91,19 @@ def cease_to_exist(game, seat: int, copy) -> None:
     game.take_card_from_exile(seat, copy)
 
 
-def arm_copy_cast(game, seat: int, card, source_name: str, *, one_of=None) -> None:
+def arm_copy_cast(
+    game, seat: int, card, source_name: str, *, one_of=None,
+    from_hand_of: int | None = None,
+) -> None:
     """Offer *seat* a cast of a copy of *card*.
+
+    *from_hand_of* is the seat whose **hand** holds *card*, when it is not in
+    exile: "Target opponent reveals their hand. You may copy an instant or
+    sorcery card in it." (Reversal of Fortune.) The offer then asks after the
+    card in that hand rather than in exile, and nothing else changes — the
+    copy is still made in the caster's exile and cast from there, the one
+    road this module casts by (CR 707.12 would create it in the hand it
+    copies; the engine has no cast out of another player's hand).
 
     *one_of* is the record an offer shares with its siblings when the
     sentence copies **one** of the exiled cards ("a card exiled with this
@@ -104,11 +115,16 @@ def arm_copy_cast(game, seat: int, card, source_name: str, *, one_of=None) -> No
     data = {"card_name": card.name, "source_name": source_name, "_card": card}
     if one_of is not None:
         data[ONE_OF] = one_of
+    if from_hand_of is not None:
+        data[FROM_HAND_OF] = int(from_hand_of)
     game.arm_pending_choice("copy_cast", seat, **data)
 
 
 #: The pending choice's key for the record its sibling offers share.
 ONE_OF = "_one_of"
+
+#: The pending choice's key for the seat whose hand holds the copied card.
+FROM_HAND_OF = "_from_hand_of"
 
 
 def new_one_of() -> dict:
@@ -145,6 +161,32 @@ def _in_exile(game, card) -> int | None:
     return None
 
 
+def _still_there(game, choice) -> bool:
+    """Whether the card *choice* copies is still where the offer found it —
+    in exile, or in the hand :data:`FROM_HAND_OF` names. A card that left
+    makes no copy (Isochron Scepter's ruling)."""
+    card = choice.data.get("_card")
+    if card is None:
+        return False
+    hand_of = choice.data.get(FROM_HAND_OF)
+    if isinstance(hand_of, int) and 0 <= hand_of < len(game.players):
+        return any(held is card for held in game.players[hand_of].hand)
+    return _in_exile(game, card) is not None
+
+
+def _gone_line(game, choice) -> str:
+    """The log line for a copy that cannot be made: the card left."""
+    card = choice.data.get("_card")
+    name = getattr(card, "name", "The card")
+    hand_of = choice.data.get(FROM_HAND_OF)
+    if isinstance(hand_of, int) and 0 <= hand_of < len(game.players):
+        return (
+            f"{name} is no longer in {game.players[hand_of].name}'s hand, "
+            "so no copy is made"
+        )
+    return f"{name} is no longer exiled, so no copy is made"
+
+
 def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
     """Answer the ``copy_cast`` prompt.
 
@@ -163,10 +205,8 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
         )
         game.discard_pending_choice(choice)
         return True
-    if card is None or _in_exile(game, card) is None:
-        game.log.append(
-            f"{getattr(card, 'name', 'The card')} is no longer exiled, so no copy is made"
-        )
+    if not _still_there(game, choice):
+        game.log.append(_gone_line(game, choice))
         game.discard_pending_choice(choice)
         return True
     result = _cast_a_copy(
@@ -230,9 +270,54 @@ def default_copy_cast_offer(game, choice) -> None:
     from .ai_payment import tap_planned_lands
     from .ai_policy import choose_copy_cast
 
+    from .ai_rehearsal import rehearsing
+
     card = choice.data.get("_card")
     seat = choice.player_index
     source_name = str(choice.data.get("source_name") or "")
+    # **Inside a rehearsal, one card of a group is weighed.** Each offer of
+    # "copy **a** card …" is weighed by rehearsing its cast one level down
+    # (``ai_policy.choose_copy_cast``), and a rehearsal of anything with the
+    # offering spell on the stack resolves it — so Reversal of Fortune over a
+    # hand of three instants and sorceries rehearsed every one of them inside
+    # every rehearsal the table made while it waited, and one seeded game ran
+    # for over ten minutes. The group is offered best first (most expensive,
+    # ``handlers/stack.cast_copy_of_revealed_card``), so a rehearsal weighs
+    # that one and declines the rest unweighed; the record is the scratch
+    # copy's own, so the real table still weighs every offer.
+    #
+    # **…and none is weighed a level further down.** A copy weighed one level
+    # down (``ai_prompt_picks._one_level_deeper``) may itself offer copies —
+    # Reversal of Fortune copying the other player's Reversal of Fortune —
+    # and weighing those would be the third level that function promises is
+    # never opened: inside a rehearsal already one level down, the offer is
+    # declined unweighed, as every prompt of such a rehearsal is answered.
+    from .ai_prompt_picks import _DEEPER
+
+    # **A copy of the spell that is offering it is never taken.** Reversal of
+    # Fortune shown the other player's Reversal of Fortune may copy it, and
+    # the copy — aimed at the same opponent, whose hand still holds the
+    # original — offers exactly the same cards again: an optional loop
+    # (CR 732.1b; every pass a "may") a seat nobody asks took without end,
+    # one seeded game casting copies until it was stopped. Taking it never
+    # offers more than declining it and picking from the same hand now, so
+    # a seat nobody asks declines it; a person may still loop as long as
+    # they like.
+    if card is not None and card.name == source_name:
+        game.log.append(
+            f"{game.players[seat].name} did not cast a copy of {card.name}"
+        )
+        game.discard_pending_choice(choice)
+        return
+
+    one_of = choice.data.get(ONE_OF)
+    if rehearsing() and (
+        _DEEPER.get() or (isinstance(one_of, dict) and one_of.get("weighed"))
+    ):
+        game.discard_pending_choice(choice)
+        return
+    if rehearsing() and isinstance(one_of, dict):
+        one_of["weighed"] = True
 
     def choose(copy, permission):
         action = choose_copy_cast(game, seat, copy, permission)
@@ -240,7 +325,7 @@ def default_copy_cast_offer(game, choice) -> None:
             return None
         return cast_announcement(tap_planned_lands(game, seat, action))
 
-    if card is not None and _in_exile(game, card) is not None:
+    if _still_there(game, choice):
         result = _cast_a_copy(game, seat, card, source_name, choose=choose)
         if getattr(result, "supported", False):
             _take_one_of(game, choice)
@@ -257,6 +342,7 @@ __all__ = [
     "COPY_CAST_KIND",
     "COPY_CAST_OFFER",
     "COPY_CAST_PROMPT",
+    "FROM_HAND_OF",
     "ONE_OF",
     "arm_copy_cast",
     "cease_to_exist",

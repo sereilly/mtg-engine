@@ -68,6 +68,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
+                             COUNTERED_SPELL_THIS_WAY,
                              COUNTERS_REMOVED, DESTROYED_TARGET_COUNTERS,
                              DISCARDED_BY_SEAT,
                              DISCARDED_CARDS_BY_SEAT, DREW_BY_SEAT,
@@ -1059,8 +1060,8 @@ _PRODUCES_FOR_PAYLOAD: dict[
 #: answers both verbs. "Each player sacrifices a creature" names several
 #: objects, so "that creature" behind it refuses rather than reading the last.
 #: Records a kind writes for one payload value **while none of the listed keys
-#: is present**, as ``kind -> (payload key, payload value, record, absent
-#: keys)`` — :data:`_PRODUCES_FOR_PAYLOAD`'s shape with the one condition that
+#: is present**, as ``kind -> [(payload key, payload value, record, absent
+#: keys), …]`` — :data:`_PRODUCES_FOR_PAYLOAD`'s shape with the one condition that
 #: table cannot state.
 #:
 #: "Counter target spell. If that spell is countered this way, exile it instead
@@ -1071,11 +1072,21 @@ _PRODUCES_FOR_PAYLOAD: dict[
 #: Syncopate) counters later, from the payment prompt, with no resolution to
 #: write into — so it declares nothing, and a permission behind it would refuse
 #: rather than compile and permit nothing.
-_PRODUCES_FOR_PAYLOAD_WITHOUT: dict[str, tuple[str, object, str, tuple[str, ...]]] = {
-    "counter_top_stack_spell": (
-        "countered_destination", "exile", "exiled_cards",
-        ("unless_pays_x", "unless_pays_amount", "unless_pays_cost"),
-    ),
+#:
+#: "Counter target spell. **If that spell is countered this way**, its
+#: controller may put a creature card from their hand onto the battlefield."
+#: (Fold into Aether.) The same split for whether the counter happened at all
+#: (``oracle_types.COUNTERED_SPELL_THIS_WAY``), with no payload value to
+#: match — a ``None`` payload key is a row that holds for every payload the
+#: absent keys leave. A kind may carry several rows.
+_PRICED_COUNTER_KEYS = ("unless_pays_x", "unless_pays_amount", "unless_pays_cost")
+_PRODUCES_FOR_PAYLOAD_WITHOUT: dict[
+    str, list[tuple["str | None", object, str, tuple[str, ...]]]
+] = {
+    "counter_top_stack_spell": [
+        ("countered_destination", "exile", "exiled_cards", _PRICED_COUNTER_KEYS),
+        (None, None, COUNTERED_SPELL_THIS_WAY, _PRICED_COUNTER_KEYS),
+    ],
 }
 
 
@@ -1122,13 +1133,13 @@ def _produced_by_kind(instruction) -> frozenset[str]:
     ):
         if (instruction.payload or {}).get(payload_key) == payload_value:
             keys = keys | ({record} if isinstance(record, str) else set(record))
-    unless = _PRODUCES_FOR_PAYLOAD_WITHOUT.get(kind)
-    if unless is not None:
-        payload_key, payload_value, record, absent = unless
-        payload = instruction.payload or {}
-        if payload.get(payload_key) == payload_value and not any(
-            key in payload for key in absent
-        ):
+    payload = instruction.payload or {}
+    for payload_key, payload_value, record, absent in (
+        _PRODUCES_FOR_PAYLOAD_WITHOUT.get(kind) or ()
+    ):
+        if (
+            payload_key is None or payload.get(payload_key) == payload_value
+        ) and not any(key in payload for key in absent):
             keys = keys | {record}
     return keys
 

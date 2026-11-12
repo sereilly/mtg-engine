@@ -553,6 +553,43 @@ def accept_pile_count_bound(stream: TokenStream) -> "ast.Comparison | None":
     return None
 
 
+def accept_board_count_bound(stream: TokenStream) -> "ast.Comparison | None":
+    """``less than or equal to the number of Islands you control`` (Vedalken
+    Shackles) — a characteristic's bound spelled against a **count of the
+    controller's own permanents** — or None with the cursor unmoved.
+
+    :func:`accept_pile_count_bound`'s question on the battlefield, which that
+    reader leaves out because a board count names its seat with a controller
+    rather than a zone owner. It rides the same payload key
+    (``ObjectFilter.power_vs_count``) in the spec ``evaluate_count`` reads —
+    ``zone`` "battlefield", ``owner`` the controller word, ``filter`` the noun
+    phrase without it, exactly what ``lowering/_amounts.count_spec`` writes for
+    "the number of Islands you control" behind a damage amount. Admitted only
+    for the controller's own permanents narrowed by type, subtype or supertype:
+    the matcher counts for the seat asking (the ability's controller), and a
+    narrowing that spec does not carry must refuse rather than be counted
+    without it.
+    """
+    mark = stream.mark()
+    comparison = accept_spelled_comparison(stream)
+    counted = getattr(comparison, "value", None)
+    if (
+        isinstance(counted, ast.CountOf)
+        and counted.filter.zone == "battlefield"
+        and counted.filter.controller == "you"
+        and (counted.filter.card_types or counted.filter.subtypes)
+        and counted.filter == ast.ObjectFilter(
+            card_types=counted.filter.card_types,
+            subtypes=counted.filter.subtypes,
+            supertypes=counted.filter.supertypes,
+            controller="you",
+        )
+    ):
+        return comparison
+    stream.reset(mark)
+    return None
+
+
 #: The two printed extremes and the three printed characteristics, as the words
 #: a card spells them. A table rather than a branch because the whole content of
 #: this reader is which two words were printed: Purging Scythe prints "least

@@ -37,7 +37,9 @@ time: what differs between the callers is only which parser they already hold.
 
 from __future__ import annotations
 
-from ...oracle_types import (EVENT_SPELL_MANA_COST, MANA_PAID_BY_SEAT,
+from ...oracle_types import (COUNTERED_SPELL_CONTROLLER,
+                             COUNTERED_SPELL_CONTROLLER_ACTOR,
+                             EVENT_SPELL_MANA_COST, MANA_PAID_BY_SEAT,
                              OracleInstruction,
                              OTHER_THAN_EVENT_SUBJECT_PLAYER,
                              REVEALED_TOP_CARDS_BY_SEAT,
@@ -830,6 +832,21 @@ def _resolved_offer_actor(
         # did nothing at all. Its own actor, read off the stack object the
         # announcement named (``STACK_TARGET_CONTROLLER``).
         actor = STACK_TARGET_CONTROLLER
+    elif (
+        actor == "controller"
+        and COUNTERED_SPELL_CONTROLLER in produced
+        and LOOP_BOUND_OBJECT not in produced
+    ):
+        # "Counter target spell. If that spell is countered this way, **its
+        # controller may** put a creature card from their hand onto the
+        # battlefield." (Fold into Aether.) Behind a counter that chose its
+        # spell the possessive names that spell's controller — the seat the
+        # counter recorded, since the spell is a card in a graveyard by now
+        # and CR 108.4 gives it no controller. Left as ``controller`` the
+        # offer asked the control seam for a permanent the sentence never
+        # named. The counter's seat performs the offer, which is what its own
+        # actor says (``oracle_types.COUNTERED_SPELL_CONTROLLER_ACTOR``).
+        actor = COUNTERED_SPELL_CONTROLLER_ACTOR
     return actor
 
 

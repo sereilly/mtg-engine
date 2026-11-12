@@ -111,9 +111,17 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # "that spell") are about a *spell* that an earlier sentence named, and
         # none of them can follow an ability.
         mana, life = _parse_unless_pays(stream)
-        return ast.CounterAbility(
+        countered = ast.CounterAbility(
             subject, unless_pays=mana, unless_pays_life=life,
         )
+        # "…**and destroy that artifact if it's on the battlefield**." (Ouphe
+        # Vandals.) Teferi's Response's back-reference spoken inside the same
+        # sentence: the permanent the countered ability came from, which only
+        # the counter's own record can name once the ability is off the stack.
+        source_destroy = _accept_and_destroy_countered_source(stream, subject)
+        if source_destroy is not None:
+            return ast.Sequence((countered, source_destroy))
+        return countered
     if subject is None:
         # "**Counter that ability.**" (Imprison.) The ability the trigger's own
         # condition was about, not one this sentence chose — so it is the bound
@@ -358,6 +366,16 @@ def _parse_countered_destination(
             stream.reset(mark)
             return None, "", None
     stream.accept_punct(",")
+    # "If that spell is countered this way, **its controller may put a
+    # creature card from their hand onto the battlefield**." (Fold into
+    # Aether.) Not a destination at all: the arm is a statement of its own
+    # about what happens *after* the counter, read as an ordinary conditional
+    # (``record_conditions``' ``CounteredThisWay``) once this declines. Only
+    # the two verbs a destination is printed with keep the loud reading
+    # below, so a destination tail this cannot read still fails by name.
+    if not stream.at_word("exile", "put"):
+        stream.reset(mark)
+        return None, "", None
     # "…**exile it** instead of putting it into its owner's graveyard."
     # (Dissipate.) The same CR 614.1 replacement of CR 701.6a's destination
     # written with the destination as a *verb* rather than as a zone — which is
@@ -444,6 +462,47 @@ def _parse_destroy_countered_ability_source(
     else:
         stream.reset(rider)
     return ast.DestroyCounteredAbilitySource(bypass_regeneration=bypass)
+
+
+def _accept_and_destroy_countered_source(
+    stream: TokenStream, subject: "ast.TargetSpec",
+) -> "ast.DestroyCounteredAbilitySource | None":
+    """``and destroy that <noun> [if it's on the battlefield]`` behind "counter
+    target activated ability from an artifact source" (Ouphe Vandals), or None
+    with the cursor where it was.
+
+    The same back-reference :func:`_parse_destroy_countered_ability_source`
+    reads as a sentence of its own (Teferi's Response), so it lowers to the same
+    node and reaches the same record: the targeted ability's **source**, which
+    the ability on the stack cannot be asked about once it is countered
+    (CR 405.1). The ruling (2004-12-01) that it "can destroy an artifact with
+    protection from green or one that can't be targeted" is this reading — the
+    artifact is never a target.
+
+    The noun restates the source the counter's own phrase named ("from an
+    **artifact** source"), so it is checked against it rather than read as a
+    narrowing: "permanent" fits any source, and any other noun is a second test
+    the record cannot be asked — refused. "If it's on the battlefield" is
+    consumed whole or not at all, and is what the record's reader does
+    already: the destroy resolves the recorded permanent by id, and a source
+    that has left is no permanent (CR 400.7), so nothing is destroyed.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("and", "destroy", "that"):
+        return None
+    noun = stream.peek_word()
+    named = tuple(subject.filter.ability_source_types)
+    if noun is None or not (noun == "permanent" or noun in named):
+        stream.reset(mark)
+        return None
+    stream.advance()
+    rider = stream.mark()
+    if not (
+        stream.accept_phrase("if", "it", "'s", "on", "the", "battlefield")
+        or stream.accept_phrase("if", "it", "is", "on", "the", "battlefield")
+    ):
+        stream.reset(rider)
+    return ast.DestroyCounteredAbilitySource()
 
 
 def _parse_countered_narrowing(stream: TokenStream) -> "ast.ObjectFilter | None":
@@ -762,7 +821,7 @@ def _parse_put_exiled_card_on_stack_as_copy(
 
 def _parse_cast_copy_of_exiled_card(
     stream: TokenStream,
-) -> "ast.CastCopyOfExiledCard | None":
+) -> "ast.CastCopyOfExiledCard | ast.CastCopyOfRevealedCard | None":
     """``You may copy the exiled card. If you do, you may cast the copy without
     paying its mana cost.`` (Isochron Scepter.)
 
@@ -785,6 +844,28 @@ def _parse_cast_copy_of_exiled_card(
     # "the exiled card" copies each. The permanent names itself by any of its
     # nouns or by its name.
     chosen = False
+    # "…you may copy **an instant or sorcery card in it**" (Reversal of
+    # Fortune, behind "Target opponent reveals their hand."). The same offer
+    # over a card in the revealed hand; the printed union is read by the one
+    # reader every "<type> or <type> card" position uses, and "in it" is
+    # required — the hand is the only pile the pronoun can name.
+    revealed_mark = stream.mark()
+    if stream.accept_phrase("you", "may", "copy") and stream.accept_word("a", "an"):
+        revealed_types = accept_spell_type_union(stream, noun="card")
+        if revealed_types is not None and stream.accept_phrase("in", "it"):
+            if (
+                stream.accept_punct(".")
+                and stream.accept_phrase("if", "you", "do")
+                and stream.accept_punct(",")
+                and stream.accept_phrase(
+                    "you", "may", "cast", "the", "copy", "without", "paying",
+                    "its", "mana", "cost",
+                )
+            ):
+                return ast.CastCopyOfRevealedCard(revealed_types)
+            stream.reset(mark)
+            return None
+    stream.reset(revealed_mark)
     if stream.accept_phrase("you", "may", "copy", "the", "other"):
         other = True
     elif stream.accept_phrase("you", "may", "copy", "a", "card", "exiled", "with"):

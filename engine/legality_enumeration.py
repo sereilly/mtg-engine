@@ -640,9 +640,26 @@ class TargetEnumerationMixin:
             # (CR 614.1c), which the pure matcher refuses: resolved off the
             # source first, through the reader ``subject_matches`` uses, so the
             # picker and the handler's own ``subject_matches`` agree.
-            return permanent_matches_filter(
-                perm, _resolve_chosen_subtype(instruction.payload, source_permanent)
-            )
+            described = _resolve_chosen_subtype(instruction.payload, source_permanent)
+            # "…target creature **with power less than or equal to the number
+            # of Islands you control**" (Vedalken Shackles). A bound relative
+            # to the *activating* seat, which the pure matcher refuses outright
+            # (it is handed no seat), so it is asked alone through
+            # ``subject_matches`` with that seat — the reading the handler's
+            # own ``subject_matches`` gives it at resolution — and the rest of
+            # the filter keeps the pure reader this arm already uses.
+            bound = described.get("power_vs_count")
+            if bound is not None:
+                described = {
+                    key: value for key, value in described.items()
+                    if key != "power_vs_count"
+                }
+                if not subject_matches(
+                    self, perm, {"power_vs_count": bound},
+                    observer=controller_index,
+                ):
+                    return False
+            return permanent_matches_filter(perm, described)
         if instruction.kind == "grant_regeneration_to_target_creature":
             # Elephant Graveyard's "target Elephant" — the same subtype filter
             # _grant_regeneration_shield enforces at resolution. Death Ward's

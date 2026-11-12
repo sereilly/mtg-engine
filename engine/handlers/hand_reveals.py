@@ -28,7 +28,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ..linked_exile import until_leaves_has_ended
-from ..oracle_types import REVEALED_HAND_CARDS
+from ..oracle_types import REVEALED_HAND_CARDS, REVEALED_HAND_SEAT
 # The runtime class. The bare name is a TYPE_CHECKING-only import below, and
 # the handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import OracleInstruction as _OracleInstruction
@@ -114,6 +114,9 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
     context.results[REVEALED_HAND_CARDS] = list(victim.hand)
     if seat is not None:
         game.record_reveal(seat, names)
+        # Whose hand "it" is behind this step (Reversal of Fortune's "a card
+        # in it") — see ``oracle_types.REVEALED_HAND_SEAT``.
+        context.results[REVEALED_HAND_SEAT] = seat
     game.log.append(
         f"{victim.name} reveals their hand: " + (", ".join(names) or "(empty)")
     )
