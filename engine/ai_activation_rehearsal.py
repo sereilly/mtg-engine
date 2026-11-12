@@ -6,7 +6,9 @@ scratch copy of the game (``ai_rehearsal.rehearse``) says it pays: a land's
 ability (:func:`_land_ability_worth`), every other ability that must move
 something that lasts (:func:`_moves_something`), an X sized by what it buys
 (:func:`_sized_x_activation`), a text change's two words
-(:func:`_text_change_activation`) — and, before a combat, read again with the
+(:func:`_text_change_activation`), a sacrifice or a counter a cost spends
+(:func:`_sacrifice_priced_activation`, :func:`_counter_priced_activation`)
+— and, before a combat, read again with the
 fight fought (:func:`_read_through_the_fight`). The instant-speed chooser
 (``ai_policy.choose_instant_speed_activation``) rehearses through
 :func:`_rehearse_activation` and queues through :func:`_queue_activation`.
@@ -92,6 +94,9 @@ def _rehearse_activation(
         ) + (
             ("victims", tuple(action.cost_permanent_ids))
             if action.cost_permanent_ids else ()
+        ) + (
+            ("counter_kind", action.cost_counter_kind)
+            if action.cost_counter_kind else ()
         ) + (("source_given_up",) if given_up else ()),
         without=paid_for if taps else None,
         without_key=(
@@ -522,6 +527,57 @@ def _sacrifice_priced_activation(
         if worth is not None and needed and worth < DECIDES_THE_GAME:
             continue
         if worth is not None and worth > best_worth + 1e-9:
+            best, best_worth = action, worth
+    return best
+
+
+def _counter_priced_activation(
+    game: Game, seat: int, permanent, ability, candidate: ActivationAction,
+    *, at_instant_speed: bool = False,
+) -> ActivationAction | None:
+    """*candidate* — an ability whose cost removes a counter from a permanent
+    the activator chooses ("Remove a +1/+1 counter or a charge counter from a
+    permanent you control", Ion Storm; CR 602.2b through 601.2b) — naming
+    the permanent and the kind of counter it is paid with, or None when no
+    choice is worth paying. `_sacrifice_priced_activation`'s twin.
+
+    Each choice the board offers (``ai_counter_costs.counter_cost_choices``)
+    is rehearsed **with the whole cost paid** (`_land_ability_worth`, read
+    through the fight before a combat): a +1/+1 counter taken off a creature
+    is the smaller body the standing reads, and a counter the standing reads
+    nothing for is priced on top (``ai_counter_costs.spent_counter_worth``:
+    a charge counter its permanent spends is a mana's worth). The choice
+    leaving the seat furthest ahead is proposed, the cheaper of two equals,
+    and nothing where none leaves it ahead — so a counter moved from one
+    creature to another for no gain is never moved (Spike Rogue's shuttle).
+    At *at_instant_speed* the cheapest is proposed as it stands, for its
+    caller to rehearse (``ai_policy.choose_instant_speed_activation``).
+    """
+    from dataclasses import replace
+
+    from .ai_counter_costs import counter_cost_choices, spent_counter_worth
+
+    named = single_chosen_id(candidate.target_permanent_ids)
+    aimed = game.permanent_by_id(named) if named is not None else None
+    choices = counter_cost_choices(game, seat, permanent, ability, spare=aimed)
+    if not choices:
+        return None
+    actions = [
+        replace(candidate, cost_permanent_ids=[permanent_id], cost_counter_kind=kind)
+        for permanent_id, kind in choices
+    ]
+    if at_instant_speed:
+        return actions[0]
+    best: ActivationAction | None = None
+    best_worth = 0.0
+    for action in actions:
+        worth = _land_ability_worth(game, seat, action)
+        if worth is None:
+            continue
+        worth -= spent_counter_worth(
+            game.permanent_by_id(action.cost_permanent_ids[0]), action.cost_counter_kind,
+        )
+        if worth > best_worth + 1e-9:
             best, best_worth = action, worth
     return best
 

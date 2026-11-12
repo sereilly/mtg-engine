@@ -243,8 +243,18 @@ class ActivationAction:
     # deterministic pick; named for every sacrifice the chooser weighs
     # (`ai_activation_rehearsal._sacrifice_priced_activation`): the cheapest
     # to lose, or the reading the effect is measured by ("damage equal to the
-    # sacrificed artifact's mana value", Bosh).
+    # sacrificed artifact's mana value", Bosh). For a "Remove a counter from
+    # a permanent you control" cost, the one permanent the counter comes off
+    # (`ai_activation_rehearsal._counter_priced_activation`).
     cost_permanent_ids: list[int] | None = None
+    # …and which kind of counter it gives up (CR 602.2b through 601.2b): "Remove
+    # a +1/+1 counter **or a charge counter**" (Ion Storm), "Remove **a
+    # counter**" (Power Conduit) — the activation path's ``cost_counter_kind``.
+    # None is the engine's default (`named_counters.counter_kind_to_remove`),
+    # and every ability but one whose cost removes a counter from a permanent
+    # the payer chooses, which the chooser names by rehearsal
+    # (`ai_counter_costs.counter_cost_choices`).
+    cost_counter_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -394,8 +404,10 @@ def activation_announcement(action: ActivationAction) -> dict:
         # Which printed activation cost ("{3}, {T} or {U}, {T}") is paid.
         "alternative_cost_index": action.alternative_cost_index,
         # CR 601.2b via 602.2b: which permanents pay the sacrifice (see
-        # `ActivationAction.cost_permanent_ids`).
+        # `ActivationAction.cost_permanent_ids`)…
         "cost_permanent_ids": action.cost_permanent_ids,
+        # …and which kind of counter a remove-a-counter cost gives up.
+        "cost_counter_kind": action.cost_counter_kind,
     }
 
 
