@@ -64,7 +64,8 @@ it starts; `--run` passes `--quick`, which keeps the quick pass in the files
 named. **`MTG_PROMOTE=<CODE>`** runs any test with a measured set read as
 shipped (`engine/card_loader.py`) — the way to run a census over
 `load_catalog()` against the set you are implementing; the run's header says
-so, and the shipped-pool guards are expected red under it.
+so under `-v` (the `-q` in `pytest.ini` hides it), and the shipped-pool guards
+are expected red under it.
 
 Tests are organized by subject — put new tests in the matching subfolder:
 `tests/ai/` (AI policy/simulator), `tests/ui/` (web API + frontend/end-to-end),

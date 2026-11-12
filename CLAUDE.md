@@ -49,7 +49,8 @@ of the manifest moves that measured set into `sets` at its printing-ordered
 place for the process, the file untouched, so the censuses over
 `load_catalog()` can be run with the set shipped while it is being
 implemented. A rehearsal, never a gate — the shipped-pool guards fail on its
-unsupported cards; the test header names it, and `check_all` and the
+unsupported cards; the test header names it (under `-v`: the `-q` in
+`pytest.ini` hides the header), and `check_all` and the
 integration gates refuse to run under it (`census_rehearsal.sh` is the one that
 does).
 
