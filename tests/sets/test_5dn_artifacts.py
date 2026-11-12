@@ -113,6 +113,22 @@ def test_w1g1_clearwater_goblet_gains_its_charge_counters_each_upkeep(set_pool):
     assert game.players[0].life == 23
 
 
+def test_w1g1_clearwater_goblet_s_gain_is_a_person_s_to_decline(set_pool):
+    """"You may": a person is asked (the optional offer) and may say no."""
+    fdn = set_pool("5DN")
+    game = _w1g1_table(set_pool, hand=[fdn["Clearwater Goblet"]])
+    game.interactive_seats = {0}
+    _w1g1_cast(game, "Clearwater Goblet", {"W": 1, "U": 1, "C": 3})
+    game.start_turn(1)
+    _w1g1_settle(game)
+    game.start_turn(0)
+    owed = _w1g1_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "optional_pay"
+    assert game.resolve_pending_choice("optional_pay", 0, accept=False, option=None)
+    _w1g1_settle(game)
+    assert game.players[0].life == 20
+
+
 def test_w1g1_engineered_explosives_x_buys_colors_not_counters(set_pool):
     """The rulings (2020-08-07): X lets more colours be spent, and the counters
     are the colours — X=3 paid with two colours and a colourless is two. The
