@@ -218,7 +218,7 @@ to something that exists. The names most likely to matter this set:
   `--run` runs their *quick* tests only — a named file otherwise runs whole.
 - **Long runs**: `bash scripts/integration/run_and_wait.sh <log> <command…>`
   detaches the command, writes its exit code as the log's last line and to
-  `<log>.exit`, and waits a bounded 170 s; not done, it exits 75 with the
+  `<log>.exit`, and waits a bounded 110 s; not done, it exits 75 with the
   `--wait` command to resume. Use it for any run over ~2 minutes instead of
   writing your own background job or poll loop — **a loop grepping for
   "passed" never ends here** (pytest's summary line is suppressed), and an
@@ -434,9 +434,9 @@ bought, what it cost, what it exposed. End every commit message with:
 
     Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
-**Write your final report to `<your scratch>\REPORT.md` as well as in your
-final message** (the integrator saves reports verbatim; a file survives a
-session break). It must contain:
+**Your report is your final message**, not a file: a subagent cannot write
+`REPORT.md` (the tool refuses it; Darksteel's nine groups were each told to
+and refused). The integrator saves it verbatim. It must contain:
 
 1. **Cards done** — each with the four exit criteria confirmed and one line on
    how you drove it in a game.
