@@ -779,6 +779,7 @@ function carryCastMode(body) { return body; }
 function carryAnnouncedSeat() {}
 function carryCastZoneAndCost(body) { return body; }
 function castManaSplitFor() { return null; }
+function tapManaSplitFor() { return null; }
 function carryMadnessAnswer(body) { return body; }
 function carryCopyCastAnswer(body) { return body; }
 function carryAbilityCostAlternative(body) { return body; }

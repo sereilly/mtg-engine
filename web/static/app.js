@@ -2622,9 +2622,69 @@ function severalGraveyardHint() {
   if (Number.isInteger(p.exactTargets)) {
     return `${n} of ${p.exactTargets} chosen — choose exactly ${p.exactTargets} card${p.exactTargets === 1 ? "" : "s"} ${where} for ${p.cardName} (X = ${p.exactTargets}), then confirm.`;
   }
+  if (spec.one_target_per_color) {
+    // "For each color, … up to one target card of that color" (All Suns'
+    // Dawn): which colour each chosen card is standing for, so the person sees
+    // why a click was refused and that a white-blue card counts once.
+    const assignment = perColorAssignment(p.severalGraveyard, spec);
+    const named = (assignment || []).map((color, i) => {
+      const slot = p.severalGraveyard[i];
+      const card = currentState?.players?.[slot.seat]?.graveyard?.[slot.idx];
+      return `${card?.name || "a card"} as the ${perColorWord(color)} one`;
+    });
+    return n === 0
+      ? `Choose up to one card of each color ${where} for ${p.cardName} (click each), then confirm. Choosing none is legal.`
+      : `${n} chosen: ${named.join(", ")}.`;
+  }
   return n === 0
     ? `Choose up to ${p.maxTargets} cards ${where} for ${p.cardName} (click each), then confirm. Choosing none is legal.`
     : `${n} of up to ${p.maxTargets} chosen${spec.single_graveyard ? " (all from one graveyard)" : ""}.`;
+}
+
+// A colour letter as a word ("the white one").
+function perColorWord(color) {
+  return ({ W: "white", U: "blue", B: "black", R: "red", G: "green" })[color] || color;
+}
+
+// CR 601.2c for "For each color, return up to one target card of that color"
+// (All Suns' Dawn, `one_target_per_color` on the cast spec): every target is
+// chosen *as* a different colour's card. That is a matching, not a colour
+// count — two white-blue cards are legal as the white one and the blue one
+// (ruling 2004-12-01) — so this is Kuhn's augmenting path over the chosen
+// cards (at most five) and the spec's `graveyard_colors`. Returns the colour
+// each chosen slot stands for, or null when no assignment exists; the colours
+// are the graveyard card's own as the server serialized it. The engine judges
+// the same matching (`engine/per_color_targets.assign_colors`) and refuses an
+// unmatched set; this keeps a person from building one. Walked as the engine
+// walks it — cards in the order chosen, colours in the spec's WUBRG order —
+// so the colour the hint says a card stands for is the one the engine assigns
+// it (and records as it was chosen as, for the 2004-12-01 ruling).
+function perColorAssignment(slots, spec) {
+  const allowed = Array.isArray(spec?.graveyard_colors) && spec.graveyard_colors.length
+    ? spec.graveyard_colors : ["W", "U", "B", "R", "G"];
+  const colorsOf = (slots || []).map((slot) => {
+    const card = currentState?.players?.[slot.seat]?.graveyard?.[slot.idx];
+    const colors = Array.isArray(card?.colors) ? card.colors : [];
+    return allowed.filter((color) => colors.includes(color));
+  });
+  const holder = {};
+  const place = (i, seen) => {
+    for (const color of colorsOf[i]) {
+      if (seen.has(color)) continue;
+      seen.add(color);
+      if (holder[color] === undefined || place(holder[color], seen)) {
+        holder[color] = i;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let i = 0; i < colorsOf.length; i += 1) {
+    if (!place(i, new Set())) return null;
+  }
+  const assignment = new Array(colorsOf.length);
+  for (const [color, i] of Object.entries(holder)) assignment[i] = color;
+  return assignment;
 }
 
 function toggleSeveralGraveyardTarget(zoneSeat, index) {
@@ -2653,6 +2713,25 @@ function toggleSeveralGraveyardTarget(zoneSeat, index) {
         true,
       );
       return;
+    }
+    // One card of each colour (All Suns' Dawn): refused at the click that
+    // would leave some chosen card with no colour of its own, rather than by
+    // the engine at the confirm ("the targets must be one card of each color").
+    const spec = targetSpecOf(p.card);
+    if (spec.one_target_per_color) {
+      const widened = [...p.severalGraveyard, { seat: zoneSeat, idx: index }];
+      if (!perColorAssignment(widened, spec)) {
+        const card = currentState?.players?.[zoneSeat]?.graveyard?.[index];
+        const colors = (Array.isArray(card?.colors) ? card.colors : [])
+          .map(perColorWord);
+        updateActionHint(
+          `${p.cardName} returns one card of each color — ${card?.name || "that card"}`
+          + ` (${colors.join("-") || "colorless"}) has no color left that another chosen card isn't`
+          + " already standing for. Deselect one to choose it.",
+          true,
+        );
+        return;
+      }
     }
     p.severalGraveyard.push({ seat: zoneSeat, idx: index });
   }
@@ -3071,6 +3150,73 @@ function askCastManaSplit(split) {
   });
 }
 
+// "Whenever enchanted land is tapped for mana, its controller adds an
+// additional two mana in any combination of colors." (Dawn's Reflection.) A
+// triggered mana ability resolves inside the tap (CR 605.4a), so its split is
+// chosen with the tap and rides the tap's own body as `mana_combination`
+// (`web/actions.py` forwards it on both land-tap paths). The server says which
+// lands set such a split off (`tap_mana_split`: `{count, colors, source}`,
+// web/offers.tap_mana_split); without this every person got the engine's
+// default split (the colours the hand asks for).
+//
+// The split of the tap a body is about to send, or null: a tap or a land's
+// mana activation of one of the viewer's own lands that carries the offer and
+// has not been answered. A land's ability that adds no mana (`ability_mana`
+// says null for it — Mishra's Factory becoming a creature) is not a tap for
+// mana and owes nothing.
+function tapManaSplitFor(body, state = currentState) {
+  if (!body || (body.action !== "activate" && body.action !== "tap")) return null;
+  if (body.mana_combination != null || seat === null) return null;
+  const mine = state?.players?.[seat]?.battlefield || [];
+  const land = Number.isInteger(body.permanent_id)
+    ? mine.find((perm) => perm && typeof perm === "object" && perm.id === body.permanent_id)
+    : mine[body.permanent_index];
+  const offer = land && typeof land === "object" ? land.tap_mana_split : null;
+  if (!offer || !Number.isInteger(offer.count) || offer.count < 2) return null;
+  if (!Array.isArray(offer.colors) || !offer.colors.length) return null;
+  if (Array.isArray(land.ability_mana)) {
+    const index = Number.isInteger(body.ability_index) ? body.ability_index : 0;
+    if (!land.ability_mana[index]) return null;
+  }
+  return {
+    cardName: land.name,
+    source: offer.source || "",
+    count: offer.count,
+    colors: offer.colors.map((color) => String(color).toUpperCase()),
+  };
+}
+
+// The split chooser for a land's tap, held apart from the colour prompts
+// (`pendingManaColor`): a land is tapped while a cast or an activation waits to
+// be paid for, and that pending state must survive the answer — or the cancel.
+let pendingTapSplit = null;
+
+// Open it and wait: the split, or null when it is cancelled.
+function askTapManaSplit(split) {
+  return new Promise((resolve) => {
+    pendingTapSplit = { ...split, resolve };
+    renderActivationPrompt();
+    updateActionHint(`Choose the ${split.count} extra mana ${split.source || "the Aura"} adds as ${split.cardName} is tapped.`);
+  });
+}
+
+// One split clicked (`data-tap-split`, a `manaSplitKey`), or null for cancel.
+function answerTapManaSplit(key) {
+  const pending = pendingTapSplit;
+  if (!pending) return;
+  pendingTapSplit = null;
+  let split = null;
+  if (key !== null) {
+    split = {};
+    for (const part of String(key).split(",")) {
+      const [symbol, n] = part.split(":");
+      if (symbol && Number(n) > 0) split[symbol] = Number(n);
+    }
+  }
+  renderActivationPrompt();
+  pending.resolve(split);
+}
+
 // An empty `symbols` is an answer too: the ability adds nothing on this board
 // (a Fellwar Stone whose opponent has no land, CR 106.7) or what it adds is
 // decided as it resolves (Charmed Pendant's milled card) — either way there is
@@ -3336,6 +3482,23 @@ function autoTapChargedCost(plan) {
     for (let n = 0; n < Number(cost[symbol] || 0); n += 1) tokens.push(`{${symbol}}`);
   }
   return tokens.length ? tokens.join("") : "{0}";
+}
+
+// Sunburst (CR 702.44a): how many colours this payment spends, which is how
+// many counters the permanent enters with — the server's answer, read off the
+// trial cast's own record (`plan.sunburst.colors`, web/payment_plan.
+// sunburst_preview). The auto-tap and the pool payment both spend as many
+// colours as they can, so the line also says how to spend fewer. Empty for
+// every other spell.
+function autoTapSunburstLine(plan) {
+  const colors = plan && plan.payable && plan.sunburst && Array.isArray(plan.sunburst.colors)
+    ? plan.sunburst.colors : null;
+  if (!colors) return "";
+  const n = colors.length;
+  const spent = n ? colors.map((symbol) => `{${symbol}}`).join("") : "no colored mana";
+  return `<div id="autoTapSunburst">Sunburst: this payment spends ${renderSymbolsInline(spent)} — `
+    + `${n} color${n === 1 ? "" : "s"}, so ${n} counter${n === 1 ? "" : "s"}. `
+    + "It spends as many colors as it can; to spend fewer, tap exactly the mana you want by hand first.</div>";
 }
 
 // What the dialog says under its title, for the three things a plan can be.
@@ -7440,7 +7603,12 @@ function applyNumberChoicePrompt(info) {
   customOkBtn.disabled = true;
 
   const cardName = info.card_name || "";
-  title.textContent = "Choose a number";
+  // "Pay any amount of life, then …" (Plunge into Darkness, `pays_life`): the
+  // number is life, paid as it is named — so the prompt and every button say
+  // so, and the seat's life total stands beside the choice.
+  const paysLife = !!info.pays_life;
+  const life = Number(currentState?.players?.[seat]?.life);
+  title.textContent = paysLife ? "Pay life" : "Choose a number";
   // `maximum` is null where the card prints no ceiling ("Choose a number.",
   // Squee's Revenge; "greater than 0", Scrying Glass) — the buttons below are
   // the server's offer, not a rule.
@@ -7449,7 +7617,9 @@ function applyNumberChoicePrompt(info) {
   // many cards leave the hand at random.
   setSymbolsHtml(
     body,
-    (Number.isInteger(info.maximum)
+    (paysLife
+      ? `${cardName}: pay any amount of life${Number.isFinite(life) ? ` (you have ${life})` : ""}.`
+      : Number.isInteger(info.maximum)
       ? `${cardName}: choose a number between ${info.minimum} and ${info.maximum}.`
       : `${cardName}: choose a number (${info.minimum} or more).`) +
       (info.card_text ? `\n“${info.card_text}”` : ""),
@@ -7458,7 +7628,7 @@ function applyNumberChoicePrompt(info) {
     .map(
       (n) =>
         `<button type="button" class="prompt-choice-btn" data-number="${escapeHtml(String(n))}">` +
-        `${escapeHtml(String(n))}</button>`
+        `${escapeHtml(paysLife ? `Pay ${n} life` : String(n))}</button>`
     )
     .join("");
   steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
@@ -8429,9 +8599,20 @@ function applyMadnessCastPrompt(info) {
 // it: the viewer's own exile carries its cast spec (serialized for casting
 // from exile); another seat's pile does not, so its spec is asked for.
 function copyCastExiledCard(info, state = currentState) {
+  // "…copy an instant or sorcery card in it" (Reversal of Fortune): the card
+  // is in a revealed hand (`hand_seat` / `hand_index`), not an exile, and that
+  // hand is hidden in this viewer's state — so the offer carries the card
+  // itself (`card`). Its exile fields are null.
+  if (copyCastFromHand(info)) return info.card;
   const exile = state?.players?.[info?.exile_seat]?.exile || [];
   const card = Number.isInteger(info?.exile_index) ? exile[info.exile_index] : null;
   return card && typeof card === "object" ? card : null;
+}
+
+// Whether the offer copies a card in a revealed hand (Reversal of Fortune)
+// rather than an exiled one: the server says where it is (`hand_seat`).
+function copyCastFromHand(info) {
+  return !!info && Number.isInteger(info.hand_seat) && !!info.card && typeof info.card === "object";
 }
 
 // The way the copy is cast: free of its mana cost (CR 118.9 through the
@@ -8452,7 +8633,10 @@ function copyCastWay(info) {
 async function beginCopyCast(info) {
   let card = copyCastExiledCard(info);
   if (!card) {
-    updateActionHint(`${info.card_name || "The card"} is no longer in exile, so no copy can be made.`, true);
+    updateActionHint(
+      `${info.card_name || "The card"} is no longer ${copyCastFromHand(info) ? "in that hand" : "in exile"}, so no copy can be made.`,
+      true,
+    );
     return;
   }
   if (!card.target_spec && sessionId && seat !== null) {
@@ -8472,7 +8656,13 @@ async function beginCopyCast(info) {
   if (xLivesInManaCost(card) && card.target_spec) {
     card = { ...card, target_spec: { ...card.target_spec, announces_x: false } };
   }
-  beginZoneCast(card, "exile", null, copyCastWay(info), { copyCastSlot: info.exile_index });
+  // The copy is made in the caster's exile and cast from there either way
+  // (`copy_cast_confirm` reads the zone itself), so the chain runs as an
+  // exile cast; the slot only marks the cast as this offer's answer
+  // (`carryCopyCastAnswer`), and a revealed-hand offer has no exile slot.
+  const slot = Number.isInteger(info.exile_index) ? info.exile_index
+    : Number.isInteger(info.hand_index) ? info.hand_index : 0;
+  beginZoneCast(card, "exile", null, copyCastWay(info), { copyCastSlot: slot });
 }
 
 function applyCopyCastPrompt(info) {
@@ -8498,10 +8688,17 @@ function applyCopyCastPrompt(info) {
   title.textContent = `Cast a copy — ${cardName}`;
   body.textContent = info.prompt
     || `Cast a copy of ${cardName} without paying its mana cost (${source})?`;
-  const owner = Number.isInteger(info.exile_seat) && info.exile_seat !== seat
+  const fromHand = copyCastFromHand(info);
+  const owner = fromHand
+    ? (info.hand_seat !== seat
+      ? `${currentState?.players?.[info.hand_seat]?.name || "Another player"}'s revealed hand`
+      : "your revealed hand")
+    : Number.isInteger(info.exile_seat) && info.exile_seat !== seat
     ? `${currentState?.players?.[info.exile_seat]?.name || "Another player"}'s exile`
     : "your exile";
-  const slot = Number.isInteger(info.exile_index) ? info.exile_index + 1 : null;
+  const slot = fromHand
+    ? (Number.isInteger(info.hand_index) ? info.hand_index + 1 : null)
+    : Number.isInteger(info.exile_index) ? info.exile_index + 1 : null;
   steps.innerHTML = [
     `<div id="copyCastCardSlot" class="prompt-card-row"></div>`,
     `<div>${escapeHtml(source)} offers a copy of ${escapeHtml(cardName)}, in ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}.</div>`,
@@ -10964,9 +11161,14 @@ function applyExileFromHandPrompt(info) {
   // What becomes of the exiled card is the card's to say — this told Panoptic
   // Mirror's and Spellbinder's imprints "you may cast it for as long as it
   // remains exiled", which neither card grants.
-  body.textContent = declinable
+  // "…face down" (Summoner's Egg, `face_down`): said before the choice, since
+  // once exiled the card is hidden from everyone, its owner included (CR 406.3).
+  const faceDown = info.face_down
+    ? " It is exiled face down: no player, you included, may look at it while it stays there."
+    : "";
+  body.textContent = (declinable
     ? `You may exile one of these cards from your hand with ${info.card_name || "this effect"} — or decline and exile nothing.`
-    : "Exile one of these cards.";
+    : "Exile one of these cards.") + faceDown;
   const buttons = info.choices
     .map(
       (c) =>
@@ -14551,6 +14753,35 @@ function renderActivationPrompt() {
     panel.classList.add("hidden");
     return;
   }
+  // A land's tap waiting on the split of what its Aura adds (Dawn's
+  // Reflection, `askTapManaSplit`): first, because the tap is not sent until
+  // it is answered, and it may come while any other prompt below is open —
+  // the cast or activation the land is being tapped to pay for.
+  if (pendingTapSplit) {
+    const ask = pendingTapSplit;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose the extra mana — ${ask.cardName}`;
+    setSymbolsHtml(
+      body,
+      // Plain text: `renderSymbolsInline` escapes it and draws the symbols.
+      `${ask.source || "Its Aura"} adds ${ask.count} mana in any combination of `
+      + `${ask.colors.map((symbol) => `{${symbol}}`).join(" and/or ")} as ${ask.cardName}`
+      + " is tapped for mana. Choose the split.",
+    );
+    steps.innerHTML = `<div class="prompt-choice-row">${manaSplits(ask.colors, ask.count).map(
+      (split) => `<button type="button" class="prompt-choice-btn" data-tap-split="${escapeHtml(manaSplitKey(split))}">`
+        + `${renderSymbolsInline(manaSplitText(split))}</button>`,
+    ).join("")}</div>`;
+    steps.querySelectorAll("[data-tap-split]").forEach((btn) => {
+      btn.addEventListener("click", () => answerTapManaSplit(btn.dataset.tapSplit));
+    });
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
   const cleanupDiscard = getCleanupDiscardInfo();
   const untapInfo = getUntapLandSelectionInfo();
   const upkeepPayInfo = getUpkeepPayInfo();
@@ -15224,6 +15455,7 @@ function renderActivationPrompt() {
       plan && plan.payable && planLines.length
         ? `<div id="autoTapPlan">Auto-Tap: ${planLines.map((line) => renderSymbolsInline(escapeHtml(line))).join(", ")}</div>`
         : "",
+      autoTapSunburstLine(plan),
     ].join("");
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
@@ -15435,6 +15667,8 @@ function renderActivationPrompt() {
         : `Exile ${pending.count === 1 ? (/^[aeiou]/i.test(pending.noun) ? "an" : "a") : pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} from ${pileOwner} graveyard to ${purpose}. Choose which.`)
       : pending.announcesX
       ? `${verb} X ${pending.noun}(s) to ${purpose}. Choose which; X is how many you choose.`
+      : pending.anyNumber
+      ? `${verb} any number of ${costNounPlural(pending.noun)} to ${purpose}. Choose which; choosing none is legal.`
       : `${verb} ${pending.count} ${pending.count === 1 ? pending.noun : costNounPlural(pending.noun)} to ${purpose}. Choose which.`;
     // Two permanents with one name are told apart by their position, so the
     // player can see that a click picked the second Forest and not the first.
@@ -15473,8 +15707,12 @@ function renderActivationPrompt() {
       ? `Put ${picked.length} of ${pending.count} on the bottom`
       : pending.announcesX
       ? `${tallyVerb} ${picked.length} (X = ${picked.length})`
-      : pending.anyNumber
+      : pending.anyNumber && fromGraveyard
       ? (picked.length === 0 ? "Exile nothing" : `Exile ${picked.length} card${picked.length === 1 ? "" : "s"}`)
+      : pending.anyNumber
+      ? (picked.length === 0
+        ? `${tallyVerb} nothing`
+        : `${tallyVerb} ${picked.length} ${picked.length === 1 ? pending.noun : costNounPlural(pending.noun)}`)
       : `${tallyVerb} ${picked.length} of ${pending.count}`;
     steps.innerHTML = `<div class="prompt-choice-column">${permanentButtons}`
       + `<button type="button" class="prompt-choice-btn" id="permanentCostConfirmBtn"${ready ? "" : " disabled"}>`
@@ -15941,8 +16179,11 @@ function renderActivationPrompt() {
       customOkBtn.disabled = true;
       return;
     } else if (pendingCastTarget.targetKind === "roles") {
+      // An activation walks the same roles (Auriok Windwalker's Equipment,
+      // then creature; Goblin Welder's two artifacts): it is an ability, not
+      // a spell, that names them.
       body.textContent =
-        "This spell names several targets of different kinds. Click the glowing "
+        `This ${pendingCastTarget.castAction === "activate" ? "ability" : "spell"} names several targets of different kinds. Click the glowing `
         + "targets one at a time — each choice narrows the next. A role may be a "
         + "player, in which case the pill is what glows, or a spell on the "
         + "stack, in which case the stack card is.";
@@ -18268,6 +18509,10 @@ function permanentCostStep(costSpec, alreadyChosen = []) {
     counter: costSpec.counter || null,
     // "a counter" of any kind (`any_counter_kind`, Power Conduit).
     anyCounterKind: !!costSpec.any_counter_kind,
+    // …or of one of the kinds the cost lists ("a +1/+1 counter or a charge
+    // counter", Ion Storm: `counter_kinds`), the only kinds the engine takes.
+    counterKinds: Array.isArray(costSpec.counter_kinds) && costSpec.counter_kinds.length
+      ? costSpec.counter_kinds.map(String) : null,
     noun: typeof subtype === "string"
       ? subtype.charAt(0).toUpperCase() + subtype.slice(1)
       : (costSpec.kind || "permanent"),
@@ -18444,13 +18689,25 @@ function confirmPermanentCost() {
   // is asked when it holds more than one kind (one kind needs no choice — the
   // engine takes it).
   if (pending.anyCounterKind && !pending.counterKindChosen && picked.length === 1) {
-    const kinds = counterKindsOnPermanentId(picked[0]);
+    const held = counterKindsOnPermanentId(picked[0]);
+    // A cost that lists its kinds (Ion Storm's "+1/+1 or charge") offers
+    // those alone: a Spinal Parasite's -1/-1 counter is no answer, and the
+    // engine refuses a kind outside the list with nothing spent.
+    const kinds = pending.counterKinds
+      ? held.filter((kind) => pending.counterKinds.includes(kind))
+      : held;
     if (kinds.length >= 2) {
       pendingCounterKindChoice = { pending, picked, kinds };
       pendingPermanentCost = null;
       renderActivationPrompt();
       updateActionHint(`Choose which counter ${pending.cardName} removes to pay its cost.`);
       return;
+    }
+    if (pending.counterKinds && kinds.length === 1 && held.length > 1) {
+      // One listed kind among others the permanent holds: named, so the
+      // engine is never left to read the choice off a permanent with more
+      // than one kind on it.
+      pending.counterKindChosen = kinds[0];
     }
   }
   pendingPermanentCost = null;
@@ -19087,6 +19344,17 @@ function dispatchModalCast(card, castAction, targetKind, validTargets = null, mo
       clearPendingHandCast();
     })
     .catch((e) => {
+      // The mana is still on the board: the auto-tap dialog every other cast
+      // send opens (`continueCastAfterCost`), the chosen mode kept for the
+      // retry (`pendingCastModeIndex` rides it, `carryCastMode`). This ended
+      // the cast instead, so a mode that targets nothing — Plunge into
+      // Darkness's "Pay any amount of life", a charm's draw — could be cast
+      // only off a pool floated by hand (5DN W2G1).
+      if (isManaRefusal(e.message)) {
+        pendingAutoTap = { card, cardName, actionBody };
+        renderActivationPrompt();
+        return;
+      }
       clearPendingHandCast();
       updateActionHint(e.message, true);
     });
@@ -19338,7 +19606,10 @@ function alternativeOfferButtonText(offer) {
   if (offer?.keyword === "morph") {
     return offer.mana_owed ? `Cast face down for ${offer.mana_owed}` : "Cast face down";
   }
-  return offer?.label || "Take it";
+  // A button's words start with a capital: the Bringers' label is the
+  // sentence's own "pay {W}{U}{B}{R}{G}", beside the "Pay {7}{G}{G}" one.
+  const label = String(offer?.label || "");
+  return label ? label.charAt(0).toUpperCase() + label.slice(1) : "Take it";
 }
 
 function startCastOfferPrompt(card, castAction = "cast") {
@@ -19655,7 +19926,15 @@ function startCastCostPrompt(card, castAction = "cast") {
   // Merfolk): the same set picker for a set of one, because the canvas picker
   // below is a *sacrifice* picker — it says "sacrifice" and answers on
   // `cost_permanent_index`, which the engine's return charger does not read.
-  if ((costSpec.sacrifice_cost && Number(costSpec.count || 1) > 1) || costSpec.return_cost) {
+  //
+  // "As an additional cost to cast this spell, sacrifice **any number of**
+  // creatures" (Vicious Betrayal, `any_number` on the cost spec): the same set
+  // picker with no count, none included — the one-click picker below named one
+  // creature and could name no other, and never none.
+  if (
+    (costSpec.sacrifice_cost && (Number(costSpec.count || 1) > 1 || costSpec.any_number))
+    || costSpec.return_cost
+  ) {
     if ((pendingCastCost || {}).cost_permanent_ids) return false;
     return startCastPermanentSetCostPrompt(card, castAction, costSpec);
   }
@@ -19673,7 +19952,8 @@ function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
     .filter((option) => option?.kind === "permanent")
     .map((option) => ({ id: permanentIdAt(option.seat, option.index), name: option.name }))
     .filter((option) => Number.isInteger(option.id));
-  const count = Math.max(1, Number(costSpec.count || 1));
+  const anyNumber = !!costSpec.any_number;
+  const count = anyNumber ? 0 : Math.max(1, Number(costSpec.count || 1));
   if (options.length < count) {
     // CR 601.2h: the engine refuses it and says why; asking first would be a
     // second opinion about payability.
@@ -19687,6 +19967,9 @@ function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
     verb: permanentCostVerb(costSpec),
     noun: costSpec.kind || "permanent",
     count,
+    // "Any number of" (Vicious Betrayal): every size is an answer, none
+    // included, and the confirm is never held.
+    anyNumber,
     announcesX: false,
     options,
     picked: [],
@@ -24306,7 +24589,16 @@ function selectStackSpellTarget(arrayIndex) {
   const pending = pendingCastTarget;
   if (!pendingPromptTargetsTheStack()) return;
   const item = _currentStack[arrayIndex];
-  if (!item || !isStackItemValidCastTarget(item, arrayIndex)) return;
+  if (!item || !isStackItemValidCastTarget(item, arrayIndex)) {
+    // Said, as a click on an illegal permanent is: Ouphe Vandals clicked at a
+    // Lightning Bolt (it counters an artifact's *ability*) did nothing at all.
+    if (item) {
+      updateActionHint(
+        `${item.card?.name || item.label || "That"} isn't a legal target for ${pending?.cardName || "this"}.`, true,
+      );
+    }
+    return;
+  }
 
   // A roles walk standing on a spell role: the click answers that one role and
   // the walk goes on to the next — nothing is sent yet, and the prompt stays.
@@ -24360,7 +24652,25 @@ function selectStackSpellTarget(arrayIndex) {
     updateActionHint(`Activating ${pending.cardName} at ${item.card?.name || "spell"}...`);
     sendAction(body)
       .then(() => updateActionHint(`Activated ${pending.cardName}.`))
-      .catch((e) => updateActionHint(e.message, true));
+      .catch((e) => {
+        // The cost's mana is still on the board: the auto-tap dialog the
+        // permanent-target activation opens (`resolvePendingCastTarget`), the
+        // stack target kept on the body for its retry. This dropped the
+        // activation — Ouphe Vandals' {G} at a Rod of Ruin's ability, a
+        // Deathgrip's {B}{B} at a green spell — unless the mana was floated
+        // first (5DN W2G1).
+        if (isManaRefusal(e.message)) {
+          pendingAutoTap = {
+            card: pending.card,
+            cardName: pending.cardName,
+            cost: getActivatedAbilityCost(pending.card, pending.abilityIndex),
+            actionBody: body,
+          };
+          renderActivationPrompt();
+          return;
+        }
+        updateActionHint(e.message, true);
+      });
     return;
   }
 
@@ -29721,6 +30031,17 @@ async function sendAction(actionBody) {
     body.mana_combination = chosen;
     actionBody.mana_combination = chosen;
   }
+  // …and a land's tap whose Aura adds a split of open colour (Dawn's
+  // Reflection, `tapManaSplitFor`): asked here, where every tap passes — the
+  // click on the land, the colour fan's answer for a dual land, the tap of a
+  // land that lost its abilities, a land clicked to pay for something.
+  const tapSplit = tapManaSplitFor(body);
+  if (tapSplit) {
+    const chosen = await askTapManaSplit(tapSplit);
+    if (!chosen) throw new Error(`Tap of ${tapSplit.cardName} cancelled.`);
+    body.mana_combination = chosen;
+    actionBody.mana_combination = chosen;
+  }
   carryMadnessAnswer(body);
   carryCopyCastAnswer(body);
   // A paying action whose preview says the pool cannot pay it is not sent:
@@ -30110,6 +30431,13 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 // (`tests/ui/test_8ed_p5_cancel_rerenders_board.py`).
 function cancelPendingPrompt() {
   SFX.onMenuCancel();
+  // A land's tap waiting on its Aura's split (`askTapManaSplit`) is the one
+  // question cancelled: the tap is not sent, and the cast or activation it
+  // was paying for stays where it was.
+  if (pendingTapSplit) {
+    answerTapManaSplit(null);
+    return;
+  }
   // A cast waiting on its mana split (`askCastManaSplit`) is told it was
   // cancelled, so its caller's catch ends the cast.
   if (typeof pendingManaColor?.castResolve === "function") pendingManaColor.castResolve(null);

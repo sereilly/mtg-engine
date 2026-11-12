@@ -868,12 +868,16 @@ def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
     owner = ctx.game.players[choice.player_index]
     live = ctx.game.live_exile_from_hand_choices(choice)
+    payload = choice.data.get("_payload") or {}
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
-        "optional": bool(
-            (choice.data.get("_payload") or {}).get("optional", True)
-        ),
+        "optional": bool(payload.get("optional", True)),
+        # "…exile a card from your hand **face down**" (Summoner's Egg,
+        # Gustha's Scepter): the card is hidden from every player once it is
+        # exiled, its owner included (CR 406.3), so the seat choosing is told
+        # before it chooses. Emitted only there.
+        **({"face_down": True} if payload.get("face_down") else {}),
         "choices": [
             {"hand_index": index, "name": owner.hand[index].name} for index in live
         ],

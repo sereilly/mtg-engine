@@ -49,7 +49,7 @@ from .game_flow import _auto_resolve_ai_pending, _run_priority_exchange
 from .state_view import build_state
 from .debug_actions import _DEBUG_ANYTIME_ACTIONS
 from .payment_plan import (PAYING_ACTIONS, pay_from_board, recording_taps,
-                           trial_copy)
+                           sunburst_preview, trial_copy)
 from .action_helpers import (
     _find_card_in_hand,
     _find_controlled_permanent,
@@ -1174,12 +1174,19 @@ def preview_payment(session_id: str, req: GameActionRequest):
             reason = str(refusal.detail)
         finally:
             random.setstate(sequence)
-    return {
+    answer = {
         "payable": reason is None,
         "taps": list(paid["taps"]),
         "cost": paid["cost"],
         "reason": reason,
     }
+    if reason is None and req.action == "cast":
+        # The colours this payment spends, for a spell sunburst sizes
+        # (``payment_plan.sunburst_preview``): absent for every other spell.
+        sunburst = sunburst_preview(view.game, req.seat, len(game.stack))
+        if sunburst is not None:
+            answer["sunburst"] = sunburst
+    return answer
 
 
 def do_action(session_id: str, req: GameActionRequest):

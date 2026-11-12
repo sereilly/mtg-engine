@@ -224,6 +224,25 @@ def fill_new_fields(root) -> int:
     return filled
 
 
+def _next_permanent_id() -> int:
+    """The id the next permanent of this process would take (one is spent)."""
+    from engine import models
+
+    return models.next_permanent_id()
+
+
+def _resume_permanent_ids(saved) -> None:
+    """Carry the saving process's permanent-id count into this one, so a
+    permanent entering after the reload never takes a restored one's id."""
+    import itertools
+
+    from engine import models
+
+    if not isinstance(saved, int):
+        return
+    models._PERMANENT_IDS = itertools.count(max(saved, models.next_permanent_id()))
+
+
 def save_board(store, session_lock, revisions, board: Path) -> tuple[bool, str]:
     """Pickle every session of *store* to *board*, each under its session's
     lock; return (saved, message). On success the locks are **kept**: the
@@ -252,6 +271,13 @@ def save_board(store, session_lock, revisions, board: Path) -> tuple[bool, str]:
         "saved_at": time.time(),
         "sessions": blobs,
         "revisions": {sid: revisions.get(sid, 0) for sid, _ in sessions},
+        # The process-wide permanent-id counter (``engine.models.
+        # next_permanent_id``): a permanent's id is its identity on the wire
+        # (CR 400.7), and a reading process starts the count at 1 again — so
+        # the first permanent to enter after a reload took an id a restored
+        # one already held (5DN W2G1: a Grizzly Bears and the Forest that paid
+        # for it were both id 2, and ``__boardPoint(2)`` found one of them).
+        "next_permanent_id": _next_permanent_id(),
     }
     temporary = board.with_suffix(".tmp")
     temporary.write_bytes(pickle.dumps(record, protocol=pickle.HIGHEST_PROTOCOL))
@@ -280,6 +306,7 @@ def restore_board(store, revisions, board: Path) -> str:
         # than the one it is showing.
         revisions[sid] = record["revisions"].get(sid, 0) + 1
         restored.append(sid)
+    _resume_permanent_ids(record.get("next_permanent_id"))
     age = time.time() - record.get("saved_at", time.time())
     message = f"restored {len(restored)} of {len(record['sessions'])} session(s) saved {age:.0f} s ago"
     if filled:
