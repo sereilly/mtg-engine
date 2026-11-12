@@ -25,12 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**2 unclaimed sentence(s) across 2 supported card(s).**
+**1 unclaimed sentence(s) across 1 supported card(s).**
 
 - **Possessed Portal**
   - `if a player would draw a card, that player skips that draw instead`
-- **Salvaging Station**
-  - `{t}: return target noncreature artifact card with mana value 1 or less from your graveyard to the battlefield`
 
 ## Acknowledged simplifications
 

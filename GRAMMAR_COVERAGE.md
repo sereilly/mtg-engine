@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| 5DN *(measured)* | 165 | 273 | 77.7% | 72.9% | 49.1% | 117 |
+| 5DN *(measured)* | 165 | 273 | 78.0% | 75.8% | 52.0% | 124 |
 | **All (shipped)** | **9448** | **14064** | **89.7%** | **89.2%** | **62.1%** | **7410** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -70,7 +70,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 948 | 484 | expected a subject |  |
+| 947 | 483 | expected a subject |  |
 | 195 | 98 | unrecognized effect verb |  |
 | 148 | 77 | unconsumed text |  |
 | 78 | 59 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -90,11 +90,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 2 | expected 'top' |  |
 | 3 | 1 | 'that land' names a land no earlier step of this effect chose |  |
 | 3 | 1 | expected 'of' |  |
-| 3 | 3 | no return handler honours this restriction |  |
-| 3 | 3 | a shuffle into a library moves one chosen permanent |  |
 | 2 | 2 | expected what to gain control of |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
+| 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | a chosen attachment needs one permanent to move onto |  |
 
 ## Cards executing through the grammar
 
@@ -334,6 +334,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **All Hallow's Eve**
   - `Exile All Hallow's Eve with two scream counters on it.`
   - `At the beginning of your upkeep, if this card is exiled with a scream counter on it, remove a scream counter from it. If there are no more scream counters on it, put it into your graveyard and each player returns all creature cards from their graveyard to the battlefield.`
+- **All Suns' Dawn**
+  - `For each color, return up to one target card of that color from your graveyard to your hand. Exile All Suns' Dawn.`
 - **Allay**
   - `Destroy target enchantment.`
 - **Alley Grifters**
@@ -770,6 +772,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature gets +X/+X until end of turn, where X is this creature's power.`
 - **Auriok Champion**
   - `Whenever another creature enters, you may gain 1 life.`
+- **Auriok Salvagers**
+  - `{1}{W}: Return target artifact card with mana value 1 or less from your graveyard to your hand.`
 - **Auriok Siege Sled**
   - `{1}: Target artifact creature blocks this creature this turn if able.`
   - `{1}: Target artifact creature can't block this creature this turn.`
@@ -1072,8 +1076,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Bazaar of Wonders**
   - `When this enchantment enters, exile all graveyards.`
   - `Whenever a player casts a spell, counter it if a card with the same name is in a graveyard or a nontoken permanent with the same name is on the battlefield.`
+- **Beacon of Creation**
+  - `Create a 1/1 green Insect creature token for each Forest you control. Shuffle Beacon of Creation into its owner's library.`
 - **Beacon of Destiny**
   - `{T}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to this creature instead.`
+- **Beacon of Destruction**
+  - `Beacon of Destruction deals 5 damage to any target. Shuffle Beacon of Destruction into its owner's library.`
+- **Beacon of Tomorrows**
+  - `Target player takes an extra turn after this one. Shuffle Beacon of Tomorrows into its owner's library.`
+- **Beacon of Unrest**
+  - `Put target artifact or creature card from a graveyard onto the battlefield under your control. Shuffle Beacon of Unrest into its owner's library.`
 - **Bearscape**
   - `{1}{G}, Exile two cards from your graveyard: Create a 2/2 green Bear creature token.`
 - **Beast Attack**
@@ -6963,6 +6975,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, Sacrifice this artifact: It deals 2 damage to each attacking creature without flying.`
 - **Leonin Elder**
   - `Whenever an artifact enters, you may gain 1 life.`
+- **Leonin Squire**
+  - `When this creature enters, return target artifact card with mana value 1 or less from your graveyard to your hand.`
 - **Leonin Sun Standard**
   - `{1}{W}: Creatures you control get +1/+1 until end of turn.`
 - **Leshrac's Sigil**
@@ -10479,6 +10493,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {U} or {B}.`
   - `{T}: Add {U} or {B}.`
 - **Salvaging Station**
+  - `{T}: Return target noncreature artifact card with mana value 1 or less from your graveyard to the battlefield.`
   - `Whenever a creature dies, you may untap this artifact.`
 - **Samite Alchemist**
   - `{W}{W}, {T}: Prevent the next 4 damage that would be dealt this turn to target creature you control. Tap that creature. It doesn't untap during your next untap step.`
