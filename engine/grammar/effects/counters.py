@@ -810,11 +810,22 @@ def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
         except GrammarError:
             stream.reset(mark)
             return None
-    try:
-        counter = _expect_counter_kind(stream, " to remove").text
-    except GrammarError:
-        stream.reset(mark)
-        return None
+    # "Remove **a counter** from target permanent." (Spinal Parasite,
+    # Ferropede.) No kind printed: any counter on the object, of a kind the
+    # remover chooses where it holds several (the cards' 2004-12-01 rulings).
+    # Aether Snap's "all counters" sentinel above, for the same open kind
+    # space (CR 122.1); the lowering admits it only where a handler asks
+    # which kind.
+    if stream.at_word("counter", "counters"):
+        from ...named_counters import ANY_COUNTER_KIND
+
+        counter = ANY_COUNTER_KIND
+    else:
+        try:
+            counter = _expect_counter_kind(stream, " to remove").text
+        except GrammarError:
+            stream.reset(mark)
+            return None
     if not stream.accept_word("counter", "counters"):
         stream.reset(mark)
         return None

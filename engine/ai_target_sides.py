@@ -176,6 +176,11 @@ _OPPONENT_KINDS = frozenset({
     # is the family and the opposite side: the target is the one the counter
     # comes *off*.
     "move_counter_to_self",
+    # "Remove a counter from target permanent" (Spinal Parasite, Ferropede):
+    # the same family and the same opposite side — a counter is taken off
+    # what is named, and the counters the pool puts on permanents are mostly
+    # their controllers' gains (a +1/+1, a charge counter that pays).
+    "remove_counter_from_target",
 })
 
 

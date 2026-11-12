@@ -115,6 +115,31 @@ def _lower_remove_counter(
     # and handed the sentinel would find no counter of it and remove nothing.
     from ...named_counters import ANY_COUNTER_KIND
 
+    # "Remove a counter from **target permanent**." (Spinal Parasite,
+    # Ferropede.) A chosen object rather than the source, a bound one or a
+    # described set: the target is announced (CR 601.2c, 603.3d) and the
+    # handler takes the counter off whatever the announcement named. "A
+    # counter" is any kind (``ANY_COUNTER_KIND``), and where the object holds
+    # several the remover chooses which — "the player who controls Spinal
+    # Parasite chooses which counter to remove from the targeted permanent"
+    # (2004-12-01) — so the kind is asked at resolution, not printed. A
+    # printed kind is read the same way and asks nothing. One counter: no
+    # card prints a larger chosen-object count, and a number lowered onto
+    # this handler is a decrement it would have to split among kinds.
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.targeted:
+        if _amount_payload(node.count) != 1:
+            raise LoweringError(
+                "the chosen-object removal takes one counter at a time",
+                node=node,
+            )
+        chosen: dict[str, object] = {"counter": node.counter}
+        _describe_targets(chosen, node.subject)
+        if "targets" not in chosen:
+            raise LoweringError(
+                "the chosen-object removal needs a target the picker can name",
+                node=node,
+            )
+        return (OracleInstruction("remove_counter_from_target", "", chosen),)
     if node.counter == ANY_COUNTER_KIND and not (
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "all"

@@ -221,6 +221,92 @@ def move_counter_to_self(game: Game, instruction: OracleInstruction, context: Or
     return True, "resolved"
 
 
+@effect_handler("remove_counter_from_target")
+def remove_counter_from_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Remove a counter from target permanent." (Spinal Parasite, Ferropede.)
+
+    The chosen object loses one counter. "A counter" names no kind
+    (``named_counters.ANY_COUNTER_KIND``): the target may hold any, "not just
+    one with a counter on it" (both cards' 2004-12-01 rulings) — one holding
+    none loses nothing — and where it holds several kinds "the player who
+    controls Spinal Parasite chooses which counter to remove", which is a
+    choice made as the ability resolves (CR 608.2d). So with one kind there
+    the counter comes off; with several, the controller is asked
+    (``mode_choice``, the prompt every resolution-time "A or B" arms), each
+    offered kind a step of this same handler with the kind printed — and the
+    choice runs against this context, the announced target included.
+
+    The offer's order is a stated default, not a valuation: off a permanent
+    the remover's opponent controls, a +1/+1 counter first and a -1/-1 counter
+    last; off its own, the reverse. A seat nobody asks takes the first.
+
+    A target gone by resolution is no target (CR 608.2b): nothing else is
+    named in its place.
+    """
+    from ..named_counters import ANY_COUNTER_KIND, counter_kinds_on
+    from ..oracle_types import OracleInstruction as OracleInstructionType
+    from ..subject_filters import subject_matches
+
+    name = context.card.name if context.card is not None else "Effect"
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    victim = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if victim is None:
+        game.log.append(f"{name}: its target is gone")
+        return True, "no target"
+    counter = str(instruction.payload.get("counter", ANY_COUNTER_KIND))
+    if counter != ANY_COUNTER_KIND:
+        if counters_on(victim, counter) <= 0:
+            game.log.append(f"{victim.card.name} has no {counter} counter to remove")
+            return True, "resolved"
+        remove_counters(victim, counter, 1)
+        game.log.append(
+            f"{name} removed a {counter} counter from {victim.card.name}"
+        )
+        return True, "resolved"
+    held = {kind: count for kind, count in counter_kinds_on(victim).items() if count > 0}
+    if not held:
+        game.log.append(f"{victim.card.name} has no counters to remove ({name})")
+        return True, "resolved"
+    if len(held) == 1:
+        (only,) = held
+        remove_counters(victim, only, 1)
+        game.log.append(f"{name} removed a {only} counter from {victim.card.name}")
+        return True, "resolved"
+    remover = observer if observer is not None else game.controller_index_of(victim)
+    own = game.controller_index_of(victim) == remover
+
+    def offered_first(kind: str) -> tuple:
+        if own:
+            return (kind == "+1/+1", kind != "-1/-1", kind)
+        return (kind == "-1/-1", kind != "+1/+1", kind)
+
+    kinds = sorted(held, key=offered_first)
+    game.arm_pending_choice(
+        "mode_choice", remover,
+        card_name=name,
+        labels=[f"Remove a {kind} counter from {victim.card.name}" for kind in kinds],
+        _modes=tuple(
+            OracleInstructionType(
+                "remove_counter_from_target", "",
+                {**dict(instruction.payload), "counter": kind},
+            )
+            for kind in kinds
+        ),
+        _context=context,
+    )
+    return True, "resolved"
+
+
 @effect_handler("distribute_counters_from_self")
 def distribute_counters_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"At the beginning of your upkeep, you may move any number of +1/+1
