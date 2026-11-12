@@ -50,6 +50,8 @@ for line in read(f"{low}_refusals.log").splitlines():
 unclaimed = {}
 cur = None
 for line in read(f"{low}_parse.log").splitlines()[2:]:
+    if line.startswith("exit="):  # census.sh appends the instrument's exit code
+        continue
     if line and not line.startswith(" "):
         cur = unclaimed.setdefault(line.strip(), [])
     elif cur is not None and line.strip():
