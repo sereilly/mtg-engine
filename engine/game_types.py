@@ -155,6 +155,17 @@ CHOICE_KEYS = (
     # allocation the payment was *built* from, so "the amount of {B} spent on X"
     # is exact.
     "x_mana_spent",
+    # What a cast's whole mana payment spent, per symbol ("C" for colourless):
+    # the mana cost or an alternative cost in its place, every additional cost
+    # and every tax, measured as the pool-and-buckets delta across
+    # ``_pay_cast_mana`` (``sunburst.MANA_SPENT_TO_CAST`` names the key).
+    # ``mana_spent_for_cost``'s measurement for a spell rather than an
+    # activation, its own key because the reader is different: the permanent
+    # the spell becomes, which ``_resolve_permanent_spell`` stamps with it
+    # before it enters, so sunburst (CR 702.44a) counts "each color of mana
+    # spent to cast it" as it arrives — and a permanent that arrives any other
+    # way carries none (CR 702.44b).
+    "mana_spent_to_cast",
     # Whether the spell was cast at a time a sorcery could **not** have been
     # (Mirage's five flash Auras: "If you cast it any time a sorcery couldn't
     # have been cast, …"). On this channel for the same reason as every cost

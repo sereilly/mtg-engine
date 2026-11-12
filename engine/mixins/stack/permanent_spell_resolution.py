@@ -34,6 +34,7 @@ from ...game_types import first_target_id, single_slot
 from ...models import Permanent
 from ...oracle import compile_card_oracle
 from ...prevention.shields import carry_spell_shields_onto_permanent
+from ...sunburst import MANA_SPENT_TO_CAST
 from ...text_changes import carry_spell_text_changes
 
 
@@ -152,6 +153,16 @@ class PermanentSpellResolutionMixin:
         # ``cast_costs.CAST_COST_DISCARD_MANA_VALUE`` for why it is the
         # number and why it is stamped here. Exactly one card, or no
         # stamp: "the discarded card" names nothing else.
+        # "…a +1/+1 counter on it for each color of mana spent to cast it"
+        # (sunburst, CR 702.44a). What the cast's payment spent, measured as
+        # it paid (``sunburst.MANA_SPENT_TO_CAST``), stamped for the entry
+        # replacement that reads it as the permanent arrives -- the kicked
+        # stamp's place and reason: only a permanent spell resolving passes
+        # this line, so a permanent put onto the battlefield any other way
+        # enters with no sunburst counters (CR 702.44b).
+        mana_spent = (choices or {}).get(MANA_SPENT_TO_CAST)
+        if mana_spent:
+            permanent.metadata[MANA_SPENT_TO_CAST] = dict(mana_spent)
         cost_discards = (choices or {}).get("discarded_for_cost") or ()
         if len(cost_discards) == 1:
             permanent.metadata[CAST_COST_DISCARD_MANA_VALUE] = int(

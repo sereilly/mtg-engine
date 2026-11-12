@@ -263,6 +263,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # resolution (CR 608.2d), still one action per CR 122.5.
     "distribute_counters_from_self": "counters",
     "remove_counter_from_self": "counters",
+    # Spinal Parasite, Ferropede: one counter off a chosen object, of a kind
+    # the remover picks where it holds several.
+    "remove_counter_from_target": "counters",
     "remove_all_counters_from_self": "counters",
     # Corrosion: the sweep spelling of the row above, over a described set
     # rather than one permanent. Same category, so GRAMMAR_CATEGORIES is

@@ -39,6 +39,7 @@ from ...game_types import (
 from ...mana_combination import MANA_COMBINATION
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
+from ...sunburst import MANA_SPENT_TO_CAST
 from ...target_keywords import ANTE_INDEX
 from ...target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLE_SEATS
 from ...targeting import graveyard_target_spec
@@ -174,7 +175,7 @@ class CastCompletionMixin:
         new_color, old_color, optional_paid, permission, resolved_x_value,
         role_graveyard_stamps, role_seats, sacrificed_for_cost, source_seat,
         target_permanent_ids, target_permanent_index, target_player_index,
-        target_stack_item, x_mana_spent,
+        target_stack_item, x_mana_spent, mana_spent_to_cast=None,
     ):
         """The spell put on the stack, and cast (CR 601.2i).
 
@@ -379,6 +380,13 @@ class CastCompletionMixin:
         # unchanged.
         if copy_declined:
             spell_item.choices[COPY_DECLINED] = True
+        # What the whole payment spent, per symbol (CR 702.44a's "each color
+        # of mana spent to cast it"), for the permanent this spell becomes
+        # (``engine/sunburst.py``) -- the declined copy's channel and reason,
+        # and only where something was spent, so a free cast's stack item is
+        # unchanged.
+        if mana_spent_to_cast:
+            spell_item.choices[MANA_SPENT_TO_CAST] = dict(mana_spent_to_cast)
         if ante_index is not None:
             spell_item.choices[ANTE_INDEX] = ante_index
         self._stack_push(spell_item)

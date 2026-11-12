@@ -66,6 +66,7 @@ from .flashback import (FLASHBACK_CLAIM, flashback_x_unannounced,
                         unread_flashback_line)
 from .fading import unread_fading_line
 from .modular import unread_modular_line
+from .sunburst import unread_sunburst_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (unread_alternative_cost_sentence,
                                 unread_granted_alternative_cost_sentence)
@@ -474,6 +475,19 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented modular ability: {unread_modular}",
+            normalized_text,
+        )
+    # …and a **sunburst** line the CR 702.44a rewrite could not read
+    # (``engine/sunburst.py``), for modular's reason: the noncreature support
+    # gate below is "supported when any line is", so a keyword line nothing
+    # reads is dropped there silently — all six of Fifth Dawn's noncreature
+    # sunburst cards arrived supported entering with no counters at all.
+    unread_sunburst = unread_sunburst_line(oracle_text)
+    if unread_sunburst is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented sunburst ability: {unread_sunburst}",
             normalized_text,
         )
     # …and a **flashback** line the CR 702.34a rewrite could not read

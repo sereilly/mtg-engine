@@ -61,7 +61,11 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              choose_number_on_enter, pay_any_life_on_enter,
                              enters_with_pt_counters, kicked_entry,
                              enters_with_named_counter,
+                             enters_with_counters_per_color_spent,
+                             SUNBURST_COUNTER,
                              LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER)
+from ..printed_characteristics import printed_shape
+from ..sunburst import MANA_SPENT_TO_CAST, colors_spent
 from ..entry_choices import (LIFE_PAID_AS_ENTERED, CHOSEN_COLOR_KEY,
                              CHOSEN_LAND_TYPE_KEY, choosable_bodies)
 from .. import copies
@@ -1104,6 +1108,50 @@ class PermanentStateMixin:
             # counter is a counter placement and CR 614.1c lets a replacement
             # modify it.
             self.place_pt_counters(permanent, kind, amount)
+
+        # "…enters with a <kind> counter on it **for each color of mana spent
+        # to cast it**" (Modular—Sunburst, CR 702.44c) and sunburst's own
+        # rules text (CR 702.44a, ``engine/sunburst.py``). The fourth place the
+        # number comes from: the cast's payment, stamped on the permanent by
+        # the resolving spell (``MANA_SPENT_TO_CAST``) — so a permanent that
+        # was not cast has no stamp and gets nothing (CR 702.44b). One line
+        # each, so two instances each place (CR 702.44d).
+        #
+        # Sunburst's kind is the rule's choice, made here because only the
+        # entering object can answer it: a +1/+1 counter if it is entering as
+        # a creature **ignoring type-changing effects**, else a charge
+        # counter. So the question is the copiable values' — layers 1 and 3,
+        # ``effective_card`` — and never layer 4's ``is_creature``: a
+        # noncreature sunburst artifact under March of the Machines enters
+        # with charge counters, and a copy of an artifact creature with
+        # sunburst enters with +1/+1 counters (CR 707.2).
+        for raw_line in entry_lines:
+            kind = enters_with_counters_per_color_spent(
+                raw_line, permanent.effective_card.name
+            )
+            if kind is None:
+                continue
+            count = colors_spent(permanent.metadata.get(MANA_SPENT_TO_CAST))
+            if count <= 0:
+                continue
+            if kind == SUNBURST_COUNTER:
+                kind = (
+                    "+1/+1"
+                    if "creature" in printed_shape(permanent.effective_card)[0]
+                    else "charge"
+                )
+            if kind in ("+1/+1", "+1/+0", "+0/+1"):
+                # Through the seam, for the printed-count loop's reason.
+                self.place_pt_counters(permanent, kind, count)
+            else:
+                add_named_counters(permanent, kind, count)
+            # Said, because nothing else on the table says how the number was
+            # reached: the pool that paid is empty by now.
+            self.log.append(
+                f"{permanent.card.name} enters with {count} {kind} "
+                f"counter{'s' if count != 1 else ''} ({count} "
+                f"color{'s' if count != 1 else ''} of mana spent to cast it)"
+            )
 
         # The copy-as-enter choice (Clone, Copy Artifact) used to be made here,
         # *after* every other entry replacement above had read the printed

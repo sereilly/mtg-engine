@@ -184,6 +184,53 @@ ENTERS_WITH_WHERE_X_COUNTED_PT_COUNTERS = re.compile(
 )
 
 
+#: The counted form's **fourth** source: "This permanent enters with a +1/+1
+#: counter on it **for each color of mana spent to cast it**." (CR 702.44c's
+#: own spelling of Modular—Sunburst, Arcbound Wanderer; the sentence later
+#: sets print as converge.) Not the board and not a printed number, but the
+#: cast's own payment — ``sunburst.MANA_SPENT_TO_CAST``, stamped on the
+#: permanent by the resolving spell (``_resolve_permanent_spell``) — so a
+#: permanent that was not cast counts nothing (CR 702.44b). The counter kind is
+#: data, a P/T kind or a named one ("a charge counter").
+#:
+#: Asked before :data:`ENTERS_WITH_COUNTED_PT_COUNTERS`, whose "for each
+#: <phrase>" also takes these words: the noun reader refuses "color of mana
+#: spent to cast it", and :func:`enters_with_counted_pt_counters` declines the
+#: sentence outright so the two can never both place.
+ENTERS_WITH_COUNTER_PER_COLOR_SPENT = re.compile(
+    r"^this [a-z]+ enters with a (?P<counter>\+1/\+1|\+1/\+0|\+0/\+1|[a-z]+) "
+    r"counter on it for each color of mana spent to cast it$"
+)
+
+#: What :func:`enters_with_counters_per_color_spent` answers for CR 702.44a's
+#: whole rules text (``sunburst.SUNBURST_RULES_TEXT``): not a counter kind but
+#: the rule's choice of one — a +1/+1 counter for an object entering as a
+#: creature, ignoring type-changing effects, a charge counter otherwise —
+#: which only the entering permanent can answer.
+SUNBURST_COUNTER = "<+1/+1 entering as a creature, else charge>"
+
+
+def enters_with_counters_per_color_spent(
+    line: str, card_name: str | None = None
+) -> str | None:
+    """The counter kind a "…for each color of mana spent to cast it" entry
+    places — or :data:`SUNBURST_COUNTER` for CR 702.44a's rules text, whose
+    kind the entering permanent decides — or None.
+
+    Read by the entry state, by the support gate (through
+    :func:`enter_effect_line`) and by the payment's colour preference
+    (``sunburst.counts_colors_spent``), so what is placed, what is claimed and
+    what is paid for cannot drift.
+    """
+    from .sunburst import SUNBURST_RULES_TEXT
+
+    normalized = _self_normalized(line, card_name)
+    if normalized == _normalized(SUNBURST_RULES_TEXT):
+        return SUNBURST_COUNTER
+    match = ENTERS_WITH_COUNTER_PER_COLOR_SPENT.match(normalized)
+    return match.group("counter") if match is not None else None
+
+
 @lru_cache(maxsize=None)
 def _counted_entry_spec(phrase: str) -> "dict | None":
     """The count spec ``for each <phrase>`` takes, or None.
@@ -223,6 +270,9 @@ def enters_with_counted_pt_counters(
     what is placed and what is claimed cannot drift.
     """
     normalized = _self_normalized(line, card_name)
+    if ENTERS_WITH_COUNTER_PER_COLOR_SPENT.match(normalized) is not None:
+        # The cast's colours, not the board's: its own reader's sentence.
+        return None
     match = ENTERS_WITH_COUNTED_PT_COUNTERS.match(
         normalized
     ) or ENTERS_WITH_WHERE_X_COUNTED_PT_COUNTERS.match(normalized)
@@ -1319,6 +1369,11 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with X named counters"
     if enters_with_counted_pt_counters(normalized) is not None:
         return "enters with counted P/T counters"
+    # Sunburst's rules text (CR 702.44a, ``engine/sunburst.py``) and the
+    # one-sentence "…for each color of mana spent to cast it" (CR 702.44c).
+    # The **raw** line and the name, for kicked_entry's reason above.
+    if enters_with_counters_per_color_spent(line, card_name) is not None:
+        return "enters with counters for each color spent"
     if chooses_opponent_on_enter(normalized):
         return "chooses an opponent as it enters"
     # …and the pair (Booby Trap). Claimed beside the seat-only reading rather
@@ -1452,6 +1507,9 @@ __all__ = [
     "enters_with_x_pt_counters",
     "ENTERS_WITH_X_NAMED_COUNTERS",
     "enters_with_x_named_counters",
+    "ENTERS_WITH_COUNTER_PER_COLOR_SPENT",
+    "SUNBURST_COUNTER",
+    "enters_with_counters_per_color_spent",
     "ENTRY_SACRIFICE_ALL_TOLL",
     "ENTRY_SACRIFICE_TOLL",
     "entry_sacrifice_toll",

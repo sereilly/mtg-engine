@@ -72,6 +72,7 @@ from .late_modules import LateModules
 from .restricted_mana import (
     ACTIVATE, CAST, PaymentPurpose, restriction_admits, spendable_restricted_mana,
 )
+from .sunburst import color_spreading_costs, counts_colors_spent
 
 _late = LateModules(__package__)
 
@@ -753,6 +754,24 @@ class _PaymentPlanner:
 
     def plan(self, required: dict[str, int]) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
         """``(slots, colours)`` in tap order, or None — see `_plan_land_taps`."""
+        # **A spell sized by the colours spent on it** (sunburst, CR 702.44a:
+        # a counter "for each color of mana spent to cast it") is planned for
+        # as many colours as the sources can make: the same total with its
+        # generic named as colours no pip names, most colours first
+        # (``sunburst.color_spreading_costs``), the printed split last. A
+        # Suntouched Myr paid off three Plains beside an Island and a Swamp
+        # was a 1/1 where the board held a 3/3. Free sources only: a
+        # permanent is never given up for a colour (`_may_sacrifice_for`
+        # weighs a cast, not a counter), and the pool payment spends the
+        # same spread out of what the taps leave floating
+        # (``pool_payment._pay_cast_cost``).
+        if counts_colors_spent(self.spell):
+            for spread in color_spreading_costs(required):
+                if spread == required:
+                    break
+                found = self._plan_with(self.sources, spread)
+                if found is not None:
+                    return found
         found = self._plan_with(self.sources, required)
         if found is not None or not self.sacrificed:
             return found
@@ -1051,6 +1070,29 @@ def _plan_land_taps(
     if found is None and through_priced and not without:
         return _plan_through_a_priced_source(game, player, required, paying_for)
     return found
+
+
+def colors_in_reach(game: Game, seat: int, card: CardDefinition) -> int:
+    """How many colours of mana *seat* would spend casting *card* now — the
+    number sunburst counts (CR 702.44a) — or 0 where the board cannot pay.
+
+    The planner's own spread (`_PaymentPlanner.plan`): the first of
+    ``sunburst.color_spreading_costs`` the free sources pay is the payment
+    the cast will make, and the colours it names are the colours spent. Read
+    by the cast scorer (``ai_scoring._cast_body``), which weighed a sunburst
+    creature as the 0/0 it is printed as.
+    """
+    player = game.players[seat]
+    required = _cost_for(game, player, card, None)
+    with _paying_for(card):
+        planner = _PaymentPlanner(game, player)
+    for spread in color_spreading_costs(required):
+        if planner._plan_with(planner.sources, spread) is not None:
+            return sum(
+                1 for color in ("W", "U", "B", "R", "G")
+                if int(spread.get(color, 0) or 0) > 0
+            )
+    return 0
 
 
 def _plan_through_a_priced_source(

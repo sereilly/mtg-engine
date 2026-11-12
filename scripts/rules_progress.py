@@ -148,6 +148,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.41",  # Affinity (MRD: 8 cards; ``engine/affinity.py``)
         "702.42",  # Entwine (MRD: 13 cards; ``engine/entwine.py``)
         "702.43",  # Modular (DST: 11 cards; ``engine/modular.py``)
+        "702.44",  # Sunburst (5DN: 16 cards + Modular—Sunburst; ``engine/sunburst.py``)
         "702.108", # Prowess
         "702.111", # Menace
         # NOT 702.83 Exalted, for 701.43's reason: `engine/whenever_trigger_notes.py` cites

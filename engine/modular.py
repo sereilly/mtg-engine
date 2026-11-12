@@ -33,6 +33,18 @@ reminder says "put its +1/+1 counters on target artifact creature", which CR
 122.8 reads as the same number again; CR 702.43a says it directly, and that is
 the sentence the grammar is given.
 
+**"Modular—Sunburst"** (CR 702.44c) is modular with sunburst setting N: the
+CR's own example says it means "This permanent enters with a +1/+1 counter on
+it for each color of mana spent to cast it" and the same graveyard trigger,
+so that is the pair it is rewritten into (:data:`MODULAR_SUNBURST_RULES_TEXT`).
+The entry sentence is ``enter_effects``' colours-spent reader — the one
+sunburst's own rewrite reaches (``engine/sunburst.py``) — and it is a +1/+1
+counter whatever the object is, because CR 702.44c says the kind does not
+depend on whether the spell is a creature. The death trigger counts the
+counters the creature left with, whatever paid for them (the Arcbound Wanderer
+rulings of 2004-12-01: "the number of colors of mana used to pay its cost
+doesn't matter anymore").
+
 **N is spelled as a word**, as the reminder text prints it, because that is
 the form the entry-state reader reads; a count the number table cannot spell
 keeps the keyword line *unread*, and :func:`unread_modular_line` keeps the card
@@ -62,6 +74,21 @@ MODULAR_RULES_TEXT = (
     "When this permanent is put into a graveyard from the battlefield, you may "
     "put a +1/+1 counter on target artifact creature for each +1/+1 counter on "
     "this permanent."
+)
+
+#: CR 702.44c's example, word for word: "Modular—Sunburst" means these two
+#: abilities, one line each.
+MODULAR_SUNBURST_RULES_TEXT = (
+    "This permanent enters with a +1/+1 counter on it for each color of mana "
+    "spent to cast it.\n"
+    "When this permanent is put into a graveyard from the battlefield, you may "
+    "put a +1/+1 counter on target artifact creature for each +1/+1 counter on "
+    "this permanent."
+)
+
+#: "Modular—Sunburst" as the printed line survives reminder-text removal.
+_MODULAR_SUNBURST_LINE = re.compile(
+    r"^modular\s*[—-]\s*sunburst$", re.IGNORECASE
 )
 
 #: "modular 3" as the printed line survives reminder-text removal.
@@ -118,7 +145,10 @@ def is_modular_line(line: str) -> bool:
 
 
 def expand_modular_line(line: str) -> str | None:
-    """The CR 702.43a rules text for one printed modular line, or None."""
+    """The CR 702.43a rules text for one printed modular line — CR
+    702.44c's for "Modular—Sunburst" — or None."""
+    if _MODULAR_SUNBURST_LINE.match(_stripped(line).rstrip(".")) is not None:
+        return MODULAR_SUNBURST_RULES_TEXT
     count = modular_count(line)
     if count is None:
         return None
@@ -160,6 +190,7 @@ def has_printed_modular(oracle_text: str) -> bool:
 
 __all__ = [
     "MODULAR_RULES_TEXT",
+    "MODULAR_SUNBURST_RULES_TEXT",
     "expand_modular_line",
     "expand_modular_lines",
     "has_printed_modular",

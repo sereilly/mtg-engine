@@ -37,6 +37,8 @@ from ...cost_x_definitions import (
     floors_cast_x,
 )
 from ...oracle_types import x_spend_colors_from_text
+from ...sunburst import (color_spreading_costs, counts_colors_spent,
+                         mana_spent_between, pool_units)
 from ...refusals import noting, refuse
 
 
@@ -404,6 +406,22 @@ class PoolPaymentMixin:
         # (``engine/cost_floors.py``). Asked once: the total does not depend on
         # how X is split among colours, and a set-aside unit is part of it.
         floor, flooring = spell_cost_floor(self)
+        # **A spell sized by the colours spent on it** (sunburst, CR 702.44a)
+        # is paid with as many colours as the pool holds: the payer's choice
+        # (CR 601.2h), and the one a payer always makes for such a spell,
+        # which the generic's own preference (``pool_spent_on_generic``,
+        # sparing what the payer wants next) does not know to make. Each
+        # spread (``sunburst.color_spreading_costs``) is the same total with
+        # some generic named as colours no pip names; the first the pool pays
+        # *directly* is the payment, and the printed split is the last asked.
+        # Directly: a CR 609.4b grant (North Star) would pay a named colour
+        # with a unit of another — spending the grant to change nothing that
+        # was spent — so a spread never reaches one.
+        spreads = (
+            counts_colors_spent(card)
+            and not caster.mana_spending_is_general
+            and not caster.spends_mana_as_any_color
+        )
         for coloring in offer_x_colorings:
             give_back = self._set_aside_one_of_each(caster, coloring, purpose)
             if give_back is None:
@@ -423,7 +441,14 @@ class PoolPaymentMixin:
                 floored = apply_cost_floor(
                     cost, floor - sum(1 for _symbol in coloring)
                 )
-                if self._pay_mana_cost(caster, floored, purpose=purpose):
+                spread_paid = spreads and any(
+                    self._pay_mana_cost_directly(caster, spread, purpose=purpose)
+                    for spread in color_spreading_costs(floored)
+                    if spread != floored
+                )
+                if spread_paid or self._pay_mana_cost(
+                    caster, floored, purpose=purpose
+                ):
                     if floored is not cost:
                         self.log.append(
                             f"{card.name} costs {floor} mana to cast "
@@ -1004,12 +1029,25 @@ class PoolPaymentMixin:
         cast as that method runs it.
 
         Returns the refusal, or ``(permission, resolved_x_value,
-        x_mana_spent)``. A refusal for mana names what moved the price
+        x_mana_spent, mana_spent)``. *mana_spent* is what the payment took,
+        per symbol — the pool and its restricted buckets before less after
+        (``sunburst.pool_units``) — measured over the whole of this step
+        because every unit of mana the cast pays is paid here: the mana cost
+        or the alternative cost in its place, the additional costs and the
+        taxes (CR 702.44b's "including additional or alternative costs"). A
+        refusal for mana names what moved the price
         (*price_notes*, the taxes and reductions the cast gathered above, and
         a keyword cost's own change here): the lines announcing them are taken
         back with the refused attempt (CR 733.1), so the reason carries them
         (``refusals.noting``).
         """
+        # What the payment spends, measured rather than predicted (CR
+        # 702.44a's "each color of mana spent to cast it"; the Pentad Prism
+        # ruling of 2020-08-07: "what mana was actually spent"): a generic pip
+        # says how much is owed and never which unit paid it, and a CR 609.4b
+        # permission changes which pips a unit may pay, not which unit was
+        # spent. Before against after, below.
+        units_before = pool_units(caster)
         # A cost waiver ("cast spells from your hand without paying their mana
         # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
         # *paying*, because a waived {X} is locked to 0 (CR 107.3b) and paying
@@ -1211,4 +1249,7 @@ class PoolPaymentMixin:
                     card.name, classification.effect_kind,
                     noting(details, price_notes),
                 )
-        return permission, resolved_x_value, x_mana_spent
+        return (
+            permission, resolved_x_value, x_mana_spent,
+            mana_spent_between(units_before, pool_units(caster)),
+        )

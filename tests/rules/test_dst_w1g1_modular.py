@@ -94,10 +94,13 @@ def test_the_keyword_line_becomes_the_two_abilities_it_represents():
 
 @pytest.mark.cr("702.43a")
 def test_a_modular_line_the_rewrite_cannot_read_keeps_the_card_unsupported():
-    """"Modular—Sunburst" (a later set's count) is a modular line nothing here
-    writes, so the card names it rather than entering as a 0/0 with nothing."""
-    card = _modular("Test Sunburst", "Modular—Sunburst")
-    assert unread_modular_line(card.oracle_text) == "Modular—Sunburst"
+    """A count the number table cannot spell ("Modular—Devotion", a count no
+    card prints) is a modular line nothing here writes, so the card names it
+    rather than entering as a 0/0 with nothing. ("Modular—Sunburst", the count
+    this test named until Fifth Dawn, is read now: CR 702.44c,
+    ``tests/rules/test_5dn_w1g1_sunburst.py``.)"""
+    card = _modular("Test Devotion", "Modular—Devotion")
+    assert unread_modular_line(card.oracle_text) == "Modular—Devotion"
     program = compile_card_oracle(card)
     assert not program.supported
     assert "modular" in program.reason
