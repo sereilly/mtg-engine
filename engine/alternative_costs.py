@@ -1244,7 +1244,10 @@ def granted_alternative_cost(oracle_text: str) -> "AlternativeCost | None":
     """The alternative cost this permanent grants **every spell**, or None.
 
     "Rather than pay the mana cost for a spell, its controller may discard a
-    card that shares a color with that spell." (Dream Halls.) The board-wide
+    card that shares a color with that spell." (Dream Halls.) Or every spell
+    of its own controller's: "You may pay {W}{U}{B}{R}{G} rather than pay the
+    mana cost for spells you cast" (Fist of Suns), whose cost comes back with
+    ``controller_only`` set for the reader to scope. The board-wide
     twin of :func:`alternative_cost_for_line`, and its own reader for
     ``cost_modifiers``' reason one rule over: a printed cost is a property of
     the card being cast and a granted one is a property of a permanent on some
