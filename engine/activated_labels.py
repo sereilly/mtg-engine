@@ -149,6 +149,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # vocabulary, and this module exists to carry it.
     "add_counter_to_target": "triggered_counter",
     "add_mana_from_text": "activated_mana",
+    # "{3}, {T}: Double the amount of each type of unspent mana you have."
+    # (Doubling Cube.) A mana ability (its 2004-12-01 ruling), labelled as one.
+    "double_unspent_mana": "activated_mana",
     "counter_top_stack_spell": "spell_pattern",
     "create_token": "activated_token",
     "deal_damage": "activated_damage",
