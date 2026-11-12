@@ -411,7 +411,8 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         #
         # Both words are payload. The type is held to the creature-type
         # catalog and the quoted ability to the compiler
-        # (:func:`_controlled_retype_words`, asked by the scan), so a word the
+        # (:func:`_controlled_retype_type` asked by the scan,
+        # :func:`_compiles` by ``global_static_for``), so a word the
         # engine cannot honour leaves the line unclaimed rather than a static
         # that grants nothing. The ability rides as the text the creature
         # would print (``grants_ability``), folded into its effective card and
@@ -594,13 +595,29 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     set) leave the first one's static, which is what this answered before a
     card printed two.
     """
-    found = _template_match(oracle_text)
+    candidates = _template_match(oracle_text)
     if fast_paths.CHECKING:
         fresh = _template_match.__wrapped__(oracle_text)
         fast_paths.checked(
-            "global_static_for", fresh == found,
-            lambda: f"{oracle_text!r}: kept {found}, read {fresh}",
+            "global_static_for", fresh == candidates,
+            lambda: f"{oracle_text!r}: kept {candidates}, read {fresh}",
         )
+    # **The compiler's half of the scan is asked here, never inside the
+    # cache.** Whether a quoted grant compiles (Mephidross Vampire) is a
+    # compiled answer: ``granted_ability_supported`` is a compilation cache,
+    # cleared whenever a piece of the compiler is swapped. Asked inside
+    # ``_template_match`` — an ``lru_cache`` keyed by the text alone — the
+    # match outlived the answer it was built on: with the grammar stubbed
+    # (``test_front_end_safety``'s hooks-only compile) the cache handed back
+    # a match the quote no longer passed, and building it raised. So the
+    # cache holds every candidate the *text* allows, and the first one whose
+    # compile-dependent check passes is chosen on every call.
+    found = tuple(
+        chosen for line in candidates
+        if (chosen := next(
+            (match for match in line if _compiles(*match)), None,
+        )) is not None
+    )
     if not found:
         return None
     static = _static_from_match(*found[0])
@@ -610,6 +627,34 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
             break
         static = folded
     return static
+
+
+def global_static_implemented(oracle_text: str) -> bool:
+    """Whether *oracle_text* is a board-wide static this module performs **in
+    full** — the one answer both support gates ask.
+
+    A template match is not enough when the static grants an ability: "Each
+    creature has "When this creature dies, …"" (Endless Whispers) lands the
+    quoted sentence on every creature's effective card, where it does nothing
+    unless the compiler reads it. So a grant is asked of the one reader of
+    "does this granted text compile" (``granted_ability_supported``).
+
+    Two gates claimed these lines and only the noncreature one asked: W1G3
+    closed ``derived_static_claims`` at Fifth Dawn's wave 1 while
+    ``static_line_support``'s creature gate still took the template's word —
+    a creature printing an uncompilable board-wide grant reported supported,
+    and ``probe_line``, which asks the creature gate for every static line,
+    called Endless Whispers' line accepted while the compiler refused it.
+    One predicate, so the two cannot drift apart again.
+    """
+    static = global_static_for(oracle_text)
+    if static is None:
+        return False
+    if not static.grants_ability:
+        return True
+    from .granted_abilities import granted_ability_supported
+
+    return granted_ability_supported(static.grants_ability)
 
 
 #: The fields that say *which objects* a static reaches. Two statics fold
@@ -702,10 +747,12 @@ def _static_from_match(index: int, items: tuple) -> GlobalStatic:
             grants_ability=keyword.capitalize() if keyword else "",
         )
     if groups.get("controlled_added"):
-        # Mephidross Vampire. The type singularised and checked, and the
-        # quote compiled, by the scan already (:func:`_controlled_retype_words`);
-        # the ability rides as the text the creature would print.
-        added, ability = _controlled_retype_words(groups)
+        # Mephidross Vampire. The type singularised and checked by the scan
+        # (:func:`_controlled_retype_type`), the quote compiled by
+        # :func:`_compiles` before this match was chosen; the ability rides as
+        # the text the creature would print.
+        added = _controlled_retype_type(groups)
+        ability = groups["controlled_ability"].strip()
         return GlobalStatic(
             name=static.name,
             applies_to=static.applies_to,
@@ -804,40 +851,53 @@ def _counter_scope_words(groups: dict) -> tuple[str, str] | None:
     return added, keyword
 
 
-def _controlled_retype_words(groups: dict) -> tuple[str, str] | None:
-    """Mephidross Vampire's added type, singularised, and its quoted ability —
-    or None when the type is not in the creature-type catalog or the engine
-    does not compile the quote (``granted_abilities.granted_ability_supported``,
-    asked of a card that says nothing else, exactly what the creature's
-    effective card will hand the compiler). Read late for
-    :func:`_tribe_words`' reason."""
+def _controlled_retype_type(groups: dict) -> str | None:
+    """Mephidross Vampire's added type, singularised — or None when it is not
+    in the creature-type catalog. A fact about the text, so the cached scan
+    asks it. Read late for :func:`_tribe_words`' reason."""
     from .grammar.vocabulary import CREATURE_TYPES, singular
-    from .granted_abilities import granted_ability_supported
 
     added = singular(groups["controlled_added"])
-    ability = groups["controlled_ability"].strip()
-    if added not in CREATURE_TYPES or not granted_ability_supported(ability):
-        return None
-    return added, ability
+    return added if added in CREATURE_TYPES else None
+
+
+def _compiles(index: int, items: tuple) -> bool:
+    """Whether a candidate match's compile-dependent half holds: a retyping
+    grant's quoted ability is one the engine compiles
+    (``granted_abilities.granted_ability_supported``, asked of a card that says
+    nothing else, exactly what the creature's effective card will hand the
+    compiler). True for every other match. Asked outside the text-keyed cache
+    (:func:`global_static_for`), because the answer is the compiler's."""
+    groups = dict(items)
+    if not groups.get("controlled_added"):
+        return True
+    from .granted_abilities import granted_ability_supported
+
+    return granted_ability_supported(groups["controlled_ability"].strip())
 
 
 @lru_cache(maxsize=None)
-def _template_match(oracle_text: str) -> tuple[tuple[int, tuple], ...]:
-    """Where in :data:`_TEMPLATES` each line of *oracle_text* first matches,
-    and that match's named groups, in printed order — empty when none does.
-    The scan :func:`global_static_for` has always made, line by line and
-    template by template, passing over the one match it always passed over:
-    a Crusade naming a word that is no creature type. Every matching line,
-    not the first alone, so two lines over one scope can fold."""
+def _template_match(oracle_text: str) -> tuple[tuple[tuple[int, tuple], ...], ...]:
+    """For each line of *oracle_text* some template matches, every template it
+    matches in :data:`_TEMPLATES` order with that match's named groups — in
+    printed order, empty when no line matches. The scan
+    :func:`global_static_for` has always made, line by line and template by
+    template, passing over the matches the *text* rules out (a Crusade naming
+    a word that is no creature type). Every matching line, not the first
+    alone, so two lines over one scope can fold; every candidate on a line,
+    not the first alone, so the compiler's half of the check
+    (:func:`_compiles`) can be asked outside this cache."""
     return tuple(
         found for raw_line in oracle_text.splitlines()
-        if (found := _line_match(raw_line)) is not None
+        if (found := _line_matches(raw_line))
     )
 
 
-def _line_match(raw_line: str) -> tuple[int, tuple] | None:
-    """The first template one printed line matches, or None."""
+def _line_matches(raw_line: str) -> tuple[tuple[int, tuple], ...]:
+    """Every template one printed line matches, in table order, that the
+    text allows."""
     line = _line(raw_line)
+    found: list[tuple[int, tuple]] = []
     for index, (pattern, _static) in enumerate(_TEMPLATES):
         match = pattern.match(line)
         if match is None:
@@ -852,11 +912,11 @@ def _line_match(raw_line: str) -> tuple[int, tuple] | None:
             continue
         if (
             groups.get("controlled_added")
-            and _controlled_retype_words(groups) is None
+            and _controlled_retype_type(groups) is None
         ):
             continue
-        return index, tuple(sorted(groups.items()))
-    return None
+        found.append((index, tuple(sorted(groups.items()))))
+    return tuple(found)
 
 
 def changes_types(static: GlobalStatic) -> bool:

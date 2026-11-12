@@ -44,6 +44,7 @@ from ._cost_records import shared_creature_type_referent
 from ._events import binds_block_pair
 from ._frozen_seats import frozen_seat_record
 from ._piles import _chosen_graveyard_cards, one_card_pile_pick
+from ._record_keys import CHOSEN_PLAYER
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings, _describe_several_targets,
     _describe_targets, _filter_payload, _is_source, _is_target,
@@ -516,6 +517,92 @@ def _lower_graveyard_cards_on_library_top(
 
 
 
+def _lower_put_own_card_from_graveyard(
+    node: ast.PutOntoBattlefield, produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"…**that player puts this card from its owner's graveyard onto the
+    battlefield under their control** at the beginning of the next end step."
+    (Endless Whispers' granted dies-trigger.)
+
+    The ability's own card, named by reference (CR 700.7) — nothing is chosen
+    or matched, so this is ``return_source_card_to_battlefield``, the handler
+    Ivory Gargoyle's "return it to the battlefield under its owner's control"
+    already reaches, with the zone pinned to the one the sentence prints: the
+    card is looked for in a graveyard **by identity** (CR 400.7 — gone from
+    there, or a token that ceased to exist, and nothing returns) and never
+    taken off a battlefield, which is where the unzoned spelling also looks.
+
+    **Whose control** is the whole of what the sentence adds:
+
+    * a printed subject naming the seat an earlier step of this same effect
+      chose ("Choose target opponent. **That player** puts …") — CR 110.2a's
+      player who puts it, frozen into the delayed ability with the choice
+      (``create_delayed_trigger``'s ``binds_player``) and read back under the
+      one key a chosen seat is written to. Without that step the words name a
+      seat nobody chose, and the line refuses;
+    * no subject (or "you"): the ability's controller, or "its owner's" when
+      printed.
+
+    Every other rider refuses: none is carried by the move.
+    """
+    target = node.target
+    assert isinstance(target, ast.TargetSpec)
+    filt = target.filter
+    leftovers = _restrictions_beyond(
+        filt, frozenset({"is_source", "zone", "zone_owner"})
+    )
+    if leftovers:
+        raise LoweringError(
+            f"the source's own return does not honour {leftovers[0]!r}",
+            node=node,
+        )
+    pile = filt.zone_owner.kind if filt.zone_owner is not None else None
+    if pile not in ("owner", "you"):
+        raise LoweringError(
+            "the source's own return reads its owner's or your graveyard",
+            node=node,
+        )
+    if (
+        node.gains or node.sacrifice_when_control_lost or node.attached_to_source
+        or node.attached_to_chosen is not None or node.entering_colors
+        or node.entering_subtypes or node.tapped or node.bound_card_from
+    ):
+        raise LoweringError(
+            "the source's own return from a graveyard carries no rider",
+            node=node,
+        )
+    actor = node.actor.kind if node.actor is not None else "you"
+    if actor == "that_player":
+        if node.under_your_control or node.under_owners_control:
+            raise LoweringError(
+                "a printed subject and another seat's control name two seats",
+                node=node,
+            )
+        if CHOSEN_PLAYER not in produced:
+            raise LoweringError(
+                "\"that player\" puts it onto the battlefield only where an "
+                "earlier step chose that player",
+                node=node,
+            )
+        control = "chosen"
+    elif actor == "you":
+        if node.under_actors_control:
+            raise LoweringError(
+                "'under their control' names no subject here", node=node,
+            )
+        control = "owner" if node.under_owners_control else "you"
+    else:
+        raise LoweringError(
+            f"no handler returns the source for {actor!r}", node=node,
+        )
+    payload: dict[str, object] = {"control": control, "from": "graveyard"}
+    if pile == "you":
+        # "…from **your** graveyard": the controller's pile alone, the key
+        # Screams from Within's return already carries.
+        payload["from_controller_graveyard"] = True
+    return (OracleInstruction("return_source_card_to_battlefield", "", payload),)
+
+
 def _lower_put_onto_battlefield(
     node: ast.PutOntoBattlefield, event: str | None = None,
     produced: frozenset[str] = frozenset(),
@@ -534,6 +621,17 @@ def _lower_put_onto_battlefield(
     if not isinstance(target, ast.TargetSpec):
         raise LoweringError("no handler puts that onto the battlefield", node=node)
     filt = target.filter
+    if _is_source(target) and filt.zone == "graveyard":
+        return _lower_put_own_card_from_graveyard(node, produced)
+    if node.under_actors_control:
+        # "…under **their** control" is read off the printed subject, and only
+        # the branch above reads one for this move. Anywhere else the words
+        # would be dropped and the card would enter under the ability's
+        # controller — the seat the sentence just said it is *not*.
+        raise LoweringError(
+            "only the source's own return reads 'under their control'",
+            node=node,
+        )
     if (node.entering_colors or node.entering_subtypes) and not (
         filt.zone == "graveyard" and _is_target(target) and filt.is_card
         and (node.actor is None or node.actor.kind == "you")

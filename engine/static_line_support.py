@@ -591,9 +591,14 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # creature — or a token — printing the same line reported unsupported while
     # the effect worked perfectly. The same partial-list shape round 113 found
     # against the replacement registry, one table over.
-    from .global_statics import global_static_for
+    #
+    # **…performed in full**: a grant whose quoted text the compiler cannot
+    # read is a line that does nothing, and this gate took the template's word
+    # for it after the noncreature one had stopped (``global_static_implemented``,
+    # the one predicate both ask).
+    from .global_statics import global_static_implemented
 
-    if global_static_for(normalized) is not None:
+    if global_static_implemented(normalized):
         return True
     # "Play with the top card of your library revealed." / "…you may cast Goblin
     # spells from the top of your library." (Conspicuous Snoop, Radha.) Static

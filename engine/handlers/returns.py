@@ -30,7 +30,8 @@ from ..game_types import first_target_id, single_slot, target_slots
 from ..models import Permanent
 from ..oracle_types import (LAST_TARGET_NAME, SPELL_RETURNED_TO_HAND,
                             named_no_target)
-from ..per_color_targets import (ONE_TARGET_PER_COLOR, assign_colors,
+from ..per_color_targets import (ONE_TARGET_PER_COLOR, PER_COLOR_ASSIGNMENT,
+                                 assign_colors, kept_as_assigned,
                                  zone_cards_colors)
 from ..search_filters import card_has_type
 from ._amounts import resolve_amount
@@ -183,22 +184,33 @@ def _one_per_color_eligible(game, caster, context, count, eligible):
     still takes a colour of its own beside the others (CR 608.2b — a target
     that no longer fits is not acted on, and the rest still are).
 
-    The colours are asked now (``per_color_targets``' residual: the engine
-    records no colour per target), over the named cards still eligible, in
-    the announcement's order — so a card that left the graveyard costs the
-    others nothing.
+    Each card is held to the colour it was **chosen as**
+    (``per_color_targets.PER_COLOR_ASSIGNMENT``, fixed as the targets were
+    stamped; the 2004-12-01 ruling): one that has lost that colour is an
+    illegal target even when no other target holds the colour it has now.
+    With no record (an announcement stamped before the record existed) the
+    colours are matched afresh, over the named cards still eligible, in the
+    announcement's order — so a card that left the graveyard costs the others
+    nothing either way.
     """
     graveyard = caster.graveyard
     named: list = []
     for slot in chosen_graveyard_slots(game, context)[:count]:
+        card = None
         if (
             isinstance(slot, int) and 0 <= slot < len(graveyard)
             and eligible(graveyard[slot])
             and not any(graveyard[slot] is held for held in named)
         ):
-            named.append(graveyard[slot])
-    assigned = assign_colors(zone_cards_colors(game, caster, named))
-    kept = [card for card, color in zip(named, assigned) if color is not None]
+            card = graveyard[slot]
+        named.append(card)
+    assignment = (context.choices or {}).get(PER_COLOR_ASSIGNMENT)
+    if isinstance(assignment, (list, tuple)) and len(assignment) >= len(named):
+        kept = kept_as_assigned(game, caster, named, assignment)
+    else:
+        present = [card for card in named if card is not None]
+        assigned = assign_colors(zone_cards_colors(game, caster, present))
+        kept = [card for card, color in zip(present, assigned) if color is not None]
     return lambda card: eligible(card) and any(card is held for held in kept)
 
 

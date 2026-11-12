@@ -707,6 +707,15 @@ class PutOntoBattlefield:
     #: says otherwise, so the word is part of the entry — read, never defaulted,
     #: and refused by every lowering that cannot honour it.
     tapped: bool = False
+    #: "**That player** puts this card … onto the battlefield **under their
+    #: control**." (Endless Whispers.) The seat :attr:`actor` names, said a
+    #: second time: CR 110.2a already enters a permanent under the control of
+    #: the player an effect instructs to put it there. Recorded rather than
+    #: swallowed, because the possessive has an antecedent only where a subject
+    #: is printed, and a lowering that ignores :attr:`actor` would put the card
+    #: under the *ability's controller* while the card names somebody else —
+    #: so every branch that does not read the actor refuses the words.
+    under_actors_control: bool = False
 
 
 @dataclass(frozen=True)

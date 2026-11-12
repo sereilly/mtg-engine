@@ -949,7 +949,9 @@ class AbilityTargetsMixin:
                 for idx in named_indices:
                     if not any((seat, idx) in legal_grave for seat in seats):
                         return refused
-                return self._one_per_color_refusal(card, spec, named_indices, seats)
+                return self._one_per_color_refusal(
+                    card, spec, named_indices, seats, own_seat=controller_index,
+                )
         elif named_ids:
             # A named target must be legal. The web layer sends ids; a test or
             # the AI may send an index on a seat, which ``_activate_onto_stack``
@@ -1178,6 +1180,7 @@ class AbilityTargetsMixin:
 
     def _one_per_color_refusal(
         self, card, spec: dict, indices: list, seats: list,
+        own_seat: "int | None" = None,
     ) -> str | None:
         """CR 601.2c for a graveyard list that is **one card per colour** —
         "For each color, return up to one target card of that color from your
@@ -1194,6 +1197,15 @@ class AbilityTargetsMixin:
         from .per_color_targets import (ONE_TARGET_PER_COLOR, one_per_color,
                                         zone_cards_colors)
 
+        if (
+            len(seats) != 1 and own_seat is not None
+            and spec.get("own_graveyard_only")
+        ):
+            # "…from **your** graveyard" with no seat named: the slots count
+            # into the announcer's own pile, the one ``graveyard_target_seat``
+            # stamps — so that is the pile asked. With every seat a candidate
+            # the gate asked nothing, and two white cards were announced.
+            seats = [own_seat]
         if not spec.get(ONE_TARGET_PER_COLOR) or not indices or len(seats) != 1:
             return None
         pile = self.players[seats[0]]

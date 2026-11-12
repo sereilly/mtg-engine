@@ -24,6 +24,7 @@ from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
 from .text_changes import spell_text_card
 from .modal_triggers import modal_trigger_modes
+from .per_color_targets import PER_COLOR_ASSIGNMENT, holds_assigned_color
 from .stack_targets import _printed_target_instances, source_name
 from .targeting import (
     derive_cast_spec, derive_instruction_spec, graveyard_target_spec, role_is_stack,
@@ -487,7 +488,18 @@ class ResolutionTargetsMixin:
             item.target_graveyard_card if holder is item
             else getattr(holder, "target_graveyard_card", None)
         )
-        for stamp in (stamps if isinstance(stamps, list) else [stamps]):
+        # The colour each card of a one-card-per-colour list was chosen as
+        # (All Suns' Dawn; ``per_color_targets.PER_COLOR_ASSIGNMENT``), one
+        # entry per stamp: a card that has lost it is an illegal target (the
+        # card's 2004-12-01 ruling), so a list whose every card was recoloured
+        # does not resolve and the spell is not exiled by its own sentence.
+        assigned = (
+            (item.choices or {}).get(PER_COLOR_ASSIGNMENT) if holder is item
+            else None
+        )
+        for position, stamp in enumerate(
+            stamps if isinstance(stamps, list) else [stamps]
+        ):
             if stamp is None:
                 continue
             # The stamp resolving to no slot means no copy of the chosen card
@@ -496,7 +508,13 @@ class ResolutionTargetsMixin:
             # answers a slot (clamping where it must) and the target is legal.
             # …and legal only while a card in a graveyard may be targeted at
             # all (Ground Seal arriving in response): one reader for both.
-            legality.append(self.graveyard_target_is_legal(stamp))
+            legal = self.graveyard_target_is_legal(stamp)
+            if legal and isinstance(assigned, (list, tuple)):
+                legal = holds_assigned_color(
+                    self, stamp,
+                    assigned[position] if position < len(assigned) else None,
+                )
+            legality.append(legal)
             if addresses is not None:
                 addresses.append(None)
         # …and the pile's **owner**, where the pile's owner is a target ("…from
