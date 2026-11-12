@@ -30,7 +30,12 @@ EFFECT_HANDLERS[instruction.kind](game, instruction, context)   ← O(1) dict di
 **One parser.** `engine/grammar/` reads a line; where it refuses,
 `card_hooks.CARD_LINE_INSTRUCTIONS` supplies the reading of one printed line of
 one named card. There is nothing after that — a line neither claims produces no
-instruction, and the card is reported unsupported naming the clause. The flat
+instruction. A creature, a planeswalker and a land's static text are then
+reported unsupported naming the clause; an artifact, enchantment, instant or
+sorcery is supported when any of its lines compiles
+(`line_classification._noncreature_line_instructions`), so a line it drops is
+seen by `parse_coverage --check` and `oracle_diff`, not by the support count
+(SET_PLAYBOOK's Known gaps). The flat
 `@parse_rule` registry in `engine/parsing/` (2,303 lines of substring
 predicates hand-ordered against one another, which claimed a clause on a prefix
 and dropped whatever followed) is deleted. See "Grammar front end" below.

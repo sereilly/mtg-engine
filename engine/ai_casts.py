@@ -1544,11 +1544,14 @@ def _announced_candidate(
             # the game" shape `refused_casts` counts, one step earlier, where
             # nothing is even proposed.
             #
-            # Asked only when the mana cost cannot be paid, which is the
-            # conservative reading of CR 118.9b's "generally optional": paying a
-            # life and exiling a card is a real price, and a seat that took it
-            # while holding the mana would be spending two resources to save
-            # none.
+            # A price that is not mana alone is asked only when the mana cost
+            # cannot be paid, the conservative reading of CR 118.9b's
+            # "generally optional": paying a life and exiling a card is a real
+            # price, and a seat that took it while holding the mana would be
+            # spending two resources to save none. A price in mana alone (a
+            # Bringer's {W}{U}{B}{R}{G}) spends one resource either way, so it
+            # is weighed against a payable printed cost too
+            # (`ai_cast_gates.cheaper_mana_alternative_indices`, below).
             # CR 118.9d: the cost increases in force are "applied to that
             # alternative cost", so a pitch spell under Sphere of Resistance
             # owes {1} beside its card and its life. Planned here for the

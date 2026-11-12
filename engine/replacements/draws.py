@@ -131,9 +131,10 @@ def _doubled_draw_count(game, payload: dict) -> int:
     Copies multiply, for the reason ``_damage_multiplier`` records: an effect
     applies once per event, so counting the sources is the only way a second
     doubler is not silently dropped. Teferi's Ageless Insight is legendary and
-    Alhammarret's Archive is not in this pool, so today the count is one — the
-    legend rule is round 49's open block, and "there can only be one" is exactly
-    the kind of claim about the pool that expires without anyone editing it.
+    Alhammarret's Archive is not in this pool, so today the count is one — two
+    Teferis leave one by the legend rule (CR 704.5j, `engine/legend_rule.py`), and
+    "there can only be one" is exactly the kind of claim about the pool that
+    expires without anyone editing it.
     """
     count = int(payload.get("count", 0))
     exempt = 1 if payload.get("turn_based") else 0

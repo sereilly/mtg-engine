@@ -459,8 +459,8 @@ def _tranquil_board(set_pool, *, other_shrines=0, generic=5):
     """Tranquil Light with *other_shrines* distinct Shrines beside it.
 
     Distinct on purpose: two copies of one legendary Shrine is a different
-    question (CR 704.5j, still an open block here) and would make the count the
-    test asserts depend on it.
+    question (CR 704.5j: one leaves by the legend rule, `engine/legend_rule.py`)
+    and would make the count the test asserts depend on it.
     """
     pool = set_pool("M21")
     light = Permanent(card=pool["Sanctum of Tranquil Light"])
