@@ -48,7 +48,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | Dross Prowler, Gluttonous Zombie, Razortooth Rats, Severed Legion, Squirming Mass |
 | 5 | Dwarven Song, Heaven's Gate, Sea Kings' Blessing, Sylvan Paradise, Touch of Darkness |
 | 5 | Emerald Medallion, Jet Medallion, Pearl Medallion, Ruby Medallion, Sapphire Medallion |
-| 5 | Firefly, Furnace Whelp, **Granite Gargoyle**, Hellkite Punisher, **Shivan Dragon** |
+| 5 | Firefly, **Furnace Whelp**, **Granite Gargoyle**, Hellkite Punisher, **Shivan Dragon** |
 | 5 | Goblin Chariot, Lightning Elemental, Raging Goblin, Thundering Giant, Vulshok Berserker |
 | 5 | Hematite Talisman, Lapis Lazuli Talisman, Malachite Talisman, Nacre Talisman, Onyx Talisman |
 | 5 | **Ice Storm**, Rain of Tears, **Sinkhole**, **Stone Rain**, Winter's Grasp |
@@ -229,7 +229,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Mana Leech, Mole Worms |
 | 2 | Mask of Law and Grace, Shield of Duty and Reason |
 | 2 | Mawcor, Thornwind Faeries |
-| 2 | Merfolk Looter, Thought Courier |
+| 2 | Merfolk Looter, **Thought Courier** |
 | 2 | Merfolk Traders, Vodalian Merchant |
 | 2 | Mesa Falcon, Pearl Dragon |
 | 2 | **Mesa Pegasus**, Teremko Griffin |
