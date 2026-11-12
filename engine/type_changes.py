@@ -11,7 +11,7 @@ the same permanent.
 
 The engine used to record them by appending a dict to a metadata list from five
 places (``handlers/board_misc.py`` ×4 and ``handlers/zones.py`` ×1 — now
-``handlers/types.py`` and ``handlers/reanimation.py``), none of which
+``handlers/types.py`` and ``handlers/bound_reanimation.py``), none of which
 recorded *when*. The layer bridge had nothing to order by and gave both lists
 the constant 0 — every addition before every removal, whichever came first — so
 a Snow-Covered Forest thawed by the Weathervane and then frozen again was not

@@ -52,6 +52,10 @@ from . import (  # noqa: E402,F401
     pump,
     pt_switch,
     reanimation,
+    # Out of alphabetical order on purpose: it imports ``reanimation``, so
+    # listed first it would pull that module (and the replacements package
+    # behind it) in earlier than the rest of the engine has always seen it.
+    bound_reanimation,
     redirection,
     regeneration,
     repeats,

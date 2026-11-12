@@ -13,7 +13,8 @@ untap step. A permanent's own move is
 hand.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round. A return to the
-**battlefield** is ``reanimation.py``'s.
+**battlefield** is ``reanimation.py``'s, or ``bound_reanimation.py``'s for a
+card the ability names by reference.
 """
 
 from __future__ import annotations

@@ -235,11 +235,11 @@ _CALLERS = {
     # Takklemaggot's return attached — and, since Judgment's Infectious Rage,
     # asked once more *before* the card moves (CR 303.4g: an Aura with no
     # legal host remains in its current zone), in the nested check
-    ("engine/handlers/reanimation.py", "return_source_card_to_battlefield"),
-    ("engine/handlers/reanimation.py", "stays_where_it_is"),
+    ("engine/handlers/bound_reanimation.py", "return_source_card_to_battlefield"),
+    ("engine/handlers/bound_reanimation.py", "stays_where_it_is"),
     # …and the attach itself, made once the Aura is on the battlefield — the
     # entry's ``then``, which waits for an "as it enters" choice (CR 614.12a)
-    ("engine/handlers/reanimation.py", "arrived"),
+    ("engine/handlers/bound_reanimation.py", "arrived"),
     # Nomad Mythmaker (Judgment): "attached to a creature you control", the
     # hosts offered as the ability resolves and asked once more as the Aura
     # enters — nested helpers found under their own names too
@@ -258,8 +258,8 @@ _CALLERS = {
     # The Scourge Dragon Auras' return attached to the creature that entered
     # (CR 303.4i): asked before the card leaves the graveyard, and once more of
     # the permanent as it arrives (the entry's ``then``)
-    ("engine/handlers/reanimation.py", "return_self_from_graveyard"),
-    ("engine/handlers/reanimation.py", "returned"),
+    ("engine/handlers/bound_reanimation.py", "return_self_from_graveyard"),
+    ("engine/handlers/bound_reanimation.py", "returned"),
     # Tempting Wurm (Onslaught): the host each opponent chose for an Aura they
     # put onto the battlefield from hand, asked once more as the Aura enters
     # (CR 303.4f/g) — Replenish's re-check, for a put from a hand
