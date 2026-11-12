@@ -587,3 +587,68 @@ def test_w1g7_doubling_cube_doubles_what_is_left_after_its_own_cost(set_pool):
     assert "Doubling Cube: P0 has no unspent mana to double" in game.log
 
 # ==== end w1g7 ======================================================
+
+# ==== W2G2 ==========================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+#
+# Vedalken Shackles under a text change (CR 612.1): "…power less than or
+# equal to the number of Islands you control…" with "Islands" rewritten.
+
+import pytest as _w2g2_pytest
+
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.models import Permanent as _W2G2Permanent
+from tests.helpers import settle as _w2g2_settle
+
+
+def _w2g2_shackles_table(set_pool, lands, *, spell):
+    fifth, lea = set_pool("5DN"), set_pool("LEA")
+    game = _W2G2Game(players=[
+        _W2G2PlayerState(
+            name=f"P{seat}", library=[lea["Island"]] * 10,
+            hand=[fifth[spell] if spell in fifth else lea[spell]] if seat == 0 else [],
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w2g2_settle(game)
+    placed = []
+    for seat, card in [(0, fifth["Vedalken Shackles"])] + [(0, lea[n]) for n in lands] + [
+        (1, lea["Grizzly Bears"])
+    ]:
+        permanent = _W2G2Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        permanent.metadata["summoning_sickness_turn"] = -99
+        placed.append(permanent)
+    _w2g2_settle(game)
+    return game, placed[0], placed[-1]
+
+
+@_w2g2_pytest.mark.parametrize("spell, extra", [
+    ("Magical Hack", {}),
+    ("Spectral Shift", {"mode_index": 0}),
+])
+def test_w2g2_vedalken_shackles_counts_the_land_type_its_text_now_names(set_pool, spell, extra):
+    """Magical Hack or Spectral Shift changes "Islands" to "Plains" in the
+    Shackles' text: with two Plains the Bears (power 2) are taken; with two
+    Islands and no Plains nothing is a legal target and nothing is paid."""
+    for lands, steals in ((["Plains", "Plains"], True), (["Island", "Island"], False)):
+        game, shackles, bears = _w2g2_shackles_table(set_pool, lands, spell=spell)
+        cast = game.queue_from_hand(
+            0, spell, target_permanent_ids=[shackles.permanent_id],
+            old_color="U", new_color="W", **extra,
+        )
+        assert cast.supported, cast.details
+        _w2g2_settle(game)
+        assert f"{spell} changed Island to Plains in Vedalken Shackles's text" in game.log
+
+        taken = game.queue_permanent_ability(
+            0, "Vedalken Shackles", target_permanent_ids=[bears.permanent_id],
+        )
+        assert taken.supported is steals, taken.details
+        _w2g2_settle(game)
+        assert game.controller_index_of(bears) == (0 if steals else 1)
+        assert shackles.tapped is steals
+
+# ==== end W2G2 ======================================================
