@@ -1,5 +1,6 @@
 """What one of a viewer's objects offers **right now**, as the engine answers
-it: the mana a permanent's tap names (:func:`_offered_mana`), what each mana
+it: the mana a permanent's tap names (:func:`_offered_mana`) and the split
+of open colour a land's tap sets off (:func:`tap_mana_split`), what each mana
 ability adds and whether it asks a colour (:func:`_ability_mana`,
 :func:`_decided_ability_mana` where the board or a record decides it,
 :func:`_ability_mana_payload`), why each ability would be refused before
@@ -22,9 +23,11 @@ from __future__ import annotations
 from engine import Game
 from engine.activation_prohibitions import activation_prohibition
 from engine.ai_text_changes import ability_text_change_mode, announced_text_change_mode
+from engine.auras import AURA_ANY_COLOR_MANA, aura_additional_mana_now
 from engine.board_payment import board_can_pay, tap_alone_symbols
 from engine.cost_modifiers import cast_mana_charge
 from engine.cost_x_definitions import cost_x_is_defined
+from engine.mana_combination import ANY_COLOR_SYMBOLS
 from engine.mana_could_produce import (ability_colors_on_offer, lands_could_produce,
                                        types_that_land_could_produce)
 from engine.models import Permanent
@@ -381,6 +384,36 @@ def _ability_mana_payload(game: Game, perm: Permanent, usable) -> list | None:
         return None
     entries = [_ability_mana_entry(game, perm, ability) for ability in usable]
     return entries if any(entry is not None for entry in entries) else None
+
+
+def tap_mana_split(game: Game, perm: Permanent) -> dict | None:
+    """``{"count", "colors", "source"}`` when tapping the land *perm* for mana also sets
+    off **two or more** units of open colour that are one split of its
+    controller's — "Whenever enchanted land is tapped for mana, its controller
+    adds an additional two mana in any combination of colors." (Dawn's
+    Reflection) — else None.
+
+    The tap seam reads the land's Aura (``attached_aura``, through
+    ``auras.aura_additional_mana_now``, the pattern the planner counts with)
+    and spends the tap's ``mana_combination`` on those units when it names
+    colours alone adding up to the count, else its default
+    (``mana_combination.triggered_split``). Nothing on the wire said a tap set
+    any off, so a person got the default every time. A single open unit
+    (Fertile Ground's "one mana of any color") is the tap's ``mana_color``
+    answer, as it always was, and is not offered here — the seam asks no
+    split of it.
+    """
+    if not perm.has_type("land"):
+        return None
+    aura = perm.metadata.get("attached_aura")
+    if aura is None:
+        return None
+    count = sum(1 for extra in aura_additional_mana_now(game, aura) if extra == AURA_ANY_COLOR_MANA)
+    if count < 2:
+        return None
+    # ``source``: the Aura the split is of, for the question's words — the
+    # land is what was clicked, and it prints none of this.
+    return {"count": count, "colors": list(ANY_COLOR_SYMBOLS), "source": aura.effective_card.name}
 
 
 def _ability_denial(game: Game, seat: int, perm, ability) -> str | None:

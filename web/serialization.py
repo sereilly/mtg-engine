@@ -36,7 +36,7 @@ from engine.targeting import derive_cast_spec
 from engine.target_roles import recorded_role_seats
 from engine.text_changes import changed_words, spell_text_card
 
-from .offers import _offered_mana, cast_mana_offer, cast_x_payable, text_change_offer
+from .offers import _offered_mana, cast_mana_offer, cast_x_payable, tap_mana_split, text_change_offer
 from .runtime import CARD_BY_NAME
 
 
@@ -534,6 +534,12 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "attached_to_id": attached_to_id,
         "attached_to_seat": attached_to_seat,
         "produced_mana": list(_offered_mana(game, perm)),
+        # The open colours a tap of this land also sets off, as one split of
+        # its controller's (Dawn's Reflection's "additional two mana in any
+        # combination of colors"): `{count, colors, source}`, answered on the tap
+        # action's `mana_combination`; None for every other permanent
+        # (``offers.tap_mana_split``).
+        "tap_mana_split": tap_mana_split(game, perm),
         # Whether tapping this land part-way through a payment makes mana —
         # the tap seam's own answer (``mana_payment.taps_for_payment``), which
         # the engine's planner and the AI's already ask. The client's auto-tap

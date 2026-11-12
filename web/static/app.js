@@ -3147,6 +3147,73 @@ function askCastManaSplit(split) {
   });
 }
 
+// "Whenever enchanted land is tapped for mana, its controller adds an
+// additional two mana in any combination of colors." (Dawn's Reflection.) A
+// triggered mana ability resolves inside the tap (CR 605.4a), so its split is
+// chosen with the tap and rides the tap's own body as `mana_combination`
+// (`web/actions.py` forwards it on both land-tap paths). The server says which
+// lands set such a split off (`tap_mana_split`: `{count, colors, source}`,
+// web/offers.tap_mana_split); without this every person got the engine's
+// default split (the colours the hand asks for).
+//
+// The split of the tap a body is about to send, or null: a tap or a land's
+// mana activation of one of the viewer's own lands that carries the offer and
+// has not been answered. A land's ability that adds no mana (`ability_mana`
+// says null for it — Mishra's Factory becoming a creature) is not a tap for
+// mana and owes nothing.
+function tapManaSplitFor(body, state = currentState) {
+  if (!body || (body.action !== "activate" && body.action !== "tap")) return null;
+  if (body.mana_combination != null || seat === null) return null;
+  const mine = state?.players?.[seat]?.battlefield || [];
+  const land = Number.isInteger(body.permanent_id)
+    ? mine.find((perm) => perm && typeof perm === "object" && perm.id === body.permanent_id)
+    : mine[body.permanent_index];
+  const offer = land && typeof land === "object" ? land.tap_mana_split : null;
+  if (!offer || !Number.isInteger(offer.count) || offer.count < 2) return null;
+  if (!Array.isArray(offer.colors) || !offer.colors.length) return null;
+  if (Array.isArray(land.ability_mana)) {
+    const index = Number.isInteger(body.ability_index) ? body.ability_index : 0;
+    if (!land.ability_mana[index]) return null;
+  }
+  return {
+    cardName: land.name,
+    source: offer.source || "",
+    count: offer.count,
+    colors: offer.colors.map((color) => String(color).toUpperCase()),
+  };
+}
+
+// The split chooser for a land's tap, held apart from the colour prompts
+// (`pendingManaColor`): a land is tapped while a cast or an activation waits to
+// be paid for, and that pending state must survive the answer — or the cancel.
+let pendingTapSplit = null;
+
+// Open it and wait: the split, or null when it is cancelled.
+function askTapManaSplit(split) {
+  return new Promise((resolve) => {
+    pendingTapSplit = { ...split, resolve };
+    renderActivationPrompt();
+    updateActionHint(`Choose the ${split.count} extra mana ${split.source || "the Aura"} adds as ${split.cardName} is tapped.`);
+  });
+}
+
+// One split clicked (`data-tap-split`, a `manaSplitKey`), or null for cancel.
+function answerTapManaSplit(key) {
+  const pending = pendingTapSplit;
+  if (!pending) return;
+  pendingTapSplit = null;
+  let split = null;
+  if (key !== null) {
+    split = {};
+    for (const part of String(key).split(",")) {
+      const [symbol, n] = part.split(":");
+      if (symbol && Number(n) > 0) split[symbol] = Number(n);
+    }
+  }
+  renderActivationPrompt();
+  pending.resolve(split);
+}
+
 // An empty `symbols` is an answer too: the ability adds nothing on this board
 // (a Fellwar Stone whose opponent has no land, CR 106.7) or what it adds is
 // decided as it resolves (Charmed Pendant's milled card) — either way there is
@@ -14565,6 +14632,35 @@ function renderActivationPrompt() {
     panel.classList.add("hidden");
     return;
   }
+  // A land's tap waiting on the split of what its Aura adds (Dawn's
+  // Reflection, `askTapManaSplit`): first, because the tap is not sent until
+  // it is answered, and it may come while any other prompt below is open —
+  // the cast or activation the land is being tapped to pay for.
+  if (pendingTapSplit) {
+    const ask = pendingTapSplit;
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    customRow.classList.add("hidden");
+    title.textContent = `Choose the extra mana — ${ask.cardName}`;
+    setSymbolsHtml(
+      body,
+      // Plain text: `renderSymbolsInline` escapes it and draws the symbols.
+      `${ask.source || "Its Aura"} adds ${ask.count} mana in any combination of `
+      + `${ask.colors.map((symbol) => `{${symbol}}`).join(" and/or ")} as ${ask.cardName}`
+      + " is tapped for mana. Choose the split.",
+    );
+    steps.innerHTML = `<div class="prompt-choice-row">${manaSplits(ask.colors, ask.count).map(
+      (split) => `<button type="button" class="prompt-choice-btn" data-tap-split="${escapeHtml(manaSplitKey(split))}">`
+        + `${renderSymbolsInline(manaSplitText(split))}</button>`,
+    ).join("")}</div>`;
+    steps.querySelectorAll("[data-tap-split]").forEach((btn) => {
+      btn.addEventListener("click", () => answerTapManaSplit(btn.dataset.tapSplit));
+    });
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
   const cleanupDiscard = getCleanupDiscardInfo();
   const untapInfo = getUntapLandSelectionInfo();
   const upkeepPayInfo = getUpkeepPayInfo();
@@ -15948,8 +16044,11 @@ function renderActivationPrompt() {
       customOkBtn.disabled = true;
       return;
     } else if (pendingCastTarget.targetKind === "roles") {
+      // An activation walks the same roles (Auriok Windwalker's Equipment,
+      // then creature; Goblin Welder's two artifacts): it is an ability, not
+      // a spell, that names them.
       body.textContent =
-        "This spell names several targets of different kinds. Click the glowing "
+        `This ${pendingCastTarget.castAction === "activate" ? "ability" : "spell"} names several targets of different kinds. Click the glowing `
         + "targets one at a time — each choice narrows the next. A role may be a "
         + "player, in which case the pill is what glows, or a spell on the "
         + "stack, in which case the stack card is.";
@@ -29728,6 +29827,17 @@ async function sendAction(actionBody) {
     body.mana_combination = chosen;
     actionBody.mana_combination = chosen;
   }
+  // …and a land's tap whose Aura adds a split of open colour (Dawn's
+  // Reflection, `tapManaSplitFor`): asked here, where every tap passes — the
+  // click on the land, the colour fan's answer for a dual land, the tap of a
+  // land that lost its abilities, a land clicked to pay for something.
+  const tapSplit = tapManaSplitFor(body);
+  if (tapSplit) {
+    const chosen = await askTapManaSplit(tapSplit);
+    if (!chosen) throw new Error(`Tap of ${tapSplit.cardName} cancelled.`);
+    body.mana_combination = chosen;
+    actionBody.mana_combination = chosen;
+  }
   carryMadnessAnswer(body);
   carryCopyCastAnswer(body);
   // A paying action whose preview says the pool cannot pay it is not sent:
@@ -30117,6 +30227,13 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 // (`tests/ui/test_8ed_p5_cancel_rerenders_board.py`).
 function cancelPendingPrompt() {
   SFX.onMenuCancel();
+  // A land's tap waiting on its Aura's split (`askTapManaSplit`) is the one
+  // question cancelled: the tap is not sent, and the cast or activation it
+  // was paying for stays where it was.
+  if (pendingTapSplit) {
+    answerTapManaSplit(null);
+    return;
+  }
   // A cast waiting on its mana split (`askCastManaSplit`) is told it was
   // cancelled, so its caller's catch ends the cast.
   if (typeof pendingManaColor?.castResolve === "function") pendingManaColor.castResolve(null);
