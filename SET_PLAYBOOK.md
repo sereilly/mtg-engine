@@ -1500,12 +1500,6 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     for the creature cards a seat holds while one stands, read only on a
     rehearsal copy (CR 400.2: `ai_prompt_picks` asks `seat_standing` of the
     real table), which must not make casting a creature into the lock free.
-  - Power Conduit and Spike Rogue are never activated:
-    `ai_abilities._activation_candidate` declines every
-    `remove_counter_filter` cost. Parts: the sacrifice weighing's twin (each
-    permanent and counter kind, rehearsed with the whole cost paid), an
-    `ActivationAction.cost_counter_kind` that `activation_announcement`
-    forwards, and a standing that prices charge, fate and age counters.
   - Quicksilver Elemental's {U} is never proposed: a two-step rehearsal (the
     chooser again over the gained abilities, on the copy where the gain
     resolved) and `ai_payment._plan_land_taps` honouring the activation's
@@ -1583,7 +1577,26 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     would be a mana: the mode's default target does not ask whether a
     permanent spends the counter (W1G1;
     `tests/ai/test_ai_trigger_mode_and_colour_defaults.py`).
-  <!-- 5dn integrator: W2G3 AI -->
+  - From Fifth Dawn's W2G3, each measured: **an exchange that includes its
+    own source is proposed again and again** — Avarice Totem traded back
+    and forth (seed 7: Blind Creeper changed hands about twelve times in
+    turns 13–17 of one game; a seat swapped Totem for Totem four times),
+    because an exchange whose source passes to a seat that can pay its cost
+    on its own turn will be undone, and the rehearsal reads the swap for
+    the turn after. Parts: such an exchange priced through this turn only
+    (`ai_activation_rehearsal._moves_something` / `_activation_candidate`),
+    and the content-only reading above (an identical Totem for a Totem
+    rehearses changed at swing 0 — the same `position_digest` keying, also
+    through each permanent's `vars()`; a `Rehearsal.changed_in_content`
+    read by `_moves_something` and `pays_before_the_blocks`, not local:
+    every chooser reads `changed`). **An "any target" activation is aimed
+    at a seat alone**: Prodigal Sorcerer pings the face beside a Llanowar
+    Elves it would kill, and Ion Storm is weighed at the face
+    (`ai_abilities._activation_candidate`: the spec kind "any" is not in
+    `object_kinds`; part: a rehearsed aim over the permanents, the cast
+    side's `_better_than_the_seat`). The web auto-tap never plans through
+    Doubling Cube (`web/payment_plan` calls `planner.plan` directly, where
+    the simulator's `_plan_land_taps` reaches `_plan_through_a_pool_doubler`).
   *Clears:* the next AI round.
 
 - **Three mana readers still skip what a substitution does** (kg5 `mana2`,

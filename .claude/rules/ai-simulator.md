@@ -101,7 +101,10 @@ first combat and in response to another seat's object
   `ai_mana_sources.tap_cost_mana_activations`: the summoning-sick and least
   valuable first, never the permanent being paid for), then a
   self-sacrificing source only when the lands cannot pay and the spell is
-  worth more. Of the sources that could pay, the matching spends those the
+  worth more, and last a pool doubler (Doubling Cube,
+  `ai_payment._plan_through_a_pool_doubler`: half the cost and the
+  doubler's own price floated, the doubler activated, kept only where a
+  scratch copy's pool then pays). Of the sources that could pay, the matching spends those the
   seat's other wants need least (`mana_payment._sparing_choice` over
   `mana_wants.mana_wants`: wants paid together first, a held card's price
   before an ability that can wait, and the price of a card a graveyard
@@ -199,7 +202,10 @@ first combat and in response to another seat's object
   (`_spends_a_one_shot_on_something`; a library's order alone is nothing,
   `Rehearsal.reordered_only`), and a cost that sacrifices permanents is
   rehearsed with the whole cost paid and its victim named
-  (`_sacrifice_priced_activation`, `ActivationAction.cost_permanent_ids`). A
+  (`_sacrifice_priced_activation`, `ActivationAction.cost_permanent_ids`), as
+  a cost that removes counters is with its permanent and kind named
+  (`_counter_priced_activation`, `ActivationAction.cost_counter_kind`; a
+  spent counter priced in `engine/ai_counter_costs.py`). A
   precombat cast whose good is gone by the end of the turn is
   rehearsed through the fight (`through_combat=True`), and so is a cast
   that adds a combat phase, from any step of its caster's turn
