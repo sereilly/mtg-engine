@@ -612,6 +612,34 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     return static
 
 
+def global_static_implemented(oracle_text: str) -> bool:
+    """Whether *oracle_text* is a board-wide static this module performs **in
+    full** — the one answer both support gates ask.
+
+    A template match is not enough when the static grants an ability: "Each
+    creature has "When this creature dies, …"" (Endless Whispers) lands the
+    quoted sentence on every creature's effective card, where it does nothing
+    unless the compiler reads it. So a grant is asked of the one reader of
+    "does this granted text compile" (``granted_ability_supported``).
+
+    Two gates claimed these lines and only the noncreature one asked: W1G3
+    closed ``derived_static_claims`` at Fifth Dawn's wave 1 while
+    ``static_line_support``'s creature gate still took the template's word —
+    a creature printing an uncompilable board-wide grant reported supported,
+    and ``probe_line``, which asks the creature gate for every static line,
+    called Endless Whispers' line accepted while the compiler refused it.
+    One predicate, so the two cannot drift apart again.
+    """
+    static = global_static_for(oracle_text)
+    if static is None:
+        return False
+    if not static.grants_ability:
+        return True
+    from .granted_abilities import granted_ability_supported
+
+    return granted_ability_supported(static.grants_ability)
+
+
 #: The fields that say *which objects* a static reaches. Two statics fold
 #: only when they agree on every one (:func:`_fold`).
 _SCOPE_FIELDS = (

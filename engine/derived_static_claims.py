@@ -106,8 +106,7 @@ def _derived_static_claims(
     from .enter_effects import enter_effect_line
     from .evasion_negation import negated_evasion_abilities
     from .extra_triggers import extra_triggers_for
-    from .global_statics import global_static_for
-    from .granted_abilities import granted_ability_supported
+    from .global_statics import global_static_implemented
     from .land_play_allowance import land_play_allowance_for
     from .life_prohibitions import life_gain_ban_line
     from .game_result_bans import game_result_ban_line
@@ -402,12 +401,9 @@ def _derived_static_claims(
     # for a line that did nothing at all, invisible to every census. Asked
     # through the one reader of "does this granted text compile"
     # (``granted_ability_supported``, the Aura and lord grants' gate), so a
-    # grant the compiler cannot read refuses its card again.
-    board_static = global_static_for(oracle_text)
-    if board_static is not None and (
-        not board_static.grants_ability
-        or granted_ability_supported(board_static.grants_ability)
-    ):
+    # grant the compiler cannot read refuses its card again — through
+    # ``global_static_implemented``, which the creature gate asks too.
+    if global_static_implemented(oracle_text):
         claims.append("global_statics")
     # "A player who controls more permanents than each other player can't play
     # lands or cast artifact, creature, or enchantment spells. That player may
