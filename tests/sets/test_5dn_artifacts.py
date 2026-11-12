@@ -124,7 +124,8 @@ def test_w1g4_grafted_wargear_moved_by_its_own_equip_sacrifices_the_old_host(set
 
 
 def test_w1g4_grafted_wargear_leaving_sacrifices_its_creature_and_a_dead_host_is_announced_once(set_pool):
-    """Both departure halves of CR 701.3d, looked back at (CR 603.10c). The
+    """Both departure halves of CR 701.3d's "becoming unattached" (attach),
+    looked back at (CR 603.10c). The
     Wargear sacrificed: the creature it equipped is sacrificed. The creature
     destroyed: the trigger fires once — not again when the CR 704.5n sweep
     tidies the record — and does nothing (the 2020-11-10 ruling)."""
