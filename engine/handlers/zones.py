@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING
 
 from ..exiled_records import source_object
 from ..models import Permanent
-from ..oracle_types import CHOSEN_GRAVEYARD_CARD, LAST_TARGET_CONTROLLER
+from ..oracle_types import (CHOSEN_GRAVEYARD_CARD, LAST_TARGET_CONTROLLER,
+                            named_no_target)
 from ._filters import graveyard_card_matches, graveyard_slots_matching
 from ._targets import (_resolve_graveyard_slots, chosen_graveyard_slot,
                        frozen_that_player_seat, pile_owner_still_a_target,
@@ -350,6 +351,12 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     graveyard" was necessarily in, and the fallback below would then be
     choosing for the player."""
     caster = context.caster
+    # "Put **up to one** target card …" (Conjurer's Bauble) announced naming
+    # none (CR 601.2c): nobody is owed a card, so the fallback below — the
+    # first card in the pile — is not this announcement's to take.
+    if named_no_target(context.choices):
+        game.log.append(f"{context.card.name}: no card was chosen to bottom")
+        return True, "resolved"
     if instruction.payload.get("any_graveyard"):
         named = context.target if context.target in game.players else None
         idx = chosen_graveyard_slot(game, context)

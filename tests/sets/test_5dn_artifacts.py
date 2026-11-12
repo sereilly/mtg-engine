@@ -156,6 +156,66 @@ def test_w1g3_salvaging_station_untap_is_a_choice_an_asked_seat_may_decline(set_
     _w1g3_settle(game)
     assert station.tapped
 
+
+def _w1g3_bauble_table(set_pool, graveyard):
+    lea = set_pool("LEA")
+    game = _W1G3Game(players=[
+        _W1G3PlayerState(
+            name=f"P{seat}", library=[lea["Island"]] * 5,
+            graveyard=list(graveyard) if seat == 0 else [],
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w1g3_settle(game)
+    game._put_permanent_onto_battlefield(
+        0, _W1G3Permanent(card=set_pool("5DN")["Conjurer's Bauble"]), None
+    )
+    _w1g3_settle(game)
+    return game
+
+
+def test_w1g3_conjurers_bauble_draws_over_an_empty_graveyard(set_pool):
+    """Drive list (supported on arrival, and wrong): "{T}, Sacrifice this
+    artifact: Put **up to one** target card from your graveyard on the bottom
+    of your library. Draw a card." CR 601.2c lets the announcement name no
+    card, so the Bauble is activatable with nothing in the graveyard, for its
+    draw. It was refused ("no valid target") — the lowering dropped "up to"."""
+    game = _w1g3_bauble_table(set_pool, graveyard=[])
+    result = game.activate_permanent_ability(0, "Conjurer's Bauble")
+    assert result.supported, result
+    _w1g3_settle(game)
+    alice = game.players[0]
+    assert [c.name for c in alice.hand] == ["Island"]
+    assert [c.name for c in alice.graveyard] == ["Conjurer's Bauble"]
+
+
+def test_w1g3_conjurers_bauble_naming_no_card_bottoms_none(set_pool):
+    """Announced naming no card over a graveyard that holds one, the Bauble
+    draws and bottoms nothing — it bottomed the Lightning Bolt anyway, the
+    first card in the pile, for a player who had chosen zero. Named, the
+    card goes to the bottom."""
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    game = _w1g3_bauble_table(set_pool, graveyard=[bolt])
+    assert game.activate_permanent_ability(
+        0, "Conjurer's Bauble", target_player_index=0, target_graveyard_indices=[],
+    ).supported
+    _w1g3_settle(game)
+    alice = game.players[0]
+    assert [c.name for c in alice.graveyard] == ["Lightning Bolt", "Conjurer's Bauble"]
+    assert [c.name for c in alice.hand] == ["Island"]
+    assert alice.library[-1].name == "Island"
+
+    game = _w1g3_bauble_table(set_pool, graveyard=[bolt])
+    assert game.activate_permanent_ability(
+        0, "Conjurer's Bauble", target_player_index=0, target_graveyard_indices=[0],
+    ).supported
+    _w1g3_settle(game)
+    alice = game.players[0]
+    assert alice.library[-1].name == "Lightning Bolt"
+    assert [c.name for c in alice.graveyard] == ["Conjurer's Bauble"]
+
 # ==== end w1g3 ======================================================
 
 

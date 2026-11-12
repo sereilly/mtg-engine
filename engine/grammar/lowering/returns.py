@@ -25,7 +25,8 @@ from ..vocabulary import CREATURE_TYPES, PERMANENT_CARD_TYPES
 from ._events import OTHER_CHOSEN_PERMANENT, _back_reference_payload
 from ._bound_returns import lower_untargeted_return
 from ._described_returns import (_graveyard_to_hand_payload,
-                                 _reads_no_return_restriction)
+                                 _reads_no_return_restriction,
+                                 _record_optional_card_target)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _is_target,
     _restrictions_beyond, _describe_several_card_targets,
@@ -114,34 +115,6 @@ def _graveyard_bounds(filt: ast.ObjectFilter, node) -> dict[str, object]:
     return bounds
 
 
-
-
-def _record_optional_card_target(
-    payload: dict[str, object], subject: ast.TargetSpec
-) -> None:
-    """Record that this graveyard target was printed "**up to** one".
-
-    "Target" and "up to one target" resolve one chosen card either way, so the
-    handler, the picker and the narrowing are identical and the payload was the
-    same for both — the quantifier was simply dropped. What cannot read it off
-    the printed line is the gate that asks whether an ability may be activated
-    at all: CR 601.2c lets an "up to" announcement name *no* target, so Liliana,
-    Death Mage's "+1: Return **up to one** target creature card from your
-    graveyard to your hand" is legal with an empty graveyard and Adun
-    Oakenshield's bare "target" is not.
-
-    Recorded only for the "up to" spelling, so every card printing the bare word
-    keeps emitting its payload byte for byte. ``count`` is 1 here, which is
-    below the several-targets threshold every other reader tests
-    (``targets["count"] > 1``), so nothing that walks for a list of targets sees
-    a new one.
-    """
-    if subject.quantifier == "up_to":
-        payload["targets"] = {
-            "quantifier": "up_to",
-            "kind": "card",
-            "count": subject.count,
-        }
 
 
 def subject_names_another(subject) -> bool:
