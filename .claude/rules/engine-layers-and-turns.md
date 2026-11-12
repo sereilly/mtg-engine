@@ -169,7 +169,8 @@ and you can open this file directly whenever its subject is yours.
   Equipment that is a creature may activate equip, which then does nothing,
   CR 301.5c; a creature whose own text says it "can't be equipped",
   `equipment.self_cant_be_equipped_line`, is a legal target the Equipment
-  then does not move onto, per Goblin Brawler's 2004-12-01 ruling). An Equipment is supported only if its equip ability compiles
+  then does not move onto, per Goblin Brawler's 2004-12-01 ruling). An
+  Equipment is supported only if its equip ability compiles
   and every effect line is claimed.
 - Text-keyed derivation tables (parameters are payload, and the support gate
   reads the same table the dispatch does): `combat_restrictions.py` (CR 506; its

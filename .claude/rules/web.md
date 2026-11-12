@@ -97,7 +97,8 @@ graveyard ability's `target_spec`,
 `target_spec.cost_offers` (every applicable alternative cost by
 `alternative_index`, which the cast answers with `alternative_cost_index`, CR
 118.9a; a granted price identical to one already offered is not a second
-offer, `cast_alternative_costs._same_price`), a castable spell's `mana_combination` when it makes mana in any
+offer, `cast_alternative_costs._same_price`), a castable spell's
+`mana_combination` when it makes mana in any
 combination (`count`, or `count_by_cost` per permanent that could pay its
 cost — `mana_combination.cast_split_offer`), the active seat's
 `combat.attack_requirements` and a defending seat's `combat.block_requirements`

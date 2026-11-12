@@ -1712,9 +1712,10 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   round; (b)–(e) a client round.
 
 - **A noncreature card is supported when any of its lines compiles, so a
-  line it drops is invisible to the support count.** `oracle._compile_card_oracle`
-  assembles an artifact's, enchantment's, instant's or sorcery's program line
-  by line (`line_classification._noncreature_line_instructions`), and a line
+  line it drops is invisible to the support count.**
+  `oracle._compile_card_oracle` assembles an artifact's, enchantment's,
+  instant's or sorcery's program line by line
+  (`line_classification._noncreature_line_instructions`), and a line
   nothing reads contributes nothing; only the creature and planeswalker paths
   and a land's static text refuse one, naming it. Fifth Dawn met it twice:
   its six noncreature sunburst cards arrived supported with the keyword
