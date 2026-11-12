@@ -59,6 +59,7 @@ from .models import CardDefinition, Permanent, PlayerState
 from .oracle_types import x_spend_colors_from_text
 from .ai_mana_sources import (
     _MANA_SYMBOLS,
+    _pool_doubler,
     _priced_mana_source,
     _nonland_mana_source,
     _TapOption,
@@ -243,6 +244,24 @@ def tap_planned_lands(
                 ability_index=priced.ability_index,
                 mana_color=color if color in ("W", "U", "B", "R", "G") else None,
             )
+            continue
+        # A source that doubles the pool (Doubling Cube): every tap the plan
+        # makes is in front of it (`_plan_through_a_pool_doubler`), so its
+        # price comes out of that pool and the rest doubles.
+        doubler = _pool_doubler(game, seat, land)
+        if doubler is not None:
+            slot = next(
+                (
+                    index for index, permanent in enumerate(game.controlled_by(seat))
+                    if permanent is land
+                ),
+                None,
+            )
+            if slot is not None:
+                game.activate_permanent_ability(
+                    seat, land.card.name,
+                    permanent_index=slot, ability_index=doubler.ability_index,
+                )
             continue
         game.tap_land_for_mana(
             seat, land.card.name,
@@ -1062,13 +1081,17 @@ def _plan_land_taps(
     where those cannot pay and only under `_may_sacrifice_for` — a source that
     is sacrificed. And when even those cannot pay, **a source whose mana costs
     mana** (a filter land, Mana Cylix: `_plan_through_a_priced_source`), with
-    the taps that pay its price in front of it.
+    the taps that pay its price in front of it — and last **a source that
+    doubles the pool** (Doubling Cube: `_plan_through_a_pool_doubler`), with
+    every tap in front of it.
     """
     found = _PaymentPlanner(
         game, player, paying_for=paying_for, without=without,
     ).plan(required)
     if found is None and through_priced and not without:
-        return _plan_through_a_priced_source(game, player, required, paying_for)
+        found = _plan_through_a_priced_source(game, player, required, paying_for)
+        if found is None:
+            found = _plan_through_a_pool_doubler(game, player, required, paying_for)
     return found
 
 
@@ -1152,6 +1175,88 @@ def _plan_through_a_priced_source(
                 (*price[1], asked, *rest[1]),
             )
     return None
+
+
+def _plan_through_a_pool_doubler(
+    game: Game, player: PlayerState, required: dict[str, int],
+    paying_for: "Permanent | None",
+) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
+    """`_plan_land_taps` for a cost nothing else pays, through **one** mana
+    ability that doubles the pool (`_pool_doubler`: "{3}, {T}: Double the
+    amount of each type of unspent mana you have", Doubling Cube) — or None.
+
+    The plan taps the free sources for half of *required* — each coloured
+    pip's half rounded up, and half the whole — plus the doubler's price, and
+    then the doubler: the price comes out of that pool and what is left
+    doubles (CR 701.10f), so the pool pays *required* whole. Floating
+    everything before the doubling is never worse than tapping some after
+    it, and the smallest such float leaves the most untapped.
+
+    **Kept only where a scratch copy says it pays.** Which floating units
+    pay the doubler's price is the pool payment's own choice
+    (``mana_payment.floating_units_for_generic``, sparing the seat's other
+    wants), and what one tap makes is the tap's: so the plan is carried out
+    on a copy (`tap_planned_lands`, the executors' own) and returned only
+    where that copy's pool then pays *required* — the engine's arithmetic,
+    never a second copy of it. Asked only once every other source has
+    failed, of a seat controlling an untapped doubler. Nothing while mana
+    is already floating, for `_plan_through_a_priced_source`'s reason.
+    """
+    from types import SimpleNamespace
+
+    from .ai_scratch_copy import scratch_copy
+
+    if any(int(player.mana_pool.get(symbol, 0) or 0) for symbol in _MANA_SYMBOLS):
+        return None
+    wanted = {symbol: int(amount or 0) for symbol, amount in required.items()}
+    if not any(wanted.values()) or any(
+        amount and symbol not in (*_MANA_SYMBOLS, "generic")
+        for symbol, amount in wanted.items()
+    ):
+        return None
+    seat = next((i for i, seated in enumerate(game.players) if seated is player), None)
+    if seat is None:
+        return None
+    for index, permanent in enumerate(game.controlled_by(player)):
+        if permanent is paying_for:
+            continue
+        doubler = _pool_doubler(game, seat, permanent)
+        if doubler is None:
+            continue
+        floated = _halved_for_doubling(wanted, doubler.price)
+        plan = _plan_land_taps(
+            game, player, floated, paying_for=paying_for,
+            without=frozenset({index}), through_priced=False,
+        )
+        if plan is None:
+            continue
+        found = ((*plan[0], index), (*plan[1], "C"))
+        table = scratch_copy(game)
+        tap_planned_lands(
+            table, seat,
+            SimpleNamespace(land_tap_indices=found[0], land_tap_colors=found[1]),
+            paying_for=None if paying_for is None else table.permanent_by_id(
+                paying_for.permanent_id
+            ),
+        )
+        doubled = table.players[seat]
+        if _can_pay_cost(dict(doubled.mana_pool), wanted, doubled):
+            return found
+    return None
+
+
+def _halved_for_doubling(required: dict[str, int], price: int) -> dict[str, int]:
+    """What to float before a pool doubler whose activation costs *price*
+    generic, for the doubled pool to cover *required*: each coloured pip's
+    half rounded up, generic for the rest of half the whole, and the price.
+    In *required*'s own key order, for `_less_mana`'s reason."""
+    floated = {
+        symbol: (amount + 1) // 2
+        for symbol, amount in required.items() if symbol != "generic" and amount > 0
+    }
+    half = (sum(amount for amount in required.values() if amount > 0) + 1) // 2
+    floated["generic"] = max(0, half - sum(floated.values())) + price
+    return floated
 
 
 def _less_mana(required: dict[str, int], made: dict[str, int]) -> dict[str, int]:
