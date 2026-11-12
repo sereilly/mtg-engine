@@ -596,9 +596,24 @@ def test_the_legend_rule_is_keyed_on_the_supertype(catalog_by_name):
     p1.battlefield.append(Permanent(card=catalog_by_name["Forest"]))
 
     game._settle()
+    # Seat 0 is a person's (the rig), and CR 704.5j is that player's choice
+    # (5DN W2G4): only the two Karakas are asked about, never the Forests.
+    _answer_the_legend_rule(game, p1, "Karakas")
 
     assert [perm.card.name for perm in p1.battlefield] == ["Karakas", "Forest", "Forest"]
     assert [card.name for card in p1.graveyard] == ["Karakas"]
+
+
+def _answer_the_legend_rule(game, player, name):
+    """The one ``legend_rule`` prompt owed: about *name*'s two copies on
+    *player*'s side, answered by keeping the first."""
+    (owed,) = [choice for choice in game.pending_choices if choice.kind == "legend_rule"]
+    named = [perm for perm in player.battlefield if perm.card.name == name]
+    assert owed.data["name"] == name
+    assert owed.data["candidates"] == [perm.permanent_id for perm in named]
+    assert game.resolve_pending_choice(
+        "legend_rule", owed.player_index, permanent_id=named[0].permanent_id
+    )
 
 
 @pytest.mark.cr("205.4b", "205.4d")
@@ -628,8 +643,12 @@ def test_a_type_change_does_not_take_a_supertype_away(catalog_by_name):
 
     p1.battlefield.append(Permanent(card=catalog_by_name["Chromatic Orrery"]))
     game._settle()
+    # The animated Orrery is still legendary, so the rule asks (seat 0 is a
+    # person's): the two Orreries, and the animated one is kept.
+    _answer_the_legend_rule(game, p1, "Chromatic Orrery")
 
     assert [perm.card.name for perm in p1.battlefield].count("Chromatic Orrery") == 1
+    assert any(perm is orrery for perm in p1.battlefield)
     assert [card.name for card in p1.graveyard] == ["Chromatic Orrery"]
 
 

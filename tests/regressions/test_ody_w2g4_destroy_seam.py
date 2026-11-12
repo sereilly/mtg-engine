@@ -582,9 +582,13 @@ _NOT_DESTRUCTIONS_BY_CALLER: dict[str, str] = {
     # 704.3's one event); `check_state_based_actions` is its CR 603.3b window
     # since round 4.
     "_state_based_pass":
-        "CR 704.5j legend rule, 704.5k world rule, 704.5m / 702.16c an Aura "
+        "CR 704.5k world rule, 704.5m / 702.16c an Aura "
         "that may no longer be where it is, 704.5z the Role rule: each is "
         "'put into its owner's graveyard'",
+    # 5DN W2G4: the legend rule's sweep moved out of `_state_based_pass` with
+    # the choice it now asks (`engine/legend_rule.py`), and is called from it.
+    "put_the_rest_into_graveyards":
+        "CR 704.5j legend rule: 'the rest are put into their owners' graveyards'",
     # Animate Dead's "that creature's controller sacrifices it" was a row here
     # ("reached without the sacrifice transition") until kg4/departures, which
     # sends it through `sacrifice_permanent` once the event that took the Aura
