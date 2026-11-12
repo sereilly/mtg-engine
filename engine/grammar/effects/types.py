@@ -822,6 +822,21 @@ def _parse_become_creature(
                 in_addition = True
             else:
                 stream.reset(relative)
+        # "…lands you control become 2/2 creatures **that are still lands**."
+        # (Rude Awakening.) The relative clause agreeing with a subject that
+        # names a set, as "They're still lands." is the plural of "It's still a
+        # land." below — and held to the plural noun for that sentence's
+        # reason: "that are still land" is not a sentence this has read.
+        elif stream.accept_phrase("that", "are", "still"):
+            kept = stream.peek_word()
+            if (
+                kept is not None and kept != _singular_type(kept)
+                and _singular_type(kept) in CARD_TYPES
+            ):
+                stream.advance()
+                in_addition = True
+            else:
+                stream.reset(relative)
     # …and the fourth spelling, which is **no clause at all**: "Until end of
     # turn, this artifact becomes a 2/1 Construct **artifact** creature with
     # flying." (Chimeric Sphere, Xanthic Statue, Jade Statue.)

@@ -219,4 +219,67 @@ def test_w1g7_vicious_betrayal_sacrifices_only_what_was_named(set_pool):
     assert giant.effective_power == 3
     assert "P0 sacrificed no permanents to cast Vicious Betrayal" in game.log
 
+
+def test_w1g7_rude_awakening_entwined_untaps_and_animates_your_lands(set_pool):
+    """Entwine {2}{G}: "Untap all lands you control" and then "Until end of
+    turn, lands you control become 2/2 creatures that are still lands." The
+    caster's lands untap and become 2/2 land creatures (layers 4 and 7b); the
+    opponent's do not. A land that came under its controller's control this
+    turn cannot attack (CR 302.6; the 2008-08-01 ruling), the others can; a
+    land played after the spell resolved is not animated (the 2013-06-07
+    ruling)."""
+    lea = set_pool("LEA")
+    game, mine, (island,) = _w1g7_table(
+        set_pool, hand=[set_pool("5DN")["Rude Awakening"], lea["Forest"]],
+        mine=[lea["Forest"], lea["Forest"], lea["Mountain"]],
+        theirs=[lea["Island"]],
+    )
+    for land in mine:
+        land.tapped = True
+    fresh = _W1G7Permanent(card=lea["Forest"])
+    game._put_permanent_onto_battlefield(0, fresh, None)
+    _w1g7_settle(game)
+
+    result = game.cast_from_hand(
+        0, "Rude Awakening", optional_cost_payments={"{2}{G}": 1},
+    )
+    assert result.supported, result
+    _w1g7_settle(game)
+
+    for land in (*mine, fresh):
+        assert not land.tapped
+        assert land.is_creature and land.has_type("land")
+        assert (land.effective_power, land.effective_toughness) == (2, 2)
+    assert not island.is_creature
+
+    played = game.cast_from_hand(0, "Forest")
+    assert played.supported, played
+    newcomer = game.players[0].battlefield[-1]
+    assert newcomer.card.name == "Forest" and not newcomer.is_creature
+
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = {id(p): slot for slot, p in enumerate(game.players[0].battlefield)}
+    refused, _why = game.declare_attackers(0, [slots[id(fresh)]], defending_player_index=1)
+    assert not refused
+    ok, why = game.declare_attackers(
+        0, [slots[id(land)] for land in mine], defending_player_index=1,
+    )
+    assert ok, why
+
+
+def test_w1g7_rude_awakening_animation_ends_at_cleanup(set_pool):
+    """The second mode alone: until end of turn, so at the cleanup step the
+    lands are lands again and nothing else (CR 514.2)."""
+    lea = set_pool("LEA")
+    game, (forest,), _ = _w1g7_table(
+        set_pool, hand=[set_pool("5DN")["Rude Awakening"]], mine=[lea["Forest"]],
+    )
+
+    game.cast_from_hand(0, "Rude Awakening", mode_index=1)
+    _w1g7_settle(game)
+    assert forest.is_creature
+
+    game.resolve_cleanup_step(0)
+    assert not forest.is_creature and forest.has_type("land")
+
 # ==== end w1g7 ======================================================
