@@ -82,6 +82,7 @@ from engine.ai_scratch_copy import mid_resolution, scratch_copy
 from engine.models import Permanent
 from engine.restricted_mana import CAST
 from engine.sunburst import COLORS, MANA_SPENT_TO_CAST, counts_colors_spent
+from engine.text_changes import spell_text_card
 
 #: The action kinds whose handler pays mana and reads ``auto_tap``.
 PAYING_ACTIONS: frozenset[str] = frozenset(
@@ -122,13 +123,14 @@ def sunburst_preview(game, seat: int, card_name: str | None) -> dict | None:
     nothing of what that spread would be.
     """
     for item in reversed(getattr(game, "stack", []) or []):
-        card = getattr(item, "card", None)
-        if getattr(item, "caster_index", None) != seat or card is None:
+        if getattr(item, "caster_index", None) != seat or item.card is None:
             continue
-        if card_name and card.name != card_name:
+        if card_name and item.card.name != card_name:
             continue
         spent = (getattr(item, "choices", None) or {}).get(MANA_SPENT_TO_CAST)
-        if spent is None or not counts_colors_spent(card):
+        # What the spell *says* (``spell_text_card``: a text change on it is
+        # folded in), not its printed words.
+        if spent is None or not counts_colors_spent(spell_text_card(item)):
             return None
         return {"colors": [color for color in COLORS if int(spent.get(color, 0) or 0) > 0]}
     return None
