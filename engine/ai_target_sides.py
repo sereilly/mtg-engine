@@ -505,6 +505,11 @@ def denies_its_target(instruction: OracleInstruction) -> bool:
 #: as much, and could cast Foxfire only at its own attacker.
 _SPENT_ON_THE_EARLIER_TARGET = frozenset({"prevent_damage_to_target_until_eot"})
 
+#: The steps spent on an earlier step's object that decide an **ability's**
+#: side (:func:`ability_target_side`): a control change, which is never aimed
+#: at one's own permanent ("…and gain control of it until end of turn").
+_TAKES_THE_EARLIER_TARGET = frozenset({"gain_control_until_eot"})
+
 
 def _spent_on_the_earlier_target(instruction: OracleInstruction) -> "OracleInstruction | None":
     """The step to read, for a step with no target of its own printed after
@@ -1106,11 +1111,28 @@ def ability_target_side(instruction: OracleInstruction | None) -> str | None:
     # A step names its target in a ``targets`` payload — or *is* one: a base
     # P/T rewrite (:data:`_BASE_PT_SET_KINDS`) carries none, so Vhati il-Dal's
     # two modes were read as naming nothing and its ability had no side.
-    steps = [
-        step for step in _side_steps(instruction)
-        if isinstance((step.payload or {}).get("targets"), dict)
-        or step.kind in _BASE_PT_SET_KINDS
-    ]
+    #
+    # **And a steal spent on the object an earlier step named**: "untap
+    # target creature and gain control of it until end of turn" (Bringer of
+    # the Red Dawn's upkeep trigger, Overtaker's ability) carries its target
+    # on the untap alone, and read without the steal the ability was "you" —
+    # an AI seat borrowed its own creature. Only a control change
+    # (:data:`_TAKES_THE_EARLIER_TARGET`, CR 613 layer 2: taking a permanent
+    # is never aimed at one's own), where the spell reading
+    # (:func:`_spell_object_target_steps`) takes every step spent on the
+    # earlier target: measured over both roles, the other such steps on an
+    # ability (Sandals of Abdallah's and War Barge's delayed destroy, Maze of
+    # Ith's prevention) would flip a gift onto the opponent's board.
+    steps = []
+    for step in _side_steps(instruction):
+        payload = step.payload or {}
+        if isinstance(payload.get("targets"), dict) or step.kind in _BASE_PT_SET_KINDS:
+            steps.append(step)
+        elif (
+            steps and step.kind in _TAKES_THE_EARLIER_TARGET
+            and payload.get("permanents_from")
+        ):
+            steps.append(step)
     sides = {instruction_target_side(step) for step in steps} - {None}
     if "opponent" in sides:
         return "opponent"

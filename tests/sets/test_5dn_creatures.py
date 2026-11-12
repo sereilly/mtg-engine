@@ -266,6 +266,20 @@ def test_w1g2_red_dawn_borrows_a_tapped_creature_untapped_and_hasty_for_the_turn
     assert game.controller_index_of(borrowed) == 1
 
 
+def test_w1g2_red_dawn_unasked_borrows_the_opponents_creature_not_its_own(set_pool):
+    """A seat nobody asks aims the trigger as the engine's default does
+    (``_default_trigger_target_side``): the steal is the point of the
+    ability, so it is aimed across the table — Bob's Grizzly Bears, not the
+    Bringer itself, which the untap alone read as "you"."""
+    red = set_pool("5DN")["Bringer of the Red Dawn"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game = _w1g2_table(set_pool, mine=[red], theirs=[bears], mana=False)
+
+    (borrowed,) = [p for p in game.all_permanents() if p.card.name == "Grizzly Bears"]
+    assert game.controller_index_of(borrowed) == 0
+    assert "Bringer of the Red Dawn: targets Grizzly Bears" in game.log
+
+
 def test_w1g2_black_dawn_pays_two_life_and_puts_the_card_it_found_on_top(set_pool):
     """"…you may pay 2 life. If you do, search your library for a card, then
     shuffle and put that card on top." Alice finds the Black Lotus from the
