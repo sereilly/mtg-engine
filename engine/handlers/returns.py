@@ -30,6 +30,8 @@ from ..game_types import first_target_id, single_slot, target_slots
 from ..models import Permanent
 from ..oracle_types import (LAST_TARGET_NAME, SPELL_RETURNED_TO_HAND,
                             named_no_target)
+from ..per_color_targets import (ONE_TARGET_PER_COLOR, assign_colors,
+                                 zone_cards_colors)
 from ..search_filters import card_has_type
 from ._amounts import resolve_amount
 from ._common import return_permanent_to_owners_hand
@@ -169,6 +171,32 @@ _GRAVEYARD_NARROWING_KEYS = (
 )
 
 
+def _one_per_color_eligible(game, caster, context, count, eligible):
+    """The chosen slots' predicate for a list that is one card per colour
+    ("For each color, return up to one target card of that color", All Suns'
+    Dawn): *eligible*, and among the cards the announcement named, one that
+    still takes a colour of its own beside the others (CR 608.2b — a target
+    that no longer fits is not acted on, and the rest still are).
+
+    The colours are asked now (``per_color_targets``' residual: the engine
+    records no colour per target), over the named cards still eligible, in
+    the announcement's order — so a card that left the graveyard costs the
+    others nothing.
+    """
+    graveyard = caster.graveyard
+    named: list = []
+    for slot in chosen_graveyard_slots(game, context)[:count]:
+        if (
+            isinstance(slot, int) and 0 <= slot < len(graveyard)
+            and eligible(graveyard[slot])
+            and not any(graveyard[slot] is held for held in named)
+        ):
+            named.append(graveyard[slot])
+    assigned = assign_colors(zone_cards_colors(game, caster, named))
+    kept = [card for card, color in zip(named, assigned) if color is not None]
+    return lambda card: eligible(card) and any(card is held for held in kept)
+
+
 @effect_handler("return_creature_from_graveyard_to_hand")
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # "…creature cards **of the creature type of your choice**" (Aphetto
@@ -257,8 +285,13 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # Zero picks is a legal outcome here, not a reason to guess: the sentence
     # targets (CR 601.2c), so an announcement naming nothing returns nothing.
     if counted_x or (isinstance(printed_count, int) and printed_count > 1):
+        chooses = _eligible
+        if instruction.payload.get(ONE_TARGET_PER_COLOR):
+            chooses = _one_per_color_eligible(
+                game, caster, context, printed_count, _eligible,
+            )
         picked = _resolve_graveyard_slots(
-            game, caster, context, printed_count, _eligible
+            game, caster, context, printed_count, chooses
         )
         for returned_card in picked:
             game.put_card_into_hand(caster, returned_card)

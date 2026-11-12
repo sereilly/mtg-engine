@@ -217,6 +217,126 @@ def test_w1g3_beacon_of_unrest_whose_card_left_is_not_shuffled(set_pool):
     assert _w1g3_where(game, "Beacon of Unrest") == ["0.graveyard"]
     assert len(game.players[0].library) == 10
 
+
+def _w1g3_dawn_table(set_pool, graveyard, **kwargs):
+    pool = {**set_pool("LEA"), **set_pool("INV"), **set_pool("PLS")}
+    return _w1g3_table(
+        set_pool, hand=[set_pool("5DN")["All Suns' Dawn"]],
+        graveyard=[pool[name] for name in graveyard], **kwargs,
+    )
+
+
+def _w1g3_hand(game):
+    return sorted(c.name for c in game.players[0].hand)
+
+
+def test_w1g3_all_suns_dawn_returns_one_card_of_each_color_and_exiles_itself(set_pool):
+    """"For each color, return up to one target card of that color from your
+    graveyard to your hand. Exile All Suns' Dawn." Five targets, one per
+    colour; the colourless Black Lotus and the second red card stay; the
+    spell is exiled rather than put into the graveyard."""
+    game = _w1g3_dawn_table(set_pool, [
+        "Swords to Plowshares", "Counterspell", "Dark Ritual", "Shivan Dragon",
+        "Lightning Bolt", "Giant Growth", "Black Lotus",
+    ])
+    spec = _w1g3_cast_spec(set_pool("5DN")["All Suns' Dawn"])
+    assert spec["max_targets"] == 5 and spec["distinct_targets"]
+    assert spec["one_target_per_color"] is True
+    assert sorted(spec["graveyard_colors"]) == ["B", "G", "R", "U", "W"]
+
+    assert game.cast_from_hand(
+        0, "All Suns' Dawn", target_player_index=0,
+        target_graveyard_indices=[0, 1, 2, 3, 5],
+    ).supported
+    _w1g3_settle(game)
+    assert _w1g3_hand(game) == [
+        "Counterspell", "Dark Ritual", "Giant Growth", "Shivan Dragon",
+        "Swords to Plowshares",
+    ]
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Black Lotus", "Lightning Bolt",
+    ]
+    assert _w1g3_where(game, "All Suns' Dawn") == ["0.exile"]
+
+
+def test_w1g3_all_suns_dawn_refuses_two_cards_of_one_color(set_pool):
+    """Two red cards are not one red card and a card of another colour: the
+    announcement is refused (CR 601.2c), and so are a colourless card and one
+    card named twice (CR 115.3)."""
+    game = _w1g3_dawn_table(set_pool, ["Shivan Dragon", "Lightning Bolt", "Black Lotus"])
+    for slots in ([0, 1], [2], [0, 0]):
+        refused = game.cast_from_hand(
+            0, "All Suns' Dawn", target_player_index=0, target_graveyard_indices=slots,
+        )
+        assert not refused.supported, slots
+    assert _w1g3_hand(game) == ["All Suns' Dawn"]
+
+
+def test_w1g3_all_suns_dawn_takes_two_gold_cards_as_two_colors(set_pool):
+    """Ruling (2004-12-01): "You can target two blue-and-white multicolored
+    cards by choosing one as the blue card and one as the white card." — but
+    two blue-and-white cards beside a white one and a blue one are four cards
+    for two colours."""
+    game = _w1g3_dawn_table(
+        set_pool, ["Absorb", "Galina's Knight", "Swords to Plowshares", "Counterspell"],
+    )
+    assert not game.cast_from_hand(
+        0, "All Suns' Dawn", target_player_index=0,
+        target_graveyard_indices=[0, 1, 2, 3],
+    ).supported
+    assert game.cast_from_hand(
+        0, "All Suns' Dawn", target_player_index=0, target_graveyard_indices=[0, 1],
+    ).supported
+    _w1g3_settle(game)
+    assert _w1g3_hand(game) == ["Absorb", "Galina's Knight"]
+
+
+def test_w1g3_all_suns_dawn_with_no_targets_still_resolves_and_is_exiled(set_pool):
+    """Zero targets is a legal announcement ("up to one" five times, the
+    2004-12-01 ruling: "from zero to five targets"); a spell with no targets
+    is not one whose targets all became illegal (CR 608.2b), so it resolves
+    and exiles itself."""
+    game = _w1g3_dawn_table(set_pool, ["Black Lotus"])
+    assert game.cast_from_hand(0, "All Suns' Dawn", target_player_index=0).supported
+    _w1g3_settle(game)
+    assert _w1g3_where(game, "All Suns' Dawn") == ["0.exile"]
+    assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"]
+
+
+def test_w1g3_all_suns_dawn_whose_targets_all_left_goes_to_the_graveyard(set_pool):
+    """Every named card gone before it resolves, the spell does not resolve
+    (CR 608.2b) and goes to its owner's graveyard — the exile sentence never
+    runs."""
+    game = _w1g3_dawn_table(set_pool, ["Shivan Dragon", "Counterspell"])
+    assert game.queue_from_hand(
+        0, "All Suns' Dawn", target_player_index=0, target_graveyard_indices=[0, 1],
+    ).supported
+    alice = game.players[0]
+    for _ in range(2):
+        game.put_card_into_exile(alice, alice.graveyard.pop(0))
+    _w1g3_settle(game)
+    assert _w1g3_where(game, "All Suns' Dawn") == ["0.graveyard"]
+    assert _w1g3_hand(game) == []
+
+
+def test_w1g3_all_suns_dawn_ai_names_one_card_of_each_color(set_pool):
+    """The AI's several-target choice takes the best card of each colour it
+    can fill — never the two red cards its ranking alone would put first."""
+    from engine.ai_slot_targets import _choose_several_targets
+
+    game = _w1g3_dawn_table(set_pool, [
+        "Shivan Dragon", "Lightning Bolt", "Counterspell", "Black Lotus",
+    ])
+    seat, slots, _ids = _choose_several_targets(
+        game, 0, set_pool("5DN")["All Suns' Dawn"],
+    )
+    named = sorted(game.players[0].graveyard[slot].name for slot in slots)
+    assert seat == 0 and len(named) == 2, named
+    assert "Counterspell" in named
+    assert game.cast_from_hand(
+        0, "All Suns' Dawn", target_player_index=seat, target_graveyard_indices=slots,
+    ).supported
+
 # ==== end w1g3 ======================================================
 
 

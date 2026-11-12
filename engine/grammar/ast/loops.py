@@ -247,3 +247,18 @@ class EachAdditionalCostPaid:
     that spends the count and the payment that made it name the same offer.
     """
     symbols: str
+
+
+@dataclass(frozen=True)
+class EachColor:
+    """"**For each color,** return up to one target card of that color from
+    your graveyard to your hand." (All Suns' Dawn.)
+
+    An iterator over CR 105.1's five colours — a fixed set, neither the board
+    nor a record, so it carries nothing. The body names the iteration with
+    "of that color" (``ObjectFilter.color_chosen_this_way``, the noun parser's
+    reading of the phrase), and the lowering reads the body whole rather than
+    as a statement repeated: each turn of the loop is one more *target* of one
+    announcement (CR 601.2c, 115.3), so the loop is a property of the target
+    list and not of how many times an effect runs.
+    """

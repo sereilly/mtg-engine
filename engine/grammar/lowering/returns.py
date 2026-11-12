@@ -115,6 +115,77 @@ def _graveyard_bounds(filt: ast.ObjectFilter, node) -> dict[str, object]:
     return bounds
 
 
+def _lower_for_each_color(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
+    """"**For each color,** return up to one target card of that color from
+    your graveyard to your hand." (All Suns' Dawn.)
+
+    Not a statement repeated five times: each turn of the loop is one more
+    target of **one** announcement (CR 601.2c; 115.3 — one instance of the
+    word, so no card twice), and every target is chosen before anything
+    resolves. So the loop lowers to the several-card graveyard return Sanguine
+    Indulgence already uses — the handler, the picker and the slot stamps are
+    the same — with up to five targets, narrowed to coloured cards
+    (``graveyard_colors``, every colour) and flagged one per colour
+    (``per_color_targets.ONE_TARGET_PER_COLOR``): the one question about the
+    *set* that the card-by-card predicate cannot ask, put by the cast gate,
+    the AI's choice and the resolution.
+
+    Exactly that shape, every word of it read: "up to one target", the
+    iteration's colour ("of that color", ``color_chosen_this_way``), the
+    caster's own graveyard and hand, and nothing else the return could carry.
+    Anything wider refuses rather than returning five cards of one colour.
+    """
+    from ...per_color_targets import FIVE_COLORS, ONE_TARGET_PER_COLOR
+
+    body = node.effect
+    subject = getattr(body, "subject", None)
+    if not (
+        isinstance(body, ast.ReturnToZone)
+        and isinstance(subject, ast.TargetSpec)
+        and subject.targeted
+        and subject.quantifier == "up_to"
+        and subject.count == 1
+        and not subject.count_from_x
+        and subject.filter.is_card
+        and subject.filter.color_chosen_this_way
+        and body.from_zone is not None and body.from_zone.name == "graveyard"
+        and body.from_zone.owner is not None and body.from_zone.owner.kind == "you"
+        and body.to.name == "hand"
+        and body.to.owner is not None and body.to.owner.kind == "you"
+    ):
+        raise LoweringError(
+            "for each color, only up to one target card of that color returns "
+            "from your graveyard to your hand", node=node,
+        )
+    riders = [
+        field.name for field in dataclasses.fields(body)
+        if field.name not in ("subject", "to", "from_zone")
+        and getattr(body, field.name) != (
+            field.default if field.default is not dataclasses.MISSING
+            else field.default_factory()  # type: ignore[misc]
+        )
+    ]
+    if riders:
+        raise LoweringError(
+            "the per-colour return reads no rider: " + ", ".join(riders), node=node,
+        )
+    returned = dataclasses.replace(subject.filter, color_chosen_this_way=False)
+    if returned.colors or _reads_no_return_restriction(returned) or (
+        subject_names_another(subject)
+    ):
+        raise LoweringError(
+            "the per-colour return is narrowed by the iteration's colour and "
+            "a card type, nothing else", node=node,
+        )
+    payload = _graveyard_to_hand_payload(returned)
+    payload["graveyard_colors"] = list(FIVE_COLORS)
+    payload[ONE_TARGET_PER_COLOR] = True
+    payload["targets"] = {
+        "quantifier": "up_to", "kind": "card", "count": len(FIVE_COLORS),
+    }
+    return (
+        OracleInstruction("return_creature_from_graveyard_to_hand", "", payload),
+    )
 
 
 def subject_names_another(subject) -> bool:

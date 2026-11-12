@@ -18,6 +18,7 @@ out of ``engine/targeting.py`` at the 2,000-line cap.
 from __future__ import annotations
 
 from .announced_creature_type import GRAVEYARD_ANNOUNCED_CREATURE_TYPE
+from .per_color_targets import ONE_TARGET_PER_COLOR
 from .target_descriptions import (ANNOUNCED_SEAT, GRAVEYARD_TARGET_KIND,
                                   SINGLE_GRAVEYARD, _from_targets_payload,
                                   _narrowing_flags)
@@ -434,6 +435,13 @@ def _graveyard_return_spec(payload: dict) -> dict:
         spec["graveyard_mana_value"] = dict(payload["graveyard_mana_value"])
     if payload.get("graveyard_excluded_types"):
         spec["graveyard_excluded_types"] = list(payload["graveyard_excluded_types"])
+    # "For each color, return up to one target card **of that color** …"
+    # (All Suns' Dawn): the list is one card per colour, a question about the
+    # *set* the enumeration cannot ask card by card — carried so the picker
+    # can hold a person to it and the cast gate refuses what it does not
+    # (``per_color_targets``).
+    if payload.get(ONE_TARGET_PER_COLOR):
+        spec[ONE_TARGET_PER_COLOR] = True
     # "Return **another** target artifact card…" (Junk Diver). Carried onto the
     # spec for the subtype's reason directly above: the enumerator reads it
     # through the one predicate the handler also reads

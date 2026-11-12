@@ -37,6 +37,7 @@ from .ai_slot_sides import (
 )
 from .ai_standing import permanent_worth
 from .ai_graveyard_returns import ranked_graveyard_slots
+from .per_color_targets import ONE_TARGET_PER_COLOR, one_per_color_slots
 from .game import Game
 from .target_roles import OPTIONAL_ROLE, PER_OPPONENT_ROLE
 from .models import CardDefinition
@@ -582,6 +583,14 @@ def _choose_several_targets(
     if wanted_kind == "graveyard":
         # The cards worth most back first, not the pile's order (kg5).
         by_seat = ranked_graveyard_slots(game, caster_index, by_seat, _announced_steps(card, program))
+        if (spec or {}).get(ONE_TARGET_PER_COLOR):
+            # "For each color, return up to one target card of that color"
+            # (All Suns' Dawn): the best card of each colour the pile can
+            # fill, in rank order — never two the cast gate refuses together.
+            by_seat = {
+                pile: one_per_color_slots(game, pile, slots)
+                for pile, slots in by_seat.items()
+            }
 
     if sized_by_x or announced is not None:
         # **…and "up to X target creatures, where X is one plus the number of

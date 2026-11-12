@@ -198,6 +198,7 @@ from .zones import (
 )
 from .returns import (
     _reads_no_return_restriction,
+    _lower_for_each_color,
     _lower_reanimate_enchanted_card,
     _lower_return_to_zone,
     _lower_put_source_into_zone,
@@ -592,6 +593,7 @@ __all__ = [
     "_lower_doesnt_untap_while_source_tapped",
     "_lower_tap",
     "_reads_no_return_restriction",
+    "_lower_for_each_color",
     "_lower_cant_phase_out",
     "_lower_phase_out",
     "_lower_land_type_swap",
