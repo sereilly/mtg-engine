@@ -132,4 +132,91 @@ def test_w1g7_mana_geyser_with_no_tapped_opposing_land_adds_nothing(set_pool):
 
     assert _w1g7_pool(game.players[0]) == {}
 
+
+def test_w1g7_vicious_betrayal_counts_the_creatures_its_cost_sacrificed(set_pool):
+    """"As an additional cost to cast this spell, sacrifice any number of
+    creatures. Target creature gets +2/+2 until end of turn for each creature
+    sacrificed this way." Three named creatures go as the cost is paid
+    (CR 601.2h) and the Giant gets +6/+6; the picker asks for a set of any
+    size (``any_number``)."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    betrayal = set_pool("5DN")["Vicious Betrayal"]
+    spec = derive_cast_spec(betrayal, compile_card_oracle(betrayal))
+    assert spec["cost_spec"] == {
+        "kind": "creature", "own_only": True, "sacrifice_cost": True,
+        "any_number": True,
+    }
+    lea = set_pool("LEA")
+    game, (bear, other_bear, giant, elves), _ = _w1g7_table(
+        set_pool, hand=[betrayal],
+        mine=[lea["Grizzly Bears"], lea["Grizzly Bears"], lea["Hill Giant"],
+              lea["Llanowar Elves"]],
+    )
+
+    result = game.cast_from_hand(
+        0, "Vicious Betrayal", target_permanent_ids=[giant.permanent_id],
+        cost_permanent_ids=[bear.permanent_id, other_bear.permanent_id,
+                            elves.permanent_id],
+    )
+    assert result.supported, result
+    _w1g7_settle(game)
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Hill Giant"]
+    assert (giant.effective_power, giant.effective_toughness) == (9, 9)
+    assert "Vicious Betrayal gives Hill Giant +6/+6 until end of turn" in game.log
+
+
+def test_w1g7_vicious_betrayal_with_its_target_sacrificed_does_nothing(set_pool):
+    """CR 601.2c chooses the target before CR 601.2h pays the cost, so the
+    target may be among the creatures sacrificed — then its only target is
+    gone and the spell is removed as it would resolve (CR 608.2b)."""
+    lea = set_pool("LEA")
+    game, (bear, giant), _ = _w1g7_table(
+        set_pool, hand=[set_pool("5DN")["Vicious Betrayal"]],
+        mine=[lea["Grizzly Bears"], lea["Hill Giant"]],
+    )
+
+    game.cast_from_hand(
+        0, "Vicious Betrayal", target_permanent_ids=[giant.permanent_id],
+        cost_permanent_ids=[bear.permanent_id, giant.permanent_id],
+    )
+    _w1g7_settle(game)
+
+    assert game.players[0].battlefield == []
+    assert sorted(card.name for card in game.players[0].graveyard) == [
+        "Grizzly Bears", "Hill Giant", "Vicious Betrayal",
+    ]
+    assert any("every target is illegal" in line for line in game.log)
+
+
+def test_w1g7_vicious_betrayal_sacrifices_only_what_was_named(set_pool):
+    """None is a number: a cast naming nobody sacrifices nothing and pumps
+    +0/+0 (no default pick eats a board for a cost of zero), and a creature
+    the caster does not control cannot pay — the cast is refused with
+    nothing spent (CR 601.2h)."""
+    lea = set_pool("LEA")
+    game, (bear, giant), (theirs,) = _w1g7_table(
+        set_pool, hand=[set_pool("5DN")["Vicious Betrayal"]],
+        mine=[lea["Grizzly Bears"], lea["Hill Giant"]],
+        theirs=[lea["Grizzly Bears"]],
+    )
+
+    refused = game.cast_from_hand(
+        0, "Vicious Betrayal", target_permanent_ids=[giant.permanent_id],
+        cost_permanent_ids=[theirs.permanent_id],
+    )
+    assert not refused.supported
+    assert theirs in game.players[1].battlefield
+
+    game.cast_from_hand(
+        0, "Vicious Betrayal", target_permanent_ids=[giant.permanent_id],
+    )
+    _w1g7_settle(game)
+
+    assert bear in game.players[0].battlefield
+    assert giant.effective_power == 3
+    assert "P0 sacrificed no permanents to cast Vicious Betrayal" in game.log
+
 # ==== end w1g7 ======================================================

@@ -308,6 +308,12 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
         # flag the cast side's X box already reads — rather than a number.
         if sacrifice_count == "x":
             spec["announces_x"] = True
+        # "As an additional cost to cast this spell, sacrifice **any number
+        # of** creatures" (Vicious Betrayal): the payer names a set of any
+        # size, none included, so the client lets them pick freely and send
+        # what they picked on ``cost_permanent_ids``.
+        if getattr(cost, "sacrifice_any_number", False):
+            spec["any_number"] = True
         # `kind` already *is* the head noun, so re-stating it in the carried
         # filter would be the same restriction written twice. A type *union* has
         # no head noun (`kind` falls back to "permanent"), so it rides along.

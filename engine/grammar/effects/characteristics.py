@@ -33,7 +33,8 @@ import dataclasses
 
 from .. import ast
 from ..amounts import expect_pt, parse_amount
-from ..records import _parse_for_each_this_way, parse_for_each_milled_this_way
+from ..records import (_parse_for_each_this_way, parse_for_each_milled_this_way,
+                       parse_for_each_sacrificed_this_way)
 
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
@@ -153,6 +154,16 @@ def _parse_gets(
         _parse_for_each_this_way(stream)
         if not per_each_tapped and per_each_milled is None else None
     )
+    # "…for each creature **sacrificed this way**" (Vicious Betrayal). The
+    # record reading for a sacrifice — the cast's own additional cost or a
+    # step in front — read before the board count for the milled form's
+    # reason (the board reader would claim "creature" and strand the
+    # participle), and by the one reader Reprocess and Renounce use.
+    per_each_sacrificed = (
+        parse_for_each_sacrificed_this_way(stream, parse_object_filter)
+        if not per_each_tapped and per_each_milled is None
+        and per_each_recorded is None else None
+    )
     # "…until end of turn **for each +1/+1 counter on this creature**" (Canopy
     # Crawler). A counter pile rather than a set of objects, read by the
     # shared fragment before the object reader below, for that fragment's
@@ -168,12 +179,14 @@ def _parse_gets(
     per_each_counters = (
         _parse_per_each_counters(stream)
         if duration.kind is not None and not per_each_tapped
-        and per_each_milled is None and per_each_recorded is None else None
+        and per_each_milled is None and per_each_recorded is None
+        and per_each_sacrificed is None else None
     )
     per_each, per_each_beyond_first = (
         _parse_per_each_objects(stream)
         if not per_each_tapped and per_each_milled is None
         and per_each_recorded is None and per_each_counters is None
+        and per_each_sacrificed is None
         else (None, False)
     )
 
@@ -190,6 +203,7 @@ def _parse_gets(
         per_each=per_each, per_each_beyond_first=per_each_beyond_first,
         per_each_milled=per_each_milled, per_each_recorded=per_each_recorded,
         per_each_counters=per_each_counters,
+        per_each_sacrificed=per_each_sacrificed,
     )
 
     # "gets +3/+3 and gains flying until end of turn" / "get +1/+1 and have

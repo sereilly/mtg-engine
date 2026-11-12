@@ -258,6 +258,21 @@ def count_from_payload(
     if spec.get("cost_sacrifices_power"):
         sacrificed = (context.choices or {}).get("sacrificed_set_for_cost") or ()
         return max(0, sum(max(0, perm.effective_power) for perm in sacrificed))
+    # "Target creature gets +2/+2 until end of turn **for each creature
+    # sacrificed this way**." (Vicious Betrayal, whose "sacrifice any number
+    # of creatures" is an additional cost to cast it.) How many of the set
+    # the cost ate answer the printed noun phrase, each as it last existed on
+    # the battlefield (CR 608.2h: a land animated when it was sacrificed was
+    # a creature) — read off the record the payment kept, since the
+    # permanents were gone before the spell reached the stack.
+    if spec.get("cost_sacrificed_count"):
+        from ._filters import permanent_matches_filter
+
+        sacrificed = (context.choices or {}).get("sacrificed_set_for_cost") or ()
+        described = spec.get("filter") or {}
+        return max(0, _scaled(sum(
+            1 for perm in sacrificed if permanent_matches_filter(perm, described)
+        ), spec))
     # "…where X is 3 plus the amount of damage dealt to this creature this turn
     # by other sources named ~" (Blazing Effigy). A *history* rather than
     # anything on a board: `evaluate_count` scans zones, and the creature this

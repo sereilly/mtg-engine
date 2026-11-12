@@ -310,6 +310,14 @@ class CastCompletionMixin:
                     # different object), so the announcement is the only
                     # thing that can say which of that pile's cards it was.
                     "discarded_for_cost": cost_spoils["discarded_for_cost"],
+                    # …and every permanent a "sacrifice **any number of**
+                    # creatures" cost took (Vicious Betrayal's "for each
+                    # creature sacrificed this way"), on the channel the
+                    # activation path records Sword of the Ages' set on.
+                    **(
+                        {"sacrificed_set_for_cost": cost_spoils["sacrificed_set_for_cost"]}
+                        if cost_spoils["sacrificed_set_for_cost"] else {}
+                    ),
                     # …and what an *exile* cost ate, on the channel the
                     # activation path already records it on. Last-known
                     # information for the same reason (CR 608.2h): the

@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from ._core import (
     Amount,
     CountOfMillsThisWay,
+    CountOfSacrificesThisWay,
     CountersOnEventSubject,
     CountersOnSource,
     Duration,
@@ -87,6 +88,13 @@ class Pump:
     # objects on a board. The printed P/T is the size of one repetition, as it
     # is for every other count on this node.
     per_each_counters: "CountersOnSource | CountersOnEventSubject | None" = None
+    # "Target creature gets +2/+2 until end of turn **for each creature
+    # sacrificed this way**." (Vicious Betrayal.) What a sacrifice took —
+    # the spell's own additional cost (CR 601.2h) or a step in front of the
+    # sentence — counted against the printed noun phrase: the same node
+    # Reprocess's draw and Renounce's gain carry. Appended last, so every
+    # Pump built before it is byte-identical.
+    per_each_sacrificed: "CountOfSacrificesThisWay | None" = None
 
 
 @dataclass(frozen=True)
