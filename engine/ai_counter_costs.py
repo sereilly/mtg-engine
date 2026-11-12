@@ -62,9 +62,12 @@ _PT_COUNTER_KINDS = frozenset({"+1/+1", "-1/-1", "+1/+0", "+0/+1", "-1/-0", "-0/
 
 
 def _names_the_kind(value, kind: str) -> bool:
-    """Whether *value* (a payload, or anything in one) names *kind*."""
+    """Whether *value* (a payload, or anything in one — a wrapper's nested
+    instruction, "you may gain life equal to …", included) names *kind*."""
     if isinstance(value, str):
         return value == kind
+    if isinstance(getattr(value, "payload", None), dict):
+        return _names_the_kind(value.payload, kind)
     if isinstance(value, dict):
         return any(_names_the_kind(each, kind) for each in value.values())
     if isinstance(value, (list, tuple)):
@@ -75,9 +78,10 @@ def _names_the_kind(value, kind: str) -> bool:
 def reads_its_counters(permanent, kind: str) -> bool:
     """Whether *permanent*'s own abilities spend or count its *kind*
     counters: a cost removing that kind from itself ("Remove a charge counter
-    from this artifact: Add one mana of any color", Pentad Prism), or a step
-    whose payload names it (Engineered Explosives' "the number of charge
-    counters on this artifact"). Read off its compiled program."""
+    from this artifact: Add one mana of any color", Pentad Prism), or an
+    activated or triggered ability whose payload names it (Engineered
+    Explosives' "the number of charge counters on this artifact", Clearwater
+    Goblet's upkeep life). Read off its compiled program."""
     program = compile_card_oracle(permanent.effective_card)
     for ability in program.activated_abilities:
         cost = ability.cost
@@ -87,8 +91,8 @@ def reads_its_counters(permanent, kind: str) -> bool:
             return True
         if ability.instruction is not None and _names_the_kind(ability.instruction.payload, kind):
             return True
-    for each in (*program.instructions, *program.triggered_abilities):
-        instruction = getattr(each, "instruction", each)
+    for ability in program.triggered_abilities:
+        instruction = getattr(ability, "instruction", None)
         if instruction is not None and _names_the_kind(
             getattr(instruction, "payload", None), kind,
         ):

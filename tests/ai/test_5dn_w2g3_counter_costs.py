@@ -113,8 +113,13 @@ def test_what_a_counter_is_worth_beyond_the_standing(set_pool):
     """A +1/+1 counter is the standing's (the body it sizes); a charge counter
     its own permanent spends is a mana's worth; one nothing on its permanent
     reads is nothing; an age counter's loss is a relief."""
-    game, placed = _table(set_pool, ["Pentad Prism", "Grizzly Bears", "Ion Storm"])
+    game, placed = _table(
+        set_pool, ["Pentad Prism", "Grizzly Bears", "Ion Storm", "Clearwater Goblet"],
+    )
     assert spent_counter_worth(placed["Grizzly Bears"], "+1/+1") == 0.0
     assert spent_counter_worth(placed["Pentad Prism"], "charge") == SPENT_COUNTER_WORTH
+    # "…you may gain life equal to the number of charge counters on this
+    # artifact": counted inside a "may", at upkeep.
+    assert spent_counter_worth(placed["Clearwater Goblet"], "charge") == SPENT_COUNTER_WORTH
     assert spent_counter_worth(placed["Ion Storm"], "charge") == 0.0
     assert spent_counter_worth(placed["Grizzly Bears"], "age") == -SPENT_COUNTER_WORTH
