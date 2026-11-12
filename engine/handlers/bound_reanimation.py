@@ -204,6 +204,25 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
             game.log.append(f"{card.name}: no controller was recorded to return it")
             return True, "resolved"
         seat = frozen
+    chosen_control = instruction.payload.get("control") == "chosen"
+    if chosen_control:
+        # "Choose target opponent. **That player** puts this card from its
+        # owner's graveyard onto the battlefield under their control at the
+        # beginning of the next end step." (Endless Whispers.) CR 110.2a's
+        # player who puts it, which is the seat the creating ability chose —
+        # frozen into the delayed ability with its scratchpad (CR 603.7c) and
+        # read back under the one key a chosen seat is written to. Nobody
+        # recorded, or a seat that has left the game (CR 800.4a: nothing comes
+        # under the control of a player who left), and nobody puts it anywhere:
+        # the ability's own controller is the one seat the card says it is not.
+        chosen = context.results.get("chosen_player")
+        if (
+            not isinstance(chosen, int) or not 0 <= chosen < len(game.players)
+            or game.players[chosen].lost
+        ):
+            game.log.append(f"{card.name}: no player was chosen to put it onto the battlefield")
+            return True, "resolved"
+        seat = chosen
     if owners_control and source is not None:
         from ..control import base_controller
 
@@ -251,6 +270,9 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         )
         return True
 
+    # The seat whose graveyard held the card, when that is where it came from
+    # (below); None for every other zone.
+    pile_seat = None
     if instruction.payload.get("from") == "exile":
         # "Exile this creature. Return it to the battlefield under its owner's
         # control at the beginning of the next end step." (Anurid
@@ -274,7 +296,14 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
             return True, "resolved"
         if owners_control:
             seat = owner_seat
-    elif source is not None and game.is_on_battlefield(source):
+    elif (
+        instruction.payload.get("from") != "graveyard"
+        and source is not None and game.is_on_battlefield(source)
+    ):
+        # The unzoned spelling ("return it to the battlefield") reaches the
+        # card wherever the sweep left it; "…**from its owner's graveyard**"
+        # names the one zone (``from: graveyard``), so a source still on the
+        # battlefield is not what the sentence moves.
         if stays_where_it_is(seat):
             return True, "resolved"
         game.remove_from_battlefield(source)
@@ -303,6 +332,9 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
         player, index = found
         if owners_control:
             seat = game.seat_index(player)
+        # CR 404.1 put the card in its owner's graveyard, so the pile that held
+        # it names the owner — kept for the permanent below.
+        pile_seat = game.seat_index(player)
         if stays_where_it_is(seat, player, "graveyard"):
             return True, "resolved"
         player.graveyard.pop(index)
@@ -320,9 +352,21 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     # it was granted is compiled from the *permanent's* text, with no memory of
     # the resolution that granted it — the same channel Storm World's chosen
     # player already uses.
+    #
+    # Not when the chosen seat is the one it enters *under* (Endless
+    # Whispers): there it names the controller, which the battlefield already
+    # says, and a stamp would hand the returned card a "chosen player" its own
+    # text never asked for.
     chosen_seat = context.results.get("chosen_player")
-    if isinstance(chosen_seat, int):
+    if isinstance(chosen_seat, int) and not chosen_control:
         permanent.metadata["chosen_player_index"] = chosen_seat
+    # CR 400.3: "under <someone>'s control" moves control and never ownership,
+    # so the card goes back to its **owner's** graveyard when it next leaves.
+    # Recorded on the permanent for the reason ``reanimate_bound_card`` records
+    # it: the base controller is the owner everywhere else in this pool, and
+    # here the two differ by construction.
+    if isinstance(pile_seat, int) and pile_seat != seat:
+        permanent.metadata["owner_player_index"] = pile_seat
 
     # Once it is there — the entry's ``then``, run at the answer when an "as
     # it enters" choice keeps it on its way (CR 614.12a).

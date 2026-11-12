@@ -643,7 +643,20 @@ def parse_player_subject_verb(
             stream.reset(put_mark)
             return None
         if isinstance(moved, ast.PutOntoBattlefield):
-            return dataclasses.replace(moved, actor=source_spec)
+            # "**That player** puts this card from its owner's graveyard onto
+            # the battlefield **under their control** …" (Endless Whispers.)
+            # The possessive's antecedent is the subject this branch holds, so
+            # it is read here and nowhere in the imperative chain, where
+            # "their" would name nobody. Only beside no other control rider:
+            # one sentence naming two seats is not one this reads.
+            restated = (
+                not moved.under_your_control
+                and not moved.under_owners_control
+                and stream.accept_phrase("under", "their", "control")
+            )
+            return dataclasses.replace(
+                moved, actor=source_spec, under_actors_control=bool(restated),
+            )
         # "…target opponent gains control of this artifact **and puts a
         # charge counter on it**." (Jinxed Choker.) A counter has no
         # controller and no owner (CR 122.1), so who places it changes nothing

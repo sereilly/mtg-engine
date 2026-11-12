@@ -397,11 +397,12 @@ def _derived_static_claims(
     # has "When this creature dies, choose target opponent. That player puts
     # this card … onto the battlefield … at the beginning of the next end
     # step."" (Endless Whispers.) The grant is recorded and the quoted
-    # sentence lands on every creature's effective card, where it compiles to
-    # nothing — so the source card claimed support for a line that did
-    # nothing at all, invisible to every census. Asked through the one reader
-    # of "does this granted text compile" (``granted_ability_supported``, the
-    # Aura and lord grants' gate); the other eight grants in the pool compile.
+    # sentence lands on every creature's effective card, where it compiled to
+    # nothing until Fifth Dawn's wave 2 — so the source card claimed support
+    # for a line that did nothing at all, invisible to every census. Asked
+    # through the one reader of "does this granted text compile"
+    # (``granted_ability_supported``, the Aura and lord grants' gate), so a
+    # grant the compiler cannot read refuses its card again.
     board_static = global_static_for(oracle_text)
     if board_static is not None and (
         not board_static.grants_ability

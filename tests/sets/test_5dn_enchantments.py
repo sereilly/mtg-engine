@@ -362,3 +362,234 @@ def test_w1g7_ion_storm_takes_only_the_kinds_it_lists(set_pool):
 
 # ==== end w1g7 ======================================================
 
+
+# ==== W2G2 ==========================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+#
+# Endless Whispers: "Each creature has "When this creature dies, choose target
+# opponent. That player puts this card from its owner's graveyard onto the
+# battlefield under their control at the beginning of the next end step.""
+# Its one ruling (2004-12-01): "The creatures have the triggered ability, so
+# each creature's controller chooses one of their opponents to target."
+
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.control import change_control as _w2g2_change_control
+from engine.models import Permanent as _W2G2Permanent
+from tests.helpers import settle as _w2g2_settle
+
+
+def _w2g2_table(set_pool, *, mine=(), theirs=(), interactive=()):
+    lea = set_pool("LEA")
+    game = _W2G2Game(players=[
+        _W2G2PlayerState(name=f"P{seat}", library=[lea["Island"]] * 20)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    _w2g2_settle(game)
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for card in names:
+            permanent = _W2G2Permanent(card=card)
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+            placed[seat].append(permanent)
+    _w2g2_settle(game)
+    return game, placed[0], placed[1]
+
+
+def _w2g2_bolt(set_pool, game, seat, permanent, *, answers=None):
+    game.players[seat].hand.append(set_pool("LEA")["Lightning Bolt"])
+    cast = game.queue_from_hand(
+        seat, "Lightning Bolt", target_permanent_ids=[permanent.permanent_id],
+    )
+    assert cast.supported, cast.details
+    _w2g2_settle(game, answers=answers)
+
+
+def _w2g2_names(game, seat):
+    return sorted(p.card.name for p in game.controlled_by(seat))
+
+
+def _w2g2_graveyard(game, seat):
+    return [card.name for card in game.players[seat].graveyard]
+
+
+def test_w2g2_endless_whispers_hands_my_dead_creature_to_my_opponent(set_pool):
+    """My Bears die: I choose my opponent, and at the beginning of the next end
+    step they put the card onto the battlefield under their control — a new
+    object that I still own (CR 400.3), so when it dies again it goes to *my*
+    graveyard, and its new controller's copy of the granted trigger picks me."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, (_, mine), _ = _w2g2_table(set_pool, mine=[whispers, bears])
+
+    _w2g2_bolt(set_pool, game, 0, mine)
+    # Nothing happens until the end step: the card waits in my graveyard.
+    assert _w2g2_graveyard(game, 0) == ["Lightning Bolt", "Grizzly Bears"]
+    assert _w2g2_names(game, 1) == []
+    assert [(d.event, d.bound_player_index) for d in game.delayed_triggers] == [
+        ("next_end_step", 1)
+    ]
+
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == ["Grizzly Bears"]
+    assert _w2g2_graveyard(game, 0) == ["Lightning Bolt"]
+    back = next(game.controlled_by(1))
+    assert back.permanent_id != mine.permanent_id  # CR 400.7
+    assert game.owner_index_of(back) == 0
+    assert "Grizzly Bears returned to the battlefield under P1's control" in game.log
+
+    _w2g2_bolt(set_pool, game, 0, back)
+    assert _w2g2_graveyard(game, 0)[-1] == "Grizzly Bears"
+    assert _w2g2_graveyard(game, 1) == []
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 0) == ["Endless Whispers", "Grizzly Bears"]
+
+
+def test_w2g2_endless_whispers_gives_me_my_opponents_dead_creature(set_pool):
+    """The trigger is the dying creature's: *its* controller targets one of
+    their opponents, so the opponent's Hill Giant comes to me — and the grant
+    works the same from the opponent's own Endless Whispers."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    giant = set_pool("LEA")["Hill Giant"]
+    for mine, theirs in (([whispers], [giant]), ([], [whispers, giant])):
+        game, _, placed = _w2g2_table(set_pool, mine=mine, theirs=theirs)
+        _w2g2_bolt(set_pool, game, 0, placed[-1])
+        assert _w2g2_graveyard(game, 1) == ["Hill Giant"]
+        game.resolve_end_step(0)
+        _w2g2_settle(game)
+        assert "Hill Giant" in _w2g2_names(game, 0)
+        assert _w2g2_graveyard(game, 1) == []
+
+
+def test_w2g2_endless_whispers_a_stolen_creature_goes_home(set_pool):
+    """A creature I had stolen dies under my control: it goes to its owner's
+    graveyard (CR 404.1), my trigger targets that owner, and they put it back
+    under their own control."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    giant = set_pool("LEA")["Hill Giant"]
+    game, _, (stolen,) = _w2g2_table(set_pool, mine=[whispers], theirs=[giant])
+    _w2g2_change_control(stolen, 0, source="test")
+    game._sync_control()
+
+    _w2g2_bolt(set_pool, game, 0, stolen)
+    assert _w2g2_graveyard(game, 1) == ["Hill Giant"]
+    assert [(d.controller_index, d.bound_player_index) for d in game.delayed_triggers] == [
+        (0, 1)
+    ]
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == ["Hill Giant"]
+
+
+def test_w2g2_endless_whispers_returns_nothing_that_is_not_there(set_pool):
+    """The delayed ability looks for the card in a graveyard by identity
+    (CR 400.7): a token ceased to exist there (CR 111.7), and a card exiled
+    from the graveyard before the end step is a new object — nothing comes
+    back either way, and nothing else is taken."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+
+    game, (_, token), _ = _w2g2_table(set_pool, mine=[whispers, bears])
+    token.metadata["is_token"] = True
+    _w2g2_bolt(set_pool, game, 0, token)
+    assert len(game.delayed_triggers) == 1
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == []
+    assert "Grizzly Bears was no longer in a graveyard" in game.log
+
+    game, (_, mine), _ = _w2g2_table(set_pool, mine=[whispers, bears])
+    _w2g2_bolt(set_pool, game, 0, mine)
+    dead = game.players[0].graveyard.pop()
+    game.put_card_into_exile(game.players[0], dead)
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == []
+    assert [card.name for card in game.players[0].exile] == ["Grizzly Bears"]
+
+
+def test_w2g2_endless_whispers_a_death_in_the_end_step_waits_a_turn(set_pool):
+    """"The next end step" from inside an end step is the following turn's:
+    the ability triggers only when an end step *begins* (CR 603.7a)."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, (_, mine), _ = _w2g2_table(set_pool, mine=[whispers, bears])
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+
+    _w2g2_bolt(set_pool, game, 0, mine)
+    assert _w2g2_names(game, 1) == []
+    game.start_turn(1)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == []
+    game.resolve_end_step(1)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == ["Grizzly Bears"]
+
+
+def test_w2g2_endless_whispers_needs_a_legal_opponent(set_pool):
+    """"Choose target opponent" is a target (CR 115.1): with my only opponent
+    shrouded (True Believer) the trigger is removed as it would be put on the
+    stack (CR 603.3d) and nothing is ever armed — the card stays in my
+    graveyard."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    believer = set_pool("ONS")["True Believer"]
+    game, (_, mine), _ = _w2g2_table(set_pool, mine=[whispers, bears], theirs=[believer])
+
+    _w2g2_bolt(set_pool, game, 0, mine)
+    assert game.delayed_triggers == []
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_graveyard(game, 0) == ["Lightning Bolt", "Grizzly Bears"]
+    assert _w2g2_names(game, 1) == ["True Believer"]
+
+
+def test_w2g2_endless_whispers_looks_back_when_it_dies_alongside(set_pool):
+    """Akroma's Vengeance destroys Endless Whispers and the Bears at once: a
+    dies-trigger looks back in time (CR 603.10a), so the Bears had the granted
+    ability as they died and still go to the opponent. Once the enchantment is
+    gone *first*, a later death grants nothing."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    vengeance = set_pool("ONS")["Akroma's Vengeance"]
+    game, _, _ = _w2g2_table(set_pool, mine=[whispers, bears])
+    game.players[0].hand.append(vengeance)
+    assert game.queue_from_hand(0, "Akroma's Vengeance").supported
+    _w2g2_settle(game)
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == ["Grizzly Bears"]
+
+    game, (enchantment, mine), _ = _w2g2_table(set_pool, mine=[whispers, bears])
+    game.remove_from_battlefield(enchantment)
+    _w2g2_settle(game)
+    _w2g2_bolt(set_pool, game, 0, mine)
+    assert game.delayed_triggers == []
+
+
+def test_w2g2_endless_whispers_a_person_answers_the_target(set_pool):
+    """An interactive seat is asked the trigger's target (``trigger_target``)
+    over exactly the opponent's seat, and its answer is the seat that gets the
+    card."""
+    whispers = set_pool("5DN")["Endless Whispers"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, (_, mine), _ = _w2g2_table(set_pool, mine=[whispers, bears], interactive={0})
+    asked = []
+
+    def answer(game, choice):
+        asked.append([(t["kind"], t.get("seat")) for t in choice.data["targets"]])
+        assert game.confirm_trigger_target(choice.player_index, seat=1)
+
+    _w2g2_bolt(set_pool, game, 0, mine, answers={"trigger_target": answer})
+    assert asked == [[("player", 1)]]
+    game.resolve_end_step(0)
+    _w2g2_settle(game)
+    assert _w2g2_names(game, 1) == ["Grizzly Bears"]
+
+# ==== end W2G2 ======================================================
