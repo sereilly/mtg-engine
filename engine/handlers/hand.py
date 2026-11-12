@@ -13,7 +13,7 @@ is offered and what it may answer cannot disagree.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round. Discarding is
 ``discards.py``'s, and a whole hand revealed — or one card of it at random — is
-``reveal.py``'s.
+``hand_reveals.py``'s.
 """
 
 from __future__ import annotations

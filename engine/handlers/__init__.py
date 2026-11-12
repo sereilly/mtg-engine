@@ -34,6 +34,7 @@ from . import (  # noqa: E402,F401
     face_down,
     fighting,
     hand,
+    hand_reveals,
     keyword_removal,
     keywords,
     library,

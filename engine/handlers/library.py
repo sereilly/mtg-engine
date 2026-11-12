@@ -10,8 +10,8 @@ card off a graveyard, and Scroll Rack's "put that many cards from the top of
 your library into your hand", which is not a draw.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round. A **reveal** (the
-public half, CR 701.20a) is ``reveal.py``'s; a scry and a surveil are
-``cards.py``'s, beside the draw and the mill.
+public half, CR 701.20a) is ``reveal.py``'s, or ``hand_reveals.py``'s for a
+hand; a scry and a surveil are ``cards.py``'s, beside the draw and the mill.
 """
 
 from __future__ import annotations
