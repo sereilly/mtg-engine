@@ -264,12 +264,9 @@ def state_of_the_set(code, low, name, groups, census, scratch) -> str:
     ]
     for group, spec in groups.items():
         lines.append(f"- **{group.upper()} — {spec['title']}** ({len(spec['cards'])}).")
+    # "A card that compiles is not a card that works" follows in the template itself,
+    # right after this section: written here too, the brief said it twice.
     lines += [
-        "",
-        f"**A card that compiles is not a card that works.** Your `CARDS.md` ends with a second "
-        f"list: {name} cards that are *supported on arrival*, in your family. Nobody has run one. "
-        f"After your own cards, give each a headless game: fix what is local, measure and report "
-        f"what is not.",
         "",
         "TODO: the 'Reuse before you invent' list below is the engine map Darksteel's brief "
         "carried; cut or add the names this set's families reach.",
