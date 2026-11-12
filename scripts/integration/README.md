@@ -28,6 +28,7 @@ export ROUND=ons
 | `chain_commit.sh <group> <msg-file>` | each merge | commit the link, regenerate trackers |
 | `gate.sh <tree> <tag> [workers] [quick\|full]` + `gate_report.sh <tag>` | **wave close, promotion** | the full gate: oracle_diff, scans, whole suite (the quick pass; `full` on the promotion commit), check_all, support |
 | `census_rehearsal.sh <tree> <tag> CODE [workers] [catalog\|sampled\|both]` | **wave close, before the promotion's full pass** | the promotion in memory (`MTG_PROMOTE=CODE`): the quick pass whole and every sampled census whole; the shipped-pool guards' reds listed apart |
+| `fails_before.sh <base-ref> <test-id> <file>...` | a fix's backwards check | the test run twice in a throwaway worktree of HEAD (carrying the tree's uncommitted changes): with the files at `<base-ref>`, then as they are; both exit codes, exit 0 only for red-then-green (1 not proven, 3 inconclusive: the base run ended other than pass/fail); wrap it in `run_and_wait.sh` |
 | `run_and_wait.sh <log> <cmd...>` / `--wait <log>` | any run over ~3 min | the command detached, its exit code the log's last line and `<log>.exit`; a bounded wait (`RUN_WAIT`, 170 s) that exits with the command's code, or 75 "still running" with the resume command |
 | `regen.sh <label>` | after any merge | regenerate every tracker (never `--accept`) and commit |
 | `dups.py <files>` | each merge | a name defined twice in one scope (merge shadowing) |
@@ -43,9 +44,14 @@ export ROUND=ons
 | `serve_board.py --port N --cmd <dir>` | client work | the real web app plus a command folder: a dropped `.py` runs under the session's lock (`# sid=<id>` first line) and the board redraws |
 
 Two differentials sit beside them in `scripts/`: `oracle_diff.py`
-(every compiled program) and `sim_fingerprint.py` (twelve seeded games,
+(every compiled program; a card moved only by a new defaulted field's spelling
+is counted on that field's line, not as a move, and `compare --against B`
+reads two stored snapshots) and `sim_fingerprint.py` (twelve seeded games,
 byte-compared; a compare keeps each moved run's whole diff and new log under
-`.sim_fingerprint/compare/`). A change meant to move nothing reads 0 on both.
+`.sim_fingerprint/compare/`, and `snapshot --rev <commit>` plays the base in a
+throwaway worktree when the edit came first). A change meant to move nothing
+reads 0 on both. `scripts/probe_line.py` prints a lowering refusal's innermost
+raise site beside its message, and `--ast` each line's parsed tree.
 So does the test picker, `tests_for_diff.py`: the tests a diff owes, with
 their recorded times — what an agent runs instead of grepping, and what
 `meeting.sh` takes its registry censuses from.
