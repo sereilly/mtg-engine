@@ -1045,4 +1045,28 @@ def test_int_fist_of_suns_wubrg_counts_five_colours_for_sunburst(set_pool):
     assert (myr.effective_power, myr.effective_toughness) == (5, 5)
     assert not any(game.players[0].mana_pool.values())
 
+def test_int_solarion_doubles_the_counters_sunburst_gave_it(set_pool):
+    """Solarion's two halves came from two groups: W1G1's sunburst (CR 702.44a)
+    and W1G7's "Double the number of +1/+1 counters on this creature" (CR
+    701.10e: as many more as it already has). Cast with three colours it
+    enters with three counters; the tap doubles them to six."""
+    fdn = set_pool("5DN")
+    game = _int_table(set_pool, hand=[fdn["Solarion"]])
+    game.players[0].mana_pool.update({"W": 1, "U": 1, "B": 1, "C": 4})
+
+    result = game.cast_from_hand(0, "Solarion")
+    assert result.supported, (result.details, game.log[-5:])
+    _int_settle(game)
+    solarion = next(p for p in game.controlled_by(0) if p.card.name == "Solarion")
+    assert _int_counters_on(solarion, "+1/+1") == 3
+    solarion.metadata["summoning_sickness_turn"] = -99
+
+    activated = game.activate_permanent_ability(0, "Solarion")
+    assert activated.supported, (activated, game.log[-5:])
+    _int_settle(game)
+
+    assert _int_counters_on(solarion, "+1/+1") == 6
+    assert (solarion.effective_power, solarion.effective_toughness) == (6, 6)
+    assert solarion.tapped
+
 # ==== end integrator ================================================

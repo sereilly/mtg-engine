@@ -530,3 +530,42 @@ def test_w1g7_plunge_into_darkness_entwined_sacrifices_then_pays(set_pool):
     assert len(player.hand) == 1 and len(player.exile) == 1
 
 # ==== end w1g7 ======================================================
+
+
+# ==== integrator ====================================================
+# Whole-card tests the wave-1 split left to the integrator: Beacon of
+# Immortality's doubling is W1G7's (CR 701.10d), its shuffle W1G3's.
+from engine import Game as _IntGame, PlayerState as _IntPlayerState
+from tests.helpers import settle as _int_settle
+
+
+def test_int_beacon_of_immortality_doubles_a_life_and_shuffles_itself_away(set_pool):
+    """"Double target player's life total. Shuffle Beacon of Immortality into
+    its owner's library." The target gains the difference (CR 701.10d; the
+    2007-07-15 ruling: it is life gain), and the Beacon ends in its owner's
+    library, never the graveyard (CR 608.2n's last step is replaced)."""
+    fdn, lea = set_pool("5DN"), set_pool("LEA")
+    game = _IntGame(players=[
+        _IntPlayerState(name="Alice", hand=[fdn["Beacon of Immortality"]],
+                        library=[lea["Island"]] * 12),
+        _IntPlayerState(name="Bob", library=[lea["Island"]] * 12),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.start_turn(0)
+    _int_settle(game)
+    game.players[0].life = 7
+    game.players[0].mana_pool.update({"W": 1, "C": 5})
+    library_before = len(game.players[0].library)
+
+    result = game.cast_from_hand(0, "Beacon of Immortality", target_player_index=0)
+    assert result.supported, (result.details, game.log[-5:])
+    _int_settle(game)
+
+    assert game.players[0].life == 14
+    assert game.players[1].life == 20
+    assert [c.name for c in game.players[0].graveyard] == []
+    assert len(game.players[0].library) == library_before + 1
+    assert "Beacon of Immortality" in [c.name for c in game.players[0].library]
+
+# ==== end integrator ================================================
