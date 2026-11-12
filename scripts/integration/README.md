@@ -40,7 +40,7 @@ export ROUND=ons
 | `promote.py CODE [--wrong]` | Phase 4 | the manifest move; `--wrong` is the wrong-end rehearsal |
 | `checked_sim.py <out.json> <sim args>` | after touching a fast path | the simulator under `fast_paths.CHECKING` |
 | `board.py` (import it) | probes | `card(name)`, `place(game, seat, name)`, `table(hand=…, mine=…, theirs=…)`, `tail(game)`: a headless two-seat game over both manifest roles |
-| `serve_board.py --port N --cmd <dir>` | client work | the real web app plus a command folder: a dropped `.py` runs under the session's lock (`# sid=<id>` first line) and the board redraws |
+| `serve_board.py --port N --cmd <dir> [--reload]` | client work | the real web app plus a command folder: a dropped `.py` runs under the session's lock (`# sid=<id>` first line) and the board redraws; `--reload` restarts the app on an `engine/`/`web/` change with every session kept (`board_pickle.py`), the page left open. Click a card by id with the page's `__boardPoint` (the `run-magic` skill) |
 
 Two differentials sit beside them in `scripts/`: `oracle_diff.py`
 (every compiled program) and `sim_fingerprint.py` (twelve seeded games,

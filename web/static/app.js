@@ -27749,6 +27749,80 @@ function initDropZones() {
   // This function is kept as a no-op; the canvas callbacks wire up the behavior.
 }
 
+// ── Debug accessor for a browser harness (read-only) ─────────────────────────
+// The board is a canvas, so no selector reaches a permanent; a harness used
+// to read coordinates off a screenshot (and an attached card is hit only on
+// its visible strip). window.__boardPositions() returns, as the page stands
+// now, every drawn object's page rectangle and a point a real click lands on:
+// the battlefield's permanents by permanent id, the stack, the zone piles and
+// the emblems (BattlefieldCanvas.debugPositions), and the viewer's hand (DOM
+// cards, overlapping in their fan, so located the same way). window.
+// __boardPoint(ref) is that point as "x y" for a shell — "" when there is
+// none. The run-magic skill has the click-by-id recipe. Nothing here changes
+// the page.
+function debugHandPositions() {
+  const hand = getCurrentPlayerState()?.hand;
+  return [...document.querySelectorAll("#selfHand .hand-fan-slot")].map((slot) => {
+    const index = Number(slot.dataset.handIndex);
+    const card = Array.isArray(hand) ? hand[index] : null;
+    const box = slot.getBoundingClientRect();
+    const kept = [];
+    for (let r = 0; r < 11; r++) {
+      for (let c = 0; c < 7; c++) {
+        const x = box.left + (box.width * (c + 0.5)) / 7;
+        const y = box.top + (box.height * (r + 0.5)) / 11;
+        const top = document.elementFromPoint(x, y);
+        if (top && slot.contains(top)) kept.push({ x: Math.round(x), y: Math.round(y) });
+      }
+    }
+    let click = null;
+    if (kept.length) {
+      const mx = kept.reduce((sum, p) => sum + p.x, 0) / kept.length;
+      const my = kept.reduce((sum, p) => sum + p.y, 0) / kept.length;
+      click = kept.reduce((best, p) =>
+        ((p.x - mx) ** 2 + (p.y - my) ** 2 < (best.x - mx) ** 2 + (best.y - my) ** 2 ? p : best));
+    }
+    return {
+      index,
+      name: card && typeof card === "object" ? card.name : null,
+      selector: `#selfHand .hand-fan-slot[data-hand-index="${index}"]`,
+      rect: { x: Math.round(box.left), y: Math.round(box.top), w: Math.round(box.width), h: Math.round(box.height) },
+      click,
+      share: Math.round((kept.length / 77) * 100) / 100,
+    };
+  });
+}
+
+window.__boardPositions = function boardPositions() {
+  const board = battlefieldCanvas
+    ? battlefieldCanvas.debugPositions()
+    : { settled: true, viewer_seat: seat, mana_fan_open: false, permanents: [], stack: [], zones: [], emblems: [] };
+  return { session: sessionId, seat, ...board, hand: debugHandPositions() };
+};
+
+// ref: a permanent id (number, or its digits); "hand:N", "stack:N",
+// "emblem:N"; "<zone>:<seat>" (library, graveyard, exile, command, ante,
+// sideboard); or a name — the first permanent, else hand card, so named.
+window.__boardPoint = function boardPoint(ref) {
+  const all = window.__boardPositions();
+  const text = String(ref).trim();
+  let found = null;
+  const tagged = /^([a-z]+):(\d+)$/.exec(text);
+  if (/^\d+$/.test(text)) {
+    found = all.permanents.find((p) => p.id === Number(text));
+  } else if (tagged) {
+    const [, kind, number] = tagged;
+    const n = Number(number);
+    if (kind === "hand") found = all.hand.find((h) => h.index === n);
+    else if (kind === "stack") found = all.stack.find((s) => s.index === n);
+    else if (kind === "emblem") found = all.emblems.find((e) => e.index === n);
+    else found = all.zones.find((z) => z.kind === kind && z.seat === n);
+  } else {
+    found = all.permanents.find((p) => p.name === text) || all.hand.find((h) => h.name === text);
+  }
+  return found?.click ? `${found.click.x} ${found.click.y}` : "";
+};
+
 function initBattlefieldCanvas() {
   if (battlefieldCanvas) {
     battlefieldCanvas.destroy();
