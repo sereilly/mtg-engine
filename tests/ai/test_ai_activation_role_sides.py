@@ -85,10 +85,6 @@ _PRINTED_SIDES = {
     # "…Prevent all damage that would be dealt to any target …": a shield,
     # so a permanent it names is one of the activator's own.
     "Shieldmage Advocate": (None, "you"),
-    # Fifth Dawn (5DN W2G3, the base's red): "Attach target Equipment you
-    # control to target creature you control" — both printed as the
-    # activator's own.
-    "Auriok Windwalker": ("you", "you"),
 }
 
 
