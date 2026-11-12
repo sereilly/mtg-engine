@@ -250,6 +250,12 @@ CHOICE_KEYS = (
     # ``handlers/ownership.exchange_ante_with_top_library``. Not the slot
     # channel: that is a battlefield's, re-read off the ids at resolution.
     "ante_index",
+    # The colour each graveyard target of a one-card-per-colour list was
+    # chosen as ("For each color, return up to one target card of that
+    # color", All Suns' Dawn), fixed at the announcement (its 2004-12-01
+    # ruling) and asked again at resolution — ``per_color_targets.
+    # PER_COLOR_ASSIGNMENT`` names the key and holds its writer and reader.
+    "per_color_assignment",
 )
 
 

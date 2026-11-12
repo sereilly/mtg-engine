@@ -519,7 +519,9 @@ class CastTargetGatesMixin:
             for index in indices:
                 if not any((seat, index) in legal_slots for seat in seats):
                     return f"no valid target for {card.name}"
-            return self._one_per_color_refusal(card, spec, indices, seats)
+            return self._one_per_color_refusal(
+                card, spec, indices, seats, own_seat=caster_index,
+            )
         # A named **player**, and each entry of a divided list — the two
         # channels that carry a target and were compared with nothing.
         seat_refusal = self._cast_player_target_refusal(

@@ -18,19 +18,34 @@ cannot ask of a card alone — whether a *set* of cards is one per colour — an
 the assignment that answers it, asked by the cast gate, the AI's choice and
 the resolution.
 
-**The residual, stated.** The rulings fix each target's colour at the moment
-it is chosen. The engine records no colour per target: the resolution re-asks
-for a matching over the cards' colours *then* (``assign_colors``), so a card
-whose colour changed while the spell was on the stack is judged by the colour
-it has rather than the one it was targeted as. No card in the pool changes the
-colour of a card in a graveyard at instant speed, which is why this is a
-residual and not a defect anyone can reach today.
+**Each target's colour is fixed as it is chosen** (the ruling: "if the card
+you targeted as a blue card is red when All Suns' Dawn resolves, the card is
+an illegal target, even if the spell doesn't target another red card").
+:func:`record_per_color_assignment` writes the colour each stamped card was
+given onto the stack object (:data:`PER_COLOR_ASSIGNMENT`) as the targets are
+stamped, and the resolution keeps a card only while it still has that colour.
+The pool reaches this: Celestial Dawn makes its owner's graveyard white, so a
+Disenchant or a Sleight of Mind on it in response recolours a card the spell
+targeted (until Fifth Dawn's wave 2 the resolution re-matched over the colours
+*then*, and returned it).
+
+The residual left: the assignment is the deterministic matching
+(:func:`assign_colors`, WUBRG order) — nobody is asked *which* colour a
+multicoloured card is targeted as, so a lone blue-and-white card is the white
+one. That differs from a person's answer only when the card later loses
+exactly the colour the matching picked.
 """
 
 from __future__ import annotations
 
 #: The payload / spec key: the target list is one card per colour.
 ONE_TARGET_PER_COLOR = "one_target_per_color"
+
+#: The ``StackItem.choices`` key holding the colour each stamped graveyard
+#: target was chosen as, one entry per stamp in stamp order (``None`` for a
+#: card the matching could not give a colour) — declared in
+#: ``game_types.CHOICE_KEYS``.
+PER_COLOR_ASSIGNMENT = "per_color_assignment"
 
 #: CR 105.1's five colours, in the symbols every colour reader in the engine
 #: speaks, in WUBRG order.
@@ -98,6 +113,44 @@ def one_per_color_slots(game, seat: int, slots) -> list[int]:
         if len(kept) == len(FIVE_COLORS):
             break
     return kept
+
+
+def record_per_color_assignment(game, item) -> None:
+    """Write the colour each of *item*'s stamped graveyard targets is chosen
+    as (:data:`PER_COLOR_ASSIGNMENT`), read off the cards' colours **now** —
+    the moment CR 601.2c chooses them. Called where the stamps are made
+    (``Game._stamp_stack_targets``), for a spec that is one card per colour.
+    """
+    stamps = list(getattr(item, "target_graveyard_card", None) or ())
+    if not stamps:
+        return
+    colors = [
+        tuple(zone_cards_colors(game, game.players[stamp.seat], [stamp.card])[0])
+        if 0 <= stamp.seat < len(game.players) else ()
+        for stamp in stamps
+    ]
+    item.choices[PER_COLOR_ASSIGNMENT] = tuple(assign_colors(colors))
+
+
+def kept_as_assigned(game, owner, named, assignment) -> list:
+    """The cards of *named* (one per stamp, ``None`` for a stamp whose card
+    is gone) that still have the colour *assignment* recorded for them — CR
+    608.2b's legal targets of a one-card-per-colour list."""
+    kept = []
+    for card, color in zip(named, assignment):
+        if card is None or color is None:
+            continue
+        if color in zone_cards_colors(game, owner, [card])[0]:
+            kept.append(card)
+    return kept
+
+
+def holds_assigned_color(game, stamp, color) -> bool:
+    """Whether the graveyard card *stamp* names still has *color*, the colour
+    it was targeted as — CR 608.2b's question of one target of the list."""
+    if color is None or not 0 <= stamp.seat < len(game.players):
+        return False
+    return color in zone_cards_colors(game, game.players[stamp.seat], [stamp.card])[0]
 
 
 def zone_cards_colors(game, owner, cards) -> list[tuple[str, ...]]:

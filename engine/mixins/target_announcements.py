@@ -31,6 +31,7 @@ from ..continuous import next_timestamp
 from ..game_types import as_graveyard_stamps, as_target_ids, target_ids
 from ..events import emit
 from ..oracle import compile_card_oracle
+from ..per_color_targets import ONE_TARGET_PER_COLOR, record_per_color_assignment
 from ..stack_targets import (
     TARGETS_CHANGED_SILENTLY_FOR, TARGETS_CHOSEN_ITEM, chosen_targets, has_targets, source_name,
 )
@@ -584,6 +585,10 @@ class TargetAnnouncementsMixin:
             # handler free to scan for a stand-in.
             if stamped is not None or item.target_graveyard_card is None:
                 item.target_graveyard_card = as_graveyard_stamps(stamped)
+            if spec.get(ONE_TARGET_PER_COLOR):
+                # The colour each card is chosen *as* is part of choosing it
+                # (All Suns' Dawn's ruling), so it is fixed with the stamp.
+                record_per_color_assignment(self, item)
             # The slot was the announcement's address for the card, and the
             # stamp is the card: from here on a graveyard target is read off
             # the stamp (``Game.chosen_graveyard_index``), and the slot

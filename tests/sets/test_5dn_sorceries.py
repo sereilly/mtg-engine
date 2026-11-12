@@ -735,3 +735,128 @@ def test_w1g7_rude_awakening_animation_ends_at_cleanup(set_pool):
     assert not forest.is_creature and forest.has_type("land")
 
 # ==== end w1g7 ======================================================
+
+# ==== W2G2 ==========================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+#
+# All Suns' Dawn holds each target to the colour it was chosen as. Its ruling
+# (2004-12-01): "You choose the color each target must be when you choose it
+# as a target, so if the card you targeted as a blue card is red when All
+# Suns' Dawn resolves, the card is an illegal target, even if the spell
+# doesn't target another red card." Celestial Dawn makes its owner's
+# graveyard white, so a response to it recolours the targets.
+
+import pytest as _w2g2_pytest
+
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.models import Permanent as _W2G2Permanent
+from tests.helpers import settle as _w2g2_settle
+
+
+def _w2g2_dawn_table(set_pool, graveyard, *, celestial=True):
+    lea, mir = set_pool("LEA"), set_pool("MIR")
+    game = _W2G2Game(players=[
+        _W2G2PlayerState(
+            name="P0", library=[lea["Island"]] * 10,
+            hand=[set_pool("5DN")["All Suns' Dawn"]],
+            graveyard=[lea[name] for name in graveyard],
+        ),
+        _W2G2PlayerState(
+            name="P1", library=[lea["Island"]] * 10,
+            hand=[lea["Disenchant"], lea["Sleight of Mind"]],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w2g2_settle(game)
+    dawn = None
+    if celestial:
+        dawn = _W2G2Permanent(card=mir["Celestial Dawn"])
+        game._put_permanent_onto_battlefield(0, dawn, None)
+        _w2g2_settle(game)
+    return game, dawn
+
+
+def _w2g2_where(game, name):
+    return [
+        f"{seat}.{zone}"
+        for seat, player in enumerate(game.players)
+        for zone in ("hand", "graveyard", "exile")
+        for card in getattr(player, zone)
+        if card.name == name
+    ]
+
+
+@_w2g2_pytest.mark.parametrize("response", ["Disenchant", "Sleight of Mind"])
+def test_w2g2_all_suns_dawn_a_target_recoloured_in_response_is_illegal(set_pool, response):
+    """Under Celestial Dawn the Lightning Bolt in my graveyard is white and is
+    targeted as the white card. Disenchanting the Dawn (Bolt is red again) or
+    Sleight of Mind turning its "white" to "blue" (Bolt is blue) makes it an
+    illegal target: with every target illegal the spell does not resolve
+    (CR 608.2b) and goes to the graveyard, never reaching its exile sentence.
+    Before the colour was recorded, the resolution re-matched on red and
+    returned the Bolt."""
+    game, dawn = _w2g2_dawn_table(set_pool, ["Lightning Bolt", "Giant Growth"])
+    assert game.queue_from_hand(
+        0, "All Suns' Dawn", target_player_index=0, target_graveyard_indices=[0],
+    ).supported
+    extra = {"old_color": "W", "new_color": "U"} if response == "Sleight of Mind" else {}
+    assert game.queue_from_hand(
+        1, response, target_permanent_ids=[dawn.permanent_id], **extra,
+    ).supported
+    _w2g2_settle(game)
+    assert [c.name for c in game.players[0].hand] == []
+    assert "Lightning Bolt" in [c.name for c in game.players[0].graveyard]
+    assert _w2g2_where(game, "All Suns' Dawn") == ["0.graveyard"]
+
+
+def test_w2g2_all_suns_dawn_returns_what_still_has_its_colour(set_pool):
+    """Nothing recoloured: the Bolt targeted as white is still white and comes
+    back, and the spell exiles itself. The colour the cast fixed rides the
+    spell (``per_color_assignment``)."""
+    from engine.per_color_targets import PER_COLOR_ASSIGNMENT
+
+    game, _ = _w2g2_dawn_table(set_pool, ["Lightning Bolt", "Giant Growth"])
+    assert game.queue_from_hand(
+        0, "All Suns' Dawn", target_player_index=0, target_graveyard_indices=[0],
+    ).supported
+    assert game.stack[-1].choices[PER_COLOR_ASSIGNMENT] == ("W",)
+    _w2g2_settle(game)
+    assert [c.name for c in game.players[0].hand] == ["Lightning Bolt"]
+    assert _w2g2_where(game, "All Suns' Dawn") == ["0.exile"]
+
+
+def test_w2g2_all_suns_dawn_one_illegal_target_costs_the_others_nothing(set_pool):
+    """Two targets, Swords to Plowshares as the white card and Counterspell as
+    the blue one; the record is made to say Counterspell was targeted as red
+    (standing in for a card recoloured in response, which only a board-wide
+    effect does in this pool). Counterspell is not returned, Swords is, and
+    the spell — which still had a legal target — resolves and is exiled."""
+    from engine.per_color_targets import PER_COLOR_ASSIGNMENT
+
+    game, _ = _w2g2_dawn_table(
+        set_pool, ["Swords to Plowshares", "Counterspell"], celestial=False,
+    )
+    assert game.queue_from_hand(
+        0, "All Suns' Dawn", target_player_index=0, target_graveyard_indices=[0, 1],
+    ).supported
+    assert game.stack[-1].choices[PER_COLOR_ASSIGNMENT] == ("W", "U")
+    game.stack[-1].choices[PER_COLOR_ASSIGNMENT] = ("W", "R")
+    _w2g2_settle(game)
+    assert [c.name for c in game.players[0].hand] == ["Swords to Plowshares"]
+    assert [c.name for c in game.players[0].graveyard] == ["Counterspell"]
+    assert _w2g2_where(game, "All Suns' Dawn") == ["0.exile"]
+
+
+def test_w2g2_all_suns_dawn_naming_no_pile_is_still_one_per_colour(set_pool):
+    """An announcement that names the slots and not whose graveyard they are
+    in counts them in the caster's own ("from your graveyard",
+    ``graveyard_target_seat``) — and the one-card-per-colour gate asks that
+    pile. It asked none: with every seat a candidate, two white cards were
+    accepted."""
+    game, _ = _w2g2_dawn_table(set_pool, ["Lightning Bolt", "Giant Growth"])
+    refused = game.queue_from_hand(0, "All Suns' Dawn", target_graveyard_indices=[0, 1])
+    assert not refused.supported
+    assert refused.details == "All Suns' Dawn: the targets must be one card of each color"
+
+# ==== end W2G2 ======================================================
