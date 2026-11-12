@@ -41,7 +41,8 @@ def test_the_templates_carry_the_rules_darksteel_corrected():
     w1 = (TEMPLATES / "common_w1.md").read_text(encoding="utf-8")
     w2 = (TEMPLATES / "common_w2.md").read_text(encoding="utf-8")
     for needle in ("test_face_blind_guards.py", "run_and_wait.sh", "Never `git stash`",
-                   'never for "passed"', "oracle_diff.py snapshot"):
+                   'never for "passed"', "oracle_diff.py snapshot",
+                   "sim_fingerprint.py snapshot", "sed -i"):
         assert needle in w1, needle
     for needle in ("cannot write", "sim_fingerprint.py snapshot", "sed -i", "The reds on your base"):
         assert needle in w2, needle

@@ -31,6 +31,9 @@ at a time afterwards. Read this whole file, then your group's own `BRIEF.md`,
   `newline="\r\n"`).
 - **Never `git stash`** — the stash is shared across sibling worktrees and other
   groups will pop your work into their tree. Commit on your branch instead.
+- **Never `sed -i` a source file**: in Git Bash it rewrites a CRLF file as LF
+  (three Darksteel groups). Use the Edit tool, or a script that reads bytes and
+  writes the same line ending back.
 - Do not edit `CLAUDE.md`, `.claude/rules/*.md`, `ROADMAP.md`,
   `SET_PLAYBOOK.md`, `SET_RETROSPECTIVES.md`, `cards/manifest.json` or any
   `cards/*.json`. Do not run any `--accept` / `--accept-probe`, and do not
@@ -275,9 +278,13 @@ to something that exists. The names most likely to matter this set:
    the word. {{HOLLOW_RULE}}
 5. **When you extend a fragment production, grep for a second copy of it
    first.** Extend the shared one; do not fork it.
-6. **`python scripts/oracle_diff.py snapshot --snapshot <your scratch>\od.json`
-   before your first edit, `compare` (same flag) after each substantial change
-   and at the end.** It diffs every card's full compiled program over both
+6. **Snapshot both differentials before your first edit**:
+   `python scripts/oracle_diff.py snapshot --snapshot <your scratch>\od.json` **and**
+   `python scripts/sim_fingerprint.py snapshot` (twelve seeded games, a few minutes,
+   through `run_and_wait.sh`; three Darksteel groups rebuilt a base snapshot from an
+   export because only the first was asked for). Compare `oracle_diff` (same flag)
+   after each substantial change and both at the end; name every seeded game that
+   moved and why. It diffs every card's full compiled program over both
    manifest roles. Read *every* card that moved. A shipped (non-{{CODE}}) card
    moving is either intended (explain it) or a regression you just caught. If
    you add a defaulted field to a dataclass the snapshot reprs, report the
