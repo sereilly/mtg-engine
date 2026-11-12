@@ -49,6 +49,7 @@ from . import (  # noqa: E402,F401
     piles,
     player_choices,
     prevention,
+    prevention_blankets,
     pump,
     pt_switch,
     reanimation,
