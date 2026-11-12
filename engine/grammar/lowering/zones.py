@@ -38,7 +38,8 @@ from ..errors import LoweringError
 from ..vocabulary import PERMANENT_CARD_TYPES
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
-from ._described_returns import _graveyard_to_hand_payload
+from ._described_returns import (_graveyard_to_hand_payload,
+                                 _record_optional_card_target)
 from ._cost_records import shared_creature_type_referent
 from ._events import binds_block_pair
 from ._frozen_seats import frozen_seat_record
@@ -313,15 +314,25 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
         raise LoweringError(
             "the bottoming handler reads the caster's own graveyard", node=node
         )
-    if filt == ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner):
+    if (
+        filt == ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner)
+        and spec.quantifier != "up_to"
+    ):
         return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
     if _restrictions_beyond(filt, _BOTTOMING_HONOURED_FIELDS):
         raise LoweringError("no bottoming handler honours this restriction", node=node)
+    bottomed = _graveyard_to_hand_payload(filt)
+    # "Put **up to one** target card from your graveyard on the bottom of your
+    # library. Draw a card." (Conjurer's Bauble.) CR 601.2c lets the
+    # announcement name no card, so the Bauble is activatable over an empty
+    # graveyard for its draw — and naming none bottoms none. The quantifier
+    # was dropped here, so the activation was refused with nothing in the pile
+    # and, announced naming nothing, bottomed the first card anyway. Recorded
+    # on the key the gates and ``named_no_target`` already read; the bare
+    # "target" keeps its payload byte for byte.
+    _record_optional_card_target(bottomed, spec)
     return (
-        OracleInstruction(
-            "put_graveyard_card_on_library_bottom", "",
-            _graveyard_to_hand_payload(filt),
-        ),
+        OracleInstruction("put_graveyard_card_on_library_bottom", "", bottomed),
     )
 
 
@@ -858,7 +869,20 @@ def _lower_put_onto_battlefield(
             raise LoweringError(
                 "the reanimation handler cannot test that card phrase", node=node
             )
-        if len(filt.card_types) > 1:
+        # "Put target **artifact or creature** card from a graveyard onto the
+        # battlefield under your control." (Beacon of Unrest.) A union of
+        # permanent card types, which the handler already searches by
+        # (``card_has_any_type``, Bladewing's "permanent card") and the picker
+        # and the re-check already read as an OR (``card_types``). A
+        # conjunction ("artifact creature card") is a different phrase the
+        # handler's search cannot say, and a non-permanent type has nowhere to
+        # arrive (CR 110.4a), so both keep the refusal.
+        union = len(filt.card_types) > 1
+        if union and (
+            filt.type_match != "any"
+            or not set(filt.card_types) <= set(PERMANENT_CARD_TYPES)
+            or filt.subtypes
+        ):
             raise LoweringError(
                 "the reanimation handler moves one kind of card", node=node
             )
@@ -927,7 +951,9 @@ def _lower_put_onto_battlefield(
         # Written only when the phrase is not the creature the handler already
         # defaults to, so every reanimation compiled before this one keeps a
         # byte-identical payload.
-        if filt.card_types and filt.card_types != ("creature",):
+        if union:
+            payload["card_types"] = list(filt.card_types)
+        elif filt.card_types and filt.card_types != ("creature",):
             payload["card_type"] = filt.card_types[0]
         if filt.subtypes:
             # On the key ``graveyard_card_matches`` reads — the one predicate

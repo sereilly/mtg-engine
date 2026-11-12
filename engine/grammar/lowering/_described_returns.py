@@ -165,6 +165,40 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
 
 
 
+def _record_optional_card_target(
+    payload: dict[str, object], subject: ast.TargetSpec
+) -> None:
+    """Record that this graveyard target was printed "**up to** one".
+
+    "Target" and "up to one target" resolve one chosen card either way, so the
+    handler, the picker and the narrowing are identical and the payload was the
+    same for both — the quantifier was simply dropped. What cannot read it off
+    the printed line is the gate that asks whether an ability may be activated
+    at all: CR 601.2c lets an "up to" announcement name *no* target, so Liliana,
+    Death Mage's "+1: Return **up to one** target creature card from your
+    graveyard to your hand" is legal with an empty graveyard and Adun
+    Oakenshield's bare "target" is not.
+
+    Recorded only for the "up to" spelling, so every card printing the bare word
+    keeps emitting its payload byte for byte. ``count`` is 1 here, which is
+    below the several-targets threshold every other reader tests
+    (``targets["count"] > 1``), so nothing that walks for a list of targets sees
+    a new one.
+
+    Here rather than in ``returns`` (where it was written) because the
+    graveyard bottoming in ``zones`` reads the same quantifier — Conjurer's
+    Bauble's "Put **up to one** target card from your graveyard on the bottom
+    of your library" — and ``zones`` never imports ``returns``.
+    """
+    if subject.quantifier == "up_to":
+        payload["targets"] = {
+            "quantifier": "up_to",
+            "kind": "card",
+            "count": subject.count,
+        }
+
+
+
 def lower_described_return(
     node: ast.ReturnToZone,
     subject,

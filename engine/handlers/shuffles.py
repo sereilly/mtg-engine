@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..oracle_types import HAND_CARDS_TO_LIBRARY, LAST_TARGET_OWNER
+from ..oracle_types import (HAND_CARDS_TO_LIBRARY, LAST_TARGET_OWNER,
+                            SPELL_SHUFFLED_INTO_LIBRARY)
 from ._amounts import resolve_amount
 from ._filters import graveyard_card_matches
 from ._targets import (_resolve_graveyard_slots, pile_owner_still_a_target,
@@ -312,10 +313,33 @@ def shuffle_source_card_into_library(game: Game, instruction: OracleInstruction,
     Guile (the same printed sentence) as its example: "that library is
     shuffled even if none of those objects are in the zone they're expected to
     be in". It is the reason a player cannot read the deck for the answer.
+
+    **A spell shuffling itself** ("Shuffle Beacon of Destruction into its
+    owner's library", the five Beacons) is the third reading, and it is told
+    apart before the graveyard scan for that scan's own reason turned round:
+    two copies of a card in a deck are one ``CardDefinition``, so a Beacon
+    already in its owner's graveyard *is* the resolving spell's card by
+    identity, and the scan would shuffle that one away and bin this one. The
+    card is on the stack, in no zone a scan reaches, and CR 608.2n's last
+    step is what moves it — so the destination is written into the spell's
+    scratchpad (:data:`SPELL_SHUFFLED_INTO_LIBRARY`) the way the Pulse cycle's
+    return to hand is, and ``_bin_spell_card`` puts it into the library and
+    shuffles there, instead of into the graveyard. A copy (CR 707.10) is no
+    card: nothing moves, and its controller's library is shuffled all the
+    same (CR 701.24c).
     """
     card = context.card
     source = context.source_permanent
     owner = None
+    if source is None and context.ability_text is None and context.text_card is not None:
+        resolving = (getattr(game, "resolving_items", None) or [None])[-1]
+        if resolving is not None and getattr(resolving, "is_copy", False):
+            game.log.append(f"{card.name} (copy) ceases to exist")
+            game.shuffle_library_of(game.players[resolving.caster_index])
+            return True, "resolved"
+        context.results[SPELL_SHUFFLED_INTO_LIBRARY] = True
+        game.log.append(f"{card.name} will be shuffled into its owner's library")
+        return True, "resolved"
     if source is not None and game.is_on_battlefield(source):
         owner = game.players[source.metadata.get("base_controller_index", 0)]
         game.remove_from_battlefield(source)

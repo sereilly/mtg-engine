@@ -40,7 +40,7 @@ from typing import Union
 from .conditions import Condition
 from .conditions import DiedThisTurn, DiedThisWay, WasAttachedTo
 from .loops import (CardsDrawnThisWay, ChosenThisWay, CountersPlacedThisWay,
-                    CountersRemovedThisWay, EachAdditionalCostPaid,
+                    CountersRemovedThisWay, EachAdditionalCostPaid, EachColor,
                     EachLifeLost, EachShortOfThisWay, ExiledThisWay,
                     TappedThisWay)
 from .costs import Cost
@@ -797,7 +797,7 @@ class ForEach:
                 | ExiledThisWay | TappedThisWay | ChosenThisWay | EachLifeLost
                 | EachShortOfThisWay | EachAdditionalCostPaid
                 | CountersPlacedThisWay | CountersRemovedThisWay
-                | CardsDrawnThisWay)
+                | CardsDrawnThisWay | EachColor)
     effect: "Statement"
 
 

@@ -107,6 +107,7 @@ def _derived_static_claims(
     from .evasion_negation import negated_evasion_abilities
     from .extra_triggers import extra_triggers_for
     from .global_statics import global_static_for
+    from .granted_abilities import granted_ability_supported
     from .land_play_allowance import land_play_allowance_for
     from .life_prohibitions import life_gain_ban_line
     from .game_result_bans import game_result_ban_line
@@ -389,7 +390,21 @@ def _derived_static_claims(
     # affected permanent's effective card — so there is no instruction to
     # produce, and without this the source card would report unsupported while
     # working perfectly.
-    if global_static_for(oracle_text) is not None:
+    #
+    # **…when what it grants is an ability the engine reads.** "Each creature
+    # has "When this creature dies, choose target opponent. That player puts
+    # this card … onto the battlefield … at the beginning of the next end
+    # step."" (Endless Whispers.) The grant is recorded and the quoted
+    # sentence lands on every creature's effective card, where it compiles to
+    # nothing — so the source card claimed support for a line that did
+    # nothing at all, invisible to every census. Asked through the one reader
+    # of "does this granted text compile" (``granted_ability_supported``, the
+    # Aura and lord grants' gate); the other eight grants in the pool compile.
+    board_static = global_static_for(oracle_text)
+    if board_static is not None and (
+        not board_static.grants_ability
+        or granted_ability_supported(board_static.grants_ability)
+    ):
         claims.append("global_statics")
     # "A player who controls more permanents than each other player can't play
     # lands or cast artifact, creature, or enchantment spells. That player may

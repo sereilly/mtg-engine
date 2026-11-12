@@ -193,6 +193,14 @@ def _parse_leading_for_each(
     # (Lim-Dûl's Hex.) The players as a set, in the leading printed position.
     # Read before the noun phrase below, which has no reading for a bare
     # "player" and would fail the line on a word this clause understands.
+    # "**For each color,** return up to one target card of that color …"
+    # (All Suns' Dawn.) CR 105.1's five colours as the set, in the leading
+    # position — read before the noun phrase below, which has no reading for
+    # a bare "color" and would fail the line on the comma.
+    colors = stream.mark()
+    if stream.accept_word("color") and stream.accept_punct(","):
+        return ast.EachColor()
+    stream.reset(colors)
     players = stream.mark()
     # The bare head noun, because "for each" is already consumed and
     # `parse_player_ref` reads the quantifier with it. The two spellings the

@@ -388,7 +388,7 @@ def _narrowing_flags(source: dict) -> dict:
 _GRAVEYARD_ROLE_KEYS = (
     "any_card", "card_type", "card_types", "card_types_all",
     "graveyard_colors", "graveyard_subtypes", "graveyard_mana_value",
-    "graveyard_named",
+    "graveyard_named", "graveyard_excluded_types",
     "supertypes", "own_graveyard_only", "opponent_graveyard_only",
 )
 

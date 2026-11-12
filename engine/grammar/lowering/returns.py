@@ -25,7 +25,8 @@ from ..vocabulary import CREATURE_TYPES, PERMANENT_CARD_TYPES
 from ._events import OTHER_CHOSEN_PERMANENT, _back_reference_payload
 from ._bound_returns import lower_untargeted_return
 from ._described_returns import (_graveyard_to_hand_payload,
-                                 _reads_no_return_restriction)
+                                 _reads_no_return_restriction,
+                                 _record_optional_card_target)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _is_target,
     _restrictions_beyond, _describe_several_card_targets,
@@ -76,34 +77,115 @@ def _lower_reanimate_enchanted_card(
     return (OracleInstruction("reanimate_creature", "", {}),)
 
 
+def _graveyard_bounds(filt: ast.ObjectFilter, node) -> dict[str, object]:
+    """The two narrowings a targeted graveyard return reads beyond the noun's
+    types, colours and subtypes: a printed **mana value** bound ("with mana
+    value 3 or less", Unearth; "1 or less", Leonin Squire) and a type the card
+    must **not** have ("noncreature artifact card", Salvaging Station).
 
+    One writer for both destinations, so "1 or less" is the same payload on a
+    return to the hand as on a return to the battlefield; each key is emitted
+    only when printed, so every return compiled before it keeps a
+    byte-identical payload. Both are read by ``graveyard_card_matches``, the
+    predicate the picker, the CR 601.2c / 602.2b gates and the handler share —
+    a bound only one of the three knew about is a target one offers and
+    another declines.
 
-def _record_optional_card_target(
-    payload: dict[str, object], subject: ast.TargetSpec
-) -> None:
-    """Record that this graveyard target was printed "**up to** one".
-
-    "Target" and "up to one target" resolve one chosen card either way, so the
-    handler, the picker and the narrowing are identical and the payload was the
-    same for both — the quantifier was simply dropped. What cannot read it off
-    the printed line is the gate that asks whether an ability may be activated
-    at all: CR 601.2c lets an "up to" announcement name *no* target, so Liliana,
-    Death Mage's "+1: Return **up to one** target creature card from your
-    graveyard to your hand" is legal with an empty graveyard and Adun
-    Oakenshield's bare "target" is not.
-
-    Recorded only for the "up to" spelling, so every card printing the bare word
-    keeps emitting its payload byte for byte. ``count`` is 1 here, which is
-    below the several-targets threshold every other reader tests
-    (``targets["count"] > 1``), so nothing that walks for a list of targets sees
-    a new one.
+    CR 202.3 computes a mana value from the printed cost, so a card in a
+    graveyard has one (an {X} counts 0 there, CR 202.3e — Auriok Salvagers'
+    2020-08-07 ruling), which is what makes the bound answerable off the
+    battlefield at all.
     """
-    if subject.quantifier == "up_to":
-        payload["targets"] = {
-            "quantifier": "up_to",
-            "kind": "card",
-            "count": subject.count,
+    bounds: dict[str, object] = {}
+    if filt.mana_value is not None:
+        bound = filt.mana_value.value
+        if not isinstance(bound, ast.Fixed):
+            # An X-valued bound is a number nobody knows until the cast is
+            # announced, and the picker enumerates before that. It refuses
+            # rather than being dropped, which would return a card of any cost.
+            raise LoweringError(
+                "a graveyard return reads a printed mana value, not an X",
+                node=node,
+            )
+        bounds["graveyard_mana_value"] = {
+            "op": filt.mana_value.op, "value": bound.value,
         }
+    if filt.excluded_types:
+        bounds["graveyard_excluded_types"] = list(filt.excluded_types)
+    return bounds
+
+
+def _lower_for_each_color(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
+    """"**For each color,** return up to one target card of that color from
+    your graveyard to your hand." (All Suns' Dawn.)
+
+    Not a statement repeated five times: each turn of the loop is one more
+    target of **one** announcement (CR 601.2c; 115.3 — one instance of the
+    word, so no card twice), and every target is chosen before anything
+    resolves. So the loop lowers to the several-card graveyard return Sanguine
+    Indulgence already uses — the handler, the picker and the slot stamps are
+    the same — with up to five targets, narrowed to coloured cards
+    (``graveyard_colors``, every colour) and flagged one per colour
+    (``per_color_targets.ONE_TARGET_PER_COLOR``): the one question about the
+    *set* that the card-by-card predicate cannot ask, put by the cast gate,
+    the AI's choice and the resolution.
+
+    Exactly that shape, every word of it read: "up to one target", the
+    iteration's colour ("of that color", ``color_chosen_this_way``), the
+    caster's own graveyard and hand, and nothing else the return could carry.
+    Anything wider refuses rather than returning five cards of one colour.
+    """
+    from ...per_color_targets import FIVE_COLORS, ONE_TARGET_PER_COLOR
+
+    body = node.effect
+    subject = getattr(body, "subject", None)
+    if not (
+        isinstance(body, ast.ReturnToZone)
+        and isinstance(subject, ast.TargetSpec)
+        and subject.targeted
+        and subject.quantifier == "up_to"
+        and subject.count == 1
+        and not subject.count_from_x
+        and subject.filter.is_card
+        and subject.filter.color_chosen_this_way
+        and body.from_zone is not None and body.from_zone.name == "graveyard"
+        and body.from_zone.owner is not None and body.from_zone.owner.kind == "you"
+        and body.to.name == "hand"
+        and body.to.owner is not None and body.to.owner.kind == "you"
+    ):
+        raise LoweringError(
+            "for each color, only up to one target card of that color returns "
+            "from your graveyard to your hand", node=node,
+        )
+    riders = [
+        field.name for field in dataclasses.fields(body)
+        if field.name not in ("subject", "to", "from_zone")
+        and getattr(body, field.name) != (
+            field.default if field.default is not dataclasses.MISSING
+            else field.default_factory()  # type: ignore[misc]
+        )
+    ]
+    if riders:
+        raise LoweringError(
+            "the per-colour return reads no rider: " + ", ".join(riders), node=node,
+        )
+    returned = dataclasses.replace(subject.filter, color_chosen_this_way=False)
+    if returned.colors or _reads_no_return_restriction(returned) or (
+        subject_names_another(subject)
+    ):
+        raise LoweringError(
+            "the per-colour return is narrowed by the iteration's colour and "
+            "a card type, nothing else", node=node,
+        )
+    payload = _graveyard_to_hand_payload(returned)
+    payload["graveyard_colors"] = list(FIVE_COLORS)
+    payload[ONE_TARGET_PER_COLOR] = True
+    payload["targets"] = {
+        "quantifier": "up_to", "kind": "card", "count": len(FIVE_COLORS),
+    }
+    return (
+        OracleInstruction("return_creature_from_graveyard_to_hand", "", payload),
+    )
 
 
 def subject_names_another(subject) -> bool:
@@ -819,7 +901,8 @@ def _lower_return_to_zone(
     # handler all test it through the one predicate
     # (``graveyard_card_matches``) — which can answer it at all because CR 202.3
     # computes a mana value from the printed cost, so a card in a graveyard has
-    # one where it has no power and no keyword. Scoped to the reanimation, so
+    # one where it has no power and no keyword. Scoped to the two graveyard
+    # returns that read it (this one and the to-hand one just below), so
     # every other zone-change handler goes on refusing a bound it cannot honour.
     if (
         node.from_zone is not None
@@ -829,6 +912,27 @@ def _lower_return_to_zone(
         and filt.mana_value is not None
     ):
         gated = dataclasses.replace(gated, mana_value=None)
+    # "Return target artifact card **with mana value 1 or less** from your
+    # graveyard to your hand." (Leonin Squire, Auriok Salvagers.) Unearth's
+    # bound on the other graveyard destination, lifted for its reason directly
+    # above: it travels as ``graveyard_mana_value`` (:func:`_graveyard_bounds`)
+    # and the picker, the announcement gates and the handler all test it
+    # through ``graveyard_card_matches``.
+    #
+    # "Return target **noncreature** artifact card …" (Salvaging Station.) A
+    # type the card must not have, on both graveyard destinations and on the
+    # one key that predicate reads it under (``graveyard_excluded_types``).
+    # The attached Aura reanimation keeps its own gate, which reads neither.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name in ("hand", "battlefield")
+        and node.attached_to is None
+    ):
+        if node.to.name == "hand" and filt.mana_value is not None:
+            gated = dataclasses.replace(gated, mana_value=None)
+        if filt.excluded_types:
+            gated = dataclasses.replace(gated, excluded_types=())
     # "Return target **Dragon** permanent card from your graveyard to the
     # battlefield." (Bladewing the Risen.) The Griffin's subtype one zone over:
     # it travels as ``graveyard_subtypes``, the key the reanimation's handler
@@ -906,6 +1010,7 @@ def _lower_return_to_zone(
             ):
                 raise LoweringError("this handler returns cards to your own hand", node=node)
             to_hand = _graveyard_to_hand_payload(filt)
+            to_hand.update(_graveyard_bounds(filt, node))
             if any_graveyard:
                 to_hand["any_graveyard"] = True
             if subject_names_another(subject):
@@ -1009,27 +1114,10 @@ def _lower_return_to_zone(
             payload: dict[str, object] = (
                 {"colors": tuple(filt.colors)} if filt.colors else {}
             )
-            # "…**with mana value 3 or less**" (Unearth). Emitted only when the
-            # card prints a bound, so every reanimation written before this
-            # keeps a byte-identical payload and no behaviour signature moves.
-            # On the key ``graveyard_card_matches`` reads, which is what the
-            # picker, the CR 601.2c re-check and the handler all ask — a bound
-            # only one of the three knew about is a target one offers and
-            # another declines.
-            if filt.mana_value is not None:
-                bound = filt.mana_value.value
-                if not isinstance(bound, ast.Fixed):
-                    # An X-valued bound is a number nobody knows until the cast
-                    # is announced, and the picker enumerates before that. It
-                    # refuses rather than being dropped, which would return a
-                    # card of any cost.
-                    raise LoweringError(
-                        "the reanimation reads a printed mana value, not an X",
-                        node=node,
-                    )
-                payload["graveyard_mana_value"] = {
-                    "op": filt.mana_value.op, "value": bound.value,
-                }
+            # "…**with mana value 3 or less**" (Unearth) and "**noncreature**
+            # artifact card" (Salvaging Station), through the one writer the
+            # graveyard-to-hand return shares (:func:`_graveyard_bounds`).
+            payload.update(_graveyard_bounds(filt, node))
             # Emitted only when the card prints something other than "creature",
             # so every reanimation written before this keeps a byte-identical
             # payload and no behaviour signature moves. The handler, the picker

@@ -949,7 +949,7 @@ class AbilityTargetsMixin:
                 for idx in named_indices:
                     if not any((seat, idx) in legal_grave for seat in seats):
                         return refused
-                return None
+                return self._one_per_color_refusal(card, spec, named_indices, seats)
         elif named_ids:
             # A named target must be legal. The web layer sends ids; a test or
             # the AI may send an index on a seat, which ``_activate_onto_stack``
@@ -1175,3 +1175,30 @@ class AbilityTargetsMixin:
         if len(set(keys)) == len(keys):
             return None
         return f"{card.name} can't name the same target twice"
+
+    def _one_per_color_refusal(
+        self, card, spec: dict, indices: list, seats: list,
+    ) -> str | None:
+        """CR 601.2c for a graveyard list that is **one card per colour** —
+        "For each color, return up to one target card of that color from your
+        graveyard to your hand" (All Suns' Dawn, ``per_color_targets``).
+
+        Every named slot is already a legal card on its own (coloured, in the
+        right pile); what the per-slot walk cannot see is the *set*: the cards
+        must take distinct colours, one each (the card's 2004-12-01 rulings —
+        two blue-and-white cards may be the blue one and the white one, two
+        mono-blue cards may not). Asked over the one pile the slots count
+        into, by both the cast gate and the activation gate, so a second
+        printing on an ability is held to it too. None for every other spec.
+        """
+        from .per_color_targets import (ONE_TARGET_PER_COLOR, one_per_color,
+                                        zone_cards_colors)
+
+        if not spec.get(ONE_TARGET_PER_COLOR) or not indices or len(seats) != 1:
+            return None
+        pile = self.players[seats[0]]
+        cards = [pile.graveyard[index] for index in indices
+                 if isinstance(index, int) and 0 <= index < len(pile.graveyard)]
+        if one_per_color(zone_cards_colors(self, pile, cards)):
+            return None
+        return f"{card.name}: the targets must be one card of each color"

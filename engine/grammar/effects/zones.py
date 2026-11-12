@@ -346,6 +346,19 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
     if chosen_one is not None and stream.accept_phrase(
         "into", "its", "owner", "'s", "library"
     ):
+        # "**Shuffle Beacon of Destruction** into its owner's library." (The
+        # five Beacons.) The card's own name is the "it" branch above spelled
+        # out — the object is the source, which nobody chooses — so it is that
+        # node and not Pawnshop's, whose object is a target (CR 601.2c): read
+        # as one it refused for naming no "target", and read as a target it
+        # would have been offered a picker for the spell itself.
+        if (
+            isinstance(chosen_one, ast.TargetSpec)
+            and chosen_one.quantifier == "this"
+            and chosen_one.filter.is_source
+            and not chosen_one.targeted
+        ):
+            return ast.ShuffleSourceIntoLibrary(ast.PlayerRef("owner"))
         return ast.ShuffleTargetIntoLibrary(chosen_one, ast.PlayerRef("owner"))
     stream.reset(chosen_mark)
     if not stream.accept_phrase("your", "graveyard", "into", "your", "library"):

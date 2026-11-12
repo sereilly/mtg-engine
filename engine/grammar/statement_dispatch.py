@@ -90,6 +90,7 @@ from .lowering.loops import (
 )
 from .lowering import (
     _refuse_unfused_distinctness,
+    _lower_for_each_color,
     _fused_discard_then_draw,
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
@@ -646,6 +647,12 @@ def lower_statement(
             return _lower_for_each_tapped(statement, repeated(object_loop), produced)
         if isinstance(statement.iterator, ast.ChosenThisWay):
             return _lower_for_each_chosen(statement, repeated(object_loop), produced)
+        # "**For each color,** return up to one target card of that color …"
+        # (All Suns' Dawn) — five targets of one announcement rather than an
+        # effect run five times, so the body is read whole and never lowered
+        # on its own ("of that color" outside the loop names nothing).
+        if isinstance(statement.iterator, ast.EachColor):
+            return _lower_for_each_color(statement)
         # "For each **1 life you lost**" (Oath of Lim-Dûl).
         if isinstance(statement.iterator, ast.EachLifeLost):
             return _lower_for_each_life_lost(statement, repeated(), event)
