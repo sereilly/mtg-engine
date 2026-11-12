@@ -479,7 +479,7 @@ class ActivationChecksMixin:
 
         Pure. Asked by the activation path (``_activation_window``) and by the
         wire's per-ability refusals (``ability_denials``,
-        ``web/serialization``), so a menu greys exactly the loyalty abilities
+        ``web/offers``), so a menu greys exactly the loyalty abilities
         a click would be refused for — the client kept its own copy of these
         three rules.
         """
@@ -530,7 +530,7 @@ class ActivationChecksMixin:
 
         Pure, and nothing is chosen yet. Asked by the activation path
         (``_activation_window``) and by the wire's per-ability refusals
-        (``web/serialization._ability_denial``).
+        (``web/offers._ability_denial``).
         """
         if not self.targeting_bans:
             return None
@@ -590,7 +590,7 @@ class ActivationChecksMixin:
         Questions about the board as the activation is proposed, which nothing
         a cost decides. Pure; asked by the activation path
         (``_activation_window``) and by the wire's per-ability refusals
-        (``web/serialization._ability_denial``). The client kept a copy of
+        (``web/offers._ability_denial``). The client kept a copy of
         both that read the *first* ability's printed cost for the symbol, so
         a tapped Basalt Monolith could not be clicked for its "{3}: Untap"
         and a summoning-sick creature's ability without {T} was refused as

@@ -23,7 +23,7 @@ Three readers:
   planner already shares), the rest the seat's chosen colour when listed, else
   the first printed symbol. With nothing wanted it is the old default exactly.
 * :func:`combination_of` — which symbols and how many one ability or spell
-  makes, for the wire (``web/serialization``'s ``ability_mana``), and
+  makes, for the wire (``web/player_view``'s ``ability_mana``), and
   :func:`cast_split_offer` the same for a **spell** a seat may cast, with the
   count its cost decides.
 

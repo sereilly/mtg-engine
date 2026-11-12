@@ -17,7 +17,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import Permanent
-from web.serialization import _serialize_player, _serialize_stack_item
+from web.player_view import _serialize_player
+from web.serialization import _serialize_stack_item
 
 
 @pytest.fixture(scope="module")

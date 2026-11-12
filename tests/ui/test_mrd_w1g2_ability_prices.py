@@ -12,7 +12,7 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent
-from web.serialization import _serialize_player
+from web.player_view import _serialize_player
 
 _MRD = {card.name: card for card in load_cards(manifest_set_path("MRD", include_measured=True))}
 

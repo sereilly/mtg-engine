@@ -454,7 +454,7 @@ class DrawsAndDiscardsMixin:
 
         **Named in the log only when the sentence revealed it** (CR 701.20a).
         ``game.log`` is one list every seat and spectator reads, and a card
-        that goes from a sideboard (private, like a hand — ``web/serialization``
+        that goes from a sideboard (private, like a hand — ``web/player_view``
         never sends another seat's) into a hand is a card nobody else learns,
         which is ``find_is_public``'s rule for a find. Ring of Ma'rûf's line
         named its card for as long as it existed; Death Wish prints no reveal

@@ -90,10 +90,10 @@ from .serialization import (
     _DISPLAY_KEYWORDS,
     _effective_keywords,
     _serialize_permanent,
-    _serialize_player,
     _serialize_stack_item,
     _text_change_replacements,
 )
+from .player_view import _serialize_player
 from .catalog import CATALOG_BY_NAME
 from .turn_steps import _begin_turn, _gather_upkeep_decisions
 

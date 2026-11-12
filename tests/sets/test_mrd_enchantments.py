@@ -944,7 +944,7 @@ def test_w2g2_two_shared_fates_the_drawer_chooses_which_replaces(set_pool):
 
 
 def test_w2g2_the_wire_shows_the_card_to_its_exiler_alone(set_pool):
-    from web.serialization import exile_hidden_flags
+    from web.player_view import exile_hidden_flags
 
     game, (alice, bob), _ = _w2g2_fate_table(set_pool)
     game._draw_with_replacements(alice, 1)

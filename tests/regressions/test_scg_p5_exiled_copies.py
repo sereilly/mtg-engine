@@ -29,7 +29,7 @@ from engine.exiled_records import live_records
 from engine.linked_exile import linked_entries
 from engine.models import Permanent
 from tests.helpers import settle
-from web.serialization import _exile_payload
+from web.player_view import _exile_payload
 
 
 def _pool():

@@ -12,7 +12,7 @@ read by identity, so the next time that same object went to exile it was face
 down again: discarded (Necropotence's whole hand comes from its own exile, and
 cleanup discards it), Necropotence's other ability exiles it from the
 graveyard **face up**, and every seat — its owner included — was shown a card
-back (``web.serialization.exile_hidden_flags``).
+back (``web.player_view.exile_hidden_flags``).
 
 W2G2 had added ``linked_exile.forget_exiler_entries`` to the one departure seam
 (``Game.take_card_from_exile``) for Shared Fate's exiler entries alone; the
@@ -40,7 +40,7 @@ from engine.linked_exile import (LEAVES, RECORD_KEY, face_down_exiled_cards,
                                  linked_entries)
 from engine.models import Permanent
 from tests.helpers import settle
-from web.serialization import exile_hidden_flags
+from web.player_view import exile_hidden_flags
 
 _POOL: dict = {}
 for _path in manifest_set_paths(include_measured=True):
