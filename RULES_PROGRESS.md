@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**442 / 653 tracked rules covered (67%)** — 3716 tests, 0 unannotated.
+**443 / 654 tracked rules covered (67%)** — 3728 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 39/39 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 40/40 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -913,7 +913,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.40** Storm *(8 tests, subrules ab)*
 - [x] **702.41** Affinity *(3 tests, subrules ab)*
 - [x] **702.42** Entwine *(9 tests, subrules ab)*
-- [x] **702.43** Modular *(9 tests, subrules ab)*
+- [x] **702.43** Modular *(10 tests, subrules ab)*
+- [x] **702.44** Sunburst *(12 tests, subrules abcd)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 
@@ -944,7 +945,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(57 tests, subrules abc)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(58 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(3 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(14 tests)*
