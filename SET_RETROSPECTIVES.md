@@ -2126,11 +2126,35 @@ noncreature cards and `MTG_PROMOTE`'s header under `-v`; the rule files:
 sunburst and a granted affinity, a face-down exile turned up, "can't be
 equipped", the step-skip table, prompts a state-based check arms, the
 wire's tap split, cost offers, sunburst preview and `face_down`, the
-planner's colour spread. *Known gaps:* **drained** none of the standing
-entries (the legend rule was built before it was filed); **rewritten** the
+planner's colour spread. *Known gaps:* **drained** one item of the
+standing AI leftovers (Power Conduit and Spike Rogue, W2G3) and none of
+the standing entries (the legend rule was built before it was filed); **rewritten** the
 toolkit entry, with this set's wishes; **added** the noncreature any-line
 gate, Fifth Dawn's engine and client leftovers, two AI leftovers (Helm of
 Kaldra activated again, Energy Chamber's charge mode), and Darksteel's
 priority hold measured against an activated ability. ROADMAP: the next set
 is Champions of Kamigawa; the pool at the promotion; idiom 44.
-<!-- 5dn integrator: W2G3, the promotion gate, Phase 5 -->
+W2G3 took the AI pile: Vicious Betrayal cast only with sacrifices worth
+less than the pump they buy, Doubling Cube as the payment plan's last
+resort, a counter cost rehearsed with its permanent and kind named (Ion
+Storm, Power Conduit and Spike Rogue activated), Engineered Explosives'
+X aimed at the board, Magnetic Theft taking an opponent's Wargear, the
+Mazes and Dwarven Sea Clan used defending, Snuff Out from an opened
+graveyard; declined with parts the Avarice Totem loop, the
+identical-successor reading and an "any target" ping aimed at a seat.
+The rehearsal before the promotion read one red that was not the set's:
+the board harness pickles every session in the store and met a lock
+another test had planted, whenever a worker ran it after that file (a
+scratch teardown plugin named the planter; the ordered pair red, then
+green). The promotion's full gate — the full pass, ~31 minutes at `-n 6`,
+~41,400 tests — read 0 FAILED, `check_all` clean and 6,739 of 6,739
+supported; the wrong-end insert turned the printing-order guard alone
+red. Phase 5: three seeded 5DN batches and one with twelve new cards
+pinned, every exit 0 and nothing illegal; two whole human-vs-AI games in
+a browser, each won, every headline mechanic and every prompt kind the
+set arms driven as a person; 42 passes recorded through the Debug Menu
+(1,011 to 1,053 verified) and no fail; the deck editor's set filter
+showing the census's 165. One client fix (a land under Fist of Suns had
+opened a payment prompt); measured and left, the auto-tap reading no
+Pentad Prism counters and overpaying beside Dawn's Reflection, and
+Condescend's scry logged before its counter settled.

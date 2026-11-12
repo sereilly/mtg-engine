@@ -1770,8 +1770,22 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   `TypeError` under `MTG_PROMOTE=5DN`, order-dependent; fixed, the guard
   not). Seen, not measured: a phase-rail upkeep stop on a step Eon Hub skips
   is not honoured, which is right (CR 614.10), and the client may still show
-  the flag (W1G6). *Clears:* (a) a stack round; (b) a targets round with its
-  client half; (c) a guard round.
+  the flag (W1G6). From Phase 5's browser games, each reproduced: (d) the
+  auto-tap counts no mana from Pentad Prism's charge counters ("Nothing you
+  could tap pays" for Furnace Whelp beside a two-counter Prism; activating
+  it by hand casts it — `engine/board_payment.py` documents a mana ability
+  that costs more than the tap as out of its scope) and overpays beside
+  Dawn's Reflection (Abuna's Chant, {3}{W}, tapped four permanents, the
+  enchanted Forest three mana alone, and floated two {G}); (e) Condescend
+  logs its scry before the counter's unless-pay is answered (no outcome
+  seen to differ; the card counters-unless-pays, then scries); (f)
+  `legality_cast_spec.cast_cost_offers` (through
+  `applicable_alternative_costs`) puts Fist of Suns' offer on a land's
+  `target_spec.cost_offers` — the client ignores it for a land since
+  Phase 5 (CR 305.1: a land is played, never cast), the source still
+  offers it. *Clears:* (a) and (e) a stack round; (b) a targets round with
+  its client half; (c) a guard round; (d) a mana round; (f) a casting
+  round.
 
 - **Fifth Dawn's client leftovers** (W2G1 clicked every prompt the wave-1
   reports named; these it measured and left). (a) **A person cannot spend
@@ -1791,12 +1805,16 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   (`handlers/linked_exile`'s plural verb, Summoner's Egg), and an action
   hint left reading "Paid for X.". (d) The canvas piles a tapped permanent
   with an untapped one of the same name (W2G4's two Tolarias at the legend
-  rule's prompt; each still clicks right). (e) Not driven in a browser:
-  Endless Whispers' `trigger_target` at a person's seat (W2G2's branch; an
-  existing kind), Vedalken Shackles' "let it untap" direction, Fold into
-  Aether's and Summoner's Egg's declines, and a Bringer cast from a
-  graveyard under Fist of Suns. *Clears:* (a) a round with its engine half;
-  (b)–(e) a client round.
+  rule's prompt; each still clicks right). From Phase 5's browser games:
+  (e) under Fist of Suns every spell opens the payment choice with the
+  printed cost pre-selected, even where it cannot be paid (Beacon of
+  Tomorrows' {6}{U}{U}); (f) an activated ability costing mana alone
+  (Furnace Whelp's {R}, Doubling Cube) opens "press OK, then click lands"
+  with no Auto-Tap, where Etched Oracle and Ouphe Vandals get it; (g) the
+  Endless Whispers target prompt shows its granted text lower-cased (the
+  reader Darksteel's leftovers (c) names) and Bringer of the Red Dawn's
+  Yes/No prompt drops "That creature gains haste until end of turn.".
+  *Clears:* (a) a round with its engine half; (b)–(g) a client round.
 
 - **The toolkit and speed wishes still open**, each written down by a group
   that paid for its absence. Tools: an `explain_cast` for an activation
