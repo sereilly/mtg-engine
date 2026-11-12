@@ -5,10 +5,24 @@
     python scripts/probe_line.py --type Instant "Draw a card." "Scry 2."   # lines of one invented card
     python scripts/probe_line.py --card "Shared Fate" --json     # the same report as one JSON object
     python scripts/probe_line.py --card "Shared Fate" --full     # grammar nodes and instruction payloads too
+    python scripts/probe_line.py --card "Aether Vial" --ast      # each line's parsed tree, field by field
 
 Each line the compiler reads (after ``expand_ability_lines``) gets the layers
 it passed through, in the order the compiler asked them, and one verdict:
 ``refused at <layer>: <reason>`` or ``accepted (<instruction kinds>)``.
+
+A lowering refusal is printed with **where it was raised**: the innermost
+``LoweringError`` of the chain ``compile_line``'s lowering let out, at its
+``raise`` (``file:line``), and the lowering frames that led there
+(:func:`lowering_refusal`). The message alone names what the lowering wanted,
+and the furthest frame of a parse names where the *parser* stopped — neither is
+the line of lowering code that said no.
+
+``--ast`` prints each line's parsed tree as the grammar built it — every node
+with the fields it set (a field at its default is left out) — and, for a line
+of more than one sentence, each sentence asked alone, which is where a
+refusal inside a longer line is localised. A sentence asked alone is read out
+of its context ("it", "that player"), so its verdict is a lead.
 
 **Nothing here decides what the compiler decides.** The verdicts are read off
 the compiler's own run:
@@ -76,7 +90,7 @@ from engine import oracle  # noqa: E402
 from engine.card_loader import (load_cards, manifest_measured_codes,  # noqa: E402
                                 manifest_set_paths)
 from engine.faces import face_cards  # noqa: E402
-from engine.grammar import GRAMMAR_CATEGORIES, compile_line  # noqa: E402
+from engine.grammar import GRAMMAR_CATEGORIES, LoweringError, compile_line  # noqa: E402
 from engine.grammar import stream as grammar_stream  # noqa: E402
 from engine.grammar.lowering.categories import INSTRUCTION_CATEGORIES  # noqa: E402
 from engine.grammar.parser import each_line_parsed_once  # noqa: E402
@@ -401,6 +415,92 @@ def furthest_production(line: str, card_name: str | None = None):
     return compiled, Furthest(position, len(stream.tokens), unread, best["frames"])
 
 
+_ROOT = Path(__file__).resolve().parent.parent
+_GRAMMAR_PACKAGE = importlib.import_module("engine.grammar")
+
+
+@dataclass
+class LoweringRefusal:
+    """Where a lowering said no: the innermost ``LoweringError`` of the chain
+    that left ``lower_ability``, at its ``raise``.
+
+    *chain* is every message, outermost (the one ``compile_line`` reports)
+    first; *frames* the lowering's frames from ``lower_ability`` to the raise,
+    innermost last."""
+
+    site: str
+    message: str
+    chain: list[str]
+    frames: list[tuple[str, int, str]]
+
+
+def _repo_path(filename: str) -> str:
+    try:
+        return Path(filename).resolve().relative_to(_ROOT).as_posix()
+    except ValueError:
+        return filename
+
+
+def lowering_refusal(error: LoweringError) -> LoweringRefusal:
+    """The innermost ``LoweringError`` behind *error*, read off its chain.
+
+    A lowering that catches one refusal and raises another (``raise
+    LoweringError(...)`` inside an ``except``, or ``from``) leaves the first as
+    the second's cause or context; the innermost is the one raised first, and
+    its traceback's last frame is the ``raise``. A ``from None`` ends the chain
+    where the code said it ends."""
+    chain = [error]
+    while True:
+        current = chain[-1]
+        inner = current.__cause__ if current.__cause__ is not None else (
+            None if current.__suppress_context__ else current.__context__)
+        if not isinstance(inner, LoweringError) or any(inner is seen for seen in chain):
+            break
+        chain.append(inner)
+    innermost = chain[-1]
+    frames = [
+        (_repo_path(frame.filename), frame.lineno, frame.name)
+        for frame in traceback.extract_tb(innermost.__traceback__)
+    ]
+    site = f"{frames[-1][0]}:{frames[-1][1]} ({frames[-1][2]})" if frames else "unknown"
+    # From the lowering's entry on: the watch's own frame is not the engine's.
+    engine = [frame for frame in frames if frame[0].startswith("engine/")]
+    return LoweringRefusal(site, str(innermost), [str(item) for item in chain], engine)
+
+
+@contextmanager
+def _lowering_watch():
+    """Every ``LoweringError`` ``compile_line``'s lowering lets out, as it
+    leaves ``lower_ability`` — observed on the grammar's own call (the name is
+    looked up in ``engine.grammar`` as the line compiles), never re-asked."""
+    caught: list[LoweringError] = []
+    original = _GRAMMAR_PACKAGE.lower_ability
+
+    def watched(*args, **kwargs):
+        try:
+            return original(*args, **kwargs)
+        except LoweringError as error:
+            caught.append(error)
+            raise
+
+    _GRAMMAR_PACKAGE.lower_ability = watched
+    try:
+        yield caught
+    finally:
+        _GRAMMAR_PACKAGE.lower_ability = original
+
+
+def compile_line_watched(text: str, card_name: str | None):
+    """``(compiled, refusal)``: ``compile_line`` of *text*, and where its
+    lowering refused it (None when it did not)."""
+    with _lowering_watch() as caught:
+        compiled = compile_line(text, card_name=card_name)
+    refusal = None
+    if compiled.lowering_error is not None and caught:
+        refusal = lowering_refusal(caught[-1])
+    return compiled, refusal
+
+
 @dataclass
 class GrammarVerdict:
     text: str
@@ -415,6 +515,8 @@ class GrammarVerdict:
     furthest: Furthest | None
     #: The text-keyed registry a ``RegistryLine`` hands the line to.
     registry: str | None = None
+    #: Where the lowering refused the line, when it did.
+    lowering: LoweringRefusal | None = None
 
     @property
     def parsed(self) -> bool:
@@ -424,7 +526,7 @@ class GrammarVerdict:
 def grammar_verdict(text: str, card_name: str | None) -> GrammarVerdict:
     """The grammar's verdict on *text*; the furthest production only when the
     parse failed (watching it costs a stack walk per token)."""
-    compiled = compile_line(text, card_name=card_name)
+    compiled, refusal = compile_line_watched(text, card_name)
     furthest = furthest_production(text, card_name)[1] if compiled.parse_error else None
     return GrammarVerdict(
         text=text,
@@ -438,7 +540,144 @@ def grammar_verdict(text: str, card_name: str | None) -> GrammarVerdict:
         blank=compiled.blank,
         furthest=furthest,
         registry=getattr(compiled.node, "registry", None),
+        lowering=refusal,
     )
+
+
+# ---------------------------------------------------------------------------
+# The parsed tree (--ast)
+# ---------------------------------------------------------------------------
+
+def _is_default(item: dataclasses.Field, value: Any) -> bool:
+    if item.default is not dataclasses.MISSING:
+        return value == item.default
+    if item.default_factory is not dataclasses.MISSING:
+        return value == item.default_factory()
+    return False
+
+
+def ast_dict(value: Any) -> Any:
+    """*value* as plain data: a node is ``{"node": <type>, <field>: ...}``
+    with only the fields it sets (a field at its default is left out).
+
+    A set is sorted by repr, so two processes print it alike."""
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        out: dict[str, Any] = {"node": type(value).__name__}
+        for item in dataclasses.fields(value):
+            child = getattr(value, item.name)
+            if not _is_default(item, child):
+                out[item.name] = ast_dict(child)
+        return out
+    if isinstance(value, (tuple, list)):
+        return [ast_dict(child) for child in value]
+    if isinstance(value, (set, frozenset)):
+        return [ast_dict(child) for child in sorted(value, key=repr)]
+    if isinstance(value, dict):
+        return {str(key): ast_dict(child) for key, child in value.items()}
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return repr(value)
+
+
+def _inline(value: Any) -> str | None:
+    """*value* on one line, when it holds no node."""
+    if isinstance(value, dict) and "node" in value:
+        return f"{value['node']}()" if len(value) == 1 else None
+    if isinstance(value, list):
+        parts = [_inline(child) for child in value]
+        if any(part is None for part in parts):
+            return None
+        return "(" + ", ".join(parts) + ("," if len(parts) == 1 else "") + ")"
+    if isinstance(value, dict):
+        parts = [_inline(child) for child in value.values()]
+        if any(part is None for part in parts):
+            return None
+        return "{" + ", ".join(f"{key!r}: {part}" for key, part in zip(value, parts)) + "}"
+    return repr(value)
+
+
+def ast_lines(value: Any, indent: str = "", label: str = "") -> list[str]:
+    """:func:`ast_dict`'s output as an indented tree, one field a line."""
+    inline = _inline(value)
+    if inline is not None:
+        return [f"{indent}{label}{inline}"]
+    if isinstance(value, list):
+        out = [f"{indent}{label}({len(value)})"] if label else []
+        for i, child in enumerate(value):
+            out += ast_lines(child, indent + ("  " if label else ""), f"[{i}] ")
+        return out
+    if isinstance(value, dict) and "node" not in value:
+        out = [f"{indent}{label}{{…}}"]
+        for key, child in value.items():
+            out += ast_lines(child, indent + "  ", f"{key!r}: ")
+        return out
+    out = [f"{indent}{label}{value['node']}"]
+    for key, child in value.items():
+        if key != "node":
+            out += ast_lines(child, indent + "  ", f"{key}: ")
+    return out
+
+
+def sentences(text: str) -> list[str]:
+    """*text* cut after each full stop (or "!") that ends a sentence, never
+    inside a quoted ability or a parenthesis (reminder text) — but after a
+    parenthesis that closes on one, as reminder text ending a sentence does."""
+    out, start, depth, quoted = [], 0, 0, False
+    for i, char in enumerate(text):
+        ends = i + 1 == len(text) or text[i + 1].isspace()
+        if char == '"':
+            quoted = not quoted
+        elif char == "(" and not quoted:
+            depth += 1
+        elif char == ")" and not quoted and depth:
+            depth -= 1
+            if not depth and ends and text[i - 1] in ".!":
+                out.append(text[start:i + 1].strip())
+                start = i + 1
+        elif char in ".!" and not quoted and not depth and ends:
+            if text[start:i + 1].strip():
+                out.append(text[start:i + 1].strip())
+            start = i + 1
+    if text[start:].strip():
+        out.append(text[start:].strip())
+    # Reminder text standing after its sentence's full stop belongs to it.
+    merged: list[str] = []
+    for part in out:
+        if merged and part.startswith("(") and part.endswith(")"):
+            merged[-1] = f"{merged[-1]} {part}"
+        else:
+            merged.append(part)
+    return merged
+
+
+def ast_reading(text: str, card_name: str | None, alone: bool = False) -> dict:
+    """The grammar's tree for *text* and what became of it."""
+    compiled, refusal = compile_line_watched(text, card_name)
+    return {
+        "text": text,
+        "alone": alone,
+        "blank": compiled.blank,
+        "parse_error": compiled.parse_error,
+        "ast": ast_dict(compiled.node) if compiled.node is not None else None,
+        "lowering_error": compiled.lowering_error,
+        "lowering": _jsonable(refusal) if refusal is not None else None,
+        "kinds": [instruction.kind for instruction in compiled.instructions],
+    }
+
+
+def attach_ast(reports: list["UnitReport"]) -> None:
+    """Each line's tree (``LineReport.ast``): the line as the compiler handed
+    it to the grammar, then — for a line of more than one sentence — each
+    sentence asked alone."""
+    for unit in reports:
+        for line in unit.lines:
+            if line.blank:
+                continue
+            readings = [ast_reading(line.grammar.text, unit.name)]
+            parts = sentences(line.grammar.text)
+            if len(parts) > 1:
+                readings += [ast_reading(part, unit.name, alone=True) for part in parts]
+            line.ast = readings
 
 
 # ---------------------------------------------------------------------------
@@ -684,6 +923,9 @@ class LineReport:
     round: int
     removed: list[str]
     notes: list[str] = field(default_factory=list)
+    #: The parsed trees (``--ast``, :func:`attach_ast`): the whole line, then
+    #: each sentence asked alone when it has more than one.
+    ast: list[dict] | None = None
 
 
 @dataclass
@@ -1282,6 +1524,54 @@ def _furthest_lines(furthest: Furthest, indent: str) -> list[str]:
     return out
 
 
+def _refusal_lines(refusal: LoweringRefusal | None, indent: str) -> list[str]:
+    if refusal is None:
+        return []
+    out = [f"{indent}raised at {refusal.site}"]
+    if len(refusal.chain) > 1:
+        out.append(f"{indent}innermost of {len(refusal.chain)} chained: {refusal.message!r}")
+    via = refusal.frames[:-1][-6:]
+    if via:
+        out.append(f"{indent}via:")
+        out += [f"{indent}  {path}:{lineno} {name}" for path, lineno, name in via]
+    return out
+
+
+def _ast_reading_lines(reading: dict, indent: str) -> list[str]:
+    if reading["blank"]:
+        return [f"{indent}blank (reminder text only)"]
+    if reading["parse_error"]:
+        return [f"{indent}parse error: {reading['parse_error']}"]
+    out = ast_lines(reading["ast"], indent)
+    if reading["alone"]:
+        if reading["lowering_error"]:
+            out.append(f"{indent}lowering: error: {reading['lowering_error']}")
+            lowering = reading["lowering"]
+            if lowering is not None:
+                out += _refusal_lines(LoweringRefusal(
+                    lowering["site"], lowering["message"], lowering["chain"],
+                    [tuple(frame) for frame in lowering["frames"]]), indent + "  ")
+        else:
+            out.append(f"{indent}lowering: {reading['kinds']}")
+    return out
+
+
+def _ast_block(line: "LineReport") -> list[str]:
+    out = []
+    readings = line.ast or []
+    parts = [reading for reading in readings if reading["alone"]]
+    for reading in readings:
+        if not reading["alone"]:
+            asked = f" (of {reading['text']!r})" if reading["text"] != line.text else ""
+            out.append(f"      ast{asked}:")
+        else:
+            number = parts.index(reading) + 1
+            out.append(f"      sentence {number} of {len(parts)}, asked alone "
+                       f"(out of its context: a lead): {reading['text']!r}")
+        out += _ast_reading_lines(reading, "        ")
+    return out
+
+
 def render_text(reports: list[UnitReport], full: bool = False) -> str:
     out: list[str] = []
     for unit in reports:
@@ -1337,9 +1627,12 @@ def render_text(reports: list[UnitReport], full: bool = False) -> str:
                     out.append(f"        node: {grammar.node_repr[:3000]}")
                 if grammar.lowering_error:
                     out.append(f"      lowering: error: {grammar.lowering_error}")
+                    out += _refusal_lines(grammar.lowering, "        ")
                 else:
                     usable = "usable" if grammar.usable else "not usable"
                     out.append(f"      lowering: {grammar.kinds} {grammar.categories} ({usable})")
+            if line.ast:
+                out += _ast_block(line)
             out.append("      trigger table: "
                        + (line.condition or "no condition row (not a trigger to it)"))
             out.append("      card hook: " + (line.hook or "no CARD_LINE_INSTRUCTIONS entry"))
@@ -1402,6 +1695,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="emit the report as JSON")
     parser.add_argument("--full", action="store_true",
                         help="print the program, grammar nodes and instruction payloads")
+    parser.add_argument("--ast", action="store_true",
+                        help="print each line's parsed tree, node by node with the fields "
+                             "it sets, and each sentence of a longer line asked alone")
     add_set_argument(parser, default=None)
     return parser
 
@@ -1434,6 +1730,8 @@ def main(argv: list[str] | None = None) -> int:
         reports = probe_card(card)
     else:
         reports = probe_card(invented_card(args.line, args.type_line, args.name))
+    if args.ast:
+        attach_ast(reports)
     print(render_json(reports) if args.json else render_text(reports, full=args.full))
     return 0
 

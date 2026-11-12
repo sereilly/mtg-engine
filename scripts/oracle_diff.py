@@ -22,12 +22,20 @@ with the earliest printing winning — the same pool ``parse_coverage.py`` reads
 **A dataclass that gains a defaulted field moves every card that has one.**
 The programs are stored as their ``repr``, so adding
 ``pay_life_per_counter=None`` to ``ActivatedAbilityCost`` reported **710 of
-1,869** changed where ten had really moved. That is not a false positive to
-suppress — the repr is what makes the narrowing class visible in the first
-place — but it does mean a round that adds a field owes the reader the filter:
-strip the new field's default spelling from both sides and re-compare, and say
-in the report what the number is *after* stripping. A round that reports the
-raw count has told the next integrator nothing.
+1,869** changed where ten had really moved, and Darksteel's
+``unattach_granter_id=None`` read 2,407 for nine. That is not a false positive
+to suppress — the repr is what makes the narrowing class visible in the first
+place — so ``compare`` separates the two itself (:func:`split_defaulted`): a
+field spelled ``, name=<literal>`` that **every** new repr of a class carries
+and **no** old one does is a new defaulted field, and a card that moves by
+nothing but that spelling (at the field's commonest value) is counted on one
+line per field rather than listed. Every other card is a real move, its diff
+printed without the new fields' spelling, and the exit code is about real
+moves alone. A card carrying the field at any *other* value is a real move:
+only the one spelling is struck, never the field.
+
+Two stored snapshots compare without the engine: ``compare --against
+<other.json>`` reads the second file as the "after".
 
 **What the map cannot see** (printed on every compare): a text-keyed table —
 ``combat_restrictions``, ``untap_restrictions`` / ``draw_step_modifiers``,
@@ -43,6 +51,8 @@ import difflib
 import json
 import re
 import sys
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -169,6 +179,206 @@ def compare_snapshots(old: dict, new: dict):
     return added, removed, changed
 
 
+# ---------------------------------------------------------------------------
+# New defaulted fields
+# ---------------------------------------------------------------------------
+
+# One token of a repr: a string (skipped whole, so a paren or "x=" inside one
+# is text), a call head ``Name(``, a keyword ``name=`` (never ``==``), a
+# bracket, or a comma. Everything else — numbers, ``None``, an enum's
+# ``<Kind.X: 'x'>`` — lies between tokens and is only ever part of a value.
+_TOKEN = re.compile(
+    r"""(?P<string>'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")"""
+    r"|(?P<call>[A-Za-z_][\w.]*\()"
+    r"|(?P<keyword>[A-Za-z_]\w*=(?!=))"
+    r"|(?P<open>[(\[{])"
+    r"|(?P<close>[)\]}])"
+    r"|(?P<comma>,)"
+)
+#: The spellings a field's default can have in a repr: the brief's
+#: ``, name=<literal>``. A value outside these (a nested object, a computed
+#: tuple) is never read as a default.
+_LITERAL = re.compile(
+    r"""None|True|False|-?\d+(?:\.\d+)?|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|"""
+    r"""\(\)|\[\]|\{\}|frozenset\(\)|set\(\)"""
+)
+
+
+@dataclass(frozen=True)
+class _Field:
+    name: str
+    #: Where the text to strike begins: the ", " before the field, or the
+    #: field's own first character when it is the first in its call.
+    start: int
+    value_start: int
+    value_end: int
+    first: bool
+
+
+@dataclass
+class _Instance:
+    cls: str
+    fields: list[_Field] = field(default_factory=list)
+
+
+def repr_instances(text: str) -> list[_Instance]:
+    """Every ``Name(field=value, ...)`` call in *text*, with its keyword fields
+    at their spans. Positional arguments (a ``frozenset({...})``) carry no
+    field. Nested calls are instances of their own."""
+    instances: list[_Instance] = []
+    # Each frame: [instance or None, open field name, its start, value start, first]
+    stack: list[list] = []
+
+    def close_field(frame, end):
+        if frame[0] is not None and frame[1] is not None:
+            frame[0].fields.append(_Field(frame[1], frame[2], frame[3], end, frame[4]))
+            frame[1] = None
+
+    for match in _TOKEN.finditer(text):
+        kind = match.lastgroup
+        if kind == "string":
+            continue
+        if kind == "call":
+            stack.append([_Instance(match.group()[:-1].rsplit(".", 1)[-1]), None, 0, 0, False])
+        elif kind == "open":
+            stack.append([None, None, 0, 0, False])
+        elif kind == "close":
+            if not stack:
+                continue
+            frame = stack.pop()
+            close_field(frame, match.start())
+            if frame[0] is not None:
+                instances.append(frame[0])
+        elif kind == "comma":
+            if stack:
+                close_field(stack[-1], match.start())
+        elif kind == "keyword" and stack and stack[-1][0] is not None and stack[-1][1] is None:
+            start = match.start()
+            first = text[start - 2:start] != ", "
+            stack[-1][1:] = [match.group()[:-1], start if first else start - 2, match.end(), first]
+    return instances
+
+
+@dataclass(frozen=True)
+class DefaultedField:
+    """A field every new repr of *cls* carries and no old one did, and the
+    spelling a card may differ by and still count as unmoved."""
+
+    cls: str
+    name: str
+    value: str
+    #: How many new instances carry each other value — those cards are real moves.
+    others: tuple[tuple[str, int], ...] = ()
+
+    @property
+    def label(self) -> str:
+        return f"{self.cls}.{self.name}={self.value}"
+
+
+def _strike(text: str, struck: set[tuple[str, str, str]]) -> tuple[str, set[tuple[str, str, str]]]:
+    """*text* without each ``(cls, name, value)`` spelling, and which were struck."""
+    spans: list[tuple[int, int]] = []
+    hit: set[tuple[str, str, str]] = set()
+    for instance in repr_instances(text):
+        for index, item in enumerate(instance.fields):
+            key = (instance.cls, item.name, text[item.value_start:item.value_end])
+            if key not in struck:
+                continue
+            hit.add(key)
+            if not item.first:
+                spans.append((item.start, item.value_end))
+            elif index + 1 < len(instance.fields):
+                following = instance.fields[index + 1]
+                spans.append((item.start, following.start + (0 if following.first else 2)))
+            else:
+                spans.append((item.start, item.value_end))
+    if not spans:
+        return text, hit
+    out, cursor = [], 0
+    for start, end in sorted(spans):
+        out.append(text[cursor:start])
+        cursor = max(cursor, end)
+    out.append(text[cursor:])
+    return "".join(out), hit
+
+
+def defaulted_fields(old: dict, new: dict, changed: dict) -> list[DefaultedField]:
+    """The new defaulted fields *changed* shows.
+
+    Read off the moved components alone: a class that also appears in a
+    component that did **not** move cannot have gained a field (that repr
+    would have moved too, or would lack the field), so any such appearance
+    rules the class out."""
+    old_fields: dict[str, set[str]] = defaultdict(set)
+    new_count: Counter = Counter()
+    new_fields: dict[str, Counter] = defaultdict(Counter)
+    values: dict[tuple[str, str], Counter] = defaultdict(Counter)
+    for name, moves in changed.items():
+        for _component, before, after in moves:
+            for instance in repr_instances(before):
+                old_fields[instance.cls].update(item.name for item in instance.fields)
+            for instance in repr_instances(after):
+                new_count[instance.cls] += 1
+                for item in instance.fields:
+                    new_fields[instance.cls][item.name] += 1
+                    values[instance.cls, item.name][after[item.value_start:item.value_end]] += 1
+    candidates = {
+        (cls, name)
+        for cls, counts in new_fields.items() if cls in old_fields
+        for name, count in counts.items()
+        if count == new_count[cls] and name not in old_fields[cls]
+    }
+    if not candidates:
+        return []
+    classes = {cls for cls, _ in candidates}
+    head = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, sorted(classes))) + r")\(")
+    seen_unmoved: set[str] = set()
+    for name in old.keys() & new.keys():
+        for component in COMPONENTS:
+            text = old[name].get(component)
+            if text != new[name].get(component) or not isinstance(text, str):
+                continue
+            # The regex is the cheap pass; the scan, which skips strings, decides.
+            if head.search(text):
+                seen_unmoved |= {i.cls for i in repr_instances(text)} & classes
+    found = []
+    for cls, name in sorted(candidates):
+        if cls in seen_unmoved:
+            continue
+        spelled = values[cls, name].most_common()
+        value = spelled[0][0]
+        if not _LITERAL.fullmatch(value):
+            continue
+        found.append(DefaultedField(cls, name, value, tuple(spelled[1:])))
+    return found
+
+
+def split_defaulted(old: dict, new: dict, changed: dict):
+    """``(real, by_field, fields)``: the cards that moved for real (their moves
+    with the new fields' spelling struck, so a diff shows only what moved), the
+    cards that moved by nothing else under each field's label, and the fields."""
+    fields = defaulted_fields(old, new, changed)
+    if not fields:
+        return changed, {}, []
+    struck = {(item.cls, item.name, item.value) for item in fields}
+    label = {(item.cls, item.name, item.value): item.label for item in fields}
+    real: dict[str, list[tuple[str, str, str]]] = {}
+    by_field: dict[str, list[str]] = {item.label: [] for item in fields}
+    for name, moves in changed.items():
+        remaining, hits = [], set()
+        for component, before, after in moves:
+            stripped, hit = _strike(after, struck)
+            hits |= hit
+            if stripped != before:
+                remaining.append((component, before, stripped))
+        if remaining:
+            real[name] = remaining
+        else:
+            for key in sorted(hits):
+                by_field[label[key]].append(name)
+    return real, by_field, fields
+
+
 # A program repr is one long line; diffing it whole hides *where* it moved.
 # Splitting after each `), ` puts one instruction/ability per segment, which is
 # the granularity a reader compares at.
@@ -179,11 +389,26 @@ def _segments(text: str) -> list[str]:
     return _SEGMENT.split(text)
 
 
-def render_compare(added, removed, changed, total: int) -> str:
+def render_compare(added, removed, changed, total: int,
+                   by_field: dict | None = None, fields=()) -> str:
     lines = [
         f"{len(added)} added / {len(removed)} removed / "
         f"{len(changed)} changed of {total} cards"
     ]
+    if fields:
+        only = {name for names in (by_field or {}).values() for name in names}
+        lines.append(
+            f"{len(only)} more moved only by a new defaulted field (every new repr "
+            "of its class carries it, no old one did) — not counted above; the "
+            "diffs below leave its spelling out:"
+        )
+        for item in fields:
+            note = ""
+            if item.others:
+                spelled = ", ".join(f"{value} ×{count}" for value, count in item.others[:4])
+                more = f", {len(item.others) - 4} more" if len(item.others) > 4 else ""
+                note = f" (other values, read as moves: {spelled}{more})"
+            lines.append(f"  {len(by_field.get(item.label, ())):>5}  {item.label}{note}")
     for name in added:
         lines.append(f"+ {name} (new to the pool)")
     for name in removed:
@@ -221,12 +446,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_SNAPSHOT,
         help=f"snapshot file (default {DEFAULT_SNAPSHOT.relative_to(REPO_ROOT)})",
     )
+    parser.add_argument(
+        "--against",
+        type=Path,
+        metavar="OTHER",
+        help="compare: read this second snapshot file as the 'after' instead "
+             "of compiling the pool (two stored snapshots, no engine)",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    program_store.warm()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.against is not None and args.mode != "compare":
+        parser.error("--against is a compare option")
+    if args.against is None:
+        program_store.warm()
     if args.mode == "snapshot":
         snapshot = snapshot_pool()
         write_snapshot(snapshot, args.snapshot)
@@ -241,10 +477,21 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     old = read_snapshot(args.snapshot)
-    added, removed, changed = compare_snapshots(old, snapshot_pool())
-    print(render_compare(added, removed, changed, total=len(old)))
+    if args.against is not None:
+        if not args.against.exists():
+            print(f"no snapshot at {args.against}", file=sys.stderr)
+            return 2
+        new = read_snapshot(args.against)
+    else:
+        new = snapshot_pool()
+    added, removed, changed = compare_snapshots(old, new)
+    real, by_field, fields = split_defaulted(old, new, changed)
+    print(render_compare(added, removed, real, total=len(old),
+                         by_field=by_field, fields=fields))
     print(BLIND_SPOT)
-    return 1 if (added or removed or changed) else 0
+    # Real moves only: a card that moved by a new field's default spelling and
+    # nothing else is on its field's line, not in the exit code.
+    return 1 if (added or removed or real) else 0
 
 
 if __name__ == "__main__":

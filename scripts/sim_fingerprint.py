@@ -20,6 +20,17 @@ Usage::
     ... edit ...
     python scripts/sim_fingerprint.py compare     # exit 1 if any run moved
 
+    python scripts/sim_fingerprint.py snapshot --rev main   # after the fact
+
+**A snapshot can be of another commit** (``--rev``). Three Darksteel groups
+had edited before they snapshotted and rebuilt their base by hand from a
+``git archive`` export. ``snapshot --rev <commit>`` plays the same twelve runs
+in a throwaway detached worktree of that commit inside ``.worktrees/`` —
+its own engine and its own ``simulate_ai_games.py`` — writes them into the
+snapshot directory named, and removes the worktree; ``compare`` then reads
+that base against the working tree as usual. The commit a snapshot was taken
+of is recorded beside it (``SOURCE``) and printed by ``compare``.
+
 The run list is fixed and spans the pool by era, so the two readings are of
 the same games; there is no ``--set`` for the reason `oracle_diff` has none.
 A compare that differs prints the first lines where each moved run diverges,
@@ -38,14 +49,18 @@ from __future__ import annotations
 import argparse
 import difflib
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SNAPSHOT = REPO_ROOT / ".sim_fingerprint"
+#: The file beside a snapshot's runs naming what they were played on.
+SOURCE_FILE = "SOURCE"
 
 #: (set code, seed, games). One set per era of the pool, so the handlers a
 #: refactor can reach are reached by some run: the base sets, the first
@@ -77,24 +92,25 @@ def run_name(code: str, seed: int, games: int) -> str:
     return f"{code}_s{seed}_g{games}"
 
 
-def run_one(code: str, seed: int, games: int, out_dir: Path) -> dict:
+def run_one(code: str, seed: int, games: int, out_dir: Path, root: Path = REPO_ROOT) -> dict:
     """One seeded run, its log written beside the summary it printed.
 
     The printed summary carries the log's path, which is the one line that
-    differs between two identical runs, so it is dropped.
+    differs between two identical runs, so it is dropped. *root* is the
+    checkout whose simulator (and so whose engine) plays the run.
     """
     name = run_name(code, seed, games)
     log_path = out_dir / f"{name}.log"
     completed = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "simulate_ai_games.py"),
+            str(root / "scripts" / "simulate_ai_games.py"),
             "--set", code,
             "--seed", str(seed),
             "--games", str(games),
             "--log-file", str(log_path),
         ],
-        cwd=REPO_ROOT,
+        cwd=root,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -115,10 +131,55 @@ def run_one(code: str, seed: int, games: int, out_dir: Path) -> dict:
     return {"name": name, "exit": completed.returncode}
 
 
-def run_all(out_dir: Path, workers: int) -> list[dict]:
+def run_all(out_dir: Path, workers: int, root: Path = REPO_ROOT) -> list[dict]:
     out_dir.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(lambda run: run_one(*run, out_dir), RUNS))
+        return list(pool.map(lambda run: run_one(*run, out_dir, root), RUNS))
+
+
+def _git(*args: str, cwd: Path = REPO_ROOT) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def resolve_rev(rev: str) -> str:
+    """The full commit hash *rev* names, or ``ValueError``."""
+    try:
+        return _git("rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}")
+    except subprocess.CalledProcessError:
+        raise ValueError(f"{rev!r} names no commit") from None
+
+
+@contextmanager
+def rev_worktree(commit: str):
+    """A detached worktree of *commit*, removed on the way out.
+
+    Inside the main checkout's ``.worktrees/`` (gitignored, and the one place
+    an agent can write), whichever worktree this runs from."""
+    common = Path(_git("rev-parse", "--path-format=absolute", "--git-common-dir"))
+    path = common.parent / ".worktrees" / f"sim_fingerprint-{commit[:10]}-{os.getpid()}"
+    _git("worktree", "add", "--detach", str(path), commit)
+    try:
+        yield path
+    finally:
+        try:
+            _git("worktree", "remove", "--force", str(path))
+        except subprocess.CalledProcessError:
+            shutil.rmtree(path, ignore_errors=True)
+            _git("worktree", "prune")
+
+
+def snapshot_source(rev: str | None, commit: str | None) -> str:
+    """What a snapshot was played on, as ``SOURCE`` records it."""
+    if commit is not None:
+        return f"commit {commit} (--rev {rev})"
+    try:
+        head = _git("rev-parse", "HEAD")
+        dirty = bool(_git("status", "--porcelain", "--untracked-files=no"))
+    except (OSError, subprocess.CalledProcessError):
+        return "working tree"
+    return f"working tree at {head}" + (" with uncommitted changes" if dirty else "")
 
 
 def _read(path: Path) -> list[str]:
@@ -178,21 +239,44 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers", type=int, default=4, help="runs at once (default 4)"
     )
+    parser.add_argument(
+        "--rev",
+        metavar="COMMIT",
+        help="snapshot: play the runs on this commit instead of the working "
+             "tree, in a throwaway detached worktree removed after",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.rev is not None and args.command != "snapshot":
+        parser.error("--rev is a snapshot option: compare always plays the working tree")
     if args.command == "snapshot":
-        results = run_all(args.snapshot, args.workers)
+        commit = None
+        if args.rev is not None:
+            try:
+                commit = resolve_rev(args.rev)
+            except ValueError as error:
+                parser.error(str(error))
+            with rev_worktree(commit) as root:
+                results = run_all(args.snapshot, args.workers, root)
+        else:
+            results = run_all(args.snapshot, args.workers)
+        source = snapshot_source(args.rev, commit)
+        (args.snapshot / SOURCE_FILE).write_text(source + "\n", encoding="utf-8")
         failed = [r["name"] for r in results if r["exit"] != 0]
-        print(f"snapshot: {len(results)} seeded runs -> {args.snapshot}")
+        print(f"snapshot: {len(results)} seeded runs of the {source} -> {args.snapshot}")
         if failed:
             print(f"note: {len(failed)} run(s) exited non-zero: {failed}")
         return 0
     if not args.snapshot.exists():
         print(f"no snapshot at {args.snapshot}; run `snapshot` first")
         return 2
+    source = args.snapshot / SOURCE_FILE
+    if source.exists():
+        print(f"snapshot of the {source.read_text(encoding='utf-8').strip()}")
     with tempfile.TemporaryDirectory(prefix="sim_fingerprint_") as scratch:
         run_all(Path(scratch), args.workers)
         moved = compare_dirs(args.snapshot, Path(scratch))
