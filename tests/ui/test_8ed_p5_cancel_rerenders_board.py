@@ -29,7 +29,7 @@ let pendingManaColor = null, pendingCastTarget = null, pendingCastX = null,
     pendingDiscardCost = null, pendingPermanentCost = null, pendingCastOffers = null,
     pendingCastCreatureType = null, pendingActivation = null, pendingModeCollection = null,
     pendingActivationCost = null, pendingAbilityChoice = null, pendingChannel = null,
-    pendingChosenAbilityWord = null, pendingAttackTarget = null;
+    pendingChosenAbilityWord = null, pendingAttackTarget = null, pendingTapSplit = null;
 const battlefieldCanvas = null;
 const CALLS = [];
 const currentState = { revision: 52, current_step: "postcombat_main", priority_player: 0 };

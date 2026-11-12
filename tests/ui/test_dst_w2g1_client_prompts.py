@@ -423,7 +423,7 @@ def test_w2g1_panoptic_mirror_s_offer_names_the_card_offered_next(set_pool):
         "function copyCastExiledCard() { return null; }\n"
         "function normalizeImageUri() { return null; }\n"
     )
-    shown = run_app_js(["applyCopyCastPrompt"], "applyCopyCastPrompt(INPUT.info);" + _panel(),
+    shown = run_app_js(["applyCopyCastPrompt", "copyCastFromHand"], "applyCopyCastPrompt(INPUT.info);" + _panel(),
                        {"info": info}, prelude=prelude)
     assert "decline this and you are offered Ancestral Recall next" in shown["steps"], shown
     assert _post(sid, "copy_cast_confirm", accept=False).status_code == 200

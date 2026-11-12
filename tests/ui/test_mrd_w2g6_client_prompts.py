@@ -89,7 +89,7 @@ def _entry(state, permanent, seat=0):
 # Copy cast (Isochron Scepter)
 # ---------------------------------------------------------------------------
 
-_COPY_FUNCTIONS = ["getCopyCastInfo", "copyCastExiledCard", "copyCastWay", "carryCopyCastAnswer",
+_COPY_FUNCTIONS = ["getCopyCastInfo", "copyCastExiledCard", "copyCastFromHand", "copyCastWay", "carryCopyCastAnswer",
                    "zoneCastCard", "xLivesInManaCost"]
 _COPY_PRELUDE = "let seat = 0; let currentState = null; let pendingCopyCast = null;"
 
@@ -195,7 +195,8 @@ def test_a_copy_of_a_card_in_another_seats_exile_asks_for_its_spec():
     caster, from exile) before opening the cast chain, and an X in the mana
     cost is not asked: a copy cast without paying it has X = 0 (CR 107.3b)."""
     out = run_app_js(
-        ["beginCopyCast", "copyCastExiledCard", "copyCastWay", "normalizeCardName", "xLivesInManaCost"],
+        ["beginCopyCast", "copyCastExiledCard", "copyCastFromHand", "copyCastWay", "normalizeCardName",
+         "xLivesInManaCost"],
         """
         currentState = { players: [
           { exile: [] },

@@ -124,6 +124,7 @@ function carryAbilityCostAlternative(body) { return body; }
 function captureModeCollectionTarget() { return false; }
 function snapStateRefetchBackoff() {}
 function castManaSplitFor() { return null; }
+function tapManaSplitFor() { return null; }
 function startCastDividedPrompt(card) { shown.push({ kind: "divided", seat: pendingAnnouncedSeat }); }
 async function postJson(_url, body) { sent.push(body); return {}; }
 // The payment preview every paying action asks first (SCG P5; its own test is
