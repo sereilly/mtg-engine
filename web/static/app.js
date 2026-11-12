@@ -2655,14 +2655,17 @@ function perColorWord(color) {
 // each chosen slot stands for, or null when no assignment exists; the colours
 // are the graveyard card's own as the server serialized it. The engine judges
 // the same matching (`engine/per_color_targets.assign_colors`) and refuses an
-// unmatched set; this keeps a person from building one.
+// unmatched set; this keeps a person from building one. Walked as the engine
+// walks it — cards in the order chosen, colours in the spec's WUBRG order —
+// so the colour the hint says a card stands for is the one the engine assigns
+// it (and records as it was chosen as, for the 2004-12-01 ruling).
 function perColorAssignment(slots, spec) {
   const allowed = Array.isArray(spec?.graveyard_colors) && spec.graveyard_colors.length
     ? spec.graveyard_colors : ["W", "U", "B", "R", "G"];
   const colorsOf = (slots || []).map((slot) => {
     const card = currentState?.players?.[slot.seat]?.graveyard?.[slot.idx];
     const colors = Array.isArray(card?.colors) ? card.colors : [];
-    return colors.filter((color) => allowed.includes(color));
+    return allowed.filter((color) => colors.includes(color));
   });
   const holder = {};
   const place = (i, seen) => {

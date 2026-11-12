@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from engine.aura_attachment import attach_aura
 from engine.models import Permanent
 from engine.named_counters import counters_on
-from engine.per_color_targets import one_per_color
+from engine.per_color_targets import assign_colors, one_per_color
 from web.app import app, store
 
 from tests.helpers import run_app_js, seat_plays_first, settle
@@ -173,8 +173,10 @@ def test_w2g1_all_suns_dawn_picker_agrees_with_the_engine_on_every_set(set_pool)
     colour: two white-blue cards are the white one and the blue one (ruling
     2004-12-01), a third is refused, and so is Shock beside Lightning Bolt.
     Asked of every subset of the seven-card pile the browser was clicked on,
-    against the engine's own gate (`per_color_targets.one_per_color`): the
-    two never disagree, and 127 sets were examined."""
+    against the engine's own gate (`per_color_targets.one_per_color`) and,
+    where a set is legal, its assignment (`assign_colors`, the colour each
+    target is recorded as chosen as): the two never disagree, and 127 sets
+    were examined."""
     sid, game = _w2g1_session()
     game.players[0].hand = [_w2g1_card(set_pool, "All Suns' Dawn")]
     game.players[0].graveyard = [_w2g1_card(set_pool, name) for name in _W2G1_DAWN_PILE]
@@ -202,8 +204,10 @@ def test_w2g1_all_suns_dawn_picker_agrees_with_the_engine_on_every_set(set_pool)
         engine_says = one_per_color([pile[i].colors for i in slots])
         assert (answer is not None) == engine_says, ([pile[i].name for i in slots], answer)
         if answer is not None:
-            assert len(set(answer)) == len(slots)
-            assert all(color in pile[i].colors for color, i in zip(answer, slots))
+            # The very colours the engine assigns (and records), so the hint
+            # naming "Absorb as the white one" says what the engine will hold.
+            assert answer == assign_colors([pile[i].colors for i in slots]), (
+                [pile[i].name for i in slots], answer)
         examined += 1
     assert examined == 127
     by_name = dict(zip(
