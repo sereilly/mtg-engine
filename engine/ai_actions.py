@@ -243,8 +243,18 @@ class ActivationAction:
     # deterministic pick; named for every sacrifice the chooser weighs
     # (`ai_activation_rehearsal._sacrifice_priced_activation`): the cheapest
     # to lose, or the reading the effect is measured by ("damage equal to the
-    # sacrificed artifact's mana value", Bosh).
+    # sacrificed artifact's mana value", Bosh). For a "Remove a counter from
+    # a permanent you control" cost, the one permanent the counter comes off
+    # (`ai_activation_rehearsal._counter_priced_activation`).
     cost_permanent_ids: list[int] | None = None
+    # …and which kind of counter it gives up (CR 602.2b through 601.2b): "Remove
+    # a +1/+1 counter **or a charge counter**" (Ion Storm), "Remove **a
+    # counter**" (Power Conduit) — the activation path's ``cost_counter_kind``.
+    # None is the engine's default (`named_counters.counter_kind_to_remove`),
+    # and every ability but one whose cost removes a counter from a permanent
+    # the payer chooses, which the chooser names by rehearsal
+    # (`ai_counter_costs.counter_cost_choices`).
+    cost_counter_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -394,8 +404,10 @@ def activation_announcement(action: ActivationAction) -> dict:
         # Which printed activation cost ("{3}, {T} or {U}, {T}") is paid.
         "alternative_cost_index": action.alternative_cost_index,
         # CR 601.2b via 602.2b: which permanents pay the sacrifice (see
-        # `ActivationAction.cost_permanent_ids`).
+        # `ActivationAction.cost_permanent_ids`)…
         "cost_permanent_ids": action.cost_permanent_ids,
+        # …and which kind of counter a remove-a-counter cost gives up.
+        "cost_counter_kind": action.cost_counter_kind,
     }
 
 
@@ -503,6 +515,36 @@ def zone_being_cast_from(game: Game, seat: int, action: "CastAction") -> list:
 _OFFERS_ANNOUNCED: ContextVar["dict[str, int] | None"] = ContextVar(
     "ai_offers_announced", default=None
 )
+
+
+#: The permanents an "any number of" sacrifice would be paid with while the
+#: target choosers weigh the candidate being built ("As an additional cost to
+#: cast this spell, sacrifice any number of creatures", Vicious Betrayal; CR
+#: 601.2b) — ids, the cheapest to lose first, or None for every card printing
+#: no such cost. A pump counted by what was sacrificed, rehearsed with nothing
+#: sacrificed, is +0/+0 on every body, so every target read as nothing and the
+#: spell was dropped for "no legal target on the side the effect wants". Each
+#: target is rehearsed with the cheapest of these that is not itself
+#: (:func:`provisional_sacrifice`); how many is weighed once the target is
+#: named (``ai_sacrifice_victims.cast_naming_its_sacrifices``). Set around the
+#: single call that builds a candidate, for `_OFFERS_ANNOUNCED`'s reason.
+_SACRIFICES_ANNOUNCED: ContextVar["tuple[int, ...] | None"] = ContextVar(
+    "ai_sacrifices_announced", default=None
+)
+
+
+def provisional_sacrifice(permanent_ids) -> "list[int] | None":
+    """The ``cost_permanent_ids`` a target chooser's rehearsal of the
+    candidate being built announces where it names *permanent_ids*: the
+    cheapest provisional victim (`_SACRIFICES_ANNOUNCED`) that is not one of
+    them, or None — the engine's default, and every card's but one printing
+    an "any number of" sacrifice."""
+    victims = _SACRIFICES_ANNOUNCED.get()
+    if not victims:
+        return None
+    named = set(permanent_ids or ())
+    victim = next((each for each in victims if each not in named), None)
+    return None if victim is None else [victim]
 
 
 #: The **speed** the candidate being built is weighed at: ``"main"`` — its

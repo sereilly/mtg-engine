@@ -137,6 +137,11 @@ from .ai_slot_targets import (
 )
 from .ai_divisions import choose_divided_targets
 from .ai_imprint import held_for_an_imprint
+from .ai_sacrifice_victims import (
+    cast_naming_its_sacrifices,
+    sacrifices_weighed_provisionally,
+)
+from .ai_sunburst_x import aims_at_mana_value_zero
 from .ai_text_changes import choose_object_or_spell
 
 
@@ -1074,23 +1079,26 @@ def _cast_candidate_announcing(
 ) -> CastAction | None:
     """`_announced_candidate`, as one attempt of the decision's trace
     (``ai_cast_trace.attempt``): the mode, the offers and the size of an X
-    paid in life it is built at are the ones being weighed."""
-    if cast_trace.silent():
-        return _announced_candidate(
-            game, player_index, card, hand_index,
-            from_zone=from_zone, extra_generic=extra_generic, offers=offers,
-        )
-    asked = _LIFE_X_ASKED.get()
-    with cast_trace.attempt(
-        game, player_index, card, mode_index=_announced_mode(card),
-        offers=offers if _announces_any_offer(card, offers) else None,
-        life_x=asked[1] if asked is not None and asked[0] is card else None,
-        from_zone=from_zone, zone_index=hand_index,
-    ):
-        return _announced_candidate(
-            game, player_index, card, hand_index,
-            from_zone=from_zone, extra_generic=extra_generic, offers=offers,
-        )
+    paid in life it is built at are the ones being weighed — and an "any
+    number of" sacrifice's provisional victims, for its target choosers
+    (``ai_sacrifice_victims.sacrifices_weighed_provisionally``)."""
+    with sacrifices_weighed_provisionally(game, player_index, card, from_zone, offers):
+        if cast_trace.silent():
+            return _announced_candidate(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic, offers=offers,
+            )
+        asked = _LIFE_X_ASKED.get()
+        with cast_trace.attempt(
+            game, player_index, card, mode_index=_announced_mode(card),
+            offers=offers if _announces_any_offer(card, offers) else None,
+            life_x=asked[1] if asked is not None and asked[0] is card else None,
+            from_zone=from_zone, zone_index=hand_index,
+        ):
+            return _announced_candidate(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic, offers=offers,
+            )
 
 
 def _announced_candidate(
@@ -1168,7 +1176,9 @@ def _announced_candidate(
     x_value = _pick_x_value(
         game, player, card, extra_generic, hand_index=spell_hand_index,
     )
-    if x_value == 0:
+    if x_value == 0 and not aims_at_mana_value_zero(game, player_index, card):
+        # …except a sunburst count aimed at mana value 0 (Engineered
+        # Explosives over tokens, `ai_sunburst_x`), which is the X it wants.
         return cast_trace.dropped("its X would be 0: a price paid for nothing")
 
     # CR 601.2h's printed **additional** costs, asked of the engine's own gate
@@ -1235,7 +1245,7 @@ def _announced_candidate(
         ) is None
         and (
             _announces_any_offer(card, offers)
-            or not _alternative_cost_is_payable(game, player_index, card, hand_index)
+            or not _alternative_cost_is_payable(game, player_index, card, spell_hand_index)
         )
     ):
         return cast_trace.dropped(
@@ -1526,12 +1536,17 @@ def _announced_candidate(
             required = sized[1]
         plan = _plan_land_taps(game, player, required)
         if plan is None:
-            if announces_offer or under is not None:
+            if announces_offer or (
+                under is not None
+                and not permission_leaves_the_price(game, player_index, under)
+            ):
                 # *under*: the price planned was already the permission's — a
-                # flashback cost, a waiver, a card played out of another zone
-                # — and CR 118.9a allows no second alternative cost beside
-                # one. (A printed alternative cost taken from an opened
-                # graveyard is a cast this policy does not make.)
+                # flashback cost, a waiver — and CR 118.9a allows no second
+                # alternative cost beside one. A permission that charges the
+                # card's own mana cost (Yawgmoth's Will, Yawgmoth's Agenda)
+                # leaves its printed alternative open, and an unpayable mana
+                # cost falls through to it as from the hand (5DN W2G3: Snuff
+                # Out's 4 life out of an opened graveyard).
                 return cast_trace.dropped(
                     "unaffordable: the planned price was already the offers' or the"
                     " permission's, and no second alternative cost is allowed"
@@ -1566,7 +1581,11 @@ def _announced_candidate(
             # the one its rehearsal measures more (below). Named by index
             # where several apply, or the cast path refuses the cast.
             several = len(game.applicable_alternative_costs(player_index, card)) > 1
-            for index in payable_alternative_indices(game, player_index, card, hand_index):
+            # The spell's own slot in hand, which cannot pay for it — none for
+            # a cast out of another zone (`spell_hand_index`).
+            for index in payable_alternative_indices(
+                game, player_index, card, spell_hand_index,
+            ):
                 plan = _alternative_cost_tap_plan(
                     game, player_index, card, extra_generic=extra_generic,
                     index=index if several else None,
@@ -1640,6 +1659,8 @@ def _announced_candidate(
     # "…where X is the sacrificed artifact's mana value" (Forge Armor): the
     # victim weighed, where the effect reads what the sacrifice ate.
     action = _cast_naming_its_sacrifice(game, player_index, card, action, offers)
+    # …how many an "any number of" sacrifice eats, where the effect counts them.
+    action = cast_naming_its_sacrifices(game, player_index, card, action, offers)
     # …and the hand cards a printed discard is paid with.
     action = _cast_naming_its_discards(game, player_index, card, action, offers)
     # **What the cast would do, asked of the engine** — for a spell, whose

@@ -17,7 +17,9 @@ at all.
   Black Lotus).
 * **A source whose mana costs mana** (the Odyssey filter lands, Mana Cylix)
   is :func:`_priced_mana_source`'s, for the plan to put the taps that pay
-  its price in front of it.
+  its price in front of it — and **one that doubles the pool** (Doubling
+  Cube) is :func:`_pool_doubler`'s, for the plan to put every tap in front
+  of it.
 
 Each answers None where the payload cannot say, and the plan leaves that
 source out: mana counted that a tap will not make is a cast refused for
@@ -172,6 +174,75 @@ def _priced_mana_source(
             run=dict(produced.run) if produced.run else None,
         )
     return found
+
+
+#: The instruction kind of a mana ability that doubles the pool rather than
+#: adding a stated amount: "Double the amount of each type of unspent mana
+#: you have" (Doubling Cube; CR 701.10f, a mana ability by the card's
+#: 2004-12-01 ruling).
+POOL_DOUBLING_KIND = "double_unspent_mana"
+
+
+@dataclass(frozen=True)
+class _PoolDoubler:
+    """A mana ability that doubles the pool, as the payment plan counts it —
+    see `_pool_doubler`."""
+
+    #: Which of the permanent's usable abilities.
+    ability_index: int
+    #: The generic mana one activation costs, beside the tap.
+    price: int
+
+
+def _pool_doubler(
+    game: Game, seat: int, permanent: "Permanent | None"
+) -> "_PoolDoubler | None":
+    """The mana ability of a permanent *seat* controls that doubles the
+    unspent mana (:data:`POOL_DOUBLING_KIND`), whose cost is **generic mana
+    and {T}** — or None.
+
+    "{3}, {T}: Double the amount of each type of unspent mana you have."
+    (Doubling Cube.) Its yield is no amount a payload states, so neither the
+    free planner nor `_priced_mana_source` counted it, and the AI never
+    activated one (5DN W1G7): it is `ai_payment._plan_through_a_pool_doubler`'s,
+    the plan's very last resort. Held to `_priced_mana_source`'s gates: only
+    generic mana and {T} in the cost, no printed restriction or offer,
+    untapped, not a summoning-sick creature, not under a ban or a permission
+    that closes it to this seat.
+    """
+    import dataclasses
+
+    if permanent is None or permanent.tapped or game._is_summoning_sick(permanent):
+        return None
+    for index, ability in enumerate(game.usable_abilities_of(permanent)):
+        instruction = ability.instruction
+        if (
+            instruction is None or instruction.kind != POOL_DOUBLING_KIND
+            or not is_cr_mana_ability(ability)
+        ):
+            continue
+        cost = ability.cost
+        mana = {symbol: int(amount or 0) for symbol, amount in cost.mana.items()}
+        if any(amount for symbol, amount in mana.items() if symbol != "generic"):
+            return None
+        if cost != dataclasses.replace(
+            type(cost)(mana={symbol: 0 for symbol in cost.mana}),
+            requires_tap=True, mana=cost.mana,
+        ):
+            return None
+        line = ability.source_line or ""
+        if prints_activation_restriction(line) or carries_an_offer(instruction):
+            return None
+        if (
+            permanent_activations_forbidden(game, permanent)
+            or global_activation_ban(game, permanent, ability) is not None
+            or activation_denial(game, seat, permanent, line)
+            or activation_permission_denial(game, seat, permanent, line)
+            or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
+        ):
+            return None
+        return _PoolDoubler(ability_index=index, price=mana.get("generic", 0))
+    return None
 
 
 @dataclass(frozen=True)

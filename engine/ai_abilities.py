@@ -29,6 +29,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 
 from .ai_activation_rehearsal import (
+    _counter_priced_activation,
     _gives_up_its_source,
     _land_ability_worth,
     _moves_something,
@@ -361,16 +362,18 @@ def _activation_candidate(
     if life_cost and player.life - life_cost < ACTIVATION_LIFE_RESERVE:
         return None
 
-    # "Remove a +1/+1 counter from a creature you control" (Spike Rogue).
-    # The same trade in the opposite direction and the same reason the
-    # policy cannot price it: the score below reads the *effect*, so moving
-    # a counter from one creature to another reads as a free +1/+1 — and
-    # the AI would shuttle its board's counters onto the Spike every main
-    # phase for no net gain. Derived from the compiled cost, so it names no
-    # card. The self-referring spelling is left alone: that one is priced by
-    # the source's own counters, which the score does read.
-    if ability.cost.remove_counter_filter is not None:
-        return None
+    # "Remove a +1/+1 counter from a creature you control" (Spike Rogue),
+    # "Remove a counter from a permanent you control" (Power Conduit, Ion
+    # Storm). The score below reads the *effect*, so a counter moved from
+    # one creature to another read as a free +1/+1, and every such cost was
+    # declined (5DN W2G3 drained SET_PLAYBOOK's known gap). **Priced by
+    # rehearsal** now, as a sacrifice is: each permanent and kind of counter
+    # the cost may take, carried out on a copy with the whole cost paid
+    # (``ai_activation_rehearsal._counter_priced_activation``), so a shuttle
+    # that gains nothing is still never made. The self-referring spelling is
+    # left to the score: that one is priced by the source's own counters,
+    # which the score does read.
+    counter_weighed = ability.cost.remove_counter_filter is not None
     # …and every cost the score does price still has to be **payable**
     # (CR 601.2h via CR 602.2b; CR 118.3): "{T}, Remove a javelin counter
     # from this creature" with none left (Icatian Javelineers), "Exile two
@@ -931,9 +934,20 @@ def _activation_candidate(
         # each distinct reading the board offers. At instant speed the
         # cheapest reading is proposed and its caller's rehearsal disposes,
         # as for every proposal there. An X beside it is not announced.
-        if x_symbols:
+        if x_symbols or counter_weighed:
             return None
         return _sacrifice_priced_activation(
+            game, player_index, permanent, ability, candidate,
+            at_instant_speed=_AT_INSTANT_SPEED.get(),
+        )
+    if counter_weighed:
+        # The permanent and the kind of counter the cost takes, named
+        # (`ActivationAction.cost_permanent_ids`, ``cost_counter_kind``) and
+        # weighed by rehearsal with the rest of the cost. An X beside it is
+        # not announced.
+        if x_symbols:
+            return None
+        return _counter_priced_activation(
             game, player_index, permanent, ability, candidate,
             at_instant_speed=_AT_INSTANT_SPEED.get(),
         )

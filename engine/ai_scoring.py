@@ -54,6 +54,7 @@ from .ai_rehearsal import (
 )
 from .ai_scratch_copy import public_counts
 from .ai_standing import CARD_WORTH
+from .ai_sunburst_x import aimed_sunburst_x
 from .ai_valuation import (
     board_lowers_toughness,
     cards_drawn_by_controller,
@@ -91,6 +92,7 @@ from .ai_actions import (
     _announced_steps,
     _cast_zone,
     _cast_spec,
+    provisional_sacrifice,
     _announces_any_offer,
     target_keywords,
 )
@@ -202,6 +204,10 @@ def _announcement(
     *spell_zone*)."""
     offers = _OFFERS_ANNOUNCED.get()
     under = cast_weighed(card)
+    keywords = target_keywords(
+        game, cast_target_zone(card, mode_index=_announced_mode(card)),
+        caster, target, permanent_index, permanent_ids,
+    )
     return cast_announcement(CastAction(
         card_name=card.name,
         target_player_index=target,
@@ -209,10 +215,10 @@ def _announcement(
         land_tap_indices=(),
         score=0.0,
         hand_index=0,
-        **target_keywords(
-            game, cast_target_zone(card, mode_index=_announced_mode(card)),
-            caster, target, permanent_index, permanent_ids,
-        ),
+        **keywords,
+        # "Sacrifice any number of creatures" (Vicious Betrayal): the
+        # provisional victim, never the target named (`_SACRIFICES_ANNOUNCED`).
+        cost_permanent_ids=provisional_sacrifice(keywords.get("target_permanent_ids")),
         target_stack_index=stack_index,
         target_role_refs=role_refs,
         optional_cost_payments=(
@@ -1252,4 +1258,10 @@ def _pick_x_value(
         # X of nothing.
         return 0
     max_x = _max_affordable_x(game, player, card, extra_generic)
-    return max_x
+    # "Sunburst. … Destroy each nonland permanent with mana value equal to the
+    # number of charge counters on this artifact" (Engineered Explosives): the
+    # X is the colour count aimed at the mana value the board wants swept, and
+    # no more mana than that (`ai_sunburst_x`); the largest X where nothing is.
+    seat = next((i for i, seated in enumerate(game.players) if seated is player), 0)
+    aimed = aimed_sunburst_x(game, seat, card, max_x)
+    return max_x if aimed is None else aimed
