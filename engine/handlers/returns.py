@@ -155,6 +155,9 @@ _GRAVEYARD_NARROWING_KEYS = (
     "graveyard_subtypes", "graveyard_colors", "supertypes", "graveyard_mana_value",
     # Groffskithur's printed name: a narrowing like any adjective above.
     "graveyard_named",
+    # "target **noncreature** artifact card" (Salvaging Station): a type the
+    # card must not have.
+    "graveyard_excluded_types",
     # "target **artifact creature** card" (Skeleton Shard, Moriok
     # Scavenger): every printed type at once. With ``card_type`` None and no
     # ``card_types`` union, the payload fell through to the "first creature

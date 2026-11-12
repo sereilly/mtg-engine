@@ -496,6 +496,15 @@ def graveyard_card_matches(spec: dict, card, *, game=None, owner=None) -> bool:
         spec.get("graveyard_mana_value"), int(getattr(card, "cmc", 0) or 0)
     ):
         return False
+    # "target **noncreature** artifact card" (Salvaging Station). A type the
+    # card must *not* have, through ``card_has_type`` for the reason every type
+    # test here goes through it (CR 205.2a: an Artifact Creature card is a
+    # creature card, whichever word its line prints first). Asked before the
+    # any-card exit for the mana value's reason: it narrows a phrase that
+    # already names a type rather than replacing one.
+    unwanted = tuple(spec.get("graveyard_excluded_types") or ())
+    if unwanted and any(card_has_type(card, name) for name in unwanted):
+        return False
     # "target card **named Groffskithur**" (Groffskithur). A name is a
     # characteristic a card has in every zone (CR 201.2), asked through the one
     # reader of "is this card named N?" the battlefield and hand matchers use.

@@ -218,6 +218,17 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
         spec["graveyard_colors"] = list(colors)
     if subtypes:
         spec["graveyard_subtypes"] = list(subtypes)
+    # "target creature card **with mana value 3 or less**" (Unearth) and
+    # "target **noncreature** artifact card with mana value 1 or less"
+    # (Salvaging Station): the two narrowings the picker and the announcement
+    # gates read off this payload, handed to the same predicate here so the
+    # resolution's re-check and its no-slot fallback ask what they ask. (A
+    # bare cast or activation is handed a legal slot by the picker today, so
+    # nothing in the pool reached the fallback without them; this is the third
+    # reader agreeing with the other two, not a repair.)
+    for key in ("graveyard_mana_value", "graveyard_excluded_types"):
+        if instruction.payload.get(key):
+            spec[key] = instruction.payload[key]
     if spec:
         # The type word travels with the narrowings rather than being left to
         # the predicate's default. ``graveyard_card_matches`` ends "a spec that

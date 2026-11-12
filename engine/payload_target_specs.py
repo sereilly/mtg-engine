@@ -426,6 +426,14 @@ def _graveyard_return_spec(payload: dict) -> dict:
     # reason directly above: dropped, the picker offers every card in the pile.
     if payload.get("graveyard_named"):
         spec["graveyard_named"] = str(payload["graveyard_named"])
+    # "target artifact card **with mana value 1 or less**" (Leonin Squire,
+    # Auriok Salvagers), for the colour's reason directly above: the line has
+    # no other narrowing beside the type, so dropped, the picker offers every
+    # artifact in the pile and the handler then declines what it offered.
+    if payload.get("graveyard_mana_value"):
+        spec["graveyard_mana_value"] = dict(payload["graveyard_mana_value"])
+    if payload.get("graveyard_excluded_types"):
+        spec["graveyard_excluded_types"] = list(payload["graveyard_excluded_types"])
     # "Return **another** target artifact card…" (Junk Diver). Carried onto the
     # spec for the subtype's reason directly above: the enumerator reads it
     # through the one predicate the handler also reads
@@ -849,6 +857,10 @@ def _reanimation_spec(payload: dict) -> dict | None:
     # so ignoring it is the whole restriction gone.
     if payload.get("graveyard_mana_value"):
         spec["graveyard_mana_value"] = dict(payload["graveyard_mana_value"])
+    # "target **noncreature** artifact card" (Salvaging Station), for the
+    # bound's reason directly above.
+    if payload.get("graveyard_excluded_types"):
+        spec["graveyard_excluded_types"] = list(payload["graveyard_excluded_types"])
     # "target **Dragon** permanent card" (Bladewing the Risen): the subtype on
     # the key the handler re-checks (``graveyard_card_matches``), for the type's
     # reason above — a picker without it offers every creature card.
