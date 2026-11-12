@@ -7579,7 +7579,12 @@ function applyNumberChoicePrompt(info) {
   customOkBtn.disabled = true;
 
   const cardName = info.card_name || "";
-  title.textContent = "Choose a number";
+  // "Pay any amount of life, then …" (Plunge into Darkness, `pays_life`): the
+  // number is life, paid as it is named — so the prompt and every button say
+  // so, and the seat's life total stands beside the choice.
+  const paysLife = !!info.pays_life;
+  const life = Number(currentState?.players?.[seat]?.life);
+  title.textContent = paysLife ? "Pay life" : "Choose a number";
   // `maximum` is null where the card prints no ceiling ("Choose a number.",
   // Squee's Revenge; "greater than 0", Scrying Glass) — the buttons below are
   // the server's offer, not a rule.
@@ -7588,7 +7593,9 @@ function applyNumberChoicePrompt(info) {
   // many cards leave the hand at random.
   setSymbolsHtml(
     body,
-    (Number.isInteger(info.maximum)
+    (paysLife
+      ? `${cardName}: pay any amount of life${Number.isFinite(life) ? ` (you have ${life})` : ""}.`
+      : Number.isInteger(info.maximum)
       ? `${cardName}: choose a number between ${info.minimum} and ${info.maximum}.`
       : `${cardName}: choose a number (${info.minimum} or more).`) +
       (info.card_text ? `\n“${info.card_text}”` : ""),
@@ -7597,7 +7604,7 @@ function applyNumberChoicePrompt(info) {
     .map(
       (n) =>
         `<button type="button" class="prompt-choice-btn" data-number="${escapeHtml(String(n))}">` +
-        `${escapeHtml(String(n))}</button>`
+        `${escapeHtml(paysLife ? `Pay ${n} life` : String(n))}</button>`
     )
     .join("");
   steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
@@ -15538,6 +15545,8 @@ function renderActivationPrompt() {
         : `Exile ${pending.count === 1 ? (/^[aeiou]/i.test(pending.noun) ? "an" : "a") : pending.count} ${pending.noun}${pending.count === 1 ? "" : "s"} from ${pileOwner} graveyard to ${purpose}. Choose which.`)
       : pending.announcesX
       ? `${verb} X ${pending.noun}(s) to ${purpose}. Choose which; X is how many you choose.`
+      : pending.anyNumber
+      ? `${verb} any number of ${costNounPlural(pending.noun)} to ${purpose}. Choose which; choosing none is legal.`
       : `${verb} ${pending.count} ${pending.count === 1 ? pending.noun : costNounPlural(pending.noun)} to ${purpose}. Choose which.`;
     // Two permanents with one name are told apart by their position, so the
     // player can see that a click picked the second Forest and not the first.
@@ -15576,8 +15585,12 @@ function renderActivationPrompt() {
       ? `Put ${picked.length} of ${pending.count} on the bottom`
       : pending.announcesX
       ? `${tallyVerb} ${picked.length} (X = ${picked.length})`
-      : pending.anyNumber
+      : pending.anyNumber && fromGraveyard
       ? (picked.length === 0 ? "Exile nothing" : `Exile ${picked.length} card${picked.length === 1 ? "" : "s"}`)
+      : pending.anyNumber
+      ? (picked.length === 0
+        ? `${tallyVerb} nothing`
+        : `${tallyVerb} ${picked.length} ${picked.length === 1 ? pending.noun : costNounPlural(pending.noun)}`)
       : `${tallyVerb} ${picked.length} of ${pending.count}`;
     steps.innerHTML = `<div class="prompt-choice-column">${permanentButtons}`
       + `<button type="button" class="prompt-choice-btn" id="permanentCostConfirmBtn"${ready ? "" : " disabled"}>`
@@ -18374,6 +18387,10 @@ function permanentCostStep(costSpec, alreadyChosen = []) {
     counter: costSpec.counter || null,
     // "a counter" of any kind (`any_counter_kind`, Power Conduit).
     anyCounterKind: !!costSpec.any_counter_kind,
+    // …or of one of the kinds the cost lists ("a +1/+1 counter or a charge
+    // counter", Ion Storm: `counter_kinds`), the only kinds the engine takes.
+    counterKinds: Array.isArray(costSpec.counter_kinds) && costSpec.counter_kinds.length
+      ? costSpec.counter_kinds.map(String) : null,
     noun: typeof subtype === "string"
       ? subtype.charAt(0).toUpperCase() + subtype.slice(1)
       : (costSpec.kind || "permanent"),
@@ -18550,13 +18567,25 @@ function confirmPermanentCost() {
   // is asked when it holds more than one kind (one kind needs no choice — the
   // engine takes it).
   if (pending.anyCounterKind && !pending.counterKindChosen && picked.length === 1) {
-    const kinds = counterKindsOnPermanentId(picked[0]);
+    const held = counterKindsOnPermanentId(picked[0]);
+    // A cost that lists its kinds (Ion Storm's "+1/+1 or charge") offers
+    // those alone: a Spinal Parasite's -1/-1 counter is no answer, and the
+    // engine refuses a kind outside the list with nothing spent.
+    const kinds = pending.counterKinds
+      ? held.filter((kind) => pending.counterKinds.includes(kind))
+      : held;
     if (kinds.length >= 2) {
       pendingCounterKindChoice = { pending, picked, kinds };
       pendingPermanentCost = null;
       renderActivationPrompt();
       updateActionHint(`Choose which counter ${pending.cardName} removes to pay its cost.`);
       return;
+    }
+    if (pending.counterKinds && kinds.length === 1 && held.length > 1) {
+      // One listed kind among others the permanent holds: named, so the
+      // engine is never left to read the choice off a permanent with more
+      // than one kind on it.
+      pending.counterKindChosen = kinds[0];
     }
   }
   pendingPermanentCost = null;
@@ -19193,6 +19222,17 @@ function dispatchModalCast(card, castAction, targetKind, validTargets = null, mo
       clearPendingHandCast();
     })
     .catch((e) => {
+      // The mana is still on the board: the auto-tap dialog every other cast
+      // send opens (`continueCastAfterCost`), the chosen mode kept for the
+      // retry (`pendingCastModeIndex` rides it, `carryCastMode`). This ended
+      // the cast instead, so a mode that targets nothing — Plunge into
+      // Darkness's "Pay any amount of life", a charm's draw — could be cast
+      // only off a pool floated by hand (5DN W2G1).
+      if (isManaRefusal(e.message)) {
+        pendingAutoTap = { card, cardName, actionBody };
+        renderActivationPrompt();
+        return;
+      }
       clearPendingHandCast();
       updateActionHint(e.message, true);
     });
@@ -19761,7 +19801,15 @@ function startCastCostPrompt(card, castAction = "cast") {
   // Merfolk): the same set picker for a set of one, because the canvas picker
   // below is a *sacrifice* picker — it says "sacrifice" and answers on
   // `cost_permanent_index`, which the engine's return charger does not read.
-  if ((costSpec.sacrifice_cost && Number(costSpec.count || 1) > 1) || costSpec.return_cost) {
+  //
+  // "As an additional cost to cast this spell, sacrifice **any number of**
+  // creatures" (Vicious Betrayal, `any_number` on the cost spec): the same set
+  // picker with no count, none included — the one-click picker below named one
+  // creature and could name no other, and never none.
+  if (
+    (costSpec.sacrifice_cost && (Number(costSpec.count || 1) > 1 || costSpec.any_number))
+    || costSpec.return_cost
+  ) {
     if ((pendingCastCost || {}).cost_permanent_ids) return false;
     return startCastPermanentSetCostPrompt(card, castAction, costSpec);
   }
@@ -19779,7 +19827,8 @@ function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
     .filter((option) => option?.kind === "permanent")
     .map((option) => ({ id: permanentIdAt(option.seat, option.index), name: option.name }))
     .filter((option) => Number.isInteger(option.id));
-  const count = Math.max(1, Number(costSpec.count || 1));
+  const anyNumber = !!costSpec.any_number;
+  const count = anyNumber ? 0 : Math.max(1, Number(costSpec.count || 1));
   if (options.length < count) {
     // CR 601.2h: the engine refuses it and says why; asking first would be a
     // second opinion about payability.
@@ -19793,6 +19842,9 @@ function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
     verb: permanentCostVerb(costSpec),
     noun: costSpec.kind || "permanent",
     count,
+    // "Any number of" (Vicious Betrayal): every size is an answer, none
+    // included, and the confirm is never held.
+    anyNumber,
     announcesX: false,
     options,
     picked: [],
