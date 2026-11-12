@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**443 / 654 tracked rules covered (67%)** — 3728 tests, 0 unannotated.
+**444 / 655 tracked rules covered (67%)** — 3734 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [615. Prevention Effects](#615-prevention-effects) | 8/13 | 61% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
-| [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
+| [701. Keyword Actions](#701-keyword-actions) | 20/20 | 100% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 40/40 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
@@ -174,7 +174,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 107. Numbers and Symbols
 
-- [x] **107.1** The only numbers the Magic game uses are integers. *(3 tests, subrules ab)*
+- [x] **107.1** The only numbers the Magic game uses are integers. *(4 tests, subrules ab)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
 - [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(21 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
@@ -713,7 +713,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(33 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(34 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(31 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(7 tests, subrules a)*
@@ -862,6 +862,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(9 tests, subrules abc)*
 - [x] **701.9** Discard *(9 tests, subrules ac)*
+- [x] **701.10** Double *(6 tests, subrules def)*
 - [x] **701.12** Exchange *(11 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(8 tests, subrules abd)*

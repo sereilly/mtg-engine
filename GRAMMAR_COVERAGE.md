@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MRD | 291 | 456 | 88.2% | 88.2% | 65.1% | 238 |
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| 5DN *(measured)* | 165 | 273 | 81.7% | 80.6% | 54.6% | 131 |
+| 5DN *(measured)* | 165 | 273 | 84.2% | 83.5% | 57.5% | 137 |
 | **All (shipped)** | **9448** | **14064** | **89.7%** | **89.2%** | **62.1%** | **7410** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -72,7 +72,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 941 | 477 | expected a subject |  |
 | 194 | 97 | unrecognized effect verb |  |
-| 146 | 75 | unconsumed text |  |
+| 143 | 72 | unconsumed text |  |
 | 78 | 59 | granted ability in quotes | phase 3 (quoted abilities) |
 | 43 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -94,7 +94,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | only doubling power has a handler |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -1084,6 +1084,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to this creature instead.`
 - **Beacon of Destruction**
   - `Beacon of Destruction deals 5 damage to any target. Shuffle Beacon of Destruction into its owner's library.`
+- **Beacon of Immortality**
+  - `Double target player's life total. Shuffle Beacon of Immortality into its owner's library.`
 - **Beacon of Tomorrows**
   - `Target player takes an extra turn after this one. Shuffle Beacon of Tomorrows into its owner's library.`
 - **Beacon of Unrest**
@@ -3376,6 +3378,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{R}.`
 - **Double Vision**
   - `Whenever you cast your first instant or sorcery spell each turn, copy that spell. You may choose new targets for the copy.`
+- **Doubling Cube**
+  - `{3}, {T}: Double the amount of each type of unspent mana you have.`
 - **Doubtless One**
   - `Whenever this creature deals damage, you gain that much life.`
 - **Douse**
@@ -6235,6 +6239,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent casts a creature spell that doesn't share a color with a creature you control, counter that spell unless that player pays {X}, where X is its mana value.`
 - **Invulnerability**
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage.`
+- **Ion Storm**
+  - `{1}{R}, Remove a +1/+1 counter or a charge counter from a permanent you control: This enchantment deals 2 damage to any target.`
 - **Iridescent Drake**
   - `When this creature enters, put target Aura card from a graveyard onto the battlefield under your control attached to this creature.`
 - **Iron Lance**
@@ -7443,6 +7449,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
   - `Whenever a player taps a land for mana, that player adds one mana of any type that land produced.`
+- **Mana Geyser**
+  - `Add {R} for each tapped land your opponents control.`
 - **Mana Leak**
   - `Counter target spell unless its controller pays {3}.`
   - `Counter target spell unless its controller pays {3}.`
@@ -9204,6 +9212,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put two target lands on top of their owners' libraries.`
 - **Plunge into Darkness**
   - `• Sacrifice any number of creatures. You gain 3 life for each creature sacrificed this way.`
+  - `• Pay any amount of life, then look at that many cards from the top of your library. Put one of those cards into your hand and exile the rest.`
 - **Political Trickery**
   - `Exchange control of target land you control and target land an opponent controls. (This effect lasts indefinitely.)`
 - **Pollen Remedy**
@@ -10380,6 +10389,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Gain control of target creature for as long as you control Rubinia Soulsinger and Rubinia Soulsinger remains tapped.`
 - **Rude Awakening**
   - `• Untap all lands you control.`
+  - `• Until end of turn, lands you control become 2/2 creatures that are still lands.`
 - **Rugged Highlands**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {R} or {G}.`
@@ -11536,6 +11546,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Solar Tide**
   - `• Destroy all creatures with power 2 or less.`
   - `• Destroy all creatures with power 3 or greater.`
+- **Solarion**
+  - `{T}: Double the number of +1/+1 counters on this creature.`
 - **Soldevi Adnate**
   - `{T}, Sacrifice a black or artifact creature: Add an amount of {B} equal to the sacrificed creature's mana value.`
 - **Soldevi Digger**
@@ -13705,6 +13717,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Vibrating Sphere**
   - `During your turn, creatures you control get +2/+0.`
   - `During turns other than yours, creatures you control get -0/-2.`
+- **Vicious Betrayal**
+  - `Target creature gets +2/+2 until end of turn for each creature sacrificed this way.`
 - **Vicious Hunger**
   - `Vicious Hunger deals 2 damage to target creature and you gain 2 life.`
   - `Vicious Hunger deals 2 damage to target creature and you gain 2 life.`
