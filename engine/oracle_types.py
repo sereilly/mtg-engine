@@ -1380,6 +1380,16 @@ TARGET_PLAYER_OR_CONTROLLER = "target_player_or_controller"
 #: exist (CR 707.10a).
 SPELL_RETURNED_TO_HAND = "spell_returned_to_hand"
 
+#: The resolving spell's record that **its own effect shuffles its card into
+#: its owner's library** — "Shuffle Beacon of Destruction into its owner's
+#: library" (the five Beacons). :data:`SPELL_RETURNED_TO_HAND`'s sibling one
+#: zone over, written by ``shuffle_source_card_into_library`` and read by the
+#: same last step (``_resolve_card``'s ``finish`` → ``_bin_spell_card``), so
+#: CR 608.2n's "put into its owner's graveyard" does not then happen too. A
+#: spell that never resolves never runs the handler, and goes to the
+#: graveyard (the Beacons' 2007-07-15 ruling).
+SPELL_SHUFFLED_INTO_LIBRARY = "spell_shuffled_into_library"
+
 #: What the target of a single-target destroy was **attached to**, and what
 #: was attached **to it**, as the destroy step found them (CR 608.2h): lists
 #: of permanents, empty when there was nothing. "If that Equipment was

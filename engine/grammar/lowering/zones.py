@@ -858,7 +858,20 @@ def _lower_put_onto_battlefield(
             raise LoweringError(
                 "the reanimation handler cannot test that card phrase", node=node
             )
-        if len(filt.card_types) > 1:
+        # "Put target **artifact or creature** card from a graveyard onto the
+        # battlefield under your control." (Beacon of Unrest.) A union of
+        # permanent card types, which the handler already searches by
+        # (``card_has_any_type``, Bladewing's "permanent card") and the picker
+        # and the re-check already read as an OR (``card_types``). A
+        # conjunction ("artifact creature card") is a different phrase the
+        # handler's search cannot say, and a non-permanent type has nowhere to
+        # arrive (CR 110.4a), so both keep the refusal.
+        union = len(filt.card_types) > 1
+        if union and (
+            filt.type_match != "any"
+            or not set(filt.card_types) <= set(PERMANENT_CARD_TYPES)
+            or filt.subtypes
+        ):
             raise LoweringError(
                 "the reanimation handler moves one kind of card", node=node
             )
@@ -927,7 +940,9 @@ def _lower_put_onto_battlefield(
         # Written only when the phrase is not the creature the handler already
         # defaults to, so every reanimation compiled before this one keeps a
         # byte-identical payload.
-        if filt.card_types and filt.card_types != ("creature",):
+        if union:
+            payload["card_types"] = list(filt.card_types)
+        elif filt.card_types and filt.card_types != ("creature",):
             payload["card_type"] = filt.card_types[0]
         if filt.subtypes:
             # On the key ``graveyard_card_matches`` reads — the one predicate

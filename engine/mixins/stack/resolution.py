@@ -32,7 +32,7 @@ from ...game_types import (OracleExecutionContext, OracleStateMachine,
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition
 from ...oracle import OracleInstruction, compile_card_oracle
-from ...oracle_types import SPELL_RETURNED_TO_HAND
+from ...oracle_types import SPELL_RETURNED_TO_HAND, SPELL_SHUFFLED_INTO_LIBRARY
 from ...modal_triggers import modal_trigger_modes
 from ...resumption import run_resumable
 from ...stack_targets import source_name
@@ -102,6 +102,7 @@ class StackResolutionMixin:
         self, owner, card: CardDefinition, *, exile_instead: bool, verb: str,
         hand_instead: bool = False, exile_is_final: bool = False,
         chooser_index: int | None = None, returned_to_hand: bool = False,
+        shuffled_into_library: bool = False,
     ) -> None:
         """Where a spell's card goes as it leaves the stack (CR 608.2n): the
         owner's graveyard, unless the cast carried the "if that spell would be
@@ -157,6 +158,29 @@ class StackResolutionMixin:
         # …and a face-down spell is revealed as it leaves for anywhere but the
         # battlefield (CR 708.9) — the card that lands is the one it hid.
         leaving = whole_card(revealed_as_it_moves(self, card))
+        # *shuffled_into_library*: the spell's own effect shuffles it into its
+        # owner's library (the Beacons, ``SPELL_SHUFFLED_INTO_LIBRARY``). Like
+        # the Pulse cycle's return below it is no graveyard trip, so nothing
+        # replacing one contends — not the "exile it instead" rider, not
+        # buyback, not Forbidden Crypt — and only a final exile outranks it:
+        # CR 702.34a's flashback exile is "instead of putting it anywhere
+        # else", and CR 701.24c shuffles the library all the same (its own
+        # example is Black Sun's Zenith cast with flashback).
+        if shuffled_into_library:
+            if exile_instead and exile_is_final:
+                self.put_card_into_exile(owner, leaving)
+                self.log.append(
+                    f"{card.name} {verb} and was exiled instead of being "
+                    "shuffled into its owner's library"
+                )
+            elif self.put_card_into_library(owner, leaving):
+                self.log.append(
+                    f"{card.name} {verb} and was shuffled into its owner's library"
+                )
+            else:
+                self.log.append(f"{card.name} {verb}")
+            self.shuffle_library_of(owner)
+            return
         # *returned_to_hand*: the spell's own effect sent it there (the Pulse
         # cycle, ``Game.return_resolving_spell_to_hand``). No graveyard trip, so
         # nothing replacing one contends; only a final exile outranks it.
@@ -1347,6 +1371,11 @@ class StackResolutionMixin:
                 # …and the Pulse cycle's own return (SPELL_RETURNED_TO_HAND).
                 returned_to_hand=any(
                     ran is not None and ran.results.get(SPELL_RETURNED_TO_HAND)
+                    for ran in contexts_run
+                ),
+                # …and the Beacons' own shuffle (SPELL_SHUFFLED_INTO_LIBRARY).
+                shuffled_into_library=any(
+                    ran is not None and ran.results.get(SPELL_SHUFFLED_INTO_LIBRARY)
                     for ran in contexts_run
                 ),
             )
