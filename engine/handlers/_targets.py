@@ -943,7 +943,8 @@ def recorded_permanent_ids(context, key) -> tuple[int, ...]:
     about shape: a reanimation, a sweep and a tap write a *list* of ids, while a
     choose-one prompt and a targeting steal write a bare id. Twenty reader sites
     across eight ``handlers/`` files each made their own assumption, and two of
-    them — ``counters.add_counter_to_target`` and ``prevention``'s shield grant —
+    them — ``counters.add_counter_to_target`` and ``prevention_blankets``' shield
+    grant —
     had grown a local normalisation whose own comment called itself "the local
     half of a wider question". Nothing was broken, but only because no
     list-producer happened to feed a scalar reader; three sets in a row added
@@ -1171,8 +1172,8 @@ def names_a_target_list(instruction) -> bool:
 
     Here rather than in one handler family, because it is the question every
     caller of :func:`resolve_target_permanents` has to answer first and a second
-    family now asks it (``handlers/prevention.py``'s Redeem). It is a *floor*,
-    not a family: it reads a payload and nothing else.
+    family now asks it (``handlers/prevention_blankets.py``'s Redeem). It is a
+    *floor*, not a family: it reads a payload and nothing else.
     """
     targets = instruction.payload.get("targets")
     if not isinstance(targets, dict):

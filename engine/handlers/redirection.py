@@ -15,7 +15,11 @@ recipient: damage that becomes counter removal (Soul Echo) and a turn-long
 change to how much is dealt (Equal Treatment, Blind Fury,
 ``engine/turn_replacements.py``).
 
-Split out of ``damage.py`` at the 2,000-line cap's split round.
+Split out of ``damage.py`` at the 2,000-line cap's split round. Jade Monolith's
+redirect of a chosen source's next damage onto its controller, and Personal
+Incarnation's next 1 damage to its owner (a count on the permanent that
+``replacements/redirects.py`` spends), came over from ``prevention.py`` at the
+pre-Fifth-Dawn split round: each moves the damage rather than preventing it.
 """
 
 from __future__ import annotations
@@ -1274,6 +1278,52 @@ def redirect_damage_from_target_spell_until_eot(
         f"{card_name}: damage {item.card.name} would deal is dealt to "
         f"{controller.name} instead"
     )
+    return True, "resolved"
+
+
+@effect_handler("redirect_one_damage_to_owner")
+def redirect_one_damage_to_owner(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    card = context.card
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    source_permanent.metadata["redirect_one_damage_to_owner_until_eot"] = int(
+        source_permanent.metadata.get("redirect_one_damage_to_owner_until_eot", 0)
+    ) + 1
+    game.log.append(f"{card.name} will redirect next 1 damage to its owner")
+    return True, "resolved"
+
+
+@effect_handler("jade_monolith_redirect")
+def jade_monolith_redirect(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Jade Monolith: "The next time a source of your choice would deal damage to
+    target creature this turn, that source deals that damage to you instead."
+
+    The general CR 614.9 record (``damage_redirects.DamageRedirect``) on the
+    target creature: one use, the chosen source (``choices["chosen_source"]``:
+    a permanent, or a stack spell's card) or any source for an announcement
+    that named none (an AI or headless activation), the caster taking the
+    damage. As a record it is CR 615.8's instance like every other one-use
+    redirect — spent inside a simultaneous dealing, it moves the source's other
+    chunks of that dealing to the creature too — and its source is matched by
+    identity (``damage_redirects.source_matches``): a second Rod of Ruin is not
+    the one that was named. It was a metadata pair named for the card, spent
+    per chunk and matched by card.
+    """
+    caster = context.caster
+    target_creature = resolve_target_permanent(game, context)
+    if target_creature is not None:
+        chosen_source = context.choices.get("chosen_source")
+        add_redirect(target_creature, DamageRedirect(
+            new_recipient=caster, source=chosen_source, uses=1,
+            source_name=context.card.name,
+        ))
+        named = getattr(getattr(chosen_source, "card", chosen_source), "name", "source")
+        game.log.append(
+            f"{context.card.name} marks {target_creature.card.name} for damage "
+            f"redirect to {caster.name}"
+            + (f" (source: {named})" if chosen_source is not None else "")
+        )
     return True, "resolved"
 
 

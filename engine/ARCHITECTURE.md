@@ -668,7 +668,7 @@ arms every seat's `secret_number` at once and the answer that completes the map
 logs the reveal. Two decisions by two different players in one sentence are the
 same loop over one seat with the second as its `then` — Blackmail's revealer
 picks the three cards to show, then the caster picks among them
-(`handlers/reveal._reveal_shown_cards_and_choose`).
+(`handlers/hand_reveals._reveal_shown_cards_and_choose`).
 
 **Every damage call in the engine satisfies both and asks**: the handlers and
 the combat damage step (`tests/engine/test_kg_damage_handler_asks.py`), and

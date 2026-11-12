@@ -11,7 +11,7 @@ answer makes, shared with the resolvers in ``engine/mixins/stack/choices/``.
 
 Split out of ``zones.py`` at the 2,000-line cap's split round. A discard of a
 card a *reveal* chose ("…discards it unless they pay 1 life") is
-``reveal.py``'s, beside the reveal that recorded which card.
+``hand_reveals.py``'s, beside the reveal that recorded which card.
 """
 
 from __future__ import annotations

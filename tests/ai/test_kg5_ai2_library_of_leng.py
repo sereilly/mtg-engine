@@ -42,7 +42,7 @@ from engine.oracle import compile_card_oracle
 from tests.helpers import _nosick, settle
 
 #: The effect kinds that make a player discard (``handlers/discards.py``,
-#: ``handlers/reveal.py``).
+#: ``handlers/hand_reveals.py``).
 _DISCARD_KINDS = frozenset({
     "discard_target_cards", "discard_x_target_cards", "discard_all_matching_cards",
     "discard_hand", "each_player_discards_a_card", "each_player_discards_up_to_cards",

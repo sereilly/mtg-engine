@@ -499,10 +499,10 @@ def denies_its_target(instruction: OracleInstruction) -> bool:
 #: that would be dealt to and dealt by that creature this turn." (Foxfire;
 #: "those creatures", Energy Arc, through the record the untap wrote.) The
 #: handler resolves the pronoun to the target the sentence in front named
-#: (``handlers/prevention.prevent_damage_to_target_until_eot``). Read alone,
-#: the untap made both spells "you" (``_OWN_KINDS``): an AI seat aimed Energy
-#: Arc at its own creature with the opposing twin measuring four times as
-#: much, and could cast Foxfire only at its own attacker.
+#: (``handlers/prevention_blankets.prevent_damage_to_target_until_eot``). Read
+#: alone, the untap made both spells "you" (``_OWN_KINDS``): an AI seat aimed
+#: Energy Arc at its own creature with the opposing twin measuring four times
+#: as much, and could cast Foxfire only at its own attacker.
 _SPENT_ON_THE_EARLIER_TARGET = frozenset({"prevent_damage_to_target_until_eot"})
 
 
