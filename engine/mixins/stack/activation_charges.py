@@ -772,14 +772,18 @@ class ActivationChargesMixin:
         One function for the refusal above the payment and the payment below
         it, so the kind checked is the kind removed.
         """
-        from ...named_counters import ANY_COUNTER_KIND, counter_kind_to_remove
+        from ...named_counters import (ANY_COUNTER_KIND, counter_kind_to_remove,
+                                       listed_counter_kinds)
 
         printed = getattr(ability.cost, "remove_counter", None)
-        if printed != ANY_COUNTER_KIND:
+        # "Remove a +1/+1 counter **or a charge counter** from a permanent you
+        # control" (Ion Storm): the same choice narrowed to the listed kinds.
+        listed = listed_counter_kinds(printed)
+        if printed != ANY_COUNTER_KIND and listed is None:
             return printed
         if payer is None:
             return None
-        return counter_kind_to_remove(payer, named)
+        return counter_kind_to_remove(payer, named, among=listed)
 
     def _choose_graveyard_to_library_bottom(
         self, cost, controller, controller_index: int, named_slots,

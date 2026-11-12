@@ -194,3 +194,77 @@ def test_w1g7_dawns_reflection_counts_in_the_payment_planner(set_pool):
     assert board_can_pay(game, 0, cost)
     assert not board_can_pay(game, 0, {"U": 2, "B": 1, "generic": 1})
 
+
+def test_w1g7_ion_storm_pays_with_either_kind_off_a_permanent_you_choose(set_pool):
+    """"{1}{R}, Remove a +1/+1 counter or a charge counter from a permanent
+    you control: This enchantment deals 2 damage to any target." The payer
+    picks the permanent (``cost_permanent_ids``); unnamed, the one with the
+    most to spare pays, and a permanent holding both gives up the inert
+    charge counter first. Each payment is one counter, and with none left the
+    activation is refused before anything is paid (CR 601.2h)."""
+    pool = set_pool("5DN")
+    lea = set_pool("LEA")
+    from engine.named_counters import add_counters, counters_on
+
+    game, (storm, bears, bauble), (enemy,) = _w1g7_table(
+        set_pool,
+        mine=[pool["Ion Storm"], lea["Grizzly Bears"], pool["Wayfarer's Bauble"]],
+        theirs=[lea["Grizzly Bears"]],
+    )
+    game.place_plus1_counters(bears, 1)
+    add_counters(bauble, "charge", 2)
+
+    result = game.activate_permanent_ability(0, "Ion Storm", target_player_index=1)
+    assert result.supported, result
+    _w1g7_settle(game)
+    assert game.players[1].life == 18
+    assert counters_on(bauble, "charge") == 1
+    assert "Wayfarer's Bauble gave up 1 charge counter(s) (Ion Storm's cost)" in game.log
+
+    game.activate_permanent_ability(
+        0, "Ion Storm", target_permanent_ids=[enemy.permanent_id],
+        cost_permanent_ids=[bears.permanent_id],
+    )
+    _w1g7_settle(game)
+    assert counters_on(bears, "+1/+1") == 0
+    assert enemy not in game.players[1].battlefield
+
+    game.activate_permanent_ability(0, "Ion Storm", target_player_index=1)
+    _w1g7_settle(game)
+    assert counters_on(bauble, "charge") == 0
+    assert game.players[1].life == 16
+
+    refused = game.activate_permanent_ability(0, "Ion Storm", target_player_index=1)
+    assert not refused.supported
+    assert refused.details == (
+        "Ion Storm: no permanent with a +1/+1 or charge counter to remove"
+    )
+    assert game.players[1].life == 16
+
+
+def test_w1g7_ion_storm_takes_only_the_kinds_it_lists(set_pool):
+    """A counter of another kind pays nothing — a Bauble holding only fade
+    counters is no candidate — and a kind named outside the two
+    (``cost_counter_kind``) is refused with nothing spent."""
+    pool = set_pool("5DN")
+    from engine.named_counters import add_counters, counters_on
+
+    game, (storm, bauble), _ = _w1g7_table(
+        set_pool, mine=[pool["Ion Storm"], pool["Wayfarer's Bauble"]],
+    )
+    add_counters(bauble, "fade", 2)
+    refused = game.activate_permanent_ability(0, "Ion Storm", target_player_index=1)
+    assert not refused.supported
+    assert counters_on(bauble, "fade") == 2
+
+    add_counters(bauble, "charge", 1)
+    refused = game.activate_permanent_ability(
+        0, "Ion Storm", target_player_index=1,
+        cost_permanent_ids=[bauble.permanent_id], cost_counter_kind="fade",
+    )
+    assert not refused.supported
+    assert counters_on(bauble, "fade") == 2 and counters_on(bauble, "charge") == 1
+    assert game.players[1].life == 20
+
+# ==== end w1g7 ======================================================
+

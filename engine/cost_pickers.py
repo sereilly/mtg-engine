@@ -427,11 +427,19 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             # where the chosen permanent holds two kinds — may name one on
             # ``cost_counter_kind``; unnamed, the charger takes
             # ``named_counters.counter_kind_to_remove``'s pick.
-            from .named_counters import ANY_COUNTER_KIND
+            from .named_counters import ANY_COUNTER_KIND, listed_counter_kinds
 
             if cost.remove_counter == ANY_COUNTER_KIND:
                 spec["counter"] = "any"
                 spec["any_counter_kind"] = True
+            # "Remove a +1/+1 counter **or a charge counter** …" (Ion Storm):
+            # the same naming, over the kinds the cost lists — sent, so the
+            # client offers only those (a kind outside them is refused).
+            listed = listed_counter_kinds(cost.remove_counter)
+            if listed is not None:
+                spec["counter"] = " or ".join(listed)
+                spec["any_counter_kind"] = True
+                spec["counter_kinds"] = list(listed)
             specs.append(spec)
     if getattr(cost, "hand_to_library_top", 0):
         # "**Put a card from your hand on top of your library**: …" (Hidden
