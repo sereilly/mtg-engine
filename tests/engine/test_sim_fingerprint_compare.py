@@ -10,6 +10,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 
@@ -48,3 +50,54 @@ def test_a_compare_that_moves_nothing_leaves_no_stale_diffs(tmp_path):
     stale.write_text("from an earlier compare\n", encoding="utf-8")
     sim_fingerprint.keep_compare(tmp_path / "snapshot", tmp_path / "scratch", [])
     assert not stale.exists()
+
+
+def test_snapshot_rev_plays_the_runs_on_the_commit_s_own_checkout(tmp_path, monkeypatch, capsys):
+    """``snapshot --rev`` hands every run the throwaway worktree as its root —
+    that checkout's simulator, so that checkout's engine — writes them into the
+    snapshot directory named, and records the commit beside them, which
+    ``compare`` prints. The worktree itself is ``rev_worktree``'s (git); here it
+    is a folder, so the test is about the plumbing."""
+    commit = sim_fingerprint.resolve_rev("HEAD")
+    assert len(commit) == 40
+    roots, made = [], []
+
+    class FakeWorktree:
+        def __init__(self, sha):
+            made.append(sha)
+
+        def __enter__(self):
+            return tmp_path / "throwaway"
+
+        def __exit__(self, *exc):
+            made.append("removed")
+
+    def fake_run_one(code, seed, games, out_dir, root=sim_fingerprint.REPO_ROOT):
+        roots.append(root)
+        _write_run(out_dir, sim_fingerprint.run_name(code, seed, games), [code])
+        return {"name": sim_fingerprint.run_name(code, seed, games), "exit": 0}
+
+    monkeypatch.setattr(sim_fingerprint, "rev_worktree", FakeWorktree)
+    monkeypatch.setattr(sim_fingerprint, "run_one", fake_run_one)
+    snapshot = tmp_path / "snapshot"
+    assert sim_fingerprint.main(["snapshot", "--rev", "HEAD", "--snapshot", str(snapshot)]) == 0
+    assert made == [commit, "removed"]
+    assert roots == [tmp_path / "throwaway"] * len(sim_fingerprint.RUNS)
+    assert (snapshot / "SOURCE").read_text(encoding="utf-8") == f"commit {commit} (--rev HEAD)\n"
+    assert f"of the commit {commit}" in capsys.readouterr().out
+
+    # compare plays the working tree (the script's own checkout) and names the base.
+    roots.clear()
+    assert sim_fingerprint.main(["compare", "--snapshot", str(snapshot), "--workers", "1"]) == 0
+    assert roots == [sim_fingerprint.REPO_ROOT] * len(sim_fingerprint.RUNS)
+    out = capsys.readouterr().out
+    assert out.startswith(f"snapshot of the commit {commit} (--rev HEAD)\ncompare: 0 moved of ")
+
+
+def test_rev_names_a_commit_and_only_snapshot_takes_it(tmp_path):
+    with pytest.raises(ValueError):
+        sim_fingerprint.resolve_rev("no-such-ref-anywhere")
+    with pytest.raises(SystemExit):
+        sim_fingerprint.main(["compare", "--rev", "HEAD", "--snapshot", str(tmp_path)])
+    with pytest.raises(SystemExit):
+        sim_fingerprint.main(["snapshot", "--rev", "no-such-ref-anywhere", "--snapshot", str(tmp_path)])
