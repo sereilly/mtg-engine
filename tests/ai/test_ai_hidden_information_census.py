@@ -147,7 +147,7 @@ def proposal(card, mode, world: str) -> "dict | None":
     said = cast_announcement(
         replace(action, target_permanent_ids=None, cost_permanent_ids=None)
     )
-    # A role's permanent by seat and slot too (`ai_targets.role_ref`).
+    # A role's permanent by seat and slot too (`ai_slot_targets.role_ref`).
     said["target_role_refs"] = [
         (
             {"permanent": (

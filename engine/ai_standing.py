@@ -39,7 +39,7 @@ from .phasing_locks import waits_for_its_source
 # own, which of two legal targets is the better one, whether a cast does
 # anything at all — each is a comparison of two positions, and a comparison
 # needs one unit. The unit is the life-equivalent the toll prices already use
-# (``ai_prompts._toll_loss_price``): a point of life near twenty is worth one.
+# (``ai_offer_answers._toll_loss_price``): a point of life near twenty is worth one.
 # (Those prices are an older list in the same unit and put a card at two; the
 # two lists answer different questions and nothing here reconciles them.)
 #

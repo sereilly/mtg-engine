@@ -776,7 +776,7 @@ def _activation_candidate(
     # announcement and exiles nothing — a cost paid for no effect, which is
     # what this seat did with every one of them once the handler stopped
     # picking for it. Named here the way the cast side names them
-    # (`ai_targets._choose_several_targets`): the maximum, out of one opponent's pile,
+    # (`ai_slot_targets._choose_several_targets`): the maximum, out of one opponent's pile,
     # and skipped when no opponent has a card to take.
     if (
         spec is not None

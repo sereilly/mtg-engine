@@ -18,7 +18,7 @@ keyword moved from one creature to another):
 Each reading ends in the one-target reading (``ai_target_sides._effect_side``,
 ``_PRINTED_SEATS``, ``activation_target_side``), so a kind classified there
 is classified here; what this module adds is which step spends which target.
-The policy's choosers ask these (``ai_targets``, ``ai_divisions``,
+The policy's choosers ask these (``ai_slot_targets``, ``ai_divisions``,
 ``ai_abilities``) and choose among the engine's own candidates; nothing here
 names a permanent.
 """

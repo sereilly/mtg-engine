@@ -21,7 +21,7 @@ permanent (``ai_prompt_picks.battlefield_worth``); for a hand, by what it is
 worth to hold (``held_worth``). Asked by the cast (:func:`cast_graveyard_return`),
 the trigger default (``choices/triggers._default_trigger_target``), the
 activation chooser (``ai_abilities``) and a several-target return
-(``ai_targets._choose_several_targets``). An exile that denies a graveyard
+(``ai_slot_targets._choose_several_targets``). An exile that denies a graveyard
 card is ``ai_targets._graveyard_denial_target``'s, and a card put on a
 library is not ranked here.
 """

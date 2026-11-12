@@ -49,13 +49,13 @@ def _w2g6_sanctuary_run():
     # Sanctuary a probe: each acceptance arms a skip of that turn's draw step,
     # and a skip armed and never spent is the defect. Taking it every turn was
     # the headless default until PLS W2G5 made that default weigh the trade
-    # (`ai_prompts.offer_trade_is_worth_taking`: a land for a draw only while
+    # (`ai_offer_answers.offer_trade_is_worth_taking`: a land for a draw only while
     # short of lands) — right for a seat and useless for an instrument, which
     # then saw three offers taken in six games. The old default is put back
     # for this run alone.
     with pytest.MonkeyPatch.context() as patched:
         patched.setattr(
-            "engine.ai_prompts.offer_trade_is_worth_taking",
+            "engine.ai_offer_answers.offer_trade_is_worth_taking",
             lambda game, player_index, entry: True,
         )
         return run_ai_simulation(

@@ -44,7 +44,7 @@ def choose_divided_targets(
 
     Returns None when *card* divides nothing — every other card in the pool —
     and ``()`` when it divides and no legal announcement exists, which is a
-    refusal rather than an absence, the same way ``ai_targets._choose_role_targets``
+    refusal rather than an absence, the same way ``ai_slot_targets._choose_role_targets``
     answers: CR 601.2d needs one target or more, and the cast gate refuses a
     spell announced with none, so proposing it would be a turn spent on an
     action the game then rejects.

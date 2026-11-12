@@ -1,7 +1,7 @@
 """The Chains' copy offers ("…they may copy this spell and may choose a new
 target for that copy"): what a seat nobody asks answers.
 
-``ai_prompts.copy_offer_turns_on_its_taker`` declined every copy whose
+``ai_offer_answers.copy_offer_turns_on_its_taker`` declined every copy whose
 original targeted the taker, on the premise that the copy keeps its target —
 stale since the copy offer's default measures a new one
 (``spell_copies.offer_new_targets``, ``ai_prompts.choose_copy_target``). So

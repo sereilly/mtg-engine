@@ -138,7 +138,7 @@ class CastAction:
     # Zombie card from your graveyard", Cruel Revival). The field did not
     # exist, so an AI seat named at most one player in a chain of seat roles
     # and never named Cruel Revival's card. None for every spell naming no
-    # roles. See `ai_targets._role_answer`.
+    # roles. See `ai_slot_targets._role_answer`.
     target_role_refs: list[dict] | None = None
     # The two words a text change announces (CR 612), as mana symbols —
     # `queue_from_hand`'s ``old_color`` replaced by ``new_color``: "replacing

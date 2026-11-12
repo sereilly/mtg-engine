@@ -54,10 +54,12 @@ rest is one subject a module:
   which measures with them — and because it is the same move as everything
   else here: the compiled program read for what it does, this time by
   running it;
-* ``ai_prompt_readers`` — what a choice the rules leave to a player does (an
-  offer's price, a toll's branches, a chosen colour, name, number or pile).
+* ``ai_prompt_readers`` — what a choice the rules leave to a player does (a
+  chosen colour, name, number, creature type or pile, a graveyard card, a
+  discard), and ``ai_offer_readers`` what an offer costs and buys (its price,
+  a toll's branches).
 
-The same split is why ``ai_prompt_readers.offered_action_is_a_payment`` is in
+The same split is why ``ai_offer_readers.offered_action_is_a_payment`` is in
 this family rather than in ``engine/mixins/stack/choices/`` beside the
 default that reads it. "This offer's price comes out of the taker's own
 permanents, hand, library or life" is a claim about what a card *does*, true

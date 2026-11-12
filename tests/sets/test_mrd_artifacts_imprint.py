@@ -808,7 +808,7 @@ def test_w1g5_synod_sanctum_exiles_your_own_permanent_and_returns_the_pile(set_p
 # W2G5's tests go between this line and the "end W2G5" line.
 #
 # The AI pile: a seat nobody asks **takes** a hand imprint
-# (`ai_prompt_readers.offers_a_hand_imprint`, CR 607.2a) — the "make no
+# (`ai_offer_readers.offers_a_hand_imprint`, CR 607.2a) — the "make no
 # trades" default declined every one, and Chrome Mox tapped for nothing all
 # game — and then uses it: Isochron Scepter's copy is weighed one level down
 # inside the activation's rehearsal (`ai_policy.choose_copy_cast`), and Soul
@@ -821,7 +821,7 @@ from engine.ai_abilities import choose_activation_action as _w2g5_choose_activat
 from engine.ai_actions import activation_announcement as _w2g5_activation_announcement
 from engine.ai_payment import tap_planned_lands as _w2g5_tap_planned_lands
 from engine.ai_policy import choose_cast_action as _w2g5_choose_cast_action
-from engine.ai_prompt_readers import offers_a_hand_imprint as _w2g5_offers_a_hand_imprint
+from engine.ai_offer_readers import offers_a_hand_imprint as _w2g5_offers_a_hand_imprint
 from engine.models import Permanent as _w2g5_Permanent
 from engine.oracle import compile_card_oracle as _w2g5_compile
 from tests.helpers import _nosick as _w2g5_nosick

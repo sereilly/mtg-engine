@@ -1794,7 +1794,7 @@ def test_ebony_charms_graveyard_mode_is_aimed_at_an_opponents_pile_by_an_ai_seat
     (`ai_slot_sides.several_target_slot_sides`) rather than the own-pile-first
     default every other several-card graveyard spell takes — which here would
     empty the caster's."""
-    from engine.ai_targets import _choose_several_targets
+    from engine.ai_slot_targets import _choose_several_targets
     from engine.ai_weighed_cast import considering_mode
 
     game = _w2g4_charm(

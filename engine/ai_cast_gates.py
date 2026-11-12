@@ -451,7 +451,7 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     # the announceable ones, and that list has asked the stack gate already.
     spec = _cast_spec(card, program)
     if spec is None or spec.get("kind") in ("none", "modal") or spec_roles(spec):
-        # No spec, no target; roles are `ai_targets._choose_role_targets`' question and it
+        # No spec, no target; roles are `ai_slot_targets._choose_role_targets`' question and it
         # already declines an unfillable chain.
         return False
     if _targets_are_optional(_announced_steps(card, program)):
@@ -471,7 +471,7 @@ def _a_legal_target_is_controlled_by(
     human's picker is built from), read for one battlefield.
 
     For a preference arm that wants its target on a particular board. True
-    when the announcement names roles instead — `ai_targets._choose_role_targets` picks a
+    when the announcement names roles instead — `ai_slot_targets._choose_role_targets` picks a
     side per role and declines an unfillable chain — or nothing a picker lists.
     """
     spec = _cast_spec(card, compile_card_oracle(card))

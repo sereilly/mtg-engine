@@ -16,7 +16,7 @@ offers buy is a creature's attack this turn and the fight is where that is
 worth anything. What the action costs is in the reading where the standing can
 see it — a sacrificed permanent leaves the board — and is added where it
 cannot: cards exiled out of the taker's own graveyard are priced as a toll
-prices them (``ai_prompts._toll_loss_price``, the precedent this decision
+prices them (``ai_offer_answers._toll_loss_price``, the precedent this decision
 follows), since no standing counts a graveyard — and one the seat could still
 cast from there (flashback) as the card in hand it nearly is.
 
@@ -64,8 +64,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .ai_prompt_readers import TollLoss
-from .ai_prompts import _toll_loss_price
+from .ai_offer_readers import TollLoss
+from .ai_offer_answers import _toll_loss_price
 from .ai_rehearsal import (
     combat_is_still_to_come,
     deliberating,
@@ -409,7 +409,7 @@ def _graveyard_price(game: Game, seat: int, entry: dict) -> float:
 
     The cards are the ones the take gives up when it is named none
     (``ai_prompt_readers.graveyard_price_order``, least valuable first), each
-    priced as a toll prices one (``ai_prompts._toll_loss_price``) — except a
+    priced as a toll prices one (``ai_offer_answers._toll_loss_price``) — except a
     card its owner could still cast from there (flashback, CR 702.34a), which
     that order calls a spell the seat still holds and which is priced as one:
     a card in hand (``ai_standing.CARD_WORTH``).

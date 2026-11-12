@@ -30,7 +30,7 @@ where the program prints two — and what a divided spell divides are
 that spends each target.
 
 The policy's choosers ask these and choose among the engine's own candidates
-(``ai_targets``); nothing here names a permanent.
+(``ai_targets``, ``ai_slot_targets``); nothing here names a permanent.
 """
 
 from __future__ import annotations

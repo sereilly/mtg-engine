@@ -35,7 +35,7 @@ the walk prices:
 **A toll** — "sacrifice it unless you exile a card from your graveyard"
 (Rotting Giant, Treacherous Vampire), "it deals 3 damage to you unless you pay
 {2}" (Hasran Ogress) — is paid by the standing policy whenever it can be
-(``ai_prompts.toll_decline_is_smaller_loss``), so it is priced only where it
+(``ai_offer_answers.toll_decline_is_smaller_loss``), so it is priced only where it
 cannot: then its penalty happens, before the combat damage it was declared
 for.
 

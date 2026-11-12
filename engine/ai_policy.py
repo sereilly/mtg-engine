@@ -24,14 +24,17 @@ them imports this one:
 * ``ai_casts`` — one cast built as a candidate, in each mode, at each answer
   to its optional costs;
 * ``ai_cast_gates`` — whether that cast can be made as announced;
-* ``ai_targets`` and ``ai_divisions`` — what it names, and how a divided
+* ``ai_targets``, ``ai_slot_targets`` and ``ai_divisions`` — what it names
+  (one target; several, slot by slot or role by role), and how a divided
   spell splits what it divides;
 * ``ai_scoring`` — what a proposal is worth, measured by rehearsing it;
 * ``ai_abilities`` — which ability to activate on the seat's own
   permanents; ``ai_foreign_activations`` on another seat's, and
   ``ai_hand_activations`` on a card in its hand;
 * ``ai_declarations`` — its attackers and its blockers;
-* ``ai_prompts`` — the answers it gives part-way through a resolution;
+* ``ai_prompts`` — the answers it gives part-way through a resolution, and
+  ``ai_offer_answers`` the ones it gives an offer there (a toll, a trade, a
+  copy offer, a chain link, a mana-priced "you may pay");
 * ``ai_payment`` and ``ai_mana_sources`` — the taps that pay for all of it.
 
 What a card *does* is not the policy's to say: the valuation modules read it

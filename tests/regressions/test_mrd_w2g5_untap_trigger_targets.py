@@ -10,7 +10,7 @@ rule then tapped three lands to untap it, beside a tapped Hill Giant.
 Now a tapped permanent on that side is named first
 (``ai_target_sides.untap_target_order``), and where nothing there is tapped
 the price is declined as buying nothing
-(``ai_prompt_readers.offered_untap_changes_nothing``). Provoke's untap is not
+(``ai_offer_readers.offered_untap_changes_nothing``). Provoke's untap is not
 this reader's: it is aimed by the fight it compels (``ai_compelled_blocks``).
 """
 

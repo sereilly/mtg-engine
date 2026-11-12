@@ -127,9 +127,9 @@ def test_w2g5_shepherd_of_rot_drains_only_from_ahead(set_pool, life, activated):
 # If you do, gain control of target creature that player controls." The
 # optional-pay default's "make no trades" declined it every time it connected
 # (nine declines in one seeded ONS game, W1G10's report); its two halves are
-# permanents a standing prices (`ai_prompt_readers.offer_trade`'s
+# permanents a standing prices (`ai_offer_readers.offer_trade`'s
 # ``("source", "target_permanent")``, weighed by
-# `ai_prompts.offer_trade_is_worth_taking`).
+# `ai_offer_answers.offer_trade_is_worth_taking`).
 
 
 def _w2g5_entrancer_connects(set_pool, theirs):
@@ -363,7 +363,7 @@ def test_w2g5_the_sized_activation_is_carried_out(set_pool):
 # cards. Draw a card." The role walk answered every optional seat role it
 # could, so it named every opponent or the spell was not cast — and stopping
 # early, naming nobody included, was not weighed (W1G10;
-# `ai_targets._weighed_seat_prefix` rehearses each length).
+# `ai_slot_targets._weighed_seat_prefix` rehearses each length).
 
 
 def _w2g5_wheel(set_pool, *, their_hand, their_library=30):

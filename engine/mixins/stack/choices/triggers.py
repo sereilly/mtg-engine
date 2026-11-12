@@ -979,7 +979,7 @@ class TriggerChoicesMixin:
             # Hill Giant. A tapped one on that side first
             # (``ai_target_sides.untap_target_order``); where none is, the offer
             # order below, and the price is then declined as buying nothing
-            # (``ai_prompt_readers.offered_untap_changes_nothing``).
+            # (``ai_offer_readers.offered_untap_changes_nothing``).
             from ....ai_target_sides import (shield_target_order, shields_its_target,
                                              untap_target_order, untaps_its_target)
 
@@ -1235,11 +1235,11 @@ class TriggerChoicesMixin:
         Among the free ones, a choice asked **at resolution** (CR 608.2d — a
         prompt carrying the resolution's ``_context``) skips an alternative that
         would change nothing on the board as it now stands
-        (``ai_prompt_readers.offered_alternative_changes_nothing``): Urborg aimed at
+        (``ai_offer_readers.offered_alternative_changes_nothing``): Urborg aimed at
         a swampwalker takes swampwalk, not the first strike it does not have.
         Printed order is still the answer whenever no alternative is a no-op.
         """
-        from ....ai_prompt_readers import (offered_action_is_a_payment,
+        from ....ai_offer_readers import (offered_action_is_a_payment,
                                            offered_alternative_changes_nothing)
 
         seat = self.players[choice.player_index]

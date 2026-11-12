@@ -670,7 +670,7 @@ class OptionalPayChoicesMixin:
            CR 118.8 alternative? A printed cost is already answered above, and
            correctly: the seat spends what is floating and no more.
         2. does taking it spend something of the seat's own
-           (``ai_prompt_readers.offered_action_is_a_payment``)?
+           (``ai_offer_readers.offered_action_is_a_payment``)?
         3. is refusing it free — no "if you don't" branch and no legacy damage
            field, which are the two spellings of a printed penalty?
 
@@ -683,7 +683,7 @@ class OptionalPayChoicesMixin:
         resolution knows them: "that player" is whoever the offer was rebound
         to, and CR 601.2b's chooser is the seat holding the prompt.
         """
-        from ....ai_prompt_readers import offered_action_is_a_payment
+        from ....ai_offer_readers import offered_action_is_a_payment
 
         entry = choice.data
         if (
@@ -699,10 +699,10 @@ class OptionalPayChoicesMixin:
         )
 
     def _weighed_offer_trade(self, choice: PendingChoice) -> "bool | None":
-        """`ai_prompts.offer_trade_is_worth_taking` for a **free, untolled**
+        """`ai_offer_answers.offer_trade_is_worth_taking` for a **free, untolled**
         offer — the only kind whose accept branch is the whole of its price —
         or None for every other, which the standing policy answers."""
-        from ....ai_prompts import offer_trade_is_worth_taking
+        from ....ai_offer_answers import offer_trade_is_worth_taking
 
         entry = choice.data
         if (
@@ -719,7 +719,7 @@ class OptionalPayChoicesMixin:
         """The printed player references in this offer's branches that resolve
         to the offered seat ("caster", "target_player"), for the readers whose
         answer depends on who a step lands on
-        (``ai_prompt_readers.offered_action_is_a_payment``, ``toll_branch_loss``).
+        (``ai_offer_readers.offered_action_is_a_payment``, ``toll_branch_loss``).
 
         Resolved here because only the resolution knows the bindings: "that
         player" is whoever the offer was rebound to, and CR 601.2b's chooser is
@@ -732,7 +732,7 @@ class OptionalPayChoicesMixin:
         seat = self.players[choice.player_index]
         # *context*: a deed-priced chain link's ``_chain_context``, whose
         # references the AI prices the unpaid branch against
-        # (``ai_prompts._deed_chain_decline``); the entry's own otherwise.
+        # (``ai_offer_answers._deed_chain_decline``); the entry's own otherwise.
         if context is None:
             context = entry.get("_context")
         self_recipients: set[str] = set()
@@ -752,7 +752,7 @@ class OptionalPayChoicesMixin:
         entry applies its decline consequence (Hasran Ogress' damage).
 
         A *stated policy*, not the payability test. Floating mana is always
-        spent; an untapped land only when ``ai_prompts.optional_pay_may_tap_lands``
+        spent; an untapped land only when ``ai_offer_answers.optional_pay_may_tap_lands``
         says the tap is worth it — a toll always, a gift only with mana nothing
         else this turn would spend — because tapping is a real decision about
         the rest of the turn. ``_player_can_pay_optional`` is the wider question
@@ -781,9 +781,9 @@ class OptionalPayChoicesMixin:
         # Islands untapped, and Rootwater Thief never paid its {2}. Whether
         # tapping a land is worth it is a *weight* — pay tolls always, take
         # gifts only with mana nothing else this turn will spend — and it lives
-        # with the other weights (`ai_prompts.optional_pay_may_tap_lands`).
+        # with the other weights (`ai_offer_answers.optional_pay_may_tap_lands`).
         # Paying is then the plan `_pay_optional` already spends, lands and all.
-        from ....ai_prompts import optional_pay_may_tap_lands
+        from ....ai_offer_answers import optional_pay_may_tap_lands
 
         may_tap: list[bool] = []  # asked once, and only when the pool falls short
 
@@ -854,11 +854,11 @@ class OptionalPayChoicesMixin:
             floating = True
         # One link of an "unless any player pays" chain asks the effect's own
         # controller too, and paying is only right for the seat the unpaid
-        # branch hurts (`ai_prompts.chained_toll_declined`).
-        from ....ai_prompt_readers import (offered_counter_misses_every_card,
+        # branch hurts (`ai_offer_answers.chained_toll_declined`).
+        from ....ai_offer_readers import (offered_counter_misses_every_card,
                                            offered_gift_lands_on_the_wrong_side,
                                            offered_untap_changes_nothing)
-        from ....ai_prompts import (chained_toll_declined, copy_offer_answer,
+        from ....ai_offer_answers import (chained_toll_declined, copy_offer_answer,
                                     offer_buys_own_drawback,
                                     offer_purchase_settled_against,
                                     returned_aura_lands_on_wrong_side)
@@ -883,7 +883,7 @@ class OptionalPayChoicesMixin:
         # …and a copy of the spell (the Chains): taken where taking it — the
         # price and the copy, aimed by the copy's own default — measures
         # better than declining, the other seat's reply included; declined
-        # where it does not (`ai_prompts.copy_offer_answer`). Weighed, it is
+        # where it does not (`ai_offer_answers.copy_offer_answer`). Weighed, it is
         # the whole answer: no rule below second-guesses it.
         elif floating is not None and (
             copied := copy_offer_answer(self, choice)
@@ -894,7 +894,7 @@ class OptionalPayChoicesMixin:
                 self.log.append(f"{player.name} declined {entry['card_name']} ({why})")
         # …and an Aura returned onto a host the effect names (the Dragon
         # Auras), where that host is on the side the Aura works against
-        # (`ai_prompts.returned_aura_lands_on_wrong_side`).
+        # (`ai_offer_answers.returned_aura_lands_on_wrong_side`).
         elif floating is not None and returned_aura_lands_on_wrong_side(
             self, choice.player_index, entry
         ):
@@ -919,7 +919,7 @@ class OptionalPayChoicesMixin:
         # …and an offer whose whole purchase sits behind a condition already
         # settled against (Liar's Pendulum's reveal when the guess was right):
         # the action would be taken for nothing
-        # (`ai_prompts.offer_purchase_settled_against`).
+        # (`ai_offer_answers.offer_purchase_settled_against`).
         elif floating is not None and offer_purchase_settled_against(self, entry):
             floating = None
             self.log.append(
@@ -930,7 +930,7 @@ class OptionalPayChoicesMixin:
         # untapped (the Mirage Talismans' "you may pay {3}. If you do, untap
         # target permanent", with nothing tapped on the seat's side to name):
         # the gift rule tapped three lands for it
-        # (`ai_prompt_readers.offered_untap_changes_nothing`). Only a priced
+        # (`ai_offer_readers.offered_untap_changes_nothing`). Only a priced
         # offer: refusing a free one is the same nothing.
         elif (
             floating is not None
@@ -945,7 +945,7 @@ class OptionalPayChoicesMixin:
         # …and a gift whose announced target is an opponent's permanent (a
         # modular creature's counters, CR 702.43a, when the only artifact
         # creature left to name was across the table): the "may" is the card's
-        # answer to that board (`ai_prompt_readers.
+        # answer to that board (`ai_offer_readers.
         # offered_gift_lands_on_the_wrong_side`).
         elif floating is not None and offered_gift_lands_on_the_wrong_side(
             self, choice.player_index, entry
@@ -958,7 +958,7 @@ class OptionalPayChoicesMixin:
         # …and a counter on its own source that the source reads as a mana
         # value (Aether Vial's charge counters), where the count it makes
         # leaves every card the seat could put with it behind
-        # (`ai_prompt_readers.offered_counter_misses_every_card`).
+        # (`ai_offer_readers.offered_counter_misses_every_card`).
         elif floating is not None and offered_counter_misses_every_card(
             self, choice.player_index, entry
         ):
@@ -968,7 +968,7 @@ class OptionalPayChoicesMixin:
                 "(the count it makes would leave their cards behind)"
             )
         # **A trade this policy can price on both sides is weighed, not
-        # refused or taken by rule** (`ai_prompts.offer_trade_is_worth_taking`:
+        # refused or taken by rule** (`ai_offer_answers.offer_trade_is_worth_taking`:
         # a draw step for a land card, a card from hand for the source
         # untapped). Asked before the two constants below because each was
         # wrong about one of them: "make no trades" declined Forsaken City at
@@ -996,11 +996,11 @@ class OptionalPayChoicesMixin:
         # …unless the toll's two losses are both priceable off the compiled
         # program and the penalty is the smaller one — "2 damage" against
         # "sacrifice that artifact" (Curse Artifact). The comparison and its
-        # weights are `ai_prompts.toll_decline_is_smaller_loss` with the
-        # magnitudes derived in `ai_prompt_readers.toll_branch_loss`; a side the
+        # weights are `ai_offer_answers.toll_decline_is_smaller_loss` with the
+        # magnitudes derived in `ai_offer_readers.toll_branch_loss`; a side the
         # program cannot price answers False and the pay-tolls policy stands.
         elif floating is not None:
-            from ....ai_prompts import toll_decline_is_smaller_loss
+            from ....ai_offer_answers import toll_decline_is_smaller_loss
 
             chain_context = entry.get("_chain_context")
             if toll_decline_is_smaller_loss(
