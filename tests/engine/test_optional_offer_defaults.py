@@ -550,6 +550,22 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         # target is the opponent's, which comes back at the end step a new
         # object (CR 400.7).
         "exile_target_permanent",
+        # Bringer of the Red Dawn (5DN), read at its promotion rehearsal: "At
+        # the beginning of your upkeep, you may untap target creature and gain
+        # control of it until end of turn. That creature gains haste until end
+        # of turn." The steal is the action's second step, behind the targeted
+        # untap above, and reads the record that untap writes
+        # (`permanents_from: untapped_permanents`) — as does the haste rider —
+        # so its empty cases are the targeted ones: no creature at all and the
+        # trigger is removed as it is put on the stack (CR 603.3d); its target
+        # gone in response and it is removed at resolution (CR 608.2b), nothing
+        # untapped, stolen or hasted - driven in tests/sets/test_5dn_creatures.py.
+        # A creature already untapped is still recorded, so the steal and the
+        # haste land on the target whatever its state. Not a self-payment, so a
+        # seat nobody asks takes the offer, aimed at the opponent's creature
+        # (`ai_target_sides._TAKES_THE_EARLIER_TARGET`: the steal, not the
+        # untap, decides the side) - driven, Bob's Grizzly Bears borrowed.
+        "gain_control_until_eot",
         # Empty, and the rider behind it is itself a no-op — the same shape as
         # the two rows this round added, with nothing at stake. Ice Cauldron
         # grants permission over an empty pile; Flash offers a cost computed

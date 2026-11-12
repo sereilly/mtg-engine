@@ -561,6 +561,37 @@ def test_w1g2_red_dawn_unasked_borrows_the_opponents_creature_not_its_own(set_po
     assert "Bringer of the Red Dawn: targets Grizzly Bears" in game.log
 
 
+def test_w1g2_red_dawn_with_its_target_gone_in_response_steals_and_hastes_nothing(set_pool):
+    """The trigger aimed at Bob's Grizzly Bears, and the Bears bolted in
+    response: the trigger's one target is illegal and it is removed as it
+    resolves (CR 608.2b) — nothing is offered, nothing untapped, the steal
+    and the haste rider (both reading the untap's record) touch nothing, and
+    the Bringer stays its controller's, untouched."""
+    lea = set_pool("LEA")
+    red = set_pool("5DN")["Bringer of the Red Dawn"]
+    game = _w1g2_table(set_pool, mine=[red], theirs=[lea["Grizzly Bears"]],
+                       mana=False, interactive=(0,), start=False)
+    (bears,) = [p for p in game.controlled_by(1) if p.card.name == "Grizzly Bears"]
+    game.players[1].hand.append(lea["Lightning Bolt"])
+    game.start_turn(0)
+    asked = _w1g2_settle(game, defaults=False)
+    assert asked is not None and asked.kind == "trigger_target"
+    assert game.confirm_trigger_target(0, permanent_id=bears.permanent_id, seat=1)
+    assert game.stack, "the trigger waits on the stack"
+
+    bolt = game.queue_from_hand(1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id])
+    assert bolt.supported, bolt.details
+    _w1g2_settle(game)
+
+    assert sorted(card.name for card in game.players[1].graveyard) == [
+        "Grizzly Bears", "Lightning Bolt",
+    ]
+    (bringer,) = [p for p in game.all_permanents() if p.card.name == "Bringer of the Red Dawn"]
+    assert game.controller_index_of(bringer) == 0
+    assert not game._has_keyword(bringer, "haste")
+    assert not any("gains control" in line for line in game.log)
+
+
 def test_w1g2_black_dawn_pays_two_life_and_puts_the_card_it_found_on_top(set_pool):
     """"…you may pay 2 life. If you do, search your library for a card, then
     shuffle and put that card on top." Alice finds the Black Lotus from the
