@@ -838,6 +838,26 @@ class HandChoicesMixin:
         if live and (choice.data.get("_payload") or {}).get("optional", True):
             hand = self.players[choice.player_index].hand
             live = sorted(live, key=lambda slot: (hand[slot].cmc, slot))
+            # …**unless the pile is the payoff**: "If it's a creature card,
+            # put it onto the battlefield under your control" (Summoner's
+            # Egg). Then the card to hold is the most expensive one the return
+            # would put onto the battlefield, read off the source's program
+            # (``ai_prompt_readers.linked_exile_returns_to_battlefield``).
+            from ....ai_prompt_readers import linked_exile_returns_to_battlefield
+            from ....search_filters import card_has_type
+
+            source = choice.data.get("_source_permanent")
+            returned_as = (
+                linked_exile_returns_to_battlefield(source.card)
+                if source is not None else None
+            )
+            if returned_as is not None:
+                wanted = [
+                    slot for slot in live
+                    if not returned_as or card_has_type(hand[slot], returned_as)
+                ]
+                if wanted:
+                    live = sorted(wanted, key=lambda slot: (-hand[slot].cmc, slot))
         if live and self._resolve_exile_from_hand_choice(choice, live[0]):
             return
         # Nothing eligible: the offer was never made rather than declined,

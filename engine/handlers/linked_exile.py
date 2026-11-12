@@ -28,6 +28,8 @@ from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card,
 from ..linked_exile import face_down_exiled_cards
 # How the public log names a card leaving a face-down pile (CR 406.3).
 from ..linked_exile import entry_name_for_the_log, is_exiled_face_down
+# Turning a face-down pile face up where it lies (Summoner's Egg).
+from ..linked_exile import turn_linked_entries_face_up
 from ..entry_awaiting import entry_happened, entry_replaced
 from ..models import Permanent
 from ..permanent_cards import stays_out_of_battlefield
@@ -400,6 +402,30 @@ def exile_hand_pile(game: Game, instruction: OracleInstruction, context: OracleE
     return True, "resolved"
 
 
+@effect_handler("turn_linked_exile_face_up")
+def turn_linked_exile_face_up(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this creature dies, **turn the exiled card face up**."
+    (Summoner's Egg.)
+
+    The cards the source's imprint exiled face down, turned face up where they
+    lie (``linked_exile.turn_linked_entries_face_up``). Read off
+    ``context.source_permanent`` for :func:`put_exiled_with_source`'s reason:
+    the record lives on the ``Permanent`` object the dies trigger still holds
+    after it left (CR 603.10a). Turned face up, the card is the table's to
+    read, so the log names it now — the first line that may.
+    """
+    source = context.source_permanent
+    name = context.card.name if context.card is not None else "that permanent"
+    turned = turn_linked_entries_face_up(game, source) if source is not None else []
+    if not turned:
+        game.log.append(f"{name}: no card exiled with it is face down")
+        return True, "resolved"
+    game.log.append(
+        f"{name} turns {', '.join(card.name for card in turned)} face up in exile"
+    )
+    return True, "resolved"
+
+
 @effect_handler("put_exiled_with_source")
 def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put all cards exiled with this artifact into their owner's hand."
@@ -532,7 +558,13 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
             put_back_linked_entry(source, entry)
     if not entries:
         name = context.card.name if context.card is not None else "that permanent"
-        game.log.append(f"nothing is exiled with {name}")
+        # A narrowed return that found nothing it names has not found an
+        # empty pile: Summoner's Egg's turned-up Lightning Bolt "remains
+        # exiled face up" (its ruling), and the line says which it was.
+        game.log.append(
+            f"no {wanted_type} card is exiled with {name}" if wanted_type
+            else f"nothing is exiled with {name}"
+        )
         return True, "resolved"
     moved: list[str] = []
     onto_battlefield = False

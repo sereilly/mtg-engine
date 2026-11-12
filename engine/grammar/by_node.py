@@ -185,6 +185,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_remove_from_combat,
                        _lower_put_library_top_into_hand,
                        _lower_put_exiled_with_source,
+                       _lower_turn_exiled_card_face_up,
                        _lower_each_player_claims_exiled_card,
                        _lower_return_one_exiled_card,
                        _lower_separate_into_piles)
@@ -217,6 +218,9 @@ _BY_NODE_TYPE: dict[type, object] = {
     # was the one this file already is: a registry inside a dispatcher is the
     # half that grows, so it is the half that leaves.
     ast.MoveCounter: _lower_move_counter,
+    # "Turn the exiled card face up." (Summoner's Egg.) The linked record
+    # names the card; nothing about the line is payload.
+    ast.TurnExiledCardFaceUp: _lower_turn_exiled_card_face_up,
     # "All creatures able to block target creature this turn do so."
     # (Bloodscent.) Names one announced attacker and a phrase; no record.
     ast.BlockedByAllAbleThisTurn: _lower_blocked_by_all_able_this_turn,

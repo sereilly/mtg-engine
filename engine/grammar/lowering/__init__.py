@@ -234,6 +234,7 @@ from .linked_exile import (
     _lower_put_exiled_pile_on_library,
     _lower_put_exiled_with_source,
     _lower_search_and_exile,
+    _lower_turn_exiled_card_face_up,
     _lower_transmute_by_sacrifice,
 )
 from ._piles import _SEARCH_EXILE_HONOURED
@@ -737,6 +738,7 @@ __all__ = [
     "_lower_exile_entire_library",
     "_lower_exile_random_from_hand",
     "_lower_put_exiled_with_source",
+    "_lower_turn_exiled_card_face_up",
     "_lower_look_top_exile_random",
     "_lower_look_top_pick",
     "_lower_search_and_exile",

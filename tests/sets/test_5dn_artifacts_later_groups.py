@@ -24,6 +24,7 @@ log), not instruction kinds alone.
 # w1g5's tests go between this line and the "end w1g5" line.
 
 from engine import Game as _W1G5Game, PlayerState as _W1G5PlayerState
+from engine.linked_exile import face_down_exiled_cards as _w1g5_face_down
 from engine.models import Permanent as _W1G5Permanent
 from tests.helpers import settle as _w1g5_settle
 
@@ -174,6 +175,95 @@ def test_w1g5_vedalken_shackles_leaving_ends_the_steal(set_pool):
     game.remove_from_battlefield(shackles)
     _w1g5_settle(game)
     assert game.controller_index_of(bears) == 1
+
+
+def _w1g5_egg(set_pool, hand, *, pick=None, interactive=()):
+    """Seat 0 casts Summoner's Egg holding *hand*; with *pick* (seat 0
+    interactive) it takes the imprint offer and exiles that card by name.
+    Returns ``(game, egg)`` with the Egg on the battlefield."""
+    game, _mine, _theirs = _w1g5_table(
+        set_pool, hand=["Summoner's Egg", *hand], opponent_hand=["Disenchant"],
+        interactive=interactive,
+    )
+    assert game.queue_from_hand(0, "Summoner's Egg").supported
+    answers = {}
+    if pick is not None:
+        hand_of = game.players[0].hand
+        answers = {
+            "optional_pay": lambda g, c: g.confirm_optional_pay(c.player_index, accept=True),
+            "exile_from_hand_choice": lambda g, c: g.confirm_exile_from_hand_choice(
+                c.player_index,
+                next(i for i, card in enumerate(hand_of) if card.name == pick),
+            ),
+        }
+    _w1g5_settle(game, answers=answers)
+    egg = next(
+        p for p in game.controlled_by(game.players[0]) if p.card.name == "Summoner's Egg"
+    )
+    return game, egg
+
+
+def _w1g5_disenchant(game, permanent):
+    game.active_player_index = 1
+    cast = game.queue_from_hand(1, "Disenchant", target_permanent_ids=[permanent.permanent_id])
+    assert cast.supported, cast.details
+    _w1g5_settle(game)
+
+
+def test_w1g5_summoners_egg_hatches_the_imprinted_creature_when_it_dies(set_pool):
+    """"Imprint — When this creature enters, you may exile a card from your
+    hand face down. When this creature dies, turn the exiled card face up. If
+    it's a creature card, put it onto the battlefield under your control."
+    The Craw Wurm is exiled face down — hidden from every seat, its owner
+    included (CR 406.3; the ruling: "you can't look at the card once it's
+    imprinted"), and unnamed in the log — and enters when the Egg dies."""
+    game, egg = _w1g5_egg(
+        set_pool, ["Craw Wurm", "Lightning Bolt"], pick="Craw Wurm", interactive=(0,),
+    )
+    wurm = _w1g5_card(set_pool, "Craw Wurm")
+    assert [c.name for c in _w1g5_face_down(game, 0, 0)] == ["Craw Wurm"]
+    assert [c.name for c in _w1g5_face_down(game, 0, 1)] == ["Craw Wurm"]
+    assert not any("Craw Wurm" in line for line in game.log)
+    _w1g5_disenchant(game, egg)
+    assert [p.card.name for p in game.controlled_by(game.players[0])] == ["Craw Wurm"]
+    assert all(card is not wurm for card in game.players[0].exile)
+    assert "Summoner's Egg turns Craw Wurm face up in exile" in game.log
+
+
+def test_w1g5_summoners_egg_leaves_a_noncreature_card_exiled_face_up(set_pool):
+    """The ruling (2004-12-01): "If the card is not a creature card when it's
+    turned face up, it remains exiled face up." """
+    game, egg = _w1g5_egg(
+        set_pool, ["Craw Wurm", "Lightning Bolt"], pick="Lightning Bolt", interactive=(0,),
+    )
+    _w1g5_disenchant(game, egg)
+    assert list(game.controlled_by(game.players[0])) == []
+    assert [c.name for c in game.players[0].exile] == ["Lightning Bolt"]
+    assert _w1g5_face_down(game, 0) == []
+    assert "no creature card is exiled with Summoner's Egg" in game.log
+
+
+def test_w1g5_summoners_egg_leaving_without_dying_keeps_the_card_face_down(set_pool):
+    """Only "dies" turns the card up: an Egg returned to its owner's hand
+    leaves its imprint exiled face down for good (CR 406.3 has no ending)."""
+    game, egg = _w1g5_egg(
+        set_pool, ["Craw Wurm"], pick="Craw Wurm", interactive=(0,),
+    )
+    game.remove_from_battlefield(egg)
+    game.players[0].hand.append(egg.card)
+    _w1g5_settle(game)
+    assert [c.name for c in _w1g5_face_down(game, 0)] == ["Craw Wurm"]
+    assert list(game.controlled_by(game.players[0])) == []
+
+
+def test_w1g5_summoners_egg_seat_nobody_asks_imprints_its_best_creature(set_pool):
+    """A seat nobody asks takes the offer and imprints the most expensive
+    creature card — the one the dies trigger would hatch — not the cheapest
+    card in hand (``ai_prompt_readers.linked_exile_returns_to_battlefield``)."""
+    game, egg = _w1g5_egg(set_pool, ["Lightning Bolt", "Grizzly Bears", "Craw Wurm"])
+    assert [c.name for c in _w1g5_face_down(game, 0)] == ["Craw Wurm"]
+    _w1g5_disenchant(game, egg)
+    assert [p.card.name for p in game.controlled_by(game.players[0])] == ["Craw Wurm"]
 
 # ==== end w1g5 ======================================================
 

@@ -489,6 +489,32 @@ _TAKEN_FROM_ITS_CONTROLLER = frozenset({
 })
 
 
+def linked_exile_returns_to_battlefield(card: CardDefinition) -> "str | None":
+    """The card type *card*'s linked pile is put onto the battlefield as —
+    ``""`` for any card, None when nothing on *card* puts it there.
+
+    "Imprint — When this creature enters, you may exile a card from your hand
+    face down. When this creature dies, turn the exiled card face up. **If
+    it's a creature card, put it onto the battlefield under your control.**"
+    (Summoner's Egg.) The exile from hand is a seat's own pick, and a seat
+    nobody asks took the cheapest card in hand — a Lightning Bolt over a Craw
+    Wurm, so the Egg hatched nothing. The pile is the payoff here, not a
+    loss, and the card it should hold is the one the return would put onto
+    the battlefield.
+
+    Read off the compiled program (``put_exiled_with_source`` to the
+    battlefield, and the ``card_type`` that narrows it), so no card is named.
+    """
+    for instruction in _walk_program(compile_card_oracle(card)):
+        payload = instruction.payload or {}
+        if (
+            instruction.kind == "put_exiled_with_source"
+            and payload.get("zone") == "battlefield"
+        ):
+            return str(payload.get("card_type") or "")
+    return None
+
+
 def pick_is_taken_from_its_controller(card: CardDefinition, result_key: str) -> bool:
     """Whether a later step of *card* takes the permanent a
     ``choose_permanent`` recorded under *result_key* away from its controller
@@ -1104,6 +1130,7 @@ __all__ = [
     "exiles_a_graveyard_target",
     "graveyard_denial_order",
     "graveyard_price_order",
+    "linked_exile_returns_to_battlefield",
     "reads_what_its_cost_exiled",
     "pick_is_taken_from_its_controller",
     "pick_is_tested_for_a_shared_color",

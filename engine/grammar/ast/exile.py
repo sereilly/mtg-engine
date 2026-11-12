@@ -387,6 +387,23 @@ class PutExiledWithSource:
 
 
 @dataclass(frozen=True)
+class TurnExiledCardFaceUp:
+    """``Turn the exiled card face up.`` (Summoner's Egg.)
+
+    The linked pile again (CR 607.2a: "the exiled card" is the one this
+    permanent's imprint exiled), turned from CR 406.3's face-down state to
+    face up where it lies — a card in exile, not a permanent, so nothing of
+    CR 708's turning a permanent face up applies (the card's ruling,
+    2004-12-01: its "when turned face up" abilities don't trigger). Read
+    after its exiler has died, so the record is the one the departed
+    permanent still holds (CR 603.10a). No field: which card is the record's
+    to say, and a card that stays in exile stays there face up (the ruling:
+    "If the card is not a creature card when it's turned face up, it remains
+    exiled face up").
+    """
+
+
+@dataclass(frozen=True)
 class SearchAndExile:
     """``Search your graveyard and library for any number of <filter> cards,
     exile them, then shuffle.`` (Chandra, Heart of Fire's −9.)

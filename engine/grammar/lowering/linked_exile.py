@@ -253,6 +253,21 @@ def _lower_put_exiled_with_source(
     )
 
 
+#: The kind "turn the exiled card face up" lowers to. Named for the handler
+#: and the label tables beside it.
+TURN_LINKED_EXILE_FACE_UP = "turn_linked_exile_face_up"
+
+
+def _lower_turn_exiled_card_face_up(
+    node: ast.TurnExiledCardFaceUp,
+) -> tuple[OracleInstruction, ...]:
+    """``Turn the exiled card face up.`` (Summoner's Egg.) One instruction
+    with nothing on it: the source's linked record says which cards, and the
+    handler turns each face-down entry face up where it lies (CR 406.3's
+    state ended by the instruction that says so)."""
+    return (OracleInstruction(TURN_LINKED_EXILE_FACE_UP, "", {}),)
+
+
 def _lower_search_and_exile(node: ast.SearchAndExile) -> tuple[OracleInstruction, ...]:
     """"Search your graveyard and library for any number of red instant and/or
     sorcery cards, exile them, then shuffle." (Chandra, Heart of Fire's −9.)

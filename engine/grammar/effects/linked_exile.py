@@ -525,6 +525,55 @@ def _parse_player_returns_exiled_with_source(
     return ast.PutExiledWithSource(ast.Zone(zone.name, ast.PlayerRef("owner")))
 
 
+def parse_turn_exiled_card_face_up(stream: TokenStream) -> "ast.Statement | None":
+    """``Turn the exiled card face up. [If it's a <type> card, put it onto
+    the battlefield under your control.]`` (Summoner's Egg.)
+
+    "The exiled card" is the linked pile (CR 607.2a, the definite article
+    doing what "exiled with this creature" does on Knowledge Vault), turned
+    face up where it lies. The second sentence is read here too rather than
+    left to the sequence: its "it" is the card the first sentence turned up,
+    which no sentence-level reader could bind — and once bound it is exactly
+    Cold Storage's narrowed return (``PutExiledWithSource`` with a
+    ``card_type`` and ``under_your_control``), so it lowers through that node
+    and that handler. Both sentences required word for word once the second
+    has begun: a different arm is a different card. Declines with the cursor
+    unmoved.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("turn", "the", "exiled", "card", "face", "up"):
+        return None
+    turned = ast.TurnExiledCardFaceUp()
+    after = stream.mark()
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase("if", "it", "'s")
+    ):
+        stream.reset(after)
+        return turned
+    stream.accept_word("a", "an")
+    noun = stream.peek_word()
+    if noun is None or noun not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not (
+        stream.accept_word("card")
+        and stream.accept_punct(",")
+        and stream.accept_phrase(
+            "put", "it", "onto", "the", "battlefield", "under", "your", "control",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.Sequence((
+        turned,
+        ast.PutExiledWithSource(
+            ast.Zone("battlefield"), card_type=noun, under_your_control=True,
+        ),
+    ))
+
+
 #: Where a linked pile may be printed to go back on a library. A closed list
 #: for `naming._REVEAL_DESTINATIONS`' reason: each of these is a
 #: position the handler actually reaches, and a word outside it refuses the

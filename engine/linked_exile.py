@@ -449,6 +449,49 @@ def keep_face_down_after_departure(game, permanent: "Permanent") -> None:
         entry[HANDED_TO_REGISTER] = True
 
 
+def turn_linked_entries_face_up(game, permanent: "Permanent") -> list["CardDefinition"]:
+    """Turn every card *permanent* exiled face down face up where it lies,
+    and return those cards. "When this creature dies, **turn the exiled card
+    face up**." (Summoner's Egg.)
+
+    CR 406.3's face-down state ends only by an instruction, and this is one:
+    the entry stops being face down, and — for a permanent that has left, whose
+    facts went to the game's register as it left
+    (:func:`keep_face_down_after_departure`) — the register's record of the
+    same object in the same exile stops being face down too, so no viewer is
+    shown it hidden. A card no longer in its owner's exile is skipped: it left
+    by another route and is a new object (CR 400.7). The entries stay linked,
+    so the sentence after this one (Cold Storage's narrowed return) still finds
+    them; a card that does not answer it "remains exiled face up" (the ruling,
+    2004-12-01).
+    """
+    from .exiled_records import live_records
+
+    turned: list["CardDefinition"] = []
+    for entry in linked_entries(permanent):
+        if not entry.get("face_down"):
+            continue
+        owner_index = int(entry.get("owner_index", -1))
+        if not 0 <= owner_index < len(game.players):
+            continue
+        card = entry["card"]
+        if not any(held is card for held in game.players[owner_index].exile):
+            continue
+        entry.pop("face_down", None)
+        entry.pop("looker_index", None)
+        entry.pop(HANDED_TO_REGISTER, None)
+        for record in live_records(game):
+            if (
+                record.face_down
+                and record.owner_index == owner_index
+                and record.card is card
+            ):
+                record.face_down = False
+                record.looker_index = None
+        turned.append(card)
+    return turned
+
+
 def forget_linked_entries(game, owner_index: int, card) -> None:
     """*card* has just left seat *owner_index*'s exile: drop every entry
     naming it, from every permanent that holds one.
