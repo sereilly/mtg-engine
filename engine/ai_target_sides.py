@@ -1126,8 +1126,9 @@ def ability_target_side(instruction: OracleInstruction | None) -> str | None:
     # is never aimed at one's own), where the spell reading
     # (:func:`_spell_object_target_steps`) takes every step spent on the
     # earlier target: measured over both roles, the other such steps on an
-    # ability (Sandals of Abdallah's and War Barge's delayed destroy, Maze of
-    # Ith's prevention) would flip a gift onto the opponent's board.
+    # ability (Sandals of Abdallah's and War Barge's delayed destroy) would
+    # flip a gift onto the opponent's board. Maze of Ith's prevention is read,
+    # narrowed, below.
     #
     # **And a prevention both ways spent on that object** (5DN W2G3): "Untap
     # target attacking creature. Prevent all combat damage that would be dealt

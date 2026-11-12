@@ -154,8 +154,12 @@ def _choose_role_targets(
     if _moves_an_attachment(card):
         # "Attach target Equipment to target creature" (Magnetic Theft): which
         # Equipment, and onto whose creature, weighed by rehearsal
-        # (`_weighed_attachment_moves`) rather than by one side per role.
-        return _weighed_attachment_moves(game, caster_index, card, options)
+        # (`_weighed_attachment_moves`) rather than by one side per role —
+        # and by the sides below only where nothing could be rehearsed (one
+        # level down, inside a rehearsal).
+        weighed = _weighed_attachment_moves(game, caster_index, card, options)
+        if weighed is not None:
+            return weighed
     sides = role_target_sides(card, offers)
     # "Choose any number of target players or planeswalkers. For each of them,
     # … deals damage …" (Kaboom!): every role is aimed where the loop's body
@@ -367,7 +371,9 @@ def _weighed_attachment_moves(
     the caster's onto an opponent's — almost always a gift), at most
     :data:`ATTACHMENT_MOVES_WEIGHED`, each rehearsed through the turn's fight
     (`_weighed_through_the_fight`); a move onto the creature it is already on
-    is no move. The best accepted swing that changes something is announced.
+    is no move. The best accepted swing that changes something is announced;
+    None where no chain could be rehearsed at all (inside a rehearsal), for
+    the caller's walk by sides.
     """
     from .ai_scoring import _weighed_through_the_fight
     from .equipment import equipped_creature
@@ -393,7 +399,7 @@ def _weighed_attachment_moves(
             if host.get("kind") != "permanent" or creature is None or creature is on:
                 continue
             chains.append((equipment, host))
-    best, best_swing = (), None
+    best, best_swing, rehearsed = (), None, False
     for chain in sorted(chains, key=prior)[:ATTACHMENT_MOVES_WEIGHED]:
         answer = _role_answer(game, caster_index, list(chain))
         if not answer:
@@ -406,11 +412,14 @@ def _weighed_attachment_moves(
             game, caster_index, card, announcement,
             _rehearse_announcement(game, caster_index, card, announcement),
         )
-        if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
+        if rehearsal is None:
+            continue
+        rehearsed = True
+        if not rehearsal.accepted or not rehearsal.changed:
             continue
         if best_swing is None or rehearsal.swing > best_swing + 1e-9:
             best, best_swing = answer, rehearsal.swing
-    return best
+    return best if rehearsed or not chains else None
 
 
 def optional_role_levels(roles) -> frozenset:
