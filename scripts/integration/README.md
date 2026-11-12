@@ -28,7 +28,7 @@ export ROUND=ons
 | `chain_commit.sh <group> <msg-file>` | each merge | commit the link, regenerate trackers |
 | `gate.sh <tree> <tag> [workers] [quick\|full]` + `gate_report.sh <tag>` | **wave close, promotion** | the full gate: oracle_diff, scans, whole suite (the quick pass; `full` on the promotion commit), check_all, support |
 | `census_rehearsal.sh <tree> <tag> CODE [workers] [catalog\|sampled\|both]` | **wave close, before the promotion's full pass** | the promotion in memory (`MTG_PROMOTE=CODE`): the quick pass whole and every sampled census whole; the shipped-pool guards' reds listed apart |
-| `run_and_wait.sh <log> <cmd...>` / `--wait <log>` | any run over ~3 min | the command detached, its exit code the log's last line and `<log>.exit`; a bounded wait (`RUN_WAIT`, 170 s) that exits with the command's code, or 75 "still running" with the resume command |
+| `run_and_wait.sh <log> <cmd...>` / `--wait <log>` | any run over ~3 min | the command detached, its exit code the log's last line and `<log>.exit`; a bounded wait (`RUN_WAIT`, 110 s from the call — under the agent shell's 120-s foreground limit) that exits with the command's code, or 75 "still running" with the resume command |
 | `regen.sh <label>` | after any merge | regenerate every tracker (never `--accept`) and commit |
 | `dups.py <files>` | each merge | a name defined twice in one scope (merge shadowing) |
 | `extract_reports.py <out> <transcript|dir> --groups <agents.json>` | each report, the day it lands | every subagent's hand-back report out of the session transcript (a subagent cannot write a report file), one `<group>.md` each; names the groups still owed |

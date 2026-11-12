@@ -117,7 +117,8 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   hand-wrote a background job and a poll loop for it (a loop grepping for
   "passed" never ends here; an agent that ends its turn waiting never wakes).
   It detaches the command, writes its exit code as the log's last line and to
-  `<log>.exit`, and waits a bounded 170 s: done, it exits with the command's
+  `<log>.exit`, and waits a bounded 110 s from the call (under the agent shell
+  tool's 120-second foreground limit): done, it exits with the command's
   code and the `FAILED` lines; not done, it exits 75 with the `--wait` command
   to resume. Every brief names it.
 - **A stopped background task is not a stopped process**: the stop kills the
