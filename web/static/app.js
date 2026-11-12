@@ -19534,7 +19534,10 @@ function alternativeOfferButtonText(offer) {
   if (offer?.keyword === "morph") {
     return offer.mana_owed ? `Cast face down for ${offer.mana_owed}` : "Cast face down";
   }
-  return offer?.label || "Take it";
+  // A button's words start with a capital: the Bringers' label is the
+  // sentence's own "pay {W}{U}{B}{R}{G}", beside the "Pay {7}{G}{G}" one.
+  const label = String(offer?.label || "");
+  return label ? label.charAt(0).toUpperCase() + label.slice(1) : "Take it";
 }
 
 function startCastOfferPrompt(card, castAction = "cast") {
