@@ -342,6 +342,14 @@ class AlternativeCost:
     #: modifier scoped to the keyword ("Flashback costs you pay cost {2} less",
     #: Catalyst Stone).
     keyword: "str | None" = None
+    #: Whether a cost a **permanent grants** is offered only to that
+    #: permanent's controller: "You may pay {W}{U}{B}{R}{G} rather than pay the
+    #: mana cost for spells **you** cast" (Fist of Suns, CR 109.5), where Dream
+    #: Halls' "its controller may" is offered to every caster at the table.
+    #: Read by ``Game.applicable_alternative_costs`` against the seat it finds
+    #: the granting permanent under. False on every printed cost: a cost a card
+    #: prints on itself is its own caster's by construction.
+    controller_only: bool = False
 
     @property
     def announces_x(self) -> bool:
@@ -564,6 +572,55 @@ _CONTROLS_CLAUSE = re.compile(
 #: graveyard or a library must refuse rather than be answered against the hand.
 _HAND_CLAUSE = re.compile(r"^you have (?P<board>.+) in hand$")
 
+#: "You may **pay {W}{U}{B}{R}{G}** rather than pay this spell's mana cost."
+#: (Fifth Dawn's five Bringers; Fist of Suns grants the same price to every
+#: spell its controller casts.) CR 118.9's first spelling with a price that is
+#: itself **mana** -- the resource every earlier printed alternative cost
+#: replaced and none charged. ``AlternativeCost.mana`` has carried such a price
+#: since flashback (CR 702.34a), and the cast path pays it where the mana cost
+#: would have been paid (``pool_payment._pay_cast_mana``), so this is only the
+#: reading: the printed run of symbols, first, optionally followed by the
+#: clauses :func:`_read_cost_clauses` reads ("pay {1} and 2 life" would be one
+#: sentence). Delimiting only -- the run is read by
+#: ``mana_payment.mana_cost_from_symbols``, which refuses a hybrid or Phyrexian
+#: symbol rather than approximating it.
+_PAY_MANA_CLAUSE = re.compile(
+    r"^pay (?P<mana>(?:\{[^{}]+\})+)(?:(?:,\s*|\s+and\s+)(?P<rest>.+))?$"
+)
+
+
+def _read_offer_clauses(costs: str) -> dict | None:
+    """The fields one "rather than pay … mana cost" sentence's *costs* fill —
+    :func:`_read_cost_clauses`, plus CR 118.9's price in **mana** read first
+    (:data:`_PAY_MANA_CLAUSE`).
+
+    Kept beside the clause reader rather than inside it, because flashback's
+    and morph's readers (``flashback._read_cost``, ``face_down``) share that
+    reader and read their own mana in front of it: a mana field filled there
+    would be a second price on a cost that already names one.
+
+    An ``{X}`` refuses, for the reason :func:`alternative_cost_for_line`
+    refuses a counted X: a printed alternative cost has no announcement for X
+    to come from (CR 107.3b locks it to 0 only when the alternative cost does
+    *not* include X).
+    """
+    from .mana_payment import mana_cost_from_symbols
+
+    priced = _PAY_MANA_CLAUSE.match(costs.strip())
+    if priced is None:
+        return _read_cost_clauses(costs)
+    mana = priced.group("mana").upper()
+    if "{X}" in mana or mana_cost_from_symbols(mana) is None:
+        return None
+    fields: dict = {}
+    if priced.group("rest"):
+        read = _read_cost_clauses(priced.group("rest"))
+        if read is None:
+            return None
+        fields = read
+    fields["mana"] = mana
+    return fields
+
 #: "…exile **a blue card from your hand**…" The zone is part of the clause and
 #: not an afterthought: this is the only zone the payment can reach, and a
 #: sentence naming another one must refuse rather than be charged against the
@@ -647,6 +704,21 @@ _DISCARD_FROM_HAND = re.compile(
 _GRANTED_ALTERNATIVE_COST = re.compile(
     r"^rather than pay the mana cost for a spell, its controller may "
     r"(?P<costs>.+)$"
+)
+
+#: "**You may** pay {W}{U}{B}{R}{G} **rather than pay the mana cost for spells
+#: you cast**." (Fist of Suns.) Dream Halls' board-wide grant with the other
+#: scope: "you" is the granting permanent's controller (CR 109.5), and "spells
+#: you cast" are that player's alone -- so the offer is made to one seat, where
+#: Dream Halls' "its controller" is whoever casts the spell. The scope rides
+#: the cost (``AlternativeCost.controller_only``) and is asked by the one
+#: reader every consumer shares (``Game.applicable_alternative_costs``).
+#:
+#: The ruling (2004-12-01): "Fist of Suns's ability is an alternative cost to
+#: cast a spell. You can't combine this with other alternative costs, such as
+#: flashback." CR 118.9a, which that reader's callers already hold to one.
+_GRANTED_TO_CONTROLLER = re.compile(
+    r"^you may (?P<costs>.+?) rather than pay the mana cost for spells you cast$"
 )
 
 #: The printed word for each colour symbol, for :meth:`AlternativeCost.describe`
@@ -1114,7 +1186,7 @@ def alternative_cost_for_line(line: str) -> AlternativeCost | None:
         match = _ALTERNATIVE_COST_INVERTED.match(normalized)
     if match is None:
         return None
-    fields = _read_cost_clauses(match.group("costs"))
+    fields = _read_offer_clauses(match.group("costs"))
     if fields is None or _counts_an_x(fields):
         # An X in a printed alternative cost has no announcement to come from:
         # the cast path offers X off the mana cost and a flashback cost, and
@@ -1172,7 +1244,10 @@ def granted_alternative_cost(oracle_text: str) -> "AlternativeCost | None":
     """The alternative cost this permanent grants **every spell**, or None.
 
     "Rather than pay the mana cost for a spell, its controller may discard a
-    card that shares a color with that spell." (Dream Halls.) The board-wide
+    card that shares a color with that spell." (Dream Halls.) Or every spell
+    of its own controller's: "You may pay {W}{U}{B}{R}{G} rather than pay the
+    mana cost for spells you cast" (Fist of Suns), whose cost comes back with
+    ``controller_only`` set for the reader to scope. The board-wide
     twin of :func:`alternative_cost_for_line`, and its own reader for
     ``cost_modifiers``' reason one rule over: a printed cost is a property of
     the card being cast and a granted one is a property of a permanent on some
@@ -1192,15 +1267,23 @@ def granted_alternative_cost(oracle_text: str) -> "AlternativeCost | None":
     if "rather than pay the mana cost" not in (oracle_text or "").lower():
         return None
     for line in (oracle_text or "").split("\n"):
-        match = _GRANTED_ALTERNATIVE_COST.match(
-            " ".join(line.strip().lower().split()).rstrip(".")
-        )
-        if match is None:
-            continue
-        fields = _read_cost_clauses(match.group("costs"))
-        if fields is None or _counts_an_x(fields):
-            continue
-        return AlternativeCost(match.group(0), **fields)
+        normalized = " ".join(line.strip().lower().split()).rstrip(".")
+        # Dream Halls' scope (every caster) or Fist of Suns' (the granting
+        # permanent's controller): one vocabulary of clauses, two readings of
+        # *who* is offered it -- see ``AlternativeCost.controller_only``.
+        for pattern, controller_only in (
+            (_GRANTED_ALTERNATIVE_COST, False),
+            (_GRANTED_TO_CONTROLLER, True),
+        ):
+            match = pattern.match(normalized)
+            if match is None:
+                continue
+            fields = _read_offer_clauses(match.group("costs"))
+            if fields is None or _counts_an_x(fields):
+                continue
+            return AlternativeCost(
+                match.group(0), controller_only=controller_only, **fields,
+            )
     return None
 
 
@@ -1232,11 +1315,12 @@ def unread_granted_alternative_cost_sentence(line: str) -> str | None:
     unsupported -- which is the honest answer and the one this exists to keep.
     """
     normalized = " ".join(line.strip().lower().split()).rstrip(".")
-    match = _GRANTED_ALTERNATIVE_COST.match(normalized)
-    if match is not None:
-        fields = _read_cost_clauses(match.group("costs"))
-        if fields is None or _counts_an_x(fields):
-            return match.group(0)
+    for pattern in (_GRANTED_ALTERNATIVE_COST, _GRANTED_TO_CONTROLLER):
+        match = pattern.match(normalized)
+        if match is not None:
+            fields = _read_offer_clauses(match.group("costs"))
+            if fields is None or _counts_an_x(fields):
+                return match.group(0)
     return None
 
 

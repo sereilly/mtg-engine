@@ -261,6 +261,16 @@ class CostModifier:
     #: permanent's controller, the "you" of its own static ability (CR 109.5).
     #: None exactly when ``per_each`` is.
     per_each_seat: str | None = None
+    #: "**Artifact creature** spells you cast have affinity for artifacts."
+    #: (Mycosynth Golem.) Card types the affected object must have **as well
+    #: as** one of ``card_types``: two type words printed side by side are one
+    #: noun phrase naming an object with both (CR 205.2b), which
+    #: ``card_types``' alternation ("instant and enchantment spells", Mana
+    #: Matrix) cannot say -- read as one, the Golem would discount every
+    #: artifact spell and every creature spell. Set only on a one-subject
+    #: sentence over one type, for ``face_down``'s reason: the stacked word is
+    #: printed once.
+    also_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -360,13 +370,20 @@ _FACE_DOWN_SLOT = r"(?:face-down )"
 # that owns it.
 _NOT_A_TYPE_WORD = rf"(?!(?:{_TYPES}|{_SPELL_COLOURS}|face-down|spells?)\b)"
 _CREATURE_TYPE_SLOT = rf"(?:{_NOT_A_TYPE_WORD}[a-z][a-z'’-]* )"
+# "**Artifact** creature spells …" (Mycosynth Golem). A type word printed
+# directly in front of another, with no conjunction between: one noun phrase
+# naming an object with both types (CR 205.2b), carried as
+# ``CostModifier.also_types``. The lookahead is what keeps it from taking the
+# only type word of "artifact spells", which is the type list's.
+_STACKED_TYPE_SLOT = rf"(?:(?:{_TYPES}) (?=(?:{_TYPES}) ))"
 _SPELL_SUBJECT_TEXT = (
     rf"(?:(?:{_SPELL_COLOURS}) )?{_FACE_DOWN_SLOT}?{_CREATURE_TYPE_SLOT}?"
-    rf"(?:(?:{_TYPE_LIST}) )?spells?{_CHOSEN_TYPE_TAIL}?"
+    rf"{_STACKED_TYPE_SLOT}?(?:(?:{_TYPE_LIST}) )?spells?{_CHOSEN_TYPE_TAIL}?"
 )
 _SPELL_SUBJECT = re.compile(
     rf"^(?:(?P<colour>{_SPELL_COLOURS}) )?(?P<face_down>{_FACE_DOWN_SLOT})?"
     rf"(?:(?P<creature_type>{_NOT_A_TYPE_WORD}[a-z][a-z'’-]*) )?"
+    rf"(?:(?P<stacked>{_TYPES}) (?=(?:{_TYPES}) ))?"
     rf"(?:(?P<type>{_TYPE_LIST}) )?"
     rf"spell(?P<plural>s)?(?P<chosen>{_CHOSEN_TYPE_TAIL})?$"
 )
@@ -701,11 +718,19 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         # with no "to <verb>" behind it, and pays nothing: its own word here
         # for the two rows above's reason.
         and "costs cost" not in text
+        # "…spells you cast have affinity for artifacts." (Mycosynth Golem.)
+        # A reduction printed as a keyword grant, with no "less to" in it
+        # once its reminder text is left off.
+        and "have affinity for" not in text
     ):
         return ()
     modifiers: list[CostModifier] = []
     for match in _SPELL_TAX.finditer(text):
         modifier = _spell_tax_modifier(match)
+        if modifier is not None:
+            modifiers.append(modifier)
+    for match in _GRANTED_AFFINITY.finditer(text):
+        modifier = _granted_affinity_modifier(match)
         if modifier is not None:
             modifiers.append(modifier)
     for match in _TARGETING_LIFE_TAX.finditer(text):
@@ -900,6 +925,7 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     chosen_type = False
     face_down = False
     creature_type: str | None = None
+    also_types: tuple[str, ...] = ()
     for printed in _SUBJECT_SPLIT.split(match.group("subjects")):
         read = _SPELL_SUBJECT.match(printed.strip())
         if read is None:
@@ -907,6 +933,13 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         singular = singular or not read.group("plural")
         chosen_type = chosen_type or bool(read.group("chosen"))
         face_down = face_down or bool(read.group("face_down"))
+        if read.group("stacked"):
+            # "Artifact creature spells" (Mycosynth Golem): both types, over
+            # exactly one type word — "artifact creature and enchantment
+            # spells" would leave it unsaid which the stacked word narrows.
+            if len(_types_named(read.group("type"))) != 1:
+                return None
+            also_types = (read.group("stacked"),)
         printed_type = read.group("creature_type")
         if printed_type is not None:
             # CR 205.3m's list and nothing else: a word the slot read that the
@@ -964,6 +997,9 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     # (CR 708.2a), so the pair names nothing.
     if creature_type is not None and (len(subjects) > 1 or face_down):
         return None
+    # "Artifact creature spells …": one subject, for the same reason.
+    if also_types and len(subjects) > 1:
+        return None
     mana_value = None
     if match.group("mv_value") is not None:
         # See ``CostModifier.mana_value``: a reduction, bounded below.
@@ -1006,7 +1042,67 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         colored_only=colored_only,
         per_each=per_each,
         per_each_seat=per_each_seat,
+        also_types=also_types,
     )
+
+
+#: "**Artifact creature spells you cast have affinity for artifacts.**"
+#: (Mycosynth Golem.) CR 702.41a's keyword granted to a class of spells by a
+#: permanent's static ability: "Affinity for [text]" means "This spell costs
+#: {1} less to cast for each [text] you control", so each spell the sentence
+#: names costs that much less, and the sentence is that cost reduction --
+#: read by rewriting it into the rules text and handing the result to
+#: :data:`_SPELL_TAX`'s own reader (:func:`granted_affinity_sentence`), the
+#: arrangement ``affinity.py`` makes for the keyword a card prints about
+#: itself. "You" in the affinity sentence is the spell's controller, who is
+#: this permanent's controller because only "spells you cast" are named.
+#:
+#: CR 702.41b ("each of them applies") is the table's own arithmetic: a spell
+#: with printed affinity (Frogmite) under a Golem has its self-reduction and
+#: this modifier, and two Golems are two modifiers (the card's ruling,
+#: 2004-12-01: "Two or more instances of the affinity ability are
+#: cumulative").
+#:
+#: Searched over a whole text like the tax above, so the match is held to the
+#: start of its sentence (:func:`_starts_its_sentence`). The [text] stops at
+#: the sentence's end or at the reminder's opening parenthesis.
+_GRANTED_AFFINITY = re.compile(
+    rf"(?<![a-z])(?P<subjects>{_SPELL_SUBJECT_TEXT}) you cast have affinity "
+    r"for (?P<text>[a-z][a-z ]*?)(?=\s*\(|\.|\n|$)"
+)
+
+
+def granted_affinity_sentence(match: "re.Match[str]") -> str | None:
+    """The cost-reduction sentence CR 702.41a makes of a granted affinity
+    *match* — "artifact creature spells you cast cost {1} less to cast for each
+    artifact you control" — or None when the [text] is not a noun phrase the
+    keyword's own reader can count (``affinity.affinity_count_phrase``)."""
+    from .affinity import affinity_count_phrase
+
+    counted = affinity_count_phrase(match.group("text").strip())
+    if counted is None:
+        return None
+    return (
+        f"{match.group('subjects')} you cast cost {{1}} less to cast for each "
+        f"{counted.lower()} you control"
+    )
+
+
+def _granted_affinity_modifier(match: "re.Match[str]") -> CostModifier | None:
+    """The reduction a granted affinity *match* states, or None when this
+    cannot read it in full — its sentence's beginning unread, its [text]
+    uncountable, or the rewritten sentence one :func:`_spell_tax_modifier`
+    refuses. One builder for the charge and the claim, that function's
+    pairing."""
+    if not _starts_its_sentence(match):
+        return None
+    sentence = granted_affinity_sentence(match)
+    if sentence is None:
+        return None
+    rewritten = _SPELL_TAX.match(sentence)
+    if rewritten is None or rewritten.end() != len(sentence):
+        return None
+    return _spell_tax_modifier(rewritten)
 
 
 #: The seat words a per-each tax may close its count with, and whose board each

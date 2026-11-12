@@ -113,7 +113,9 @@ from .ai_cast_gates import (
     _printed_costs_are_payable,
     _alternative_cost_is_payable,
     _alternative_cost_tap_plan,
+    cheaper_mana_alternative_indices,
     payable_alternative_indices,
+    permission_leaves_the_price,
     _can_cast_with_targets,
     _caster_can_make_its_sacrifices,
     _entry_gate_gives_back_more_than_it_brings,
@@ -1577,6 +1579,34 @@ def _announced_candidate(
             alternative_cost = True
         else:
             tap_indices, tap_colors = plan
+            # "You may pay {W}{U}{B}{R}{G} rather than pay this spell's mana
+            # cost" (the Bringers, Fist of Suns): an alternative price in
+            # **mana alone**, and less of it, is taken even with the mana cost
+            # payable — the same resource, fewer of it, and the lands it
+            # leaves are the turn's next spell. Not beside an offer or a
+            # permission's price (CR 118.9a: one alternative cost), nor for an
+            # X the caster sized (CR 107.3b: X would be 0). Out of a graveyard
+            # Yawgmoth's Will opened as out of the hand (the zone-cast census'
+            # claim: what a seat announces from its hand it announces there).
+            if (
+                not announces_offer and not x_value
+                and permission_leaves_the_price(game, player_index, under)
+            ):
+                several = len(game.applicable_alternative_costs(player_index, card)) > 1
+                for index in cheaper_mana_alternative_indices(
+                    game, player_index, card,
+                    hand_index if from_zone == "hand" else None, required,
+                    extra_generic=extra_generic,
+                ):
+                    cheaper = _alternative_cost_tap_plan(
+                        game, player_index, card, extra_generic=extra_generic,
+                        index=index if several else None,
+                    )
+                    if cheaper is not None:
+                        alternatives.append((*cheaper, index if several else None))
+                if alternatives:
+                    tap_indices, tap_colors, _named = alternatives[0]
+                    alternative_cost = True
 
     action = CastAction(
         card_name=card.name,

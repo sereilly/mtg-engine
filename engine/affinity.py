@@ -78,6 +78,16 @@ def _counted_phrase(text: str) -> str | None:
     return " ".join([*words[:-1], single])
 
 
+def affinity_count_phrase(text: str) -> str | None:
+    """The singular noun phrase "affinity for [*text*]" counts, or None —
+    :func:`_counted_phrase` for a reader outside this module: a permanent
+    that **grants** affinity ("Artifact creature spells you cast have
+    affinity for artifacts", Mycosynth Golem,
+    ``cost_modifier_lines._GRANTED_AFFINITY``) counts its [text] exactly as
+    the keyword a card prints about itself does."""
+    return _counted_phrase(text)
+
+
 def affinity_sentence(line: str) -> str | None:
     """The rules sentence CR 702.41a says the affinity keyword *line* means,
     or None when *line* is not one or this cannot write it.

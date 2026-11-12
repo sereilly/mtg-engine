@@ -226,6 +226,77 @@ def payable_alternative_indices(
     ]
 
 
+def _is_a_price_in_mana_alone(cost) -> bool:
+    """Whether *cost* charges mana and nothing else, and casts the spell as
+    the spell it is: "You may pay {W}{U}{B}{R}{G} rather than pay this
+    spell's mana cost" (the Bringers, Fist of Suns' grant).
+
+    A keyworded one is not: morph's {3} casts a face-down 2/2 (CR 702.37c),
+    a different spell from the one the mana cost buys, and flashback's
+    exiles the card as it leaves the stack (CR 702.34a)."""
+    from .alternative_costs import AlternativeCost
+
+    if cost.keyword is not None or not cost.mana:
+        return False
+    return cost == AlternativeCost(
+        cost.phrase, mana=cost.mana, condition=cost.condition,
+        controller_only=cost.controller_only,
+    )
+
+
+def permission_leaves_the_price(game: Game, player_index: int, under) -> bool:
+    """Whether a cast made under *under* — a :class:`PermittedCast`, or None
+    for a cast from the hand — may still take an alternative cost the card
+    prints or a permanent grants (CR 118.9a: one per spell).
+
+    True from the hand, and under a permission that charges the card's own
+    mana cost — "you may play lands and cast spells from your graveyard"
+    (Yawgmoth's Will) — where the engine, told ``alternative_cost``, finds no
+    permission requiring a cost of its own (CR 118.9b's flashback is asked
+    first, ``_spell_source``) and applies the printed one. False under a
+    waiver or a required cost: the cast is already paid for some other way."""
+    if under is None:
+        return True
+    if under.cost is not None or under.waives_mana_cost:
+        return False
+    from .cast_permissions import permission_for
+
+    return permission_for(
+        game, player_index, under.held, under.zone, spell=under.spell, costed=True,
+    ) is None
+
+
+def cheaper_mana_alternative_indices(
+    game: Game, player_index: int, card: CardDefinition, hand_index: "int | None",
+    required: "dict[str, int]", *, extra_generic: int = 0,
+) -> list[int]:
+    """The payable alternatives (CR 118.9) that charge **mana alone** and
+    less of it than *required*, the mana cost's price for this cast — by index
+    among ``applicable_alternative_costs``.
+
+    CR 118.9b makes an alternative cost optional, and the policy takes a
+    printed one only when the mana cost cannot be paid: a pitched card or a
+    life is a second resource spent to save the first. A price in mana alone
+    is not — it is the same resource, fewer of it — so a seat with nine lands
+    and a Bringer pays {W}{U}{B}{R}{G} and keeps four, rather than tapping
+    out for {7}{U}{U}. Priced by the engine's own reader
+    (``Game.alternative_cost_mana``, the taxes CR 118.9d keeps included), so
+    the comparison is between the two totals the cast would charge."""
+    printed = game.applicable_alternative_costs(player_index, card)
+    payable = set(payable_alternative_indices(game, player_index, card, hand_index))
+    wanted = sum(int(amount or 0) for amount in required.values())
+    cheaper: list[int] = []
+    for index, cost in enumerate(printed):
+        if index not in payable or not _is_a_price_in_mana_alone(cost):
+            continue
+        owed = game.alternative_cost_mana(
+            player_index, card, cost, extra_generic=extra_generic,
+        )
+        if sum(int(amount or 0) for amount in owed.values()) < wanted:
+            cheaper.append(index)
+    return cheaper
+
+
 def _alternative_cost_tap_plan(
     game: Game, player_index: int, card: CardDefinition, *, extra_generic: int = 0,
     index: "int | None" = None,
