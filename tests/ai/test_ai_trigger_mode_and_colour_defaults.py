@@ -65,9 +65,14 @@ def _put(game, seat, card, *, tapped=False) -> Permanent:
 # --- the mode of a modal triggered ability -----------------------------------
 
 
-def test_the_pool_prints_four_modal_triggered_abilities(pool):
-    """The floor: every one of them is driven below, and a fourth is a card
-    this file has not looked at."""
+def test_the_pool_prints_these_modal_triggered_abilities(pool):
+    """The floor: every one of them is driven below, and one more is a card
+    this file has not looked at. Energy Chamber (Fifth Dawn) is in the
+    inventory once its set ships (``MTG_PROMOTE=5DN`` rehearses that): both of
+    its modes target, so CR 700.2b's offer is narrowed by the board before the
+    policy weighs what is left
+    (``test_energy_chamber_feeds_its_own_artifact_and_never_theirs``, which
+    drives it from the set's own pool whether or not it ships yet)."""
     carriers = sorted(
         name for name, card in pool.items()
         if compile_card_oracle(card).supported and any(
@@ -75,9 +80,10 @@ def test_the_pool_prints_four_modal_triggered_abilities(pool):
             for ability in compile_card_oracle(card).triggered_abilities
         )
     )
-    assert carriers == [
-        "Elder Gargaroth", "Putrid Warrior", "Relic Bind", "Trufflesnout",
-    ]
+    expected = {"Elder Gargaroth", "Putrid Warrior", "Relic Bind", "Trufflesnout"}
+    if "Energy Chamber" in pool:
+        expected.add("Energy Chamber")
+    assert carriers == sorted(expected)
 
 
 def test_trufflesnout_takes_the_life_when_life_is_what_it_is_short_of(pool):
@@ -178,6 +184,56 @@ def test_putrid_warrior_takes_the_side_of_the_swing_its_seat_is_short_of(
     swing = 1 if gains else -1
     assert game.players[ME].life == life[0] + swing, game.log[-6:]
     assert game.players[OPP].life == max(0, life[1] - 2 + swing), game.log[-6:]
+
+
+def _energy_chamber_upkeep(pool, fifth_dawn, mine=(), theirs=()):
+    """Energy Chamber and *mine* under seat 0, *theirs* under seat 1, and seat
+    0's upkeep: the trigger's mode and target are the default's. Fifth Dawn's
+    cards from its own pool (``set_pool``), shipped or measured."""
+    cards = {**pool, **fifth_dawn}
+    game = _table(pool)
+    _put(game, ME, cards["Energy Chamber"])
+    placed = {
+        seat: [_put(game, seat, cards[name]) for name in names]
+        for seat, names in ((ME, mine), (OPP, theirs))
+    }
+    game.start_turn(ME)
+    settle(game)
+    return game, placed
+
+
+def test_energy_chamber_feeds_its_own_artifact_and_never_theirs(pool, set_pool):
+    """"At the beginning of your upkeep, choose one — • Put a +1/+1 counter on
+    target artifact creature. • Put a charge counter on target noncreature
+    artifact." Both modes target, and the Chamber is always a legal target of
+    the second, so the second is always offered.
+
+    With an artifact creature of its own the +1/+1 counter goes on it; with
+    only the opponent's, the policy takes the charge counter on its own
+    Chamber rather than grow their creature; and an opponent's Pentad Prism
+    is never handed a charge counter (one more mana for them).
+
+    Not asserted, and measured: with only its own noncreature artifacts, the
+    charge counter goes on the first of them (the Chamber itself) even beside
+    a Pentad Prism, where it would have been a mana — the mode's target
+    default does not ask whether a permanent spends that counter."""
+    from engine.named_counters import counters_on
+
+    fifth_dawn = set_pool("5DN")
+    game, placed = _energy_chamber_upkeep(
+        pool, fifth_dawn, mine=["Ornithopter"], theirs=["Ornithopter"],
+    )
+    mine, theirs = placed[ME][0], placed[OPP][0]
+    assert counters_on(mine, "+1/+1") == 1
+    assert counters_on(theirs, "+1/+1") == 0
+
+    game, placed = _energy_chamber_upkeep(pool, fifth_dawn, theirs=["Ornithopter"])
+    chamber = next(p for p in game.controlled_by(ME) if p.card.name == "Energy Chamber")
+    assert counters_on(placed[OPP][0], "+1/+1") == 0
+    assert counters_on(chamber, "charge") == 1
+
+    game, placed = _energy_chamber_upkeep(pool, fifth_dawn, theirs=["Pentad Prism"])
+    assert counters_on(placed[OPP][0], "charge") == 0
 
 
 def test_an_interactive_seat_is_still_asked(pool):
