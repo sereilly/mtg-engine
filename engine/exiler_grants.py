@@ -33,9 +33,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from .late_modules import LateModules
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .cast_permissions import CastPermission
     from .models import Permanent
+
+_late = LateModules(__package__)
 
 
 #: The linked entry's key naming the seat that exiled the card
@@ -102,8 +106,8 @@ def exiler_play_permission(
     exiled off that opponent's library, named by ``zone_player_index``, the
     cross-seat spelling Grinning Totem's grant made.
     """
-    from .cast_permissions import CastPermission
-    from .linked_exile import linked_entries
+    CastPermission = _late.cast_permissions.CastPermission
+    linked_entries = _late.linked_exile.linked_entries
 
     for permanent in game.all_permanents():
         entries = [

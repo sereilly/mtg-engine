@@ -24,7 +24,7 @@ import re
 from .. import simultaneous_damage
 from ..color_changes import change_color
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
-from ..aura_restrictions import aura_restriction_active
+from ..aura_restrictions import aura_restriction_active, cant_be_enchanted_by_own_text
 from ..aura_attachment import attached_subject_triggers
 from ..damage_events import (EVENT_LOCK, EVENT_PREVENTION_LOCK,
                              damage_source_seat, deal_damage,
@@ -134,7 +134,6 @@ class EffectsMixin:
         """
 
         from ..subject_filters import subject_matches
-        from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
         events = []
         for defender_index, damagers in sorted(damagers_by_defender.items()):
@@ -272,7 +271,6 @@ class EffectsMixin:
         # would destroy a damaged *land* — and `subject_matches` is what makes
         # "another creature" or "a creature you control" cost nothing to add.
         from ..subject_filters import subject_matches
-        from ..trigger_utils import iter_triggered_abilities
 
         for seat, observer, trig in iter_triggered_abilities(
             self, condition_kinds={"creature_dealt_damage"},
@@ -325,7 +323,6 @@ class EffectsMixin:
         """Whether an Aura can't be attached to *permanent* — either a per-permanent
         flag set by an effect, or Guardian Beast's continuous grant to the
         noncreature artifacts its controller controls while it's untapped."""
-        from ..aura_restrictions import cant_be_enchanted_by_own_text
 
         return (
             bool(permanent.metadata.get("cant_be_enchanted_by_auras"))

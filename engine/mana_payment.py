@@ -35,8 +35,13 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
+from .late_modules import LateModules
+
 if TYPE_CHECKING:
     from .models import Permanent
+
+_late = LateModules(__package__)
+_late_mixins = LateModules(f"{__package__}.mixins")
 
 #: The coloured symbols a cost can name, in the order a payer should try them.
 #: Colourless {C} is here too: it is not a colour, but it is paid the same way —
@@ -1325,7 +1330,7 @@ def taps_for_payment(land) -> bool:
     the rest. The seam refused them (CR 602.2b) while the planner tapped them
     for one free mana of their summary's colour and spent no counter at all.
     """
-    from .mixins.land_mana_taps import LandManaTapsMixin
+    LandManaTapsMixin = _late_mixins.land_mana_taps.LandManaTapsMixin
 
     free, priced = LandManaTapsMixin._land_mana_abilities(land)
     if free is not None:
@@ -1339,7 +1344,7 @@ def taps_for_payment(land) -> bool:
     # A land that has lost all abilities (an animated one under Humility) has
     # lost the mana ability its type gives it with the rest — the seam's own
     # refusal, asked here so the planner does not count what it will not tap.
-    from .keywords import abilities_lost_at
+    abilities_lost_at = _late.keywords.abilities_lost_at
 
     if abilities_lost_at(land) is not None:
         return False
@@ -1369,7 +1374,7 @@ def land_text_is_run(land) -> bool:
     run, plus whatever another effect granted it, which is text the engine
     does run.
     """
-    from .oracle import compile_card_oracle
+    compile_card_oracle = _late.oracle.compile_card_oracle
 
     return compile_card_oracle(land.effective_card).supported
 

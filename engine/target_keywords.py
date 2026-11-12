@@ -42,8 +42,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .game_types import target_slots
+from .late_modules import LateModules
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
+
+_late = LateModules(__package__)
 
 #: The zones a target keyword names.
 BATTLEFIELD = "battlefield"
@@ -87,10 +92,10 @@ def cast_target_zone(card, *, mode_index: int | None = None) -> str:
     in: a graveyard where its spec addresses one (``graveyard_target_spec`` —
     Raise Dead, Animate Dead's enchant, Gravedigger's entry trigger), the ante
     where its effect reads an ante slot (Darkpact), else the battlefield."""
-    # Imported here: the handlers read this module's key, and the compiler
-    # imports the handlers.
-    from .oracle import compile_card_oracle
-    from .targeting import graveyard_target_spec
+    # Read late (``LateModules``): the handlers read this module's key, and
+    # the compiler imports the handlers.
+    compile_card_oracle = _late.oracle.compile_card_oracle
+    graveyard_target_spec = _late.targeting.graveyard_target_spec
 
     program = compile_card_oracle(card)
     if graveyard_target_spec(card, program, mode_index=mode_index) is not None:
@@ -237,8 +242,7 @@ def slot_keywords(game: "Game", zone: str, announcer: int, seat, slot, ids=None)
     named beside no seat counts into the board the gates always read it on
     (``bare_announcements.seat_of_unseated_slot``).
     """
-    from .bare_announcements import seat_of_unseated_slot
-    from .game_types import target_slots
+    seat_of_unseated_slot = _late.bare_announcements.seat_of_unseated_slot
 
     if zone == GRAVEYARD:
         return {"target_graveyard_indices": None if slot is None else target_slots(slot)}

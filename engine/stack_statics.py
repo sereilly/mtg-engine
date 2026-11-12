@@ -42,6 +42,8 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from .text_changes import spell_text_card
+
 # "As long as <this card> is on the stack, <effect>." — the printed wording, and
 # the pre-Sixth-Edition templating that goes with it: the card names itself
 # rather than saying "this spell". Both spellings are read, because the
@@ -241,7 +243,6 @@ def stack_static_cost_sources(stack) -> list[tuple]:
     that target **it**" is a fact about which *object* a spell chose, and two
     copies of one card on the stack are two objects (CR 109.1 / CR 601.2c).
     """
-    from .text_changes import spell_text_card
 
     found = []
     for item in stack or ():
@@ -260,7 +261,6 @@ def stack_static_cost_sources(stack) -> list[tuple]:
 
 def stack_static_grant_sources(stack) -> list[tuple]:
     """Each object on *stack* granting a board-wide static, paired with it."""
-    from .text_changes import spell_text_card
 
     found = []
     for item in stack or ():

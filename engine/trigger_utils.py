@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Container, Iterator, Sequence
 
 from .oracle import compile_card_oracle
+from .exiled_records import functions_in_exile
 
 if TYPE_CHECKING:
     from .models import CardDefinition, Permanent, PlayerState
@@ -34,7 +35,6 @@ def trigger_functions_from(trig) -> str:
     battlefield and a scan of the zone the ability names cannot both answer
     yes.
     """
-    from .exiled_records import functions_in_exile
 
     instruction = getattr(trig, "instruction", None)
     stated = (getattr(instruction, "payload", None) or {}).get("functions_from")

@@ -66,6 +66,10 @@ from .entry_choices import (
 from .entry_choices import (ENTRY_CHOICES, PAY_ANY_LIFE_ON_ENTER, EntryChoice,
                             chooses_card_name_on_enter, chosen_as_entered,
                             entry_choices_of)
+from .grammar.lowering._common import dropped_narrowings
+from .grammar.phrases import parse_subject_filter
+from .grammar.vocabulary import NUMBER_WORDS
+from .subject_filters import card_only_filter, object_only_filter
 
 # --- CR 614.1c entry state, engine/mixins/permanent_state.py ---------------
 
@@ -197,7 +201,6 @@ def _counted_entry_spec(phrase: str) -> "dict | None":
     """
     from .grammar.errors import GrammarError, LoweringError
     from .grammar.lowering import count_spec
-    from .grammar.phrases import parse_subject_filter
 
     try:
         filt = parse_subject_filter(f"a {phrase}")
@@ -247,7 +250,6 @@ def enters_with_pt_counters(line: str, card_name: str | None = None) -> tuple[in
     whole line rather than defaulting to one — a creature entering with one
     counter where the card prints four is a strictly smaller card, silently.
     """
-    from .grammar.vocabulary import NUMBER_WORDS
 
     match = ENTERS_WITH_PT_COUNTERS.match(_self_normalized(line, card_name))
     if match is None:
@@ -511,7 +513,6 @@ def enters_with_named_counter(line: str, card_name: str | None = None) -> tuple[
     printed = match.group("count")
     if printed in ("a", "an"):
         return 1, match.group("counter")
-    from .grammar.vocabulary import NUMBER_WORDS
 
     count = NUMBER_WORDS.get(printed)
     # A number word the table does not know refuses the line rather than
@@ -605,9 +606,6 @@ def sacrifice_any_number_on_enter(line: str, card_name: str | None = None) -> di
     outside :data:`subject_filters.OBJECT_ONLY_FILTER_KEYS` would be quietly
     ignored and the player would be offered permanents the card does not name.
     """
-    from .grammar.lowering._common import dropped_narrowings
-    from .grammar.phrases import parse_subject_filter
-    from .subject_filters import object_only_filter
 
     match = SACRIFICE_ANY_NUMBER_ON_ENTER.match(_self_normalized(line, card_name))
     if match is None:
@@ -653,9 +651,6 @@ def sacrifice_all_on_enter(line: str, card_name: str | None = None) -> dict | No
     board performed on the wrong one. Anything left that the object-only matcher
     cannot test refuses too, for the any-number row's reason.
     """
-    from .grammar.lowering._common import dropped_narrowings
-    from .grammar.phrases import parse_subject_filter
-    from .subject_filters import object_only_filter
 
     match = SACRIFICE_ALL_ON_ENTER.match(_self_normalized(line, card_name))
     if match is None:
@@ -768,10 +763,6 @@ def exile_cards_on_enter(line: str, card_name: str | None = None) -> dict | None
     source behind it, so a restriction the matcher cannot answer would be
     quietly ignored and the player offered cards the sentence does not name.
     """
-    from .grammar.lowering._common import dropped_narrowings
-    from .grammar.phrases import parse_subject_filter
-    from .grammar.vocabulary import NUMBER_WORDS
-    from .subject_filters import card_only_filter
 
     match = EXILE_CARDS_ON_ENTER.match(_self_normalized(line, card_name))
     if match is None:
@@ -842,9 +833,6 @@ def exile_any_number_on_enter(line: str, card_name: str | None = None) -> dict |
     lists one graveyard with no observer and no source behind it, so a
     restriction it cannot answer would offer cards the sentence does not name.
     """
-    from .grammar.lowering._common import dropped_narrowings
-    from .grammar.phrases import parse_subject_filter
-    from .subject_filters import card_only_filter
 
     match = EXILE_ANY_NUMBER_ON_ENTER.match(_self_normalized(line, card_name))
     if match is None:
@@ -955,9 +943,6 @@ def entry_sacrifice_toll(line: str, card_name: str | None = None) -> dict | None
     the player offered permanents the card does not name - which here is not a
     smaller card but a **cheaper** one.
     """
-    from .grammar.lowering._common import dropped_narrowings
-    from .grammar.phrases import parse_subject_filter
-    from .subject_filters import object_only_filter
 
     # **Two normalizations, the uncollapsed one first**, and that order is the
     # whole of Sheltered Valley's trouble. ``_self_normalized`` rewrites a card
@@ -1078,9 +1063,6 @@ def entry_discard_toll(line: str, card_name: str | None = None) -> dict | None:
     dropped and the player offered cards the sentence does not name - which is
     not a smaller card but a **cheaper** one.
     """
-    from .grammar.lowering._common import dropped_narrowings
-    from .grammar.phrases import parse_subject_filter
-    from .subject_filters import card_only_filter
 
     match = None
     for text in (_normalized(line), _self_normalized(line, card_name)):

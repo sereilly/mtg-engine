@@ -18,6 +18,10 @@ with ``engine/special_actions.py``.
 
 from __future__ import annotations
 
+from .late_modules import LateModules
+
+_late_mixins = LateModules(f"{__package__}.mixins")
+
 
 def auras_attached_to(permanent) -> list:
     """Every Aura currently attached to *permanent*, in attachment order.
@@ -360,8 +364,9 @@ def unsatisfied_enchant_clause(game, aura) -> str | None:
     applicable effects) are their own sweeps beside this one, each with its own
     exemption, and stay there.
     """
-    from .mixins.stack import (aura_enchant_noun, enchant_seat_satisfied,
-                               permanent_matches_enchant_noun)
+    aura_enchant_noun = _late_mixins.stack.aura_enchant_noun
+    enchant_seat_satisfied = _late_mixins.stack.enchant_seat_satisfied
+    permanent_matches_enchant_noun = _late_mixins.stack.permanent_matches_enchant_noun
 
     host = aura.metadata.get("attached_to")
     if host is None or not game.is_on_battlefield(host):

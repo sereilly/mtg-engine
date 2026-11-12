@@ -33,6 +33,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from .handlers._conditions import most_permanents_seat
+from .object_colors import card_colors, share_a_color
+from .search_filters import card_has_type
+
 if TYPE_CHECKING:
     from .game import Game
 
@@ -173,8 +177,6 @@ def own_cast_ban(game: "Game", caster_index: int, card) -> str | None:
     is a blue spell (CR 105.2b) and a card a Celestial Dawn has made white is
     not one.
     """
-    from .object_colors import card_colors
-    from .search_filters import card_has_type
 
     for seat, permanent in game.permanents_with_controller():
         for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
@@ -276,7 +278,7 @@ def chosen_name_ban(game: "Game", card) -> str | None:
     with different punctuation is the same name — the comparison every other
     name test in the engine makes.
     """
-    from .search_filters import card_has_type, name_key
+    from .search_filters import name_key
 
     # **The name of what is being cast**, which for a split card is the half
     # (CR 709.3a: "only the chosen half is evaluated to see if it can be
@@ -373,7 +375,7 @@ def same_name_as_permanent_ban(game: "Game", card) -> str | None:
     what counts (CR 707.2): a Clone that copied a Bear really is called Grizzly
     Bears, and it is the name the card asks about.
     """
-    from .search_filters import card_has_type, name_key
+    from .search_filters import name_key
 
     wanted = name_key(getattr(card, "name", "") or "")
     if not wanted:
@@ -617,8 +619,6 @@ def last_cast_color_ban(game: "Game", caster_index: int, card) -> str | None:
     A land is never cast (CR 305.1), so the sentence cannot reach one: this
     function is asked from a path that land drops also take.
     """
-    from .object_colors import card_colors, share_a_color
-    from .search_filters import card_has_type
 
     if card_has_type(card, "land"):
         return None
@@ -865,7 +865,6 @@ def _most_permanents_ban_sources(game: "Game", seat: int):
     two players' permanents to discover that nobody printed the sentence is a
     tally taken on every board that has never seen the card.
     """
-    from .handlers._conditions import most_permanents_seat
 
     sources = [
         (permanent, banned)
@@ -888,7 +887,6 @@ def most_permanents_cast_ban(game: "Game", caster_index: int, card) -> str | Non
     :func:`global_cast_ban`'s reason: a card has **every** type its line names
     (CR 205.2), so an artifact creature is stopped by a ban on either word.
     """
-    from .search_filters import card_has_type
 
     for permanent, banned in _most_permanents_ban_sources(game, caster_index):
         if any(card_has_type(card, wanted) for wanted in banned):
@@ -946,7 +944,6 @@ def _line_prints_the_escape_hatch(line: str) -> bool:
 
 def _ignore_board_static_offer(game, permanent):
     """What *permanent* is offering the leading player right now, or None."""
-    from .handlers._conditions import most_permanents_seat
     from .special_actions import SpecialActionOffer
 
     if not any(
@@ -1026,7 +1023,6 @@ def global_cast_ban(game: "Game", card) -> str | None:
     a card has **every** type its line names (CR 205.2), so an artifact creature
     is a creature spell and Aether Storm stops it.
     """
-    from .search_filters import card_has_type
 
     for _seat, permanent in game.permanents_with_controller():
         for raw_line in (permanent.effective_card.oracle_text or "").splitlines():

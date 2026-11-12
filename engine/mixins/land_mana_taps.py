@@ -11,6 +11,8 @@ with nothing on it the seam cannot honour part-way through a payment.
 ``_land_mana_abilities`` walks the land's effective card for the free one and
 says whether a priced one exists; a basic land type the land gained is a
 second mana ability with no text (CR 305.6/305.7, ``_gained_type_mana``).
+Each of the two is a function of one compiled object — the ability, and the
+effective card's program — and is held on it (``oracle.held_on_compiled``).
 ``land_mana_tap_refusal`` is the seam's own gate, pure, so what a planner
 counts and what the tap makes are one answer; its CR 602.5 half is
 ``land_tap_prohibition``, over the one prohibition table.
@@ -25,10 +27,18 @@ from __future__ import annotations
 import dataclasses
 
 from ..keywords import abilities_lost_at
-from ..mana_abilities import answer_color_choices
+from ..mana_abilities import (
+    INTRINSIC_LAND_MANA_ABILITY, answer_color_choices, carries_an_offer, is_mana_ability,
+)
 from ..mana_could_produce import NAMED_MANA_TYPE, named_mana_type
 from ..game_types import OracleExecutionContext
-from ..oracle import compile_card_oracle
+from ..oracle import compile_card_oracle, held_on_compiled
+from ..oracle_types import DERIVED_SLOT_PREFIX, ParsedActivatedAbility
+from ..land_types import added_land_types, lost_abilities_to_type_change
+from ..late_modules import LateModules
+from ..mana_payment import land_text_is_run
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 def _is_free_beyond_tapping(cost) -> bool:
@@ -61,10 +71,28 @@ def is_tap_alone_mana_ability(ability) -> bool:
     answering separately is how the route kept a three-kind set of its own
     while the seam asked CR 605.1a, and a land's coloured second ability went
     down the path that skips every swap and trigger the seam announces.
+
+    **Derived once per compiled ability, and held on it**
+    (``oracle.held_on_compiled``). The answer is a function of the ability
+    alone — its instruction, its cost, its printed line — and the tap seam,
+    the payment planner and the highlight ask it of the same abilities on
+    every tap they count: 1.3 million times in one payment census, each a
+    ``dataclasses.replace`` and a walk of every step. Anything else handed in
+    (a test's stand-in) is answered from scratch.
     """
-    from ..activation_restrictions import (prints_activation_restriction,
-                                           restrictions_askable_mid_payment)
-    from ..mana_abilities import carries_an_offer, is_mana_ability
+    if type(ability) is ParsedActivatedAbility:
+        return held_on_compiled(ability, _TAP_ALONE_SLOT, _tap_alone_mana_ability)
+    return _tap_alone_mana_ability(ability)
+
+
+#: Where :func:`is_tap_alone_mana_ability`'s answer is held on an ability.
+_TAP_ALONE_SLOT = DERIVED_SLOT_PREFIX + "tap_alone_mana_ability"
+
+
+def _tap_alone_mana_ability(ability) -> bool:
+    """:func:`is_tap_alone_mana_ability`, derived."""
+    prints_activation_restriction = _late.activation_restrictions.prints_activation_restriction
+    restrictions_askable_mid_payment = _late.activation_restrictions.restrictions_askable_mid_payment
 
     instruction = getattr(ability, "instruction", None)
     if instruction is None or not getattr(ability, "supported", False):
@@ -121,6 +149,46 @@ _TAP_REFUSAL_BY_ROW = {
 }
 
 
+def _land_mana_abilities_of(program):
+    """``LandManaTapsMixin._land_mana_abilities``' walk, over the program of a
+    land's effective card: ``(free_instruction, priced)``."""
+    prints_activation_restriction = _late.activation_restrictions.prints_activation_restriction
+
+    priced = False
+    for ability in program.activated_abilities:
+        instruction = ability.instruction
+        if instruction is None or not ability.supported:
+            continue
+        if not (is_mana_ability(ability) or instruction.kind == "if_then"):
+            continue
+        if is_tap_alone_mana_ability(ability) and not prints_activation_restriction(
+            ability.source_line or ""
+        ):
+            return instruction, priced
+        # A tap-alone ability that prints a board condition ("Activate
+        # only if you control a Swamp", the Tainted lands) is reachable by
+        # index and asked its clause there (``land_mana_tap_refusal``), but
+        # it is never the default a bare tap runs: a default that could be
+        # refused would refuse the land's free mana with it. A land whose
+        # *only* mana ability is conditioned (Temple of the False God) is
+        # reached by index too — ``land_mana_ability_for`` names it — so
+        # every reader that counts a land without asking the board (CR
+        # 602.5's clause is a fact about the board) leaves it out.
+        priced = True
+    return None, priced
+
+
+#: Where :func:`_land_mana_abilities_of`'s answer is held on a program.
+_LAND_MANA_SLOT = DERIVED_SLOT_PREFIX + "land_mana_abilities"
+
+
+def _same_walk(held, fresh) -> bool:
+    """Whether a held walk is the fresh one — the free instruction as the
+    *same object*, which is how its readers find it again among a land's
+    abilities (``ability.instruction is free``)."""
+    return held[0] is fresh[0] and held[1] == fresh[1]
+
+
 class LandManaTapsMixin:
     @staticmethod
     def _land_mana_abilities(land):
@@ -152,39 +220,25 @@ class LandManaTapsMixin:
         another effect **granted** the land ("Lands you control have '{T}: Add
         two mana of any one color.'", Overlaid Terrain), which the arm that
         stood here returned in front of.
-        """
-        from ..activation_restrictions import prints_activation_restriction
-        from ..mana_abilities import is_mana_ability
-        from ..mana_payment import land_text_is_run
 
+        **The walk is held on that program** (:func:`_land_mana_abilities_of`,
+        through ``oracle.held_on_compiled``): it reads the program and nothing
+        else, and every reader of a land's mana asks it on every tap it counts
+        — 3.2 million times in one payment census, a third of the census. Held
+        on the *effective* card's program, so the land is answered as the card
+        it is now: a Forest under Blood Moon reads the Mountain's program, and
+        the Forest's again when the Moon leaves.
+        """
         if not land_text_is_run(land):
             # A land none of whose text compiles (Rhystic Cave, until PCY
             # W3G1): the summary below would be its whole reading — free mana
             # with every cost and condition taken out. Reported as priced,
             # which is the answer the tap seam refuses.
             return None, True
-        priced = False
-        for ability in compile_card_oracle(land.effective_card).activated_abilities:
-            instruction = ability.instruction
-            if instruction is None or not ability.supported:
-                continue
-            if not (is_mana_ability(ability) or instruction.kind == "if_then"):
-                continue
-            if is_tap_alone_mana_ability(ability) and not prints_activation_restriction(
-                ability.source_line or ""
-            ):
-                return instruction, priced
-            # A tap-alone ability that prints a board condition ("Activate
-            # only if you control a Swamp", the Tainted lands) is reachable by
-            # index and asked its clause there (``land_mana_tap_refusal``), but
-            # it is never the default a bare tap runs: a default that could be
-            # refused would refuse the land's free mana with it. A land whose
-            # *only* mana ability is conditioned (Temple of the False God) is
-            # reached by index too — ``land_mana_ability_for`` names it — so
-            # every reader that counts a land without asking the board (CR
-            # 602.5's clause is a fact about the board) leaves it out.
-            priced = True
-        return None, priced
+        return held_on_compiled(
+            compile_card_oracle(land.effective_card), _LAND_MANA_SLOT,
+            _land_mana_abilities_of, agrees=_same_walk,
+        )
 
     def _chosen_land_mana_ability(self, land, ability_index: int):
         """The instruction of the mana ability *ability_index* names on *land*,
@@ -227,8 +281,9 @@ class LandManaTapsMixin:
         readers choosing an ability two ways is a land that pays for one
         player and not for the other.
         """
-        from ..ai_valuation import mana_ability_symbols
-        from ..land_mana_swaps import could_produce_under_substitutions, swapped_production
+        mana_ability_symbols = _late.ai_valuation.mana_ability_symbols
+        could_produce_under_substitutions = _late.land_mana_swaps.could_produce_under_substitutions
+        swapped_production = _late.land_mana_swaps.swapped_production
 
         free, priced = self._land_mana_abilities(land)
         if free is not None and color in mana_ability_symbols(free):
@@ -410,7 +465,7 @@ class LandManaTapsMixin:
         no tap-alone mana ability has nothing to ask; the seam refuses it for
         that reason instead. Pure, like the table.
         """
-        from ..activation_prohibitions import activation_prohibition
+        activation_prohibition = _late.activation_prohibitions.activation_prohibition
 
         ability = self._land_tap_ability(land, ability_index)
         if ability is None:
@@ -420,8 +475,6 @@ class LandManaTapsMixin:
         )
 
     def _land_tap_ability(self, land, ability_index: int | None):
-        from ..mana_abilities import INTRINSIC_LAND_MANA_ABILITY
-
         if ability_index is not None:
             usable = self.usable_abilities_of(land)
             if not 0 <= ability_index < len(usable):
@@ -457,7 +510,6 @@ class LandManaTapsMixin:
         unrestricted road (``test_land_mana_swap_buckets``). Not after a
         "loses all abilities" (CR 613.1f), which only a newer grant survives.
         """
-        from ..land_types import added_land_types
 
         added = set(added_land_types(land))
         if (
@@ -482,8 +534,6 @@ class LandManaTapsMixin:
         whose type an effect set, which lost that text (CR 305.7). "Own" is
         ``Permanent.card_through_layer_3``: what it prints, copies (CR 707.2)
         or was rewritten to say (CR 612), before any layer-6 grant."""
-        from ..land_types import lost_abilities_to_type_change
-        from ..mana_abilities import is_mana_ability
 
         if lost_abilities_to_type_change(land):
             return False

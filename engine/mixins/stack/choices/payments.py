@@ -17,6 +17,10 @@ from ....pending_choices import ChoiceSpec, PendingChoice
 from ....mana_payment import (generic_cost, mana_cost_label, payment_prices_in_force,
                               payment_units_in_force, payment_wants_in_force,
                               plan_payment, untapped_mana_lands)
+from ....late_modules import LateModules
+from ....mana_could_produce import ability_colors_on_offer
+
+_late = LateModules(__package__.split(".", 1)[0])
 
 
 class PaymentChoicesMixin:
@@ -122,7 +126,6 @@ class PaymentChoicesMixin:
         nothing on this board", which the payment planner, the AI's tap plan
         and the client's colour picker must all be able to hear.
         """
-        from ....mana_could_produce import ability_colors_on_offer
 
         free, _priced = self._land_mana_abilities(land)
         if free is None:
@@ -191,7 +194,7 @@ class PaymentChoicesMixin:
         # A land with no compiled tap-alone ability is the summary path's (a
         # basic, a dual), and one whose ability's shape is not read keeps the
         # summary too: both come back None.
-        from ....board_payment import tap_alone_symbols
+        tap_alone_symbols = _late.board_payment.tap_alone_symbols
 
         tapped_for = tap_alone_symbols(self, land)
         if tapped_for is not None:
@@ -556,7 +559,7 @@ class PaymentChoicesMixin:
         mana pays the pip only *as* another colour (CR 106.6: white as any
         colour under Celestial Dawn, where no land "produces" the pip).
         """
-        from ....ai_valuation import mana_ability_symbols
+        mana_ability_symbols = _late.ai_valuation.mana_ability_symbols
 
         offered = [str(symbol).upper() for symbol in self._land_payment_colors(land)]
         if wanted is not None and str(wanted).upper() in offered:

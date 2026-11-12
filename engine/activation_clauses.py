@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import re
 
+from .self_reference import _collapse_self_references
+
 
 #: Where one printed sentence stops being one restriction. "Activate only during
 #: combat **and only** if defending player controls a snow land" and "Activate
@@ -93,8 +95,6 @@ def _clauses(text: str, card_name: str | None = None) -> list[str]:
     sentence rather than about a card.
     """
     if card_name:
-        from .self_reference import _collapse_self_references
-
         # Lowercased **before** the collapse, not after: the name forms
         # ``_self_name_forms`` produces are lowercase and the match is
         # case-sensitive, so a card's printed capital "Hakim" went straight

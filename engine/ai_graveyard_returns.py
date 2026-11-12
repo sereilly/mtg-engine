@@ -29,6 +29,12 @@ library is not ranked here.
 from __future__ import annotations
 
 from .ai_weighed_cast import _effect_steps
+from .cost_pickers import spec_is_a_cost
+from .late_modules import LateModules
+from .oracle import compile_card_oracle
+from .targeting import GRAVEYARD_TARGET_KIND, spec_roles
+
+_late = LateModules(__package__)
 
 #: Where each graveyard-target return step puts its card.
 RETURN_DESTINATIONS = {
@@ -104,12 +110,12 @@ def cast_graveyard_return(game, player_index: int, card) -> "tuple[int, int] | N
     list for the announcement being built) — or None for any other spell, and
     for one none of whose legal cards can arrive (its rehearsal reads the
     cast as changing nothing)."""
-    from .ai_actions import (_OFFERS_ANNOUNCED, _announced_mode, _announced_steps,
-                             _cast_spec, _cast_zone)
-    from .ai_prompt_readers import exiles_a_graveyard_target
-    from .cost_pickers import spec_is_a_cost
-    from .oracle import compile_card_oracle
-    from .targeting import GRAVEYARD_TARGET_KIND, spec_roles
+    _OFFERS_ANNOUNCED = _late.ai_actions._OFFERS_ANNOUNCED
+    _announced_mode = _late.ai_actions._announced_mode
+    _announced_steps = _late.ai_actions._announced_steps
+    _cast_spec = _late.ai_actions._cast_spec
+    _cast_zone = _late.ai_actions._cast_zone
+    exiles_a_graveyard_target = _late.ai_prompt_readers.exiles_a_graveyard_target
 
     program = compile_card_oracle(card)
     spec = _cast_spec(card, program)

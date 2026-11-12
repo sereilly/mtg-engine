@@ -71,6 +71,7 @@ from functools import lru_cache
 
 from .oracle_types import MANA_COLOR_OF_CHOICE
 from .shields import END_OF_TURN  # noqa: F401  (one duration vocabulary)
+from .subject_filters import subject_matches
 
 
 @dataclass
@@ -447,7 +448,6 @@ def static_substitutions_for(game, land) -> "tuple[ManaSubstitution, ...]":
     which one wins is the tapper's choice (:func:`ordered_substitutions`),
     where the first in printed order used to answer for every seat.
     """
-    from .subject_filters import subject_matches
 
     found: list[ManaSubstitution] = []
     for source in game.all_permanents():
@@ -567,7 +567,6 @@ def swapped_productions(
     ability armed the swap, so an opponent's Deep Water says nothing about this
     land. *tapper* is :func:`swapped_production`'s.
     """
-    from .subject_filters import subject_matches
 
     # The land's own records (Quarum Trench Gnomes) **first**: applied ahead
     # of every other substitution is the answer every seat was given while the

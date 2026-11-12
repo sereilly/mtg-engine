@@ -43,6 +43,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .late_modules import LateModules
+from .object_creature_types import card_creature_types
+
+_late = LateModules(__package__)
+
 #: The instruction kind the line compiles to: a record the layer readers ask
 #: for, never a handler that runs (the shape ``copy_top_card_of_zone`` has).
 EXILED_CARD_BODY_KIND = "adopt_exiled_creature_body"
@@ -107,8 +112,7 @@ def refresh_exiled_card_bodies(game, permanents) -> None:
     written where its effective program carries the line and a creature card
     is exiled with it, popped everywhere else (a permanent that lost the
     ability, CR 613.1f, keeps no body)."""
-    from .object_creature_types import card_creature_types
-    from .oracle import compile_card_oracle
+    compile_card_oracle = _late.oracle.compile_card_oracle
 
     for permanent in permanents:
         permanent.metadata.pop(EXILED_CARD_BODY, None)

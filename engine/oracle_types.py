@@ -438,6 +438,24 @@ def x_spend_colors_from_text(text: str) -> tuple[str, ...]:
     )
 
 
+#: The instance-dict key prefix under which ``oracle.held_on_compiled`` keeps
+#: an answer derived from a compiled object on that object —
+#: ``models.COMPILED_PROGRAM_SLOT``'s arrangement: a frozen dataclass's
+#: instance dict is an ordinary dict, and nothing in it is a field, so
+#: equality, ``replace`` and the repr never see it. Left out of every copy and
+#: pickle of the object (:func:`_without_derived`): the answer is this
+#: process's, held under its compile generation, and cheap to derive again.
+DERIVED_SLOT_PREFIX = "_derived_"
+
+
+def _without_derived(state: dict[str, Any]) -> dict[str, Any]:
+    """*state*, an instance dict, less every derived answer held in it."""
+    if any(key.startswith(DERIVED_SLOT_PREFIX) for key in state):
+        return {key: value for key, value in state.items()
+                if not key.startswith(DERIVED_SLOT_PREFIX)}
+    return state
+
+
 @dataclass(frozen=True)
 class OracleToken:
     kind: str
@@ -474,6 +492,10 @@ class ParsedActivatedAbility:
     cost: ActivatedAbilityCost
     effect_kind: str = "unsupported"
     instruction: OracleInstruction | None = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Its fields, less what ``oracle.held_on_compiled`` keeps on it."""
+        return _without_derived(self.__dict__)
 
 
 @dataclass(frozen=True)
@@ -538,6 +560,10 @@ class OracleProgram:
     # the half that suits them, which is the opposite of what all three cards
     # are printed to do.
     mode_chooser: str | None = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Its fields, less what ``oracle.held_on_compiled`` keeps on it."""
+        return _without_derived(self.__dict__)
 
 
 # Number words, shared with the text-keyed derivation tables that read a count

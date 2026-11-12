@@ -28,6 +28,11 @@ from __future__ import annotations
 import zlib
 
 from .entry_awaiting import ENTRY_EVENT, awaited_entries
+from .cast_permissions import playable_from_zones
+from .face_down import face_down_card, hidden_card_of
+from .library_top import top_is_public, top_is_visible
+from .linked_exile import face_down_exiled_cards
+from .revealed_hands import hand_revealed_to
 
 
 def _every_card(game):
@@ -319,18 +324,11 @@ def conceal_from(game, seat: int) -> None:
     """
     import random
 
-    from .library_top import top_is_public, top_is_visible
-    from .revealed_hands import hand_revealed_to
-
-    from .cast_permissions import playable_from_zones
-
     def playable_on_top(index) -> bool:
         return any(
             entry.get("zone") == "library" and entry.get("index") == 0
             for entry in playable_from_zones(game, index)
         )
-
-    from .face_down import face_down_card, hidden_card_of
 
     owing = {choice.player_index for choice in game.pending_choices}
     for index, player in enumerate(game.players):
@@ -376,7 +374,6 @@ def _face_down_exile_slots(game, index: int, seat: int) -> "list[tuple[int, obje
     look: Shared Fate's exiler, Gustha's Scepter's controller), in exile
     order — a function of where the cards are in a zone everyone can count,
     never of what they are."""
-    from .linked_exile import face_down_exiled_cards
 
     hidden = face_down_exiled_cards(game, index, viewer_index=seat)
     return [

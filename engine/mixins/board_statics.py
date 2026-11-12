@@ -51,6 +51,14 @@ from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..static_bonuses import conditional_static_holds
+from ..global_statics import (
+    STACK_STATICS_KEY, changes_types, global_static_sources, record_stack_statics,
+    removes_all_abilities,
+)
+from ..keywords import all_abilities_removed
+from ..late_modules import LateModules
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 def _record_land_animation_order(
@@ -156,7 +164,6 @@ class BoardStaticsMixin:
             host = source.metadata.get("attached_to")
             if host is not None and aura_animates_artifact(source_card.oracle_text):
                 statics.append(self._attached_animation_static(source, host))
-        from ..global_statics import changes_types
 
         by_source: dict[int, TypeStatic] = {}
         for source, static in global_sources:
@@ -265,7 +272,6 @@ class BoardStaticsMixin:
         Not asked (no entry reader in the pool reads them): what a lord will
         grant the permanent, and its layer-7 size.
         """
-        from ..global_statics import global_static_sources
 
         board = list(self.all_permanents())
         # Is there any static to ask? Nearly every entry in nearly every game
@@ -456,10 +462,7 @@ class BoardStaticsMixin:
         Conspiracy had just made one refresh late, and a Conspiracy could not
         wait behind the effect that made a land a creature.
         """
-        from ..global_statics import (STACK_STATICS_KEY, changes_types,
-                                      global_static_sources,
-                                      record_stack_statics)
-        from ..stack_statics import stack_static_grant_sources
+        stack_static_grant_sources = _late.stack_statics.stack_static_grant_sources
 
         # Both derived layer-4 channels are cleared before anything is judged,
         # so no candidate can read a previous pass's contribution as this
@@ -657,9 +660,6 @@ class BoardStaticsMixin:
         # The remover itself is not asked. Humility under Opalescence strips
         # its own ability and applies all the same (an effect cannot depend on
         # itself), and two of them strip each other to the same board.
-        from ..global_statics import removes_all_abilities
-        from ..keywords import all_abilities_removed
-
         def later_layers_only(static) -> bool:
             return not (
                 changes_types(static) or static.sets_colors is not None
@@ -798,8 +798,6 @@ class BoardStaticsMixin:
             # green creature, and one that stops being green stops paying the
             # upkeep with nothing to undo.
             if static.colors:
-                from ..subject_filters import subject_matches
-
                 if game is None:
                     return False
                 return all(

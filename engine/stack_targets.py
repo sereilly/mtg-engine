@@ -60,10 +60,17 @@ from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
 from .game_types import as_graveyard_stamps, target_ids
 from .modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from .text_changes import spell_text_card
+from .cost_pickers import spec_is_a_cost
+from .late_modules import LateModules
+from .oracle import compile_card_oracle
+from .target_roles import ROLES_TARGET_KIND, recorded_role_seats, role_is_seat
+from .targeting import GRAVEYARD_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS, role_is_stack, spec_roles
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
     from .game_types import StackItem
+
+_late = LateModules(__package__)
 
 
 #: The trigger-context key the object rides under when "a player chooses one
@@ -220,7 +227,6 @@ _UNTARGETED_SPEC_FLAGS = ("source_of_choice", "optional")
 
 def _spec_targets(spec: dict | None) -> bool:
     """Whether *spec* describes a picker that is a CR 115.1 target."""
-    from .cost_pickers import spec_is_a_cost
 
     if not spec or spec.get("kind") in (None, "none", "modal", "hand_card", "faces"):
         return False
@@ -261,8 +267,8 @@ def announcements(item: "StackItem") -> "tuple[_Announcement, ...] | None":
     modal spell whose chosen mode names no target, an unkicked spell whose only
     target is kicked-only (CR 702.33g).
     """
-    from .oracle import compile_card_oracle
-    from .targeting import _from_instructions, derive_cast_spec
+    _from_instructions = _late.targeting._from_instructions
+    derive_cast_spec = _late.targeting.derive_cast_spec
 
     # What the object says (CR 612, ``spell_text_card``): a spell's text as
     # any text change made it, an ability's card as it is.
@@ -431,12 +437,6 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
     ``target_player_index`` beside a permanent index is a battlefield, and
     beside a player-kind spec with no permanent it is a face.
     """
-    from .targeting import (
-        GRAVEYARD_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
-        role_is_stack, spec_roles,
-    )
-    from .target_roles import (ROLES_TARGET_KIND, recorded_role_seats,
-                               role_is_seat)
 
     spec, holder, mode = announcement.spec, announcement.holder, announcement.mode
     kind = spec.get("kind")
@@ -720,7 +720,6 @@ def _printed_target_instances(item: "StackItem") -> int | None:
     never let it choose.
     """
     from .legality import _cast_lines
-    from .oracle import compile_card_oracle
     from .picker_probes import line_names_a_cast_target
 
     def count(text: str | None) -> int:
@@ -877,7 +876,6 @@ def _one_description_for_every_instance(item: "StackItem", instances: int) -> bo
     damage to a third target", Cone of Flame). Slot lists whose restrictions differ are a
     roles spec (``target_descriptions._slot_roles_spec``) and are refused
     beside this. A spell only: an ability's instances are its own line's."""
-    from .oracle import compile_card_oracle
 
     if getattr(item, "is_ability", False):
         return False
@@ -938,7 +936,6 @@ def change_slots(game: "Game", item: "StackItem") -> "list[ChangeSlot] | str":
     creature (kg5). The slots of several modes come in announcement order,
     each with its own mode's candidates.
     """
-    from .oracle import compile_card_oracle
 
     announced = announcements(item)
     if announced is None:
@@ -1024,8 +1021,6 @@ def names_several_targets(item: "StackItem") -> bool:
     # …or several **players**, each on a slot of its own ("target player …
     # another target player", Cultural Exchange): the list is only ever
     # recorded for two or more of them.
-    from .target_roles import recorded_role_seats
-
     if recorded_role_seats(item) is not None:
         return True
     # …or a permanent **beside a card in a graveyard** ("Return two target
@@ -1097,7 +1092,7 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
     scalar seat beside it. The list is replaced, never mutated: a copy of the
     spell (CR 707.10) shares the original's list object.
     """
-    from .target_roles import ROLE_SEATS, recorded_role_seats
+    from .target_roles import ROLE_SEATS
 
     blanked = 0
     dropped: list[int] = []

@@ -87,13 +87,28 @@ import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .mana_abilities import MANA_PRODUCING_KINDS, _every_nested_step
+from .mana_abilities import (
+    MANA_PRODUCING_KINDS, _every_nested_step, carries_an_offer, is_mana_ability,
+)
 from .mana_payment import (PIP_SYMBOLS, UNITS_UNCHANGED, ManaPayment,
                            _prices_in_force, pips_payable_by, plan_payment)
+from . import land_mana_swaps
+from .activation_restrictions import prints_activation_restriction
+from .auras import AURA_ANY_COLOR_MANA, aura_additional_mana_now
+from .game_types import OracleExecutionContext
+from .handlers._amounts import count_from_payload
+from .handlers.control_flow import evaluate_condition
+from .late_modules import LateModules
+from .mana_could_produce import ability_colors_on_offer
+from .mixins.land_mana_taps import is_tap_alone_mana_ability
+from .named_counters import counters_on
+from .restricted_mana import restriction_admits
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
     from .models import Permanent
+
+_late = LateModules(__package__)
 
 #: A mark every unit carries so the matching counts it toward a generic cost
 #: (``plan_payment`` spends on generic only a source that makes *something*).
@@ -128,7 +143,6 @@ def _seam_abilities(game: "Game", land: "Permanent") -> list:
     """The instructions the tap seam would run for *land*, one per mana
     ability a tap alone pays for — ``None`` standing for the printed-summary
     path a basic or a dual takes."""
-    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     found: list = []
     if game.land_mana_tap_refusal(land) is None:
@@ -183,12 +197,6 @@ def _read_yields(
     as, and the planner's hook (:func:`tap_alone_symbols`) must not mistake
     one for an ability that makes no mana.
     """
-    from .handlers._amounts import count_from_payload
-    from .handlers.control_flow import evaluate_condition
-    from .mana_could_produce import ability_colors_on_offer
-    from .named_counters import counters_on
-    from .game_types import OracleExecutionContext
-    from .restricted_mana import restriction_admits
 
     seat = game.controller_index_of(land)
     player = game.players[seat]
@@ -272,7 +280,6 @@ def _under_a_swap(game: "Game", land: "Permanent", found: TapYield) -> TapYield:
     """*found* as CR 106.12b's "produces … instead" leaves it (Deep Water,
     Contamination, Harvest Mage) — the substitution the seam applies to
     whatever the land's ability put in the pool."""
-    from . import land_mana_swaps
 
     swap = land_mana_swaps.swapped_production(game, land)
     offered = land_mana_swaps.payment_colors(game, land)
@@ -309,7 +316,6 @@ def _aura_units(game: "Game", land: "Permanent") -> "tuple[frozenset[str], ...]"
     additional {G}." (Wild Growth, Fertile Ground; Elvish Guidance's "{G} for
     each Elf on the battlefield", counted now.) Added by the seam on every
     tap, whatever the land's own ability made."""
-    from .auras import AURA_ANY_COLOR_MANA, aura_additional_mana_now
 
     aura = land.metadata.get("attached_aura")
     if aura is None:
@@ -331,7 +337,6 @@ def _with_triggered_mana(
     joins the yield as more units of the one shared choice: a Tropical Island
     under a Mana Flare is {G}{G} or {U}{U}, never {G}{U}.
     """
-    from .restricted_mana import restriction_admits
 
     seat = game.controller_index_of(land)
     if seat is None:
@@ -392,7 +397,6 @@ def source_tap_yields(
     fallback, and a non-land source has no seam.
     """
     from .activation_prohibitions import activation_prohibition
-    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     if permanent.tapped or permanent.has_type("land"):
         return []
@@ -435,9 +439,6 @@ def is_tap_cost_mana_ability(ability) -> bool:
     """
     from dataclasses import replace
 
-    from .activation_restrictions import prints_activation_restriction
-    from .mana_abilities import carries_an_offer, is_mana_ability
-
     instruction = getattr(ability, "instruction", None)
     if instruction is None or not getattr(ability, "supported", False):
         return False
@@ -465,7 +466,7 @@ def tap_cost_mana_abilities(game: "Game", seat: int) -> list:
     CR 602.5 prohibition (``activation_prohibition`` — a Null Rod, a Cursed
     Totem). Whether the cost can be paid is the caller's count of what it
     may tap (``Game._tap_cost_candidates``)."""
-    from .activation_prohibitions import activation_prohibition
+    activation_prohibition = _late.activation_prohibitions.activation_prohibition
 
     found: list = []
     for permanent in game.controlled_by(seat):
@@ -708,7 +709,6 @@ def tap_alone_symbols(game: "Game", land: "Permanent") -> "tuple[str, ...] | Non
     then the rest in WUBRG-then-colourless order, then the mana of a basic
     land type the land *gained* (CR 305.7).
     """
-    from .mixins.land_mana_taps import is_tap_alone_mana_ability
 
     free, _priced = game._land_mana_abilities(land)
     if free is None:

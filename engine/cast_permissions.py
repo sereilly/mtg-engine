@@ -36,6 +36,9 @@ from typing import TYPE_CHECKING
 
 from .faces import castable_faces
 from .search_filters import card_has_type
+from .exiler_grants import exiler_play_permission
+from .flashback import flashback_permission
+from .library_top import top_castable
 
 if TYPE_CHECKING:
     from .alternative_costs import AlternativeCost
@@ -488,8 +491,6 @@ def _permissions_for(
     # the card's own permission below is, and for the same reason: a stored
     # grant would have to be taken away when the Snoop leaves.
     if zone == "library":
-        from .library_top import top_castable
-
         if top_castable(game, player_index, card):
             yield CastPermission(
                 player_index=player_index, zone="library", mode="play",
@@ -529,8 +530,6 @@ def _permissions_for(
     # for the Agenda's reason above: it ends with the permanent (ruling
     # 2008-08-01), so nothing stored has to be taken away.
     if zone == "exile":
-        from .exiler_grants import exiler_play_permission
-
         exiled_by_you = exiler_play_permission(game, player_index, card)
         if exiled_by_you is not None:
             yield exiled_by_you
@@ -555,8 +554,6 @@ def _permissions_for(
     # permission here that names a price, and a caster whose graveyard another
     # effect has opened is not thereby made to pay it.
     if zone == "graveyard" and not as_land:
-        from .flashback import flashback_permission
-
         own = flashback_permission(game, player_index, card, spell)
         if own is not None:
             yield own

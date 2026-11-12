@@ -98,6 +98,7 @@ from .ai_targets import (
 )
 from .ai_graveyard_returns import best_graveyard_return, graveyard_return_destination
 from .ai_player_control import plays_for_another
+from .mana_abilities import is_mana_ability as is_cr_mana_ability
 
 
 def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:
@@ -208,7 +209,6 @@ def _abilities_weighed(game: Game, permanent) -> list:
     (``mana_abilities.is_mana_ability``), which reads a painland's "Add {W} or
     {U}. This land deals 1 damage to you." as the mana ability it is.
     """
-    from .mana_abilities import is_mana_ability as is_cr_mana_ability
 
     usable = game.usable_abilities_of(permanent)
     later = [

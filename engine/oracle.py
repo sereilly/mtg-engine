@@ -50,6 +50,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from . import fast_paths
 from .models import COMPILED_PROGRAM_SLOT, CardDefinition
 from .faces import CAST_FACE_LAYOUTS, face_cards, is_multi_face
 from .program_store import seedable
@@ -114,6 +115,7 @@ __all__ = [
     "ParsedTriggeredAbility",
     "TriggerCondition",
     "compile_card_oracle",
+    "held_on_compiled",
     "lex_oracle_text",
     "normalize_creature_line",
     "parse_activated_ability_cost",
@@ -1097,6 +1099,41 @@ def compile_card_oracle(card: CardDefinition) -> OracleProgram:
         program = _compile_card_program(card)
     card.__dict__[COMPILED_PROGRAM_SLOT] = (_HELD.generation, program)
     return program
+
+
+def held_on_compiled(compiled, slot: str, derive, agrees=None):
+    """``derive(compiled)``, kept on *compiled* — a program, or one of its
+    abilities — once derived.
+
+    For an answer that is a function of a compiled object **and nothing
+    else**: no board, no game, no seat. The object is immutable, so the answer
+    is kept in its instance dict the way :func:`compile_card_oracle` keeps a
+    program on its card, under the generation of the compilation caches, and
+    clearing them derives it again on the next read — so a test that patches a
+    table the derivation reads and clears the caches is answered by the patched
+    table. Never keyed by ``id()``: the answer travels with the object, and an
+    object that is gone takes its answer with it.
+
+    *slot* starts with :data:`oracle_types.DERIVED_SLOT_PREFIX`, which a copy
+    or a pickle of the object leaves out (the compiled-program store, a game's
+    undo snapshot). Under ``engine/fast_paths.py``'s checking mode every held
+    answer is derived again and compared — by ``==``, or by *agrees(held,
+    fresh)* where the caller needs more (the same object, say)."""
+    held = compiled.__dict__.get(slot)
+    if held is not None and held[0] == _HELD.generation:
+        answer = held[1]
+        if fast_paths.CHECKING:
+            fresh = derive(compiled)
+            fast_paths.checked(
+                slot, agrees(answer, fresh) if agrees else answer == fresh,
+                lambda: f"{type(compiled).__name__} "
+                f"{getattr(compiled, 'source_line', None) or getattr(compiled, 'normalized_text', '')!r}: "
+                f"held {answer!r}, derived {fresh!r}",
+            )
+        return answer
+    answer = derive(compiled)
+    compiled.__dict__[slot] = (_HELD.generation, answer)
+    return answer
 
 
 def _compile_card_program(card: CardDefinition) -> OracleProgram:

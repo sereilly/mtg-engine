@@ -50,6 +50,9 @@ from .shields import END_OF_COMBAT, END_OF_TURN  # noqa: F401  (one duration voc
 # One occasion vocabulary too: a shield's "next time" and a redirect's are
 # the same object (``shields`` is the module both can import).
 from .shields import SharedNextTime  # noqa: F401
+from .aura_attachment import auras_attached_to
+from .aura_grants import aura_redirects_host_damage_to_controller
+from .simultaneous_damage import joined
 
 
 def dealing_moment(game, *, combat: bool, source):
@@ -72,7 +75,6 @@ def dealing_moment(game, *, combat: bool, source):
     2004-10-04). A chunk dealt alone, outside any dealing, is a moment of its
     own (None). The combat damage step's dealing is one of these too, closed
     as it finishes like any other (``simultaneous_damage.finish``)."""
-    from .simultaneous_damage import joined
 
     return joined(game, combat=combat, source=source)
 
@@ -572,8 +574,6 @@ def _host_static_redirects(game, recipient) -> list[DamageRedirect]:
     seat = game.controller_index_of(recipient)
     if seat is None:
         return []
-    from .aura_grants import aura_redirects_host_damage_to_controller
-    from .aura_attachment import auras_attached_to
 
     controller = game.players[seat]
     found: list[DamageRedirect] = []

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from ..game_over_guard import goes_no_further
+from ..events import emblem_trigger_events, graveyard_trigger_events
+from ..game_types import OracleExecutionContext
+from ..handlers.control_flow import evaluate_condition
 
 """End step (CR 513).
 
@@ -182,9 +185,6 @@ class EndStepMixin:
         # trigger with no gate is not enqueued here at all, because this block
         # exists because of the condition, and one that has a gate is enqueued
         # whatever its effect turned out to be.
-        from ..game_types import OracleExecutionContext
-        from ..handlers.control_flow import evaluate_condition
-
         # The three scans above are by kind, so a trigger they already enqueued
         # must not be enqueued a second time by this one. None of their kinds
         # carries a gate today; the check is here rather than as a comment
@@ -292,8 +292,6 @@ class EndStepMixin:
         # Emblems (CR 114.4): "At the beginning of your end step, …" (Garruk,
         # Unleashed's emblem) fires from the command zone — scoped to this end
         # step's own player, which is what "your" means here.
-        from ..events import emblem_trigger_events, graveyard_trigger_events
-
         events.extend(
             emblem_trigger_events(
                 self, END_STEP_SELF_CONDITION, [self.players[player_index]]

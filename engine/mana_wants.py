@@ -99,9 +99,12 @@ from .mana_payment import PaymentWants, mana_cost_x_as_zero
 from .models import Permanent
 from .oracle import compile_card_oracle
 from .targeting import usable_activated_abilities
+from .late_modules import LateModules
 
 if TYPE_CHECKING:
     from .game import Game
+
+_late = LateModules(__package__)
 
 
 #: ``(card, zone)`` — the card a graveyard ability being paid for returns,
@@ -279,7 +282,7 @@ def _permitted_cast_wants(game: "Game", seat: int, paying_for) -> "list[dict[str
     for a waiver, else the card's mana cost; {X} as 0. One want per card —
     the first price the list names for it — and none for a land (CR 305.1).
     The card the payment is for (a flashback cast) is left out once."""
-    from .ai_weighed_cast import permitted_casts
+    permitted_casts = _late.ai_weighed_cast.permitted_casts
 
     found: list[dict[str, int]] = []
     seen: set[tuple[str, int, int]] = set()

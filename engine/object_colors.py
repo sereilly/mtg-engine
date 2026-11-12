@@ -44,6 +44,9 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import lru_cache
 
+from .global_statics import global_static_for
+from .text_changes import spell_text_card
+
 #: The printed colour word as the symbol the rest of the engine spells a colour
 #: with. A third copy of this map would be a third chance to disagree, so the
 #: two that exist (``layer_bridge``'s for permanents and this one) are the whole
@@ -95,7 +98,6 @@ def _seat_override(game, seat) -> tuple[int, tuple[str, ...]] | None:
     index = _seat_index(game, seat)
     if index is None:
         return None
-    from .global_statics import global_static_for
 
     for permanent in game.controlled_by(index):
         # The text after layers 1 and 3, for ``global_static_sources``' reason
@@ -170,7 +172,6 @@ def _every_zone_colors(oracle_text: str) -> tuple[str, ...] | None:
     of every permanent."""
     if "aren't on the battlefield" not in oracle_text.lower():
         return None
-    from .global_statics import global_static_for
 
     static = global_static_for(oracle_text)
     if static is None or not static.colors_every_zone or static.sets_colors is None:
@@ -218,7 +219,6 @@ def _names_the_spell(item, card) -> bool:
         return False
     if getattr(item, "card", None) is card:
         return True
-    from .text_changes import spell_text_card
 
     return spell_text_card(item) is card
 
@@ -301,7 +301,6 @@ def object_colors(game, obj, seat=None) -> tuple[str, ...]:
     effective = getattr(obj, "effective_colors", None)
     if effective is not None:
         return tuple(sorted(effective))
-    from .text_changes import spell_text_card
 
     # A spell on the stack is asked what it says (CR 612, ``spell_text_card``);
     # a bare card is its own answer.

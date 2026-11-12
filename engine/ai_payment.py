@@ -67,6 +67,13 @@ from .ai_mana_sources import (
     _land_symbols,
     tap_cost_mana_activations,
 )
+from .cost_floors import floored_spell_cost
+from .late_modules import LateModules
+from .restricted_mana import (
+    ACTIVATE, CAST, PaymentPurpose, restriction_admits, spendable_restricted_mana,
+)
+
+_late = LateModules(__package__)
 
 
 def planned_tap_color(action, position: int) -> str:
@@ -433,7 +440,6 @@ def _cost_for(
     allocation = game._x_color_allocations(
         x_spend_colors_from_text(card.oracle_text), max(0, x_value or 0)
     )[0]
-    from .cost_floors import floored_spell_cost
 
     # CR 601.2f's last step (Trinisphere), as the cast path pays it: priced
     # without it, the AI proposes a one-mana spell on two lands and the cast
@@ -571,9 +577,6 @@ class _PaymentPlanner:
         paying_for: "Permanent | None" = None,
         without: "frozenset[int]" = frozenset(),
     ):
-        from .restricted_mana import (ACTIVATE, CAST, PaymentPurpose, restriction_admits,
-                                      spendable_restricted_mana)
-
         self.game = game
         self.player = player
         context = _PAYING_FOR.get()
@@ -613,7 +616,7 @@ class _PaymentPlanner:
             return
         # Whether any trigger on the board watches a permanent being tapped:
         # read once for every source's price (`mana_drawbacks.tap_prices`).
-        from .mana_drawbacks import tap_watchers
+        tap_watchers = _late.mana_drawbacks.tap_watchers
 
         watched = tap_watchers(game)
         # Only a land the tap seam will make mana from, and only what it will
@@ -739,7 +742,6 @@ class _PaymentPlanner:
     def _readings(self) -> "list[str | None]":
         """CR 609.4's one-spell grants (North Star), tried only where the
         ordinary reading cannot pay — the order the payment spends them in."""
-        from .restricted_mana import CAST
 
         readings: "list[str | None]" = [None]
         if self.purpose is not None and self.purpose.kind == CAST:
@@ -898,7 +900,7 @@ def _source_prices(
     (`mana_drawbacks.tap_prices`), or () where none costs anything —
     each asked of the ability that makes it, where a source has several
     (*ability_for_symbol*: a Talisman's coloured tap is the one that hurts)."""
-    from .mana_drawbacks import tap_prices
+    tap_prices = _late.mana_drawbacks.tap_prices
 
     symbols = sorted({
         symbol for option in options for unit in option.units for symbol in unit

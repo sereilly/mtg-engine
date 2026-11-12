@@ -33,6 +33,10 @@ from .aura_vocabulary import (
     _line_text,
     _keyword_alternation,
 )
+from .late_modules import LateModules
+
+_late = LateModules(__package__)
+_late_grammar = LateModules(f"{__package__}.grammar")
 
 
 #: The restriction names an Aura is currently *not* imposing, because the
@@ -772,8 +776,8 @@ def aura_restriction_active(
     them gets the unconditional rows only — the untap step, the one place the
     restriction is enforced, supplies both.
     """
-    from .named_counters import counters_on
-    from .turn_state import attacked_during_seats_last_turn
+    counters_on = _late.named_counters.counters_on
+    attacked_during_seats_last_turn = _late.turn_state.attacked_during_seats_last_turn
 
     for aura in auras_attached_to(permanent):
         if _suspended(aura, name):
@@ -785,7 +789,7 @@ def aura_restriction_active(
             # "Enchanted creature can't block **if it's black**." (Hobble.) The
             # colour-conditioned rows: active exactly while the host is that
             # colour, read through layer 5 at ask time.
-            from .grammar.vocabulary import COLOR_WORDS
+            COLOR_WORDS = _late_grammar.vocabulary.COLOR_WORDS
 
             colors_now = permanent.effective_colors
             for raw_line in (text or "").splitlines():

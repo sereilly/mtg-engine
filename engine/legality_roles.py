@@ -26,8 +26,16 @@ from __future__ import annotations
 
 from .models import CardDefinition, Permanent, PlayerState
 from .targeting import role_is_stack, spec_roles
-from .target_roles import role_announcement, role_relation_holds, roles_may_end_at
+from .target_roles import (
+    PER_OPPONENT_ROLE, role_announcement, role_relation_holds, roles_may_end_at,
+    several_seat_roles,
+)
 from .text_changes import spell_text_card
+from .game_types import target_ids
+from .late_modules import LateModules
+from .oracle import compile_card_oracle
+
+_late = LateModules(__package__)
 
 
 def _role_object_key(obj) -> tuple:
@@ -166,10 +174,7 @@ class RoleTargetsMixin:
         leaving in response (CR 800.4a) renumbers every opponent behind them
         (``target_roles.ANNOUNCED_TARGET_CONTROLLERS``).
         """
-        from .game_types import target_ids
-        from .oracle import compile_card_oracle
-        from .target_roles import PER_OPPONENT_ROLE
-        from .targeting import derive_cast_spec
+        derive_cast_spec = _late.targeting.derive_cast_spec
 
         if card.primary_type not in ("instant", "sorcery"):
             return None
@@ -202,10 +207,7 @@ class RoleTargetsMixin:
         slot with only the scalar to fill them is no announcement this can
         read, and records nothing.
         """
-        from .game_types import target_ids
-        from .oracle import compile_card_oracle
-        from .target_roles import several_seat_roles
-        from .targeting import derive_cast_spec
+        derive_cast_spec = _late.targeting.derive_cast_spec
 
         if card.primary_type not in ("instant", "sorcery"):
             return None

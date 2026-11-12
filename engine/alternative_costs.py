@@ -72,10 +72,14 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
+from .face_down import morph_alternative_cost
+from .late_modules import LateModules
 
 if TYPE_CHECKING:
     from .game import Game
     from .models import CardDefinition
+
+_late = LateModules(__package__)
 
 
 @dataclass(frozen=True)
@@ -1144,8 +1148,7 @@ def alternative_costs(card: CardDefinition) -> tuple[AlternativeCost, ...]:
     the two halves of one question are not read two ways, which is how the
     sibling would have been the one place short.
     """
-    from .face_down import morph_alternative_cost
-    from .line_rewrites import expand_card_lines
+    expand_card_lines = _late.line_rewrites.expand_card_lines
 
     found = [
         cost

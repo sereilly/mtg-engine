@@ -36,6 +36,9 @@ from dataclasses import dataclass
 
 from .models import CardDefinition
 from .oracle import OracleInstruction, compile_card_oracle
+from .cast_permissions import permission_for, playable_from_zones
+from .faces import castable_faces
+from .targeting import announced_mode_instructions
 
 
 # Card types whose *resolution* carries out ``OracleProgram.instructions``.
@@ -139,7 +142,6 @@ def _spell_instructions(card: CardDefinition) -> tuple[OracleInstruction, ...]:
     gates and the resolution share, so what the policy values is the steps
     the announcement will run.
     """
-    from .targeting import announced_mode_instructions
 
     if card.primary_type not in SPELL_TYPES:
         return ()
@@ -253,8 +255,6 @@ def permitted_casts(game, player_index: int) -> "tuple[PermittedCast, ...]":
 
     Lands are included (``mode="play"``): the land-drop chooser reads them.
     """
-    from .cast_permissions import permission_for, playable_from_zones
-    from .faces import castable_faces
 
     found: list[PermittedCast] = []
     bare_seen: set[tuple[str, str]] = set()
@@ -316,7 +316,6 @@ def hand_waiver(
     a waived {X} is locked to 0 (CR 107.3b), so that one defaults to paying.
     Never a land, which is played rather than cast.
     """
-    from .cast_permissions import permission_for
 
     if spell.primary_type == "land" or "{X}" in (spell.mana_cost or "").upper():
         return None

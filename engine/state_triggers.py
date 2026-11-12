@@ -52,6 +52,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .oracle_types import EVENT_SUBJECT_LAST_KNOWN
+from .named_counters import counters_on
+from .oracle import compile_card_oracle
+from .subject_filters import subject_matches
+from .trigger_utils import battlefield_triggers
 
 if TYPE_CHECKING:
     from .game import Game
@@ -126,10 +130,6 @@ def announce_watched_counter_thresholds(game: "Game") -> bool:
     The observer for the noun phrase is the source's controller (CR 109.5), so
     "a creature **you control**" is narrowed by whoever controls the watcher.
     """
-    from .named_counters import counters_on
-    from .oracle import compile_card_oracle
-    from .subject_filters import subject_matches
-    from .trigger_utils import battlefield_triggers
 
     events: list[dict] = []
     for source in list(game.all_permanents()):

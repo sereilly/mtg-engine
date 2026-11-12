@@ -31,9 +31,19 @@ from ..continuous import next_timestamp
 from ..game_types import as_graveyard_stamps, as_target_ids, target_ids
 from ..events import emit
 from ..oracle import compile_card_oracle
-from ..stack_targets import source_name
-from ..targeting import graveyard_target_spec
+from ..stack_targets import (
+    TARGETS_CHANGED_SILENTLY_FOR, TARGETS_CHOSEN_ITEM, chosen_targets, has_targets, source_name,
+)
+from ..targeting import (
+    _PLAYER_TARGET_SPEC_KINDS, announces_a_target, graveyard_target_spec,
+    stack_object_target_spec,
+)
 from ..trigger_order import is_triggered_object
+from ..late_modules import LateModules
+from ..target_roles import ROLES_TARGET_KIND
+from .stack.trigger_targets import _target_is_up_to
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 class TargetAnnouncementsMixin:
@@ -158,8 +168,6 @@ class TargetAnnouncementsMixin:
             # announcing that is how a Sleeping Potion ("when enchanted
             # creature becomes the target of a spell or ability, sacrifice
             # this Aura") came to sacrifice itself to its own entry trigger.
-            from ..stack_targets import has_targets
-
             if has_targets(self, item):
                 self._announce_targeting(item)
         # "Up to one target …" activated with nothing named: the announcement
@@ -373,8 +381,7 @@ class TargetAnnouncementsMixin:
         no loop for Grip: its own trigger targets nothing, so its condition
         fails and it never triggers (CR 603.4).
         """
-        from ..events import emit
-        from ..stack_targets import TARGETS_CHOSEN_ITEM
+        emit = _late.events.emit
 
         if item is None:
             return 0
@@ -713,7 +720,6 @@ class TargetAnnouncementsMixin:
         the player who cast a spell its controller): a spell cast out of
         another player's pile is controlled by the seat that cast it.
         """
-        from ..stack_targets import chosen_targets
 
         chosen = chosen_targets(self, item)
         if not chosen:
@@ -879,10 +885,7 @@ class TargetAnnouncementsMixin:
         condition says "a spell **or ability**", so the ability half is half the
         card.
         """
-        from ..events import emit
-        from ..targeting import (_PLAYER_TARGET_SPEC_KINDS, announces_a_target,
-                                 stack_object_target_spec)
-        from ..target_roles import ROLES_TARGET_KIND
+        emit = _late.events.emit
 
         spec = stack_object_target_spec(item)
         if spec is not None and spec.get("kind") == ROLES_TARGET_KIND:
@@ -899,8 +902,6 @@ class TargetAnnouncementsMixin:
             # reader of what a stack object announced: one event per player
             # role, each its own seat where the announcement recorded several
             # (``target_roles.ROLE_SEATS``).
-            from ..stack_targets import chosen_targets
-
             for target in chosen_targets(self, item) or ():
                 if target.kind != "player" or target.channel != "role":
                     continue
@@ -1029,8 +1030,7 @@ class TargetAnnouncementsMixin:
         new target still "becomes the target" (CR 603.2, *newly_targeted*);
         only the choice is not announced.
         """
-        from ..events import emit
-        from ..stack_targets import TARGETS_CHOSEN_ITEM, TARGETS_CHANGED_SILENTLY_FOR, has_targets
+        emit = _late.events.emit
 
         if item is None:
             return 0
@@ -1108,8 +1108,6 @@ class TargetAnnouncementsMixin:
         * ``stack_targets.chosen_targets`` must answer the empty tuple — None
           is "this engine cannot say", and is not nobody.
         """
-        from .stack.trigger_targets import _target_is_up_to
-        from ..stack_targets import chosen_targets
 
         if item is None or not getattr(item, "activated", False) or item.is_copy:
             return

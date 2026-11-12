@@ -79,6 +79,7 @@ from ..subject_filters import subject_matches
 from ..models import Permanent
 from ..oracle import compile_card_oracle
 from ..line_rewrites import expand_card_lines
+from ..handlers._filters import permanent_effective_colors
 
 
 class PermanentStateMixin:
@@ -1086,7 +1087,6 @@ class PermanentStateMixin:
             if counted is None:
                 continue
             kind, spec = counted
-            from ..handlers._amounts import evaluate_count
 
             seat = self.controller_index_of(permanent)
             owner = self.players[seat if seat is not None else 0]
@@ -1357,6 +1357,5 @@ class PermanentStateMixin:
     def _effective_colors(self, permanent: Permanent) -> set[str]:
         """The color symbols a permanent currently has (honoring color overrides
         and copied colors). Delegates to the shared handler helper."""
-        from ..handlers._filters import permanent_effective_colors
 
         return permanent_effective_colors(permanent)

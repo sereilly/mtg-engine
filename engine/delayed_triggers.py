@@ -46,11 +46,18 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .simultaneous_damage import delayed_answers
+from .destruction_events import (
+    CREATION_SACRIFICER, CREATION_SEAT, CREATION_SOURCE, CREATION_TOGETHER,
+    delayed_mark_creations, spend_delayed_mark,
+)
+from .late_modules import LateModules
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
     from .models import Permanent
     from .oracle_types import OracleInstruction
+
+_late = LateModules(__package__)
 
 
 #: Every delayed-trigger event this engine can arm, mapped to the site that
@@ -1034,11 +1041,7 @@ def delayed_mark_events(game: "Game", firings) -> list[dict]:
     controller's. Each mark is spent as it is announced: a delayed ability
     with no stated duration triggers once (CR 603.7b).
     """
-    from .destruction_events import (CREATION_SACRIFICER, CREATION_SEAT,
-                                     CREATION_SOURCE, CREATION_TOGETHER,
-                                     delayed_mark_creations,
-                                     spend_delayed_mark)
-    from .oracle_types import OracleInstruction
+    OracleInstruction = _late.oracle_types.OracleInstruction
 
     groups: dict[tuple, dict] = {}
     for permanent, mark, rider in firings:

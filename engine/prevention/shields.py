@@ -47,6 +47,10 @@ from .registry import (
     TARGETING_BLANKET, Applicability, PreventionOutcome, prevention_effect,
     source_has_type,
 )
+from ..aura_attachment import auras_attached_to
+from ..late_modules import LateModules
+
+_late = LateModules(__package__.rpartition(".")[0])
 
 
 #: Which end of the event a combat shield covers. "Prevent all combat damage
@@ -222,7 +226,7 @@ def _static_shield_match(line: str, card_name: str | None = None):
     """
     normalized = " ".join((line or "").strip().lower().rstrip(".").split())
     if card_name:
-        from ..self_reference import _collapse_self_references
+        _collapse_self_references = _late.self_reference._collapse_self_references
 
         normalized = _collapse_self_references(
             normalized, card_name, "this creature"
@@ -292,7 +296,6 @@ def _attached_damage_shields(perm) -> list[dict]:
     """
     if not hasattr(perm, "metadata"):
         return []
-    from ..aura_attachment import auras_attached_to
 
     found: list[dict] = []
     own = getattr(perm, "effective_card", None) or getattr(perm, "card", None)
@@ -478,7 +481,7 @@ def _class_shields(game, recipient) -> list[Shield]:
     """
     if not hasattr(recipient, "metadata"):
         return []
-    from ..subject_filters import subject_matches
+    subject_matches = _late.subject_filters.subject_matches
 
     found: list[Shield] = []
     for player in game.players:

@@ -55,6 +55,10 @@ from .legality import (
     spec_chooses_a_source,
     activation_target_obligation,
 )
+from .land_types import lost_abilities_to_type_change
+from .late_modules import LateModules
+
+_late = LateModules(__package__)
 
 
 class AbilityTargetsMixin:
@@ -191,8 +195,7 @@ class AbilityTargetsMixin:
         one: a creature a Humble or a Soul Sculptor named was refused by the
         empty list further in, in other words.
         """
-        from .keywords import abilities_lost_at
-        from .land_types import lost_abilities_to_type_change
+        abilities_lost_at = _late.keywords.abilities_lost_at
 
         by_effect = abilities_lost_at(permanent) is not None
         by_type = lost_abilities_to_type_change(permanent)

@@ -38,7 +38,7 @@ from ..delayed_triggers import (end_source_tapped_delayed_triggers,
 from ..enter_effects import ENTERED_BATTLEFIELD_TURN
 from ..events import emit
 from ..linked_exile import UNTAPPED
-from ..models import Permanent
+from ..models import Permanent, _with_granted_abilities
 from ..phasing_locks import (PHASED_OUT_UNTIL_SOURCE_LEAVES,
                              phase_in_source_id, phase_out_forbidden,
                              taps_as_it_phases_in, waits_for_its_source)
@@ -46,6 +46,10 @@ from ..source_tapped_effects import (break_pending_durations,
                                      end_effects_while_tapped)
 from ..unspent_mana import seats_keeping_unspent_mana
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
+from ..color_changes import spell_color_change
+from ..library_top import granted_top_abilities
+from ..object_colors import card_colors
+from ..text_changes import spell_text_card
 
 
 class GameHelpersMixin:
@@ -95,13 +99,9 @@ class GameHelpersMixin:
         # Gnomes' "target spell becomes colorless" made a spell the colour
         # ``"colorless"`` — a non-empty answer to every reader asking whether
         # it has one.
-        from ..color_changes import spell_color_change
-
         recolored = spell_color_change(item)
         if recolored is not None:
             return recolored
-        from ..object_colors import card_colors
-        from ..text_changes import spell_text_card
 
         # The spell as it reads now (CR 612): a characteristic-defining colour
         # in its text is rewritten by a text change like any other word.
@@ -566,8 +566,6 @@ class GameHelpersMixin:
         two callers that need it: the activation path and the ability listing
         the UI reads.
         """
-        from ..library_top import granted_top_abilities
-        from ..models import _with_granted_abilities
 
         base = permanent.effective_card
         granted = granted_top_abilities(self, permanent)

@@ -55,10 +55,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .keywords import (clear_all_abilities_removals,
-                       clear_granted_ability_lines, clear_granted_keywords,
-                       clear_removed_ability_keywords,
-                       clear_removed_ability_lines)
+from .keywords import (
+    ABILITY_EFFECTS, ALL_ABILITIES_REMOVED, GRANTED_ABILITY_LINES, REMOVED_ABILITY_KEYWORDS,
+    REMOVED_ABILITY_LINES, clear_all_abilities_removals, clear_granted_ability_lines,
+    clear_granted_keywords, clear_removed_ability_keywords, clear_removed_ability_lines,
+)
 from .printed_characteristics import printed_shape
 from .type_layer import SET_CARD_TYPES
 
@@ -142,8 +143,6 @@ def holds_window(perm: "Permanent", duration: str) -> bool:
     a channel added to one and not the other would be a window that reported
     nothing to do and then left an effect running.
     """
-    from .keywords import (ABILITY_EFFECTS, ALL_ABILITIES_REMOVED,
-                           GRANTED_ABILITY_LINES, REMOVED_ABILITY_KEYWORDS)
 
     # **`REMOVED_ABILITY_KEYWORDS`, not `REMOVED_ABILITY_LINES`** — two names one
     # word apart, and this asked the wrong one. The *lines* channel is a list of
@@ -171,8 +170,6 @@ def holds_window(perm: "Permanent", duration: str) -> bool:
     # end of turn, this creature loses "…""), as a dict beside the bare string
     # an indefinite removal still is — so it is asked here, and only of the
     # dict entries, which is the crash above not coming back.
-    from .keywords import REMOVED_ABILITY_LINES
-
     for entry in perm.metadata.get(REMOVED_ABILITY_LINES) or ():
         if isinstance(entry, dict) and entry.get("duration") == duration:
             return True
