@@ -117,41 +117,61 @@ def set_name(code: str) -> str:
     return code
 
 
-def keyword_reading(code: str) -> tuple[list[str], list[str], list[str]]:
+def refused_lines(census: Path, low: str) -> list[str]:
+    """Every line the census's refusal log names as refused or unlowered."""
+    lines = []
+    for line in _read(census / f"{low}_refusals.log").splitlines():
+        m = re.match(r"^\s{2}(?:refused|unlowered): (.+)$", line)
+        if m:
+            lines.append(m.group(1).strip())
+    return lines
+
+
+def keyword_reading(code: str, census: Path, low: str) -> tuple[list[str], list[str], list[str]]:
     """(rewrites, keywords with a reader of their own, keywords nothing reads)
     — the last the set's candidate new keywords. Of the keywords the set's
     cards print (their ingested ``keywords`` field) that
     ``IMPLEMENTED_KEYWORDS`` lacks, a keyword *action* (Scryfall's catalog,
     ``data/vocabulary/keyword_actions.json``: scry, regenerate) is not a
-    keyword line and is left out; a keyword is a rewrite when
-    ``expand_ability_lines`` changes a line that starts with it; one whose
-    every card compiles supported has a reader of its own (Enchant, the Aura
-    code); the rest are read by nothing yet."""
+    keyword line and is left out, and so is an ability word (CR 207.2c,
+    ``ability_words.json``: imprint, threshold), which has no rules meaning.
+    Each keyword is judged by **its own line**, never by the card's other
+    lines: it is a rewrite when ``expand_ability_lines`` changes a printed line
+    that starts with it (Fifth Dawn's Opaline Bracers once made Sunburst read
+    as a rewrite through its Equip line); it is read by nothing when the
+    census refused a line that starts with it; otherwise it has a reader of
+    its own (Enchant, the Aura code — even on a card whose *other* line is
+    refused, as Dawn's Reflection's is)."""
     from engine.grammar.vocabulary import IMPLEMENTED_KEYWORDS
     from engine.line_rewrites import expand_ability_lines
-    from engine.oracle import compile_card_oracle
-    actions_path = REPO_PATH / "data" / "vocabulary" / "keyword_actions.json"
-    actions = {a.lower() for a in json.loads(actions_path.read_text(encoding="utf-8"))} if actions_path.exists() else set()
+    vocab = REPO_PATH / "data" / "vocabulary"
+    skipped = set()
+    for name in ("keyword_actions.json", "ability_words.json"):
+        if (vocab / name).exists():
+            skipped |= {a.lower() for a in json.loads((vocab / name).read_text(encoding="utf-8"))}
     implemented = {k.lower() for k in IMPLEMENTED_KEYWORDS}
+    refused = [line.lower() for line in refused_lines(census, low)]
     by_keyword: dict[str, list] = {}
     for card in set_cards(code):
         for keyword in getattr(card, "keywords", ()) or ():
-            if keyword.lower() not in implemented and keyword.lower() not in actions:
+            if keyword.lower() not in implemented and keyword.lower() not in skipped:
                 by_keyword.setdefault(keyword, []).append(card)
     rewrites, own_reader, missing = [], [], []
     for keyword, cards in sorted(by_keyword.items()):
-        rewritten = any(
-            any(l.lower().startswith(keyword.lower()) for l in (card.oracle_text or "").splitlines())
-            and expand_ability_lines(card.oracle_text or "", card_name=card.name) != (card.oracle_text or "")
-            for card in cards
-        )
+        word = keyword.lower()
+        rewritten = False
+        for card in cards:
+            printed = [l for l in (card.oracle_text or "").splitlines() if l.lower().startswith(word)]
+            expanded = set(expand_ability_lines(card.oracle_text or "", card_name=card.name).splitlines())
+            if any(l not in expanded for l in printed):
+                rewritten = True
         label = f"{keyword} ({len(cards)})"
         if rewritten:
             rewrites.append(label)
-        elif all(compile_card_oracle(card).supported for card in cards):
-            own_reader.append(label)
-        else:
+        elif any(line.startswith(word) for line in refused):
             missing.append(label)
+        else:
+            own_reader.append(label)
     return rewrites, own_reader, missing
 
 
@@ -208,7 +228,7 @@ def state_of_the_set(code, low, name, groups, census, scratch) -> str:
     hollow = sorted(set(hollow_cards(census, low)) | set(unclaimed_cards(census, low)))
     new, trap = new_to_pool(census, low)
     picker = picker_findings(census, low)
-    rewrites, own_reader, missing = keyword_reading(code)
+    rewrites, own_reader, missing = keyword_reading(code, census, low)
     total, supported, unsupported = counts["total"], counts["supported"], counts["unsupported"]
     todo = (unsupported or 0) + len(hollow)
     reprints = (total or 0) - (new or 0)
