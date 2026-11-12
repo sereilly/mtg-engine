@@ -1128,7 +1128,23 @@ def ability_target_side(instruction: OracleInstruction | None) -> str | None:
     # earlier target: measured over both roles, the other such steps on an
     # ability (Sandals of Abdallah's and War Barge's delayed destroy, Maze of
     # Ith's prevention) would flip a gift onto the opponent's board.
+    #
+    # **And a prevention both ways spent on that object** (5DN W2G3): "Untap
+    # target attacking creature. Prevent all combat damage that would be dealt
+    # to and dealt by that creature this turn." (Maze of Ith, Maze of
+    # Shadows.) Damage the object would deal prevented is a denial, so the
+    # untap alone made the Mazes "you" and an AI seat defending against an
+    # attacker never activated one (a two-way prevention, ``to_and_by``, and
+    # only that: a shield is still "you"; nor where the target is printed as
+    # the activator's own — "target attacking creature you control", Ebony
+    # Horse and Elvish Scout, a rescue). **And where the targeted step
+    # itself has no side** — "Choose target attacking or blocking creature …
+    # This creature deals 2 damage to that creature at end of combat"
+    # (Dwarven Sea Clan) — the step spent on that target decides
+    # (:func:`_spent_on_the_earlier_target`); War Barge's and Sandals of
+    # Abdallah's delayed destroy stay out, their grant already answering.
     steps = []
+    spent = []
     for step in _side_steps(instruction):
         payload = step.payload or {}
         if isinstance(payload.get("targets"), dict) or step.kind in _BASE_PT_SET_KINDS:
@@ -1138,7 +1154,20 @@ def ability_target_side(instruction: OracleInstruction | None) -> str | None:
             and payload.get("permanents_from")
         ):
             steps.append(step)
+        elif steps and payload.get("targets") is None and not payload.get("on_source"):
+            later = _spent_on_the_earlier_target(step)
+            named = ((steps[0].payload or {}).get("targets") or {}).get("filter") or {}
+            if (
+                later is not None and later.kind in _SPENT_ON_THE_EARLIER_TARGET
+                and (later.payload or {}).get("to_and_by")
+                and named.get("controller") != "you"
+            ):
+                steps.append(later)
+            elif later is not None:
+                spent.append(later)
     sides = {instruction_target_side(step) for step in steps} - {None}
+    if not sides:
+        sides = {instruction_target_side(step) for step in spent} - {None}
     if "opponent" in sides:
         return "opponent"
     if "you" in sides:
