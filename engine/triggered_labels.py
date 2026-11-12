@@ -404,9 +404,6 @@ TRIGGERED_LABELS: dict[str, str] = {
     # Knowledge Vault's leave-trigger empties the pile its activated ability
     # filled; `triggered_exile` is where that pile lives.
     "put_exiled_with_source": "triggered_exile",
-    # Summoner's Egg's dies trigger turns the pile's card face up first; the
-    # pile is the same one.
-    "turn_linked_exile_face_up": "triggered_exile",
     # --- Urza's Saga's four, added at its promotion -------------------------
     # The Hidden / Opal / Veiled cycle is fifteen cards printing one sentence
     # with the nouns changed — "if this permanent is an enchantment, it becomes
