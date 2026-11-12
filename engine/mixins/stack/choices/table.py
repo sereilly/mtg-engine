@@ -149,5 +149,8 @@ register_choices(
     card_names.GUESS_NAMED_CARD_SPEC,
     replacements.OPPONENT_LIBRARY_DRAW_SPEC,
     numbers.IGNORE_COIN_SPEC,
+    # CR 704.5j: which same-name legendary permanent its controller keeps,
+    # armed by the state-based check (``engine/legend_rule.py``).
+    permanents.LEGEND_RULE_SPEC,
     # Append a new kind here, at the bottom.
 )
