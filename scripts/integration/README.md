@@ -17,6 +17,7 @@ export ROUND=ons
 | `bulk_rulings.py CODE <out>` | briefing | every ruling for the set's cards from Scryfall's bulk file (one download; the per-card fetch is rate-limited) |
 | `check_brief_crs.py [--strict] <repo> <briefs>` | before sending a brief | each cited CR number with its rule's opening words, and `SUBJECT?` for a citation whose rule shares no word with its sentence; exit 1 on a number the CR lacks (`--strict`: on a `SUBJECT?` too) |
 | `census_new.py CODE` | Phase 1, after the ingest | new-to-pool cards, the origin trap, unsupported cards, layouts |
+| `../tests_for_diff.py --ingest CODE` (`--run -n N`, `--list`, `--why`) | **Phase 1, first, right after the ingest** | the ingest's yield named before it runs: every test whose population walks the measured set (`scripts/measured_censuses.py`), by node id, with recorded times; `--run` is the full pass over them (`pytest --full`), longest file first. Darksteel's 13 reds were in its 495 tests (224 files, 3,440 recorded s, against the full pass's ~14,600) — save the reds as `yield.txt` and hand them over in the briefs |
 | `card_table.py CODE <census-dir>` | grouping | one line per card: U / P / . with type, cost, text |
 | `furthest.py CODE <groups.json> <out>` | briefing, Phase 0 round 3 | per refused line, the layer that refused it (`scripts/probe_line.py`'s verdict) and, where the grammar refused, the furthest production that accepted |
 | `gen_cards.py CODE <logs> <groups.json> <out>` | briefing | each group's `CARDS.md` from the instruments' output |
@@ -38,7 +39,7 @@ export ROUND=ons
 | `wordmerge_rows.py <file> <branch>` | conflicts | conflicted table rows (`engine/ARCHITECTURE.md`'s module table) merged word by word against the merge base; aborts on a word-level conflict |
 | `resolve_both.py <file> <n>` | conflicts | keep both sides of exactly *n* conflicts (refuses any other count) |
 | `promote.py CODE [--wrong]` | Phase 4 | the manifest move; `--wrong` is the wrong-end rehearsal |
-| `checked_sim.py <out.json> <sim args>` | after touching a fast path | the simulator under `fast_paths.CHECKING` |
+| `checked_sim.py <out.json> <sim args>` | after touching a fast path | the simulator under `fast_paths.CHECKING`; every `simulate_ai_games.py` flag passes through, `--require "Card A,Card B"` (cards pinned into both decks, checked against the pool) among them |
 | `board.py` (import it) | probes | `card(name)`, `place(game, seat, name)`, `table(hand=…, mine=…, theirs=…)`, `tail(game)`: a headless two-seat game over both manifest roles |
 | `serve_board.py --port N --cmd <dir>` | client work | the real web app plus a command folder: a dropped `.py` runs under the session's lock (`# sid=<id>` first line) and the board redraws |
 
@@ -48,7 +49,17 @@ byte-compared; a compare keeps each moved run's whole diff and new log under
 `.sim_fingerprint/compare/`). A change meant to move nothing reads 0 on both.
 So does the test picker, `tests_for_diff.py`: the tests a diff owes, with
 their recorded times — what an agent runs instead of grepping, and what
-`meeting.sh` takes its registry censuses from.
+`meeting.sh` takes its registry censuses from. With no `--base` it reads the
+diff from `$MTG_DIFF_BASE`, else from where the branch started (its reflog),
+else the merge-base with `main`, and prints which; a brief for a branch cut
+from a chain link need say nothing (Darksteel's W2G3 listed 512 files against
+`main`). While a set is measured it also lists, by node id, every test whose
+population walks it (`--no-measured` leaves them off): Darksteel's three
+blind-spot reds (W1G3's graveyard-denial and conditional-grants censuses,
+W1G5's upkeep window) were each among them, red in a quick run on the branch
+that caused it. `simulate_ai_games.py --require "Card A,Card B"` pins cards
+into both decks (`run_ai_simulation(required_cards=...)`) — the wrapper ten
+of Darksteel's twelve groups wrote.
 
 **Every script that sources `_env.sh` refuses to run under `MTG_PROMOTE`**
 (the in-memory promotion): a gate, a meeting or a regeneration would read a
