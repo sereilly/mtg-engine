@@ -901,7 +901,8 @@ def _lower_return_to_zone(
     # handler all test it through the one predicate
     # (``graveyard_card_matches``) — which can answer it at all because CR 202.3
     # computes a mana value from the printed cost, so a card in a graveyard has
-    # one where it has no power and no keyword. Scoped to the reanimation, so
+    # one where it has no power and no keyword. Scoped to the two graveyard
+    # returns that read it (this one and the to-hand one just below), so
     # every other zone-change handler goes on refusing a bound it cannot honour.
     if (
         node.from_zone is not None
