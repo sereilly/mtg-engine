@@ -744,6 +744,17 @@ step — the untap step is only one of the ways a permanent phases, and a
 trigger wired there would miss Reality Ripple and every activated
 phase-out in Mirage.
 '''),
+    ('becomes_unattached', 'equipment becomes unattached', r'''
+"Whenever this Equipment becomes unattached from a permanent, sacrifice
+that permanent." (Grafted Wargear.) CR 701.3d's event about the source:
+it counts every way the attachment ends — moved to another creature by
+equip or by another effect (`equipment.attach_equipment`), taken off by
+an effect or the CR 704.5n sweep (`equipment.unattach_equipment`), and
+either end leaving the battlefield (`Game.remove_all_from_battlefield`,
+looking back in time, CR 603.10c) — but not phasing (CR 702.26j). The
+host is frozen as the event's subject, which is what "that permanent"
+reads (``_EVENT_SUBJECT_OBJECTS``).
+'''),
     ('nonmana_ability_activated', '\\{t\\} in its', r'''
 "Whenever a Forest an opponent controls becomes tapped" (Lifetap). The
 type and the controller scope are named groups, so the restriction

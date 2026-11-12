@@ -363,6 +363,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # is what the shadowing guard is checking here.
     "phases_out": "whenever this creature phases out",
     "phases_in": "whenever this creature phases in",
+    "becomes_unattached": "whenever this equipment becomes unattached from a permanent",
     # when
     "enters_battlefield": "when this creature enters the battlefield",
     # W1G4 (UDS): CR 603.1b's one ability with two trigger conditions (Goblin

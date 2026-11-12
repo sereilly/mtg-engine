@@ -1022,6 +1022,19 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
     # enqueues every condition in that set whatever the effect turned out to be.
     if cond in END_STEP_CONDITIONS and kind in EFFECT_HANDLERS:
         return "end-step trigger (CR 603.3) — phases/end_step.py"
+    from .equipment import BECOMES_UNATTACHED
+
+    if cond == BECOMES_UNATTACHED and kind in EFFECT_HANDLERS:
+        # "Whenever this Equipment becomes unattached from a permanent,
+        # sacrifice that permanent." (Grafted Wargear.) CR 701.3d's event,
+        # announced from every way an attachment ends: the move and the
+        # unattach (``equipment.announce_unattached``) and either end leaving
+        # the battlefield (``equipment.departure_unattached_events``, from the
+        # one transition out).
+        return (
+            "the Equipment's becomes-unattached trigger (CR 701.3d) — "
+            "equipment.announce_unattached / departure_unattached_events"
+        )
     return None
 
 

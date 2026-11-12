@@ -478,6 +478,7 @@ def attach_equipment(game: "Game", equipment: "Permanent", creature: "Permanent"
     if current is not None:
         detach_aura(equipment, current)
         game.log.append(f"{equipment.effective_card.name} became unattached from {current.effective_card.name}")
+        announce_unattached(game, equipment, current)
     attach_aura(equipment, creature)
     game.log.append(f"{equipment.effective_card.name} is now attached to {creature.effective_card.name}")
     game._recompute_continuous_effects()
@@ -486,13 +487,127 @@ def attach_equipment(game: "Game", equipment: "Permanent", creature: "Permanent"
 
 def unattach_equipment(game: "Game", equipment: "Permanent", reason: str) -> bool:
     """Unattach *equipment* from whatever it equips (CR 701.3d). It stays on the
-    battlefield; that is the difference from an Aura and the whole of 704.5n."""
+    battlefield; that is the difference from an Aura and the whole of 704.5n.
+
+    A host that has already left the battlefield was announced as it left
+    (:func:`departure_unattached_events`, from the one transition out): the
+    CR 704.5n sweep that tidies the record afterwards is not a second event."""
     host = equipped_creature(equipment)
     if host is None:
         return False
     detach_aura(equipment, host)
     game.log.append(f"{equipment.card.name} became unattached ({reason})")
+    if game.is_on_battlefield(host) and game.is_on_battlefield(equipment):
+        announce_unattached(game, equipment, host)
     return True
+
+
+# ---------------------------------------------------------------------------
+# Becoming unattached (CR 701.3d) as a trigger event (CR 603.10c)
+# ---------------------------------------------------------------------------
+
+#: The trigger-condition kind of "Whenever this Equipment becomes unattached
+#: from a permanent" (Grafted Wargear) — the row in ``whenever_triggers`` and
+#: ``grammar/trigger_tables``.
+BECOMES_UNATTACHED = "becomes_unattached"
+
+
+def unattached_trigger_events(
+    game: "Game", equipment: "Permanent", host: "Permanent", seat: "int | None",
+) -> list[dict]:
+    """*equipment*'s "becomes unattached" triggers for coming off *host*, as
+    enqueueable events under *seat* — empty when it has none.
+
+    CR 701.3d: "If an Aura, Equipment, or Fortification that was attached to an
+    object … ceases to be attached to it, that counts as 'becoming unattached'
+    [from that object]; this includes if that Aura, Equipment, or
+    Fortification leaves the battlefield, the object leaves the zone it was in
+    …". Every way the attachment ends asks this one function, so the event has
+    one shape whoever announced it: the host frozen by id as the event's
+    subject (CR 603.10 — "sacrifice **that permanent**" reads it, and by
+    resolution the host may be a card in a graveyard) beside the seat that
+    controlled it. Read off the Equipment's *effective* card, so an Equipment
+    that left is asked as it last existed (CR 603.10c: these abilities look
+    back in time).
+
+    Phasing announces nothing: CR 702.26j, "abilities that trigger when a
+    permanent becomes attached or unattached … don't trigger when that
+    permanent phases in or out", and a phase-out never reaches here.
+    """
+    if seat is None or host is None:
+        return []
+    from .trigger_utils import make_trigger_event, matching_triggers
+
+    triggers = matching_triggers(
+        equipment.effective_card, condition_kinds={BECOMES_UNATTACHED},
+    )
+    if not triggers:
+        return []
+    context = {
+        "event_subject_permanent_id": host.permanent_id,
+        "event_subject_controller": game.controller_or_last_known(host),
+    }
+    return [
+        make_trigger_event(seat, equipment, trig, trigger_context=dict(context))
+        for trig in triggers
+    ]
+
+
+def announce_unattached(game: "Game", equipment: "Permanent", host: "Permanent") -> None:
+    """Put *equipment*'s "becomes unattached from a permanent" triggers on the
+    stack for its coming off *host* while both stay on the battlefield — moved
+    elsewhere (:func:`attach_equipment`) or taken off (:func:`unattach_equipment`:
+    an effect, or the CR 704.5n sweep when the host stopped being a creature,
+    gained protection, or the Equipment became a creature or lost the
+    subtype; Grafted Wargear's 2020-11-10 ruling lists them)."""
+    events = unattached_trigger_events(
+        game, equipment, host, game.controller_index_of(equipment)
+    )
+    if events:
+        game._enqueue_triggered_batch(events)
+
+
+def departure_unattached_events(
+    game: "Game", departing: "Permanent", seat: "int | None",
+    attachments, departing_ids: "set[int]",
+) -> "list[tuple[Permanent, dict]]":
+    """The "becomes unattached" triggers one permanent's leaving the battlefield
+    announces, paired with *departing* — the shape
+    ``Game.remove_all_from_battlefield`` gathers its leaving triggers in.
+
+    Both ends of CR 701.3d's departure clause, read before the battlefield is
+    rebuilt (CR 603.10c looks back in time):
+
+    * *departing* is an Equipment attached to a host still on the battlefield
+      — it became unattached from that host (Grafted Wargear destroyed: "if
+      Grafted Wargear leaves the battlefield", 2020-11-10);
+    * *departing* is a host, and an Equipment attached to it stays behind
+      (*attachments* is the transition's own board scan of single-slot
+      attachments). The trigger fires and its sacrifice finds nothing
+      ("the triggered ability won't do anything in that case").
+
+    When both ends leave in one removal the first clause answers and the
+    second skips an Equipment in *departing_ids*, so the event is announced
+    once; when they leave one after another, whichever goes first is the event
+    and the later one finds no attachment left to announce.
+    """
+    events: list[tuple["Permanent", dict]] = []
+    host = equipped_creature(departing)
+    if host is not None and game.is_on_battlefield(host):
+        events.extend(
+            (departing, event)
+            for event in unattached_trigger_events(game, departing, host, seat)
+        )
+    for other in attachments:
+        if other.metadata.get("attached_to") is not departing or id(other) in departing_ids:
+            continue
+        events.extend(
+            (departing, event)
+            for event in unattached_trigger_events(
+                game, other, departing, game.controller_index_of(other)
+            )
+        )
+    return events
 
 
 def unattach_illegal_equipment(game: "Game") -> bool:
@@ -537,10 +652,13 @@ def unattach_illegal_equipment(game: "Game") -> bool:
 
 
 __all__ = [
+    "BECOMES_UNATTACHED",
     "EQUIP_RULES_TEXT",
+    "announce_unattached",
     "attach_equipment",
     "attachment_target_refusal",
     "cant_be_equipped_by_own_text",
+    "departure_unattached_events",
     "equip_line_parts",
     "equip_refusal",
     "equip_target_refusal",
@@ -555,4 +673,5 @@ __all__ = [
     "self_cant_be_equipped_line",
     "unattach_equipment",
     "unattach_illegal_equipment",
+    "unattached_trigger_events",
 ]

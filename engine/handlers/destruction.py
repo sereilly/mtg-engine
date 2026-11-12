@@ -1069,6 +1069,46 @@ def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("sacrifice_event_subject")
+def sacrifice_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever this Equipment becomes unattached from a permanent,
+    **sacrifice that permanent**." (Grafted Wargear.)
+
+    ``destroy_event_subject``'s twin one keyword action over (CR 701.21a): the
+    victim is the object the trigger's own event was about, frozen by id
+    (``event_subject_permanent_id``, CR 603.10) because by resolution an index
+    is not an identity. ``sacrifice_bound_permanent``'s rule for who
+    sacrifices: "you" is this ability's controller, and "a player can't
+    sacrifice … a permanent they don't control" — Grafted Wargear's 2004-12-01
+    ruling: on an opponent's creature, "you won't be able to sacrifice that
+    creature because you don't control it". A permanent already gone — the host
+    left the battlefield, which is itself a way of becoming unattached
+    (CR 701.3d) — is sacrificed by nothing (the 2020-11-10 ruling: "the
+    triggered ability won't do anything in that case").
+    """
+    context.results["sacrificed_this_way"] = 0
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("event_subject_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    seat = game.controller_index_of(victim)
+    if (
+        instruction.payload.get("sacrificed_by") == "you"
+        and seat != game.players.index(context.caster)
+    ):
+        game.log.append(
+            f"{context.card.name}: {context.caster.name} doesn't control "
+            f"{victim.card.name} and can't sacrifice it"
+        )
+        return True, "resolved"
+    game.sacrifice_permanent(victim)
+    context.results["sacrificed_this_way"] = 1
+    game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
+    return True, "resolved"
+
+
 @effect_handler("destroy_attached_permanent")
 def destroy_attached_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When enchanted land becomes tapped, destroy it." (Blight.)

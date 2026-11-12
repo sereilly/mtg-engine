@@ -42,6 +42,7 @@ from ..control import (base_controller, change_control, control_changes,
 from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
 from ..entry_awaiting import entry_in_progress
+from ..equipment import departure_unattached_events
 from ..events import Event, collect
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change, end_land_type_changes_tied_to
@@ -1188,6 +1189,14 @@ class ControlSeamMixin:
                             trigger_context=dict(attached_context),
                         ),
                     ))
+            # "Whenever this Equipment becomes unattached from a permanent"
+            # (Grafted Wargear). CR 701.3d counts either end of the attachment
+            # leaving the battlefield as the Equipment becoming unattached, and
+            # CR 603.10c looks back in time — so it is read here, before the
+            # rebuild, with the transition's own scan of attachments.
+            leaving.extend(
+                departure_unattached_events(self, perm, seat, attachments, departing)
+            )
             # "When **the token** leaves the battlefield, sacrifice this
             # enchantment." (Dance of Many.) The same CR 603.6c event about a
             # different object: the ability belongs to the permanent that

@@ -683,6 +683,9 @@ TRIGGERED_LABELS: dict[str, str] = {
     # creature's controller, that player sacrifices that creature." Beside
     # `sacrifice_self` and `sacrifice_matching_permanent`.
     "sacrifice_attached_permanent": "triggered_sacrifice",
+    # Grafted Wargear: "Whenever this Equipment becomes unattached from a
+    # permanent, sacrifice that permanent." The object its event froze.
+    "sacrifice_event_subject": "triggered_sacrifice",
     # Mischievous Quanar: "When this creature is turned face up, copy target
     # instant or sorcery spell." Beside the storm trigger's
     # `copy_triggering_spell`: a copy of a spell either way.
