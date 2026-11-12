@@ -59,7 +59,19 @@ _NAME_STOPS = (
 # named "Feral Shadow, a creature named Breathstealer" — which matches nothing,
 # so the cost was admitted and could never be paid. "the" is deliberately not
 # here: it is exactly the word a legendary apposition does begin with.
-_AFTER_COMMA_STOPS = ("a", "an", "another", "this")
+#
+# The imperative verbs are the same stop for the clause *after* a condition:
+# "If you control Equipment named Helm of Kaldra, Sword of Kaldra, and Shield
+# of Kaldra**, create** Kaldra, …" (Helm of Kaldra). The last name of the list
+# ran on through the comma into "create Kaldra" (the article after the next
+# comma was where it stopped), and the condition was left with no comma to
+# close on. A title's second half is an apposition, never a verb phrase:
+# checked against every set file, no card name has any of these after a comma.
+_AFTER_COMMA_STOPS = (
+    "a", "an", "another", "this",
+    "create", "draw", "destroy", "exile", "return", "sacrifice", "tap",
+    "untap", "attach", "search", "counter", "gain", "lose", "deal",
+)
 
 
 def parse_card_name(stream: TokenStream) -> str:
@@ -119,6 +131,20 @@ def accept_card_name_list(stream: TokenStream) -> tuple[str, ...]:
     """
     start = stream.mark()
     try:
+        # "…named **Helm of Kaldra**, Sword of Kaldra, and Shield of Kaldra"
+        # printed on Helm of Kaldra: the lexer has collapsed the card's own
+        # name to one SELF token, and :func:`parse_card_name` reads a SELF as
+        # the whole name and stops behind it. At the head of a list it is
+        # only the first item, so the scan steps over it and its comma and
+        # reads the rest of the head as usual (Shield of Kaldra's own name,
+        # in the middle of its list, never stopped the scan).
+        if (
+            stream.at_kind(SELF)
+            and stream.peek(1) is not None
+            and stream.peek(1).kind == PUNCT and stream.peek(1).text == ","
+            and stream.peek_word(2) not in ("and", "or")
+        ):
+            stream.advance(2)
         parse_card_name(stream)
     except GrammarError:
         stream.reset(start)
@@ -150,6 +176,34 @@ def accept_card_name_list(stream: TokenStream) -> tuple[str, ...]:
         stream.reset(start)
         return ()
     return (*names, last)
+
+
+def card_name_list_joiner(stream: TokenStream, start: int, end: int) -> str | None:
+    """``"and"`` or ``"or"``: the word that closed the printed name list read
+    between *start* and *end* — the ``, and`` / ``, or`` behind the last
+    ``named`` there — or None when the span holds no such list.
+
+    :func:`accept_card_name_list` reads both closings as the one list it hands
+    back, which is right for a noun phrase ("Equipment named A, B, and C have
+    indestructible", Shield of Kaldra: any Equipment with one of those names).
+    A *condition* is where the word means something: "If you control Equipment
+    named Helm of Kaldra, Sword of Kaldra, **and** Shield of Kaldra" (Helm of
+    Kaldra) asks for each of the three, where an "or" would ask for any one,
+    so the reader of the condition has to be able to ask which was printed.
+    """
+    named = None
+    for index in range(start, min(end, len(stream.tokens))):
+        token = stream.tokens[index]
+        if token.kind != PUNCT and token.text == "named":
+            named = index
+    if named is None:
+        return None
+    joiner = None
+    for index in range(named + 1, min(end, len(stream.tokens)) - 1):
+        token, after = stream.tokens[index], stream.tokens[index + 1]
+        if token.kind == PUNCT and token.text == "," and after.text in ("and", "or"):
+            joiner = after.text
+    return joiner
 
 
 #: The words a *bare* name scan stops before. Each opens the clause that follows
@@ -208,7 +262,10 @@ def accept_source_card_name(stream: TokenStream) -> str | None:
     return render(stream.tokens[mark:stream.mark()])
 
 
-__all__ = ["accept_card_name_list", "accept_source_card_name", "parse_card_name"]
+__all__ = [
+    "accept_card_name_list", "accept_source_card_name", "card_name_list_joiner",
+    "parse_card_name",
+]
 
 
 def accept_name_comparison(

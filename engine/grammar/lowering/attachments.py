@@ -30,11 +30,35 @@ from ._common import (_describe_targets, _filter_payload, _is_enchanted,
                       describe_independent_target_roles)
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
-                      CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
+                      CHOSEN_PLAYER, CREATED_TOKEN, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS)
 from ._piles import one_card_pile_pick
 from ._seats import _CHOOSER_SEATS
+
+
+def _recorded_host_key(host, produced: frozenset[str]) -> "str | None":
+    """The record a bare "it" host names, or None.
+
+    The host must be the bare pronoun — which the noun parser reads as the
+    ability's own source, because with nothing printed after the word that is
+    the only object a lone sentence could mean — carrying no further narrowing
+    this reading would drop; and exactly one earlier step must have recorded a
+    permanent, so "it" has one referent rather than a pick between two. A
+    permanent put onto the battlefield (Necromancy) or a token just created
+    ("create Kaldra, … token. Attach those Equipment to **it**", Helm of
+    Kaldra) are both such a step: the object did not exist until it ran.
+    """
+    if not isinstance(host, ast.TargetSpec) or host.targeted:
+        return None
+    if host.quantifier not in ("it", "that"):
+        return None
+    if _restrictions_beyond(host.filter, frozenset({"card_types", "is_source"})):
+        return None
+    recorded = tuple(sorted(produced & (_RECORDED_PERMANENTS | {CREATED_TOKEN})))
+    if len(recorded) != 1:
+        return None
+    return recorded[0]
 
 
 def _lower_attach_to_recorded(
@@ -57,20 +81,11 @@ def _lower_attach_to_recorded(
     that put a permanent onto the battlefield is what changes what the word
     means.
     """
-    host = node.host
-    if not isinstance(host, ast.TargetSpec) or host.targeted:
-        return None
-    if host.quantifier not in ("it", "that"):
-        return None
-    if _restrictions_beyond(host.filter, frozenset({"card_types", "is_source"})):
-        return None
-    recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
-    if len(recorded) != 1:
+    key = _recorded_host_key(node.host, produced)
+    if key is None:
         return None
     return (
-        OracleInstruction(
-            "attach_source_to_target", "", {"host_from": recorded[0]}
-        ),
+        OracleInstruction("attach_source_to_target", "", {"host_from": key}),
     )
 
 
@@ -113,7 +128,7 @@ def _lower_attach(
             "nothing tests that the host is one the attachment can enchant",
             node=node,
         )
-    swept = _lower_attach_all_to_source(node)
+    swept = _lower_attach_all_to_source(node, produced)
     if swept is not None:
         return swept
     if not isinstance(node.subject, ast.TargetSpec) or not _is_source(node.subject):
@@ -183,7 +198,7 @@ def _lower_attach_target_to_target(node: ast.Attach) -> tuple[OracleInstruction,
 
 
 def _lower_attach_all_to_source(
-    node: ast.Attach,
+    node: ast.Attach, produced: frozenset[str] = frozenset(),
 ) -> "tuple[OracleInstruction, ...] | None":
     """"When this creature enters, **attach all Equipment on the battlefield
     to it**." (Vulshok Battlemaster.) Or None for any other attach.
@@ -206,7 +221,15 @@ def _lower_attach_all_to_source(
         and not subject.targeted
     ):
         return None
-    if not (isinstance(host, ast.TargetSpec) and _is_source(host) and not host.targeted):
+    # "…create Kaldra, … token. Attach those Equipment to **it**." (Helm of
+    # Kaldra, whose "those Equipment" the sentence layer has written out as the
+    # set its condition counted.) The host is the token the step in front
+    # created — recorded, so read by id (``host_from``) — and not the source
+    # the bare pronoun would otherwise name.
+    host_key = _recorded_host_key(host, produced)
+    if host_key is None and not (
+        isinstance(host, ast.TargetSpec) and _is_source(host) and not host.targeted
+    ):
         raise LoweringError(
             "a swept set is attached only to the ability's own source", node=node
         )
@@ -234,6 +257,9 @@ def _lower_attach_all_to_source(
             "the attach-all cannot test " + ", ".join(sorted(untestable)),
             node=node,
         )
+    if host_key is not None:
+        # Appended, so a payload without it reprs exactly as it always did.
+        payload["host_from"] = host_key
     return (OracleInstruction("attach_all_to_source", "", payload),)
 
 

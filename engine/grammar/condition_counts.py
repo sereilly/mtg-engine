@@ -66,6 +66,7 @@ from .bounds import parse_comparison
 from .errors import GrammarError
 from .distinct import accept_one_of_each, parse_counted_objects
 from .filter_draft import _FilterDraft
+from .names import card_name_list_joiner
 from .nouns import parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
@@ -557,6 +558,7 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     bound = ("le", amount.value)
                 else:
                     stream.reset(count_mark)
+            filter_start = stream.mark()
             filt = parse_object_filter(stream)
             if another:
                 filt = dataclasses.replace(filt, other_than_source=True)
@@ -610,6 +612,26 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             # Island".
             if not negated and bound is None and not shared_name:
                 expanded = None if another else accept_one_of_each(stream, filt)
+                # "If you control **Equipment named Helm of Kaldra, Sword of
+                # Kaldra, and Shield of Kaldra**" (Helm of Kaldra). A printed
+                # name list closed by "and" in a condition asks for one of each
+                # — its 2004-12-01 ruling: "The token isn't put onto the
+                # battlefield unless you control all three Equipment" — so it
+                # is the shared-verb conjunction below with the noun written
+                # once, one conjunct per name. Closed by "or" it would ask for
+                # any one, which no card prints; it is left as the one clause,
+                # whose list no permanent matcher reads, so the line refuses.
+                if (
+                    not expanded and not another and not each_color
+                    and filt.named_among
+                    and card_name_list_joiner(
+                        stream, filter_start, stream.mark()
+                    ) == "and"
+                ):
+                    expanded = [
+                        dataclasses.replace(filt, named_among=(), named=name)
+                        for name in filt.named_among
+                    ]
                 parts = (
                     [ast.Controls(player, each) for each in expanded]
                     if expanded else [first]

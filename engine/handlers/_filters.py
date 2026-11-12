@@ -1295,6 +1295,15 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     named = payload.get("named")
     if named and name_key(perm.effective_card.name) != name_key(str(named)):
         return False
+    # "…Equipment you control **named Helm of Kaldra, Sword of Kaldra, and
+    # Shield of Kaldra**" (Helm of Kaldra's attach, written out from its
+    # condition). A printed list of names, any one of which the permanent
+    # answers to — the same comparison over a set, off the same effective card.
+    named_among = payload.get("named_among")
+    if named_among and name_key(perm.effective_card.name) not in {
+        name_key(str(name)) for name in named_among
+    }:
+        return False
     # "…**not named <card>**" — the same comparison negated, read the same way
     # and off the same effective card. The self-referential spelling
     # ("not named this creature") is ``not_named_source`` and lives in

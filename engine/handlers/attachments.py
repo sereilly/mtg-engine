@@ -263,24 +263,38 @@ def attach_all_to_source(
     receives nothing.
     """
     from ..subject_filters import subject_matches
+    from ._targets import one_recorded_permanent_id
 
     source = context.source_permanent
     card_name = getattr(context.card, "name", "")
-    if source is None or not game.is_on_battlefield(source):
-        game.log.append(f"{card_name}: nothing to attach to — it has left the battlefield")
-        return True, "resolved"
+    described = dict(instruction.payload)
+    host_key = described.pop("host_from", None)
+    if host_key is not None:
+        # "…create Kaldra, … token. Attach those Equipment to **it**." (Helm of
+        # Kaldra.) The host is the permanent an earlier step of this resolution
+        # recorded — the token it created — by id (CR 400.7); a step that
+        # recorded nothing (the condition did not hold, so no token) leaves
+        # nothing to attach to.
+        host = game.permanent_by_id(one_recorded_permanent_id(context, host_key))
+        if host is None or not game.is_on_battlefield(host):
+            game.log.append(f"{card_name}: nothing to attach to")
+            return True, "resolved"
+    else:
+        host = source
+        if source is None or not game.is_on_battlefield(source):
+            game.log.append(f"{card_name}: nothing to attach to — it has left the battlefield")
+            return True, "resolved"
     caster = context.caster
     observer = game.players.index(caster) if caster in game.players else None
-    described = dict(instruction.payload)
     movers = [
         permanent for permanent in game.all_permanents()
-        if permanent is not source
+        if permanent is not host
         and subject_matches(game, permanent, described, observer=observer, source=source)
     ]
     if not movers:
         game.log.append(f"{card_name}: nothing to attach")
     for permanent in movers:
-        attach_equipment(game, permanent, source)
+        attach_equipment(game, permanent, host)
     return True, "resolved"
 
 

@@ -211,4 +211,69 @@ def test_w1g4_grafted_wargear_unattached_by_an_effect_sacrifices_and_in_response
     assert _w1g4_equipped(wargear) is ogre
     assert _w1g4_count(game, "the permanent it named is gone") == 1
 
+def _w1g4_kaldra_board(set_pool, *, shield_seat=0):
+    """Helm and Sword of Kaldra on seat 0's side, Shield on *shield_seat*'s."""
+    fifth, mirrodin, darksteel = set_pool("5DN"), set_pool("MRD"), set_pool("DST")
+    game = _w1g4_table(set_pool)
+    helm = _w1g4_put(game, fifth["Helm of Kaldra"], 0)
+    sword = _w1g4_put(game, mirrodin["Sword of Kaldra"], 0)
+    shield = _w1g4_put(game, darksteel["Shield of Kaldra"], shield_seat)
+    return game, helm, sword, shield
+
+
+def _w1g4_kaldras(game, seat=0):
+    return [perm for perm in game.controlled_by(seat) if perm.card.name == "Kaldra"]
+
+
+def test_w1g4_helm_of_kaldra_assembles_kaldra_and_attaches_all_three(set_pool):
+    """"{1}: If you control Equipment named Helm of Kaldra, Sword of Kaldra, and
+    Shield of Kaldra, create Kaldra, a legendary 4/4 colorless Avatar creature
+    token. Attach those Equipment to it." Its 2004-12-01 ruling: "The token is
+    named Kaldra, has the supertype legendary, and has creature type Avatar."
+    All three go onto it: +5/+5 from the Sword, first strike, trample and haste
+    from the Helm, indestructible from the Shield."""
+    fifth = set_pool("5DN")
+    assert _w1g4_compile(fifth["Helm of Kaldra"]).supported
+    game, helm, sword, shield = _w1g4_kaldra_board(set_pool)
+
+    result = _w1g4_activate(game, 0, helm, ability=0)
+    assert result.supported, result.details
+    (kaldra,) = _w1g4_kaldras(game)
+    assert kaldra.metadata.get("is_token")
+    assert kaldra.has_supertype("legendary") and kaldra.has_type("avatar")
+    assert not kaldra.effective_card.colors
+    assert all(_w1g4_equipped(each) is kaldra for each in (helm, sword, shield))
+    assert (kaldra.effective_power, kaldra.effective_toughness) == (9, 9)
+    assert all(
+        game._has_keyword(kaldra, word)
+        for word in ("first strike", "trample", "haste", "indestructible")
+    )
+
+
+def test_w1g4_helm_of_kaldra_wants_all_three_under_its_controller(set_pool):
+    """"…unless you control all three Equipment" — two of the three, or the
+    third on the opponent's side, create nothing: one conjunct per printed
+    name, each asked of the activator's own board."""
+    game, helm, sword, shield = _w1g4_kaldra_board(set_pool, shield_seat=1)
+    assert _w1g4_activate(game, 0, helm, ability=0).supported
+    assert _w1g4_kaldras(game) == [] and _w1g4_kaldras(game, 1) == []
+    assert _w1g4_equipped(helm) is None and _w1g4_equipped(sword) is None
+
+
+def test_w1g4_helm_of_kaldra_checks_its_condition_as_it_resolves(set_pool):
+    """The ruling's "when the ability resolves": all three were there when the
+    ability was activated, the Shield leaves in response, and no token is put
+    onto the battlefield."""
+    game, helm, sword, shield = _w1g4_kaldra_board(set_pool)
+    assert game.queue_permanent_ability(
+        0, helm.card.name, permanent_index=game.battlefield_index_of(helm),
+        ability_index=0,
+    ).supported
+    assert game.stack
+    game.remove_from_battlefield(shield)
+    _w1g4_settle(game)
+    assert _w1g4_kaldras(game) == []
+    assert _w1g4_equipped(helm) is None and _w1g4_equipped(sword) is None
+
+
 # ==== end w1g4 ======================================================

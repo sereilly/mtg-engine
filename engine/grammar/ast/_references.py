@@ -227,8 +227,10 @@ class ObjectFilter:
     #: Kaldra**" (Shield of Kaldra): a printed list of names, any one of
     #: which the object answers to. Its own field rather than ``named``
     #: with commas, so a reader of one name never reads a list as one;
-    #: emitted as ``named_among``, which no permanent matcher tests, so only
-    #: a consumer that carries it (``engine/lord_buffs.py``) admits it.
+    #: emitted as ``named_among``, which ``permanent_matches_filter`` tests
+    #: beside ``named`` (Helm of Kaldra's attach) and ``engine/lord_buffs.py``
+    #: carries. In a "you control" condition a list closed by "and" is read
+    #: as one conjunct per name (``condition_counts``).
     named_among: tuple[str, ...] = ()
     #: "all Equipment **that were attached to it**" (Murderous Spoils): the
     #: attachment as it stood when an earlier step acted on the object "it"

@@ -189,6 +189,85 @@ def _attach_to_conditional_choice(
     return True
 
 
+def _attach_set_the_condition_named(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``{1}: If you control Equipment named Helm of Kaldra, Sword of Kaldra,
+    and Shield of Kaldra, create Kaldra, a legendary 4/4 colorless Avatar
+    creature token. **Attach those Equipment to it.**`` (Helm of Kaldra.)
+
+    "Those Equipment" are the ones the condition counted, so the sentence is
+    the **rest of that arm**, for :func:`_attach_to_conditional_choice`'s
+    reason: as a step after the conditional it would run when the condition
+    did not hold, and "it" (the token the arm created) would name nothing —
+    the card's 2004-12-01 ruling: "The token isn't put onto the battlefield
+    unless you control all three Equipment when the ability resolves."
+
+    The back-reference is written out as the set the condition described —
+    "all <noun> you control named <each name the condition named>" — which is
+    what the words mean once the condition holds: the noun is the sentence's
+    own and must be the condition's, and every conjunct must be "you control
+    a <noun> named <name>" with nothing else said. Anything else refuses
+    without consuming and the line keeps its refusal.
+    """
+    last = steps[-1] if steps else None
+    if not (
+        isinstance(last, ast.Conditional)
+        and last.otherwise is None
+        and not last.negated
+    ):
+        return False
+    condition = last.condition
+    conjuncts = (
+        condition.conditions if isinstance(condition, ast.EveryOf) else (condition,)
+    )
+    if not conjuncts or not all(
+        isinstance(each, ast.Controls)
+        and each.who.kind == "you"
+        and each.comparison is None
+        and not each.shared_name
+        and not each.of_each_color
+        and each.filter.named
+        for each in conjuncts
+    ):
+        return False
+    if not stream.at_word("attach"):
+        return False
+    mark = stream.mark()
+    try:
+        rest = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    subject = getattr(rest, "subject", None)
+    if not (
+        isinstance(rest, ast.Attach)
+        and isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "those"
+        and not subject.targeted
+    ):
+        stream.reset(mark)
+        return False
+    noun = (subject.filter.card_types, subject.filter.subtypes)
+    bare = dataclasses.replace(
+        subject.filter, card_types=(), subtypes=(),
+    ) == dataclasses.replace(ast.ObjectFilter(), zone=subject.filter.zone)
+    if not bare or not all(
+        (each.filter.card_types, each.filter.subtypes) == noun
+        and dataclasses.replace(each.filter, named=None) == subject.filter
+        for each in conjuncts
+    ):
+        stream.reset(mark)
+        return False
+    described = dataclasses.replace(
+        subject.filter, controller="you",
+        named_among=tuple(each.filter.named for each in conjuncts),
+    )
+    attach = replace(rest, subject=ast.TargetSpec("all", described))
+    steps[-1] = replace(last, then=ast.Sequence((last.then, attach)))
+    return True
+
+
 def _attach_tied_life_draw(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """``…the player with the highest life total wins the game. If two or more
     players are tied for highest life total, the game is a draw.`` (Celestial
