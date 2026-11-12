@@ -53,6 +53,7 @@ from .conditional_instead import _parse_conditional_instead_rider
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_are_among_those_players,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
+                          _attach_set_the_condition_named,
                           _attach_tied_for_fewest, _attach_to_conditional_choice,
                           _attach_tied_life_draw,
                           _attach_tied_lowest_life_choice,
@@ -540,6 +541,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # was only a choice — the sentence reading the value is part of the
             # arm, or it would run when the condition did not hold.
             if _attach_to_conditional_choice(stream, steps):
+                stream.accept_punct(".")
+                continue
+            # "If you control Equipment named …, create Kaldra, … . Attach
+            # those Equipment to it." (Helm of Kaldra.) The same arm extended
+            # by a sentence naming the set its condition counted.
+            if _attach_set_the_condition_named(stream, steps):
                 stream.accept_punct(".")
                 continue
             # "This ability can't cause the total number of +1/+0 counters on

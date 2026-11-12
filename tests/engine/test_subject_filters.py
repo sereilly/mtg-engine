@@ -124,6 +124,10 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # it as its positive sibling — would let the flyer through.
     ("without_keywords", {"without_keywords": ["flying"]}, "Air Elemental"),
     ("named", {"named": "Hill Giant"}, "Grizzly Bears"),
+    # "Equipment **named Helm of Kaldra, Sword of Kaldra, and Shield of
+    # Kaldra**" (Helm of Kaldra's attach): a list of names, none of them the
+    # permanent's, rejects it.
+    ("named_among", {"named_among": ["Hill Giant", "Gray Ogre"]}, "Grizzly Bears"),
     # CR 205.4a. Read off the type line, which for a supertype is the whole of
     # what there is — nothing in layers 4-6 computes one.
     ("supertypes", {"supertypes": ["legendary"]}, "Grizzly Bears"),
@@ -165,6 +169,18 @@ def test_every_promised_key_actually_narrows(pool, key, payload, card_name):
         "proves nothing about the key"
     )
     assert not subject_matches(game, perm, {"type_filter": "creature", **payload})
+
+
+def test_5dn_w1g4_a_name_list_admits_any_name_on_it(pool):
+    """The positive half of ``named_among``: a permanent named any one of the
+    printed names answers the list (Helm of Kaldra attaches each of its three
+    Equipment), compared through ``name_key`` so case and punctuation don't
+    matter."""
+    perm = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]), PlayerState(name="P2")])
+    assert subject_matches(game, perm, {
+        "type_filter": "creature", "named_among": ["hill giant", "grizzly bears"],
+    })
 
 
 def test_a_counter_bound_matches_once_there_are_enough_counters(pool):

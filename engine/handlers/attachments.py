@@ -195,6 +195,52 @@ def _attach_chosen_to_chosen(
 
 
 
+@effect_handler("attach_target_to_target")
+def attach_target_to_target(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Attach target Equipment you control to target creature you control."
+    (Auriok Windwalker.) "Attach target Equipment to target creature."
+    (Magnetic Theft.)
+
+    CR 701.3 with both ends announced as the two roles of one spell or
+    ability (``lowering/attachments._lower_attach_target_to_target``). Both
+    are re-asked as it resolves (CR 608.2b, ``roles_still_legal`` — the same
+    walk the picker enumerated with), and the move is all or nothing: an
+    Equipment that is no longer a legal target has nothing to move, and one
+    whose creature is no longer legal has nowhere to go, so either way the
+    Equipment stays where it is.
+
+    The move itself is ``attach_equipment``, which asks CR 301.5's legality
+    of the pair — an Equipment that is a creature (301.5c), a creature with
+    protection from it (702.16d) or one that can't be equipped (301.5b) are
+    all legal targets onto which the Equipment "doesn't move" (701.3b). And
+    nothing changes control (CR 301.5d; Magnetic Theft's ruling, 2004-12-01:
+    "Magnetic Theft can cause an Equipment one player controls to be attached
+    to a creature another player controls").
+    """
+    from ._targets import resolve_role_permanent, roles_still_legal
+
+    card_name = getattr(context.card, "name", "")
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else 0
+    payload = instruction.payload
+    if not roles_still_legal(game, context, payload, observer=observer):
+        game.log.append(f"{card_name}: a target is no longer legal; nothing moves")
+        return True, "resolved"
+    roles = [role.get("role") for role in (payload.get("targets") or {}).get("roles") or ()]
+    if len(roles) != 2:
+        game.log.append(f"{card_name}: nothing to attach")
+        return True, "resolved"
+    equipment = resolve_role_permanent(game, context, payload, roles[0])
+    creature = resolve_role_permanent(game, context, payload, roles[1])
+    if equipment is None or creature is None:
+        game.log.append(f"{card_name}: a target is no longer legal; nothing moves")
+        return True, "resolved"
+    attach_equipment(game, equipment, creature)
+    return True, "resolved"
+
+
 @effect_handler("attach_all_to_source")
 def attach_all_to_source(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
@@ -217,24 +263,38 @@ def attach_all_to_source(
     receives nothing.
     """
     from ..subject_filters import subject_matches
+    from ._targets import one_recorded_permanent_id
 
     source = context.source_permanent
     card_name = getattr(context.card, "name", "")
-    if source is None or not game.is_on_battlefield(source):
-        game.log.append(f"{card_name}: nothing to attach to — it has left the battlefield")
-        return True, "resolved"
+    described = dict(instruction.payload)
+    host_key = described.pop("host_from", None)
+    if host_key is not None:
+        # "…create Kaldra, … token. Attach those Equipment to **it**." (Helm of
+        # Kaldra.) The host is the permanent an earlier step of this resolution
+        # recorded — the token it created — by id (CR 400.7); a step that
+        # recorded nothing (the condition did not hold, so no token) leaves
+        # nothing to attach to.
+        host = game.permanent_by_id(one_recorded_permanent_id(context, host_key))
+        if host is None or not game.is_on_battlefield(host):
+            game.log.append(f"{card_name}: nothing to attach to")
+            return True, "resolved"
+    else:
+        host = source
+        if source is None or not game.is_on_battlefield(source):
+            game.log.append(f"{card_name}: nothing to attach to — it has left the battlefield")
+            return True, "resolved"
     caster = context.caster
     observer = game.players.index(caster) if caster in game.players else None
-    described = dict(instruction.payload)
     movers = [
         permanent for permanent in game.all_permanents()
-        if permanent is not source
+        if permanent is not host
         and subject_matches(game, permanent, described, observer=observer, source=source)
     ]
     if not movers:
         game.log.append(f"{card_name}: nothing to attach")
     for permanent in movers:
-        attach_equipment(game, permanent, source)
+        attach_equipment(game, permanent, host)
     return True, "resolved"
 
 

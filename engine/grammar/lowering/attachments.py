@@ -26,14 +26,39 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_describe_targets, _filter_payload, _is_enchanted,
-                      _is_source, _is_target, _restrictions_beyond)
+                      _is_source, _is_target, _restrictions_beyond,
+                      describe_independent_target_roles)
 from ._amounts import count_spec
 from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY,
-                      CHOSEN_PLAYER, EVENT_SUBJECT_PLAYER,
+                      CHOSEN_PLAYER, CREATED_TOKEN, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS)
 from ._piles import one_card_pile_pick
 from ._seats import _CHOOSER_SEATS
+
+
+def _recorded_host_key(host, produced: frozenset[str]) -> "str | None":
+    """The record a bare "it" host names, or None.
+
+    The host must be the bare pronoun — which the noun parser reads as the
+    ability's own source, because with nothing printed after the word that is
+    the only object a lone sentence could mean — carrying no further narrowing
+    this reading would drop; and exactly one earlier step must have recorded a
+    permanent, so "it" has one referent rather than a pick between two. A
+    permanent put onto the battlefield (Necromancy) or a token just created
+    ("create Kaldra, … token. Attach those Equipment to **it**", Helm of
+    Kaldra) are both such a step: the object did not exist until it ran.
+    """
+    if not isinstance(host, ast.TargetSpec) or host.targeted:
+        return None
+    if host.quantifier not in ("it", "that"):
+        return None
+    if _restrictions_beyond(host.filter, frozenset({"card_types", "is_source"})):
+        return None
+    recorded = tuple(sorted(produced & (_RECORDED_PERMANENTS | {CREATED_TOKEN})))
+    if len(recorded) != 1:
+        return None
+    return recorded[0]
 
 
 def _lower_attach_to_recorded(
@@ -56,20 +81,11 @@ def _lower_attach_to_recorded(
     that put a permanent onto the battlefield is what changes what the word
     means.
     """
-    host = node.host
-    if not isinstance(host, ast.TargetSpec) or host.targeted:
-        return None
-    if host.quantifier not in ("it", "that"):
-        return None
-    if _restrictions_beyond(host.filter, frozenset({"card_types", "is_source"})):
-        return None
-    recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
-    if len(recorded) != 1:
+    key = _recorded_host_key(node.host, produced)
+    if key is None:
         return None
     return (
-        OracleInstruction(
-            "attach_source_to_target", "", {"host_from": recorded[0]}
-        ),
+        OracleInstruction("attach_source_to_target", "", {"host_from": key}),
     )
 
 
@@ -96,6 +112,12 @@ def _lower_attach(
     with no such step in front of it, "it" is a back-reference to nothing and
     the line keeps its refusal.
     """
+    if (
+        isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject)
+        and isinstance(node.host, ast.TargetSpec) and _is_target(node.host)
+        and node.host.targeted and node.host.quantifier == "target"
+    ):
+        return _lower_attach_target_to_target(node)
     if isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject):
         return _lower_attach_chosen(node)
     if node.host_it_can_enchant:
@@ -106,7 +128,7 @@ def _lower_attach(
             "nothing tests that the host is one the attachment can enchant",
             node=node,
         )
-    swept = _lower_attach_all_to_source(node)
+    swept = _lower_attach_all_to_source(node, produced)
     if swept is not None:
         return swept
     if not isinstance(node.subject, ast.TargetSpec) or not _is_source(node.subject):
@@ -125,8 +147,58 @@ def _lower_attach(
     return (OracleInstruction("attach_source_to_target", "", payload),)
 
 
+def _lower_attach_target_to_target(node: ast.Attach) -> tuple[OracleInstruction, ...]:
+    """"Attach **target Equipment** you control **to target creature** you
+    control." (Auriok Windwalker.) "Attach target Equipment to target
+    creature." (Magnetic Theft.)
+
+    CR 701.3 with *both* ends announced: two targeted phrases of one
+    announcement, of two different kinds, so they are described as the
+    ordered roles Fumarole's "target creature and target land" already is
+    (``describe_independent_target_roles``) — the picker asks for the
+    Equipment and then the creature (CR 601.2c), the cast and activation gates
+    re-walk the same description, and the handler reads each role back by name
+    and re-asks both at resolution (CR 608.2b).
+
+    Every printed narrowing rides its role's filter, so Windwalker's two "you
+    control" are enforced and Magnetic Theft, printing neither, may put one
+    player's Equipment on another's creature without changing who controls it
+    (its 2004-12-01 ruling; CR 301.5d). Whether the Equipment can actually
+    equip the creature — CR 301.5c's animated Equipment, protection, Goblin
+    Brawler — is not a targeting question: both are legal targets and the
+    Equipment simply doesn't move (CR 301.5b, 701.3b), which
+    ``equipment.attach_equipment`` answers at resolution.
+
+    Only an Equipment moves this way. An Aura that changed hosts here would
+    want CR 303.4j's enchant legality offered by the host's picker, which these
+    roles do not carry, so any other moved noun refuses.
+    """
+    subject, host = node.subject, node.host
+    assert isinstance(subject, ast.TargetSpec) and isinstance(host, ast.TargetSpec)
+    if node.host_it_can_enchant or node.chooser is not None or node.optional:
+        raise LoweringError(
+            "an attach between two targets reads no enchant clause, chooser "
+            "or decline",
+            node=node,
+        )
+    if tuple(subject.filter.subtypes) != ("equipment",) or subject.filter.card_types:
+        raise LoweringError(
+            "only a targeted Equipment is moved onto a second target", node=node
+        )
+    payload: dict[str, object] = {}
+    describe_independent_target_roles(payload, (subject, host))
+    for role in payload["targets"]["roles"]:
+        untestable = untestable_filter_keys(role["filter"])
+        if untestable:
+            raise LoweringError(
+                "the attach cannot test " + ", ".join(sorted(untestable)),
+                node=node,
+            )
+    return (OracleInstruction("attach_target_to_target", "", payload),)
+
+
 def _lower_attach_all_to_source(
-    node: ast.Attach,
+    node: ast.Attach, produced: frozenset[str] = frozenset(),
 ) -> "tuple[OracleInstruction, ...] | None":
     """"When this creature enters, **attach all Equipment on the battlefield
     to it**." (Vulshok Battlemaster.) Or None for any other attach.
@@ -149,7 +221,15 @@ def _lower_attach_all_to_source(
         and not subject.targeted
     ):
         return None
-    if not (isinstance(host, ast.TargetSpec) and _is_source(host) and not host.targeted):
+    # "…create Kaldra, … token. Attach those Equipment to **it**." (Helm of
+    # Kaldra, whose "those Equipment" the sentence layer has written out as the
+    # set its condition counted.) The host is the token the step in front
+    # created — recorded, so read by id (``host_from``) — and not the source
+    # the bare pronoun would otherwise name.
+    host_key = _recorded_host_key(host, produced)
+    if host_key is None and not (
+        isinstance(host, ast.TargetSpec) and _is_source(host) and not host.targeted
+    ):
         raise LoweringError(
             "a swept set is attached only to the ability's own source", node=node
         )
@@ -177,6 +257,9 @@ def _lower_attach_all_to_source(
             "the attach-all cannot test " + ", ".join(sorted(untestable)),
             node=node,
         )
+    if host_key is not None:
+        # Appended, so a payload without it reprs exactly as it always did.
+        payload["host_from"] = host_key
     return (OracleInstruction("attach_all_to_source", "", payload),)
 
 

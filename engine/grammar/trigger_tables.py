@@ -232,6 +232,12 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("phases_in", ("this", "creature", "phases", "in")),
     ("phases_in", ("this", "artifact", "phases", "in")),
     ("phases_in", ("this", "permanent", "phases", "in")),
+    # "Whenever this Equipment becomes unattached from a permanent" (Grafted
+    # Wargear). CR 701.3d's event about the source itself; "a permanent" is
+    # the whole of what the card prints about the host, so it is part of the
+    # phrase rather than a narrowing to read.
+    ("becomes_unattached",
+     ("this", "equipment", "becomes", "unattached", "from", "a", "permanent")),
     ("land_tapped_for_mana", ("a", "player", "taps", "a", "land", "for", "mana")),
     # "Whenever a player chooses one or more targets" (Psychic Battle). The
     # whole phrase is the event — "one or more" is CR 115.6's wording for "the

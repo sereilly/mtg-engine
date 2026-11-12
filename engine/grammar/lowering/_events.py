@@ -171,6 +171,13 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # the id of the permanent whose counters crossed the line, once per
     # permanent, so the pronoun has exactly one referent per firing.
     "permanent_counters_reach_threshold",
+    # "Whenever this Equipment becomes unattached from a permanent, **sacrifice
+    # that permanent**." (Grafted Wargear.) CR 701.3d's event, whose fire sites
+    # (``equipment.announce_unattached`` from the move and the unattach, and the
+    # departure transition for either end leaving) freeze the id of the
+    # permanent it came off — the only object the event names besides the
+    # source.
+    "becomes_unattached",
 })
 
 

@@ -58,6 +58,7 @@ import re
 from typing import TYPE_CHECKING
 
 from .aura_attachment import attach_aura, auras_attached_to, detach_aura
+from .aura_vocabulary import _NOUN, _line_text
 
 if TYPE_CHECKING:
     from .game import Game
@@ -299,6 +300,43 @@ def attachment_target_refusal(
     return attachment_refusal(game, attachment, host)
 
 
+#: "This creature can't be equipped." (Goblin Brawler.) A restriction the
+#: permanent prints about **itself**, the Equipment twin of the Tetravite's
+#: "This token can't be enchanted" (``aura_restrictions.self_cant_be_enchanted_line``),
+#: and read the same way: anchored on the whole sentence, off the permanent's
+#: effective text, so a copy carries it (CR 707.2) and a text change can take it
+#: away.
+#:
+#: **It is not a targeting restriction.** "You can activate an equip ability
+#: that targets Goblin Brawler, but the Equipment will fail to move onto it."
+#: (Goblin Brawler ruling, 2004-12-01.) CR 301.5b says the same of every
+#: attach: "If an effect attempts to attach an Equipment to an object that
+#: can't be equipped by it, the Equipment doesn't move." So it is asked by
+#: :func:`equip_refusal` — the resolution, the CR 704.5n sweep and the AI's
+#: equip planner — and deliberately **not** by :func:`equip_target_refusal`,
+#: the picker's half.
+_SELF_CANT_BE_EQUIPPED = re.compile(rf"^this (?:token|{_NOUN}) can't be equipped$")
+
+
+def self_cant_be_equipped_line(line: str) -> bool:
+    """Whether one printed line is "this <noun> can't be equipped", in full.
+
+    Read by the support gate, by the grammar's registry claim and by
+    :func:`cant_be_equipped_by_own_text`, so what is claimed and what is
+    enforced cannot drift.
+    """
+    return _SELF_CANT_BE_EQUIPPED.match(_line_text(line or "")) is not None
+
+
+def cant_be_equipped_by_own_text(permanent: "Permanent") -> bool:
+    """Whether *permanent*'s own text forbids Equipment attaching to it."""
+    card = getattr(permanent, "effective_card", None) or getattr(permanent, "card", None)
+    text = getattr(card, "oracle_text", "") or ""
+    if "equipped" not in text:
+        return False
+    return any(self_cant_be_equipped_line(line) for line in text.splitlines())
+
+
 def equip_target_refusal(
     game: "Game", equipment: "Permanent", creature: "Permanent"
 ) -> str | None:
@@ -307,7 +345,10 @@ def equip_target_refusal(
     :func:`equip_refusal` whenever the Equipment can equip at all — a creature
     it may not be attached to (protection, CR 702.16b/d; itself) is a creature
     the ability may not choose, and offering it would be offering an attach
-    that lands nowhere. When the Equipment is itself a creature (CR 301.5c),
+    that lands nowhere — **except** a creature whose own text says it can't be
+    equipped, which is a legal target the Equipment then fails to move onto
+    (Goblin Brawler ruling, 2004-12-01; CR 301.5b; see
+    :data:`_SELF_CANT_BE_EQUIPPED`). When the Equipment is itself a creature (CR 301.5c),
     nothing can be equipped and the target is asked only what the printed
     words ask: a creature, on the battlefield, that the ability's source may
     target (CR 702.16b — an artifact source and a creature with protection
@@ -315,7 +356,7 @@ def equip_target_refusal(
     controls, and the attach that follows does nothing (CR 701.3b) either way.
     """
     if not equipment.is_creature:
-        return equip_refusal(game, equipment, creature)
+        return _equip_refusal(game, equipment, creature, chosen_as_target=True)
     if creature is None or not game.is_on_battlefield(creature):
         return "the equipped creature is no longer on the battlefield"
     if not creature.is_creature:
@@ -357,7 +398,18 @@ def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -
       happily. The rule names "a quality"; reading one family of quality is how
       the E in protection's DEBT goes missing for exactly the cards a new
       quality arrives with.
+    * CR 301.5b — a creature that can't be equipped by it ("This creature
+      can't be equipped", Goblin Brawler) doesn't receive it.
     """
+    return _equip_refusal(game, equipment, creature, chosen_as_target=False)
+
+
+def _equip_refusal(
+    game: "Game", equipment: "Permanent", creature: "Permanent", *,
+    chosen_as_target: bool,
+) -> str | None:
+    """:func:`equip_refusal`, with the one clause that is not about choosing a
+    target held back when *chosen_as_target* (see :func:`equip_target_refusal`)."""
     if creature is equipment:
         return "an Equipment can't equip itself (CR 301.5c)"
     if creature is None or not game.is_on_battlefield(creature):
@@ -378,6 +430,8 @@ def equip_refusal(game: "Game", equipment: "Permanent", creature: "Permanent") -
             f"{creature.card.name} has protection from {equipment.card.name} "
             "(CR 702.16d)"
         )
+    if not chosen_as_target and cant_be_equipped_by_own_text(creature):
+        return f"{creature.card.name} can't be equipped (CR 301.5b)"
     return None
 
 
@@ -424,6 +478,7 @@ def attach_equipment(game: "Game", equipment: "Permanent", creature: "Permanent"
     if current is not None:
         detach_aura(equipment, current)
         game.log.append(f"{equipment.effective_card.name} became unattached from {current.effective_card.name}")
+        announce_unattached(game, equipment, current)
     attach_aura(equipment, creature)
     game.log.append(f"{equipment.effective_card.name} is now attached to {creature.effective_card.name}")
     game._recompute_continuous_effects()
@@ -432,13 +487,127 @@ def attach_equipment(game: "Game", equipment: "Permanent", creature: "Permanent"
 
 def unattach_equipment(game: "Game", equipment: "Permanent", reason: str) -> bool:
     """Unattach *equipment* from whatever it equips (CR 701.3d). It stays on the
-    battlefield; that is the difference from an Aura and the whole of 704.5n."""
+    battlefield; that is the difference from an Aura and the whole of 704.5n.
+
+    A host that has already left the battlefield was announced as it left
+    (:func:`departure_unattached_events`, from the one transition out): the
+    CR 704.5n sweep that tidies the record afterwards is not a second event."""
     host = equipped_creature(equipment)
     if host is None:
         return False
     detach_aura(equipment, host)
     game.log.append(f"{equipment.card.name} became unattached ({reason})")
+    if game.is_on_battlefield(host) and game.is_on_battlefield(equipment):
+        announce_unattached(game, equipment, host)
     return True
+
+
+# ---------------------------------------------------------------------------
+# Becoming unattached (CR 701.3d) as a trigger event (CR 603.10c)
+# ---------------------------------------------------------------------------
+
+#: The trigger-condition kind of "Whenever this Equipment becomes unattached
+#: from a permanent" (Grafted Wargear) — the row in ``whenever_triggers`` and
+#: ``grammar/trigger_tables``.
+BECOMES_UNATTACHED = "becomes_unattached"
+
+
+def unattached_trigger_events(
+    game: "Game", equipment: "Permanent", host: "Permanent", seat: "int | None",
+) -> list[dict]:
+    """*equipment*'s "becomes unattached" triggers for coming off *host*, as
+    enqueueable events under *seat* — empty when it has none.
+
+    CR 701.3d: "If an Aura, Equipment, or Fortification that was attached to an
+    object … ceases to be attached to it, that counts as 'becoming unattached'
+    [from that object]; this includes if that Aura, Equipment, or
+    Fortification leaves the battlefield, the object leaves the zone it was in
+    …". Every way the attachment ends asks this one function, so the event has
+    one shape whoever announced it: the host frozen by id as the event's
+    subject (CR 603.10 — "sacrifice **that permanent**" reads it, and by
+    resolution the host may be a card in a graveyard) beside the seat that
+    controlled it. Read off the Equipment's *effective* card, so an Equipment
+    that left is asked as it last existed (CR 603.10c: these abilities look
+    back in time).
+
+    Phasing announces nothing: CR 702.26j, "abilities that trigger when a
+    permanent becomes attached or unattached … don't trigger when that
+    permanent phases in or out", and a phase-out never reaches here.
+    """
+    if seat is None or host is None:
+        return []
+    from .trigger_utils import make_trigger_event, matching_triggers
+
+    triggers = matching_triggers(
+        equipment.effective_card, condition_kinds={BECOMES_UNATTACHED},
+    )
+    if not triggers:
+        return []
+    context = {
+        "event_subject_permanent_id": host.permanent_id,
+        "event_subject_controller": game.controller_or_last_known(host),
+    }
+    return [
+        make_trigger_event(seat, equipment, trig, trigger_context=dict(context))
+        for trig in triggers
+    ]
+
+
+def announce_unattached(game: "Game", equipment: "Permanent", host: "Permanent") -> None:
+    """Put *equipment*'s "becomes unattached from a permanent" triggers on the
+    stack for its coming off *host* while both stay on the battlefield — moved
+    elsewhere (:func:`attach_equipment`) or taken off (:func:`unattach_equipment`:
+    an effect, or the CR 704.5n sweep when the host stopped being a creature,
+    gained protection, or the Equipment became a creature or lost the
+    subtype; Grafted Wargear's 2020-11-10 ruling lists them)."""
+    events = unattached_trigger_events(
+        game, equipment, host, game.controller_index_of(equipment)
+    )
+    if events:
+        game._enqueue_triggered_batch(events)
+
+
+def departure_unattached_events(
+    game: "Game", departing: "Permanent", seat: "int | None",
+    attachments, departing_ids: "set[int]",
+) -> "list[tuple[Permanent, dict]]":
+    """The "becomes unattached" triggers one permanent's leaving the battlefield
+    announces, paired with *departing* — the shape
+    ``Game.remove_all_from_battlefield`` gathers its leaving triggers in.
+
+    Both ends of CR 701.3d's departure clause, read before the battlefield is
+    rebuilt (CR 603.10c looks back in time):
+
+    * *departing* is an Equipment attached to a host still on the battlefield
+      — it became unattached from that host (Grafted Wargear destroyed: "if
+      Grafted Wargear leaves the battlefield", 2020-11-10);
+    * *departing* is a host, and an Equipment attached to it stays behind
+      (*attachments* is the transition's own board scan of single-slot
+      attachments). The trigger fires and its sacrifice finds nothing
+      ("the triggered ability won't do anything in that case").
+
+    When both ends leave in one removal the first clause answers and the
+    second skips an Equipment in *departing_ids*, so the event is announced
+    once; when they leave one after another, whichever goes first is the event
+    and the later one finds no attachment left to announce.
+    """
+    events: list[tuple["Permanent", dict]] = []
+    host = equipped_creature(departing)
+    if host is not None and game.is_on_battlefield(host):
+        events.extend(
+            (departing, event)
+            for event in unattached_trigger_events(game, departing, host, seat)
+        )
+    for other in attachments:
+        if other.metadata.get("attached_to") is not departing or id(other) in departing_ids:
+            continue
+        events.extend(
+            (departing, event)
+            for event in unattached_trigger_events(
+                game, other, departing, game.controller_index_of(other)
+            )
+        )
+    return events
 
 
 def unattach_illegal_equipment(game: "Game") -> bool:
@@ -483,9 +652,13 @@ def unattach_illegal_equipment(game: "Game") -> bool:
 
 
 __all__ = [
+    "BECOMES_UNATTACHED",
     "EQUIP_RULES_TEXT",
+    "announce_unattached",
     "attach_equipment",
     "attachment_target_refusal",
+    "cant_be_equipped_by_own_text",
+    "departure_unattached_events",
     "equip_line_parts",
     "equip_refusal",
     "equip_target_refusal",
@@ -497,6 +670,8 @@ __all__ = [
     "is_equip_ability_text",
     "is_equip_line",
     "is_equipment",
+    "self_cant_be_equipped_line",
     "unattach_equipment",
     "unattach_illegal_equipment",
+    "unattached_trigger_events",
 ]

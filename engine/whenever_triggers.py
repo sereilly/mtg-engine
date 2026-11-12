@@ -338,6 +338,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever this (?:creature|artifact|enchantment|land|permanent) phases out"),
     ("phases_in",
      r"whenever this (?:creature|artifact|enchantment|land|permanent) phases in"),
+    ("becomes_unattached",
+     r"whenever this equipment becomes unattached from a permanent"),
     ("nonmana_ability_activated",
      r"whenever (?:a player|an opponent) activates an ability of"
      r" enchanted (?P<activated_attached>[a-z]+)"

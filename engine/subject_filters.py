@@ -144,6 +144,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # be aimed at rather than one it reaches past the printed clause.
     "power_vs_count",
     "nontoken", "named", "supertypes",
+    # "Equipment **named Sword of Kaldra, Shield of Kaldra, and Helm of
+    # Kaldra**" — a printed list of names, any one of which the object answers
+    # to (``ast.ObjectFilter.named_among``). Tested by
+    # ``permanent_matches_filter`` beside ``named``, through the same
+    # ``name_key`` off the effective card; first asked by Helm of Kaldra's
+    # "Attach those Equipment to it".
+    "named_among",
     # "…a creature with flying **not named Escaped Shapeshifter**". Two keys
     # for one printed phrase, because the two front ends leave the name in two
     # places: spelled out it is a literal the *pure* matcher compares

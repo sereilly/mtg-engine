@@ -347,6 +347,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.
     "sacrifice_bound_permanent": "destruction",
+    # ...and on the object a trigger's own event froze (Grafted Wargear:
+    # "sacrifice that permanent"), beside `destroy_event_subject`.
+    "sacrifice_event_subject": "destruction",
     # "That player chooses and sacrifices one of those creatures."
     # (Retribution.) The sacrifice acting on a permanent a ``choose_permanent``
     # step recorded, beside the one acting on a permanent a trigger bound.
@@ -366,6 +369,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # moving an Equipment onto a creature is neither a tap nor a zone change,
     # and sharing a switch with either would let one be gated off by the other.
     "attach_source_to_target": "attachments",
+    # "Attach target Equipment [you control] to target creature [you
+    # control]" (Auriok Windwalker, Magnetic Theft): the same action with
+    # both ends announced as two roles.
+    "attach_target_to_target": "attachments",
     # "…attach all Equipment on the battlefield to it" (Vulshok Battlemaster)
     # and "Unattach all Equipment from target creature" (Disarm): CR 701.3
     # over a described set, the same family.

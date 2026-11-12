@@ -51,7 +51,7 @@ from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, _restrictions_beyond,
                       player_deed_payload)
-from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_QUANTITIES, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload)
+from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_QUANTITIES, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload)
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 
 
@@ -290,6 +290,29 @@ def _lower_sacrifice(
                 _bound_sacrifice_filter(node.subject, produced)
                 # CR 701.21a: "you" can't sacrifice what you don't control.
                 | ({"sacrificed_by": "you"} if node.player.kind == "you" else {}),
+            ),
+        )
+    # "Whenever this Equipment becomes unattached from a permanent,
+    # **sacrifice that permanent**." (Grafted Wargear.) The same back-reference
+    # under a *triggered* ability whose event froze the object it names
+    # (``_EVENT_SUBJECT_OBJECTS``) — ``destroy_event_subject``'s and
+    # ``exile_event_subject``'s twin one keyword action over (CR 701.21a), and
+    # its own kind for the reason ``sacrifice_bound_permanent`` has one: routed
+    # through the chosen-sacrifice prompt the ability would ask its controller
+    # to pick. The noun is read and not re-asked at resolution, for
+    # ``destroy_event_subject``'s stated reason; "you" can't sacrifice what you
+    # don't control (CR 701.21a; Grafted Wargear's 2004-12-01 ruling).
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and not node.subject.targeted
+        and event in _EVENT_SUBJECT_OBJECTS
+        and node.player.kind == "you"
+        and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
+    ):
+        return (
+            OracleInstruction(
+                "sacrifice_event_subject", "", {"sacrificed_by": "you"}
             ),
         )
     # "**That creature's controller sacrifices it** at end of combat." (Basalt
