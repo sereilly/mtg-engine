@@ -34,7 +34,7 @@ from engine.mixins.land_mana_taps import (
     is_tap_alone_mana_ability,
 )
 from engine.models import Permanent
-from engine.oracle import compile_card_oracle
+from engine.oracle import compile_card_oracle, compiled_units
 from engine.oracle_types import clear_compilation_caches
 from tests.helpers import _nosick
 
@@ -87,8 +87,7 @@ def test_every_held_answer_is_the_one_derived_now(catalog):
     each read twice (the second is the held answer): equal to a fresh
     derivation, and the free instruction the very object the program holds."""
     lands = abilities = 0
-    for card in catalog:
-        program = compile_card_oracle(card)
+    for card, program in compiled_units(catalog):
         for ability in program.activated_abilities:
             abilities += 1
             fresh = _tap_alone_mana_ability(ability)
