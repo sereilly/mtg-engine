@@ -746,3 +746,67 @@ def test_w1g3_conjurers_bauble_naming_no_card_bottoms_none(set_pool):
 # w1g4's tests go between this line and the "end w1g4" line.
 
 # ==== end w1g4 ======================================================
+
+
+# ==== integrator ====================================================
+# Whole-card tests the wave-1 split left to the integrator: a card two groups
+# built halves of. Fist of Suns (W1G2) paying for a sunburst spell (W1G1);
+# Solarion and Beacon of Immortality join here when W1G7's doubling lands.
+from engine import Game as _IntGame, PlayerState as _IntPlayerState
+from engine.models import Permanent as _IntPermanent
+from engine.named_counters import counters_on as _int_counters_on
+from tests.helpers import settle as _int_settle
+
+_INT_BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
+
+
+def _int_table(set_pool, *, hand=(), mine=()):
+    """Two seats on seat 0's first main phase, costs enforced; *mine* placed."""
+    lea = set_pool("LEA")
+    game = _IntGame(players=[
+        _IntPlayerState(name="Alice", hand=list(hand), library=[lea["Island"]] * 12),
+        _IntPlayerState(name="Bob", library=[lea["Island"]] * 12),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    for card in mine:
+        permanent = _IntPermanent(card=card)
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    game.start_turn(0)
+    _int_settle(game)
+    return game
+
+
+def _int_tap_lands(game, seat=0):
+    for permanent in list(game.controlled_by(seat)):
+        if permanent.has_type("land") and not permanent.tapped:
+            refused = game.tap_land_for_mana_or_refusal(
+                seat, permanent.card.name, permanent_id=permanent.permanent_id,
+            )
+            assert refused is None, refused
+
+
+def test_int_fist_of_suns_wubrg_counts_five_colours_for_sunburst(set_pool):
+    """CR 702.44b counts mana spent on an alternative cost: Suntouched Myr
+    ({3}, sunburst) cast for Fist of Suns' {W}{U}{B}{R}{G} enters with five
+    +1/+1 counters, where its own {3} paid the same way could count three."""
+    fdn, lea = set_pool("5DN"), set_pool("LEA")
+    game = _int_table(
+        set_pool,
+        hand=[fdn["Suntouched Myr"]],
+        mine=[fdn["Fist of Suns"], *(lea[name] for name in _INT_BASICS)],
+    )
+    _int_tap_lands(game)
+
+    result = game.cast_from_hand(0, "Suntouched Myr", alternative_cost=True)
+    assert result.supported, (result.details, game.log[-5:])
+    _int_settle(game)
+
+    myr = next(p for p in game.controlled_by(0) if p.card.name == "Suntouched Myr")
+    assert _int_counters_on(myr, "+1/+1") == 5
+    assert (myr.effective_power, myr.effective_toughness) == (5, 5)
+    assert not any(game.players[0].mana_pool.values())
+
+# ==== end integrator ================================================
