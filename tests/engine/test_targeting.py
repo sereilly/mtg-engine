@@ -607,6 +607,24 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     # set's card is not in it.
     if any(card.name == "Scion of Darkness" for card in supported_cards):
         reviewed.add("Scion of Darkness")
+    # Beacon of Unrest (5DN) is the eleventh, reviewed at Fifth Dawn's
+    # promotion rehearsal (W1G3), and Hymn of Rebirth's shape — a spell — with
+    # the first *union* of card types: "Put target artifact or creature card
+    # from a graveyard onto the battlefield under your control. Shuffle Beacon
+    # of Unrest into its owner's library." Its payload is `any_graveyard` with
+    # `card_types: ['artifact', 'creature']` (the reanimation already searched
+    # by a union, `card_has_any_type`, for Bladewing's "permanent card"), and
+    # its cast spec agrees: `graveyard_creature`, the same `card_types`, no
+    # `own_graveyard_only`. Driven (tests/sets/test_5dn_sorceries.py, W1G3):
+    # the picker offers the artifact and creature cards in both graveyards and
+    # no instant or land; naming an instant card is refused at announcement;
+    # an opponent's artifact arrives under the caster's control and stays the
+    # opponent's card; a creature from the caster's own pile returns; and a
+    # target gone before it resolves sends the Beacon to the graveyard
+    # unshuffled (its 2020-08-07 ruling). A member only while Fifth Dawn
+    # ships, for Scion's reason above.
+    if any(card.name == "Beacon of Unrest" for card in supported_cards):
+        reviewed.add("Beacon of Unrest")
     assert widened == reviewed
 
 
