@@ -55,7 +55,7 @@ from __future__ import annotations
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_WON,
-                             DISCARDED_THIS_WAY,
+                             COUNTERED_SPELL_THIS_WAY, DISCARDED_THIS_WAY,
                              MILLED_THIS_WAY, NAMED_CARD_GUESS,
                              PUT_INTO_HAND_THIS_WAY,
                              REVEALED_HAND_CARDS, SECRET_NUMBERS_BY_SEAT)
@@ -769,6 +769,19 @@ def lower_record_condition(
                 node=condition,
             )
         return {"kind": "it_happened", "key": "discarded_count"}
+    if isinstance(condition, ast.CounteredThisWay):
+        # "If that spell is countered this way, …" (Fold into Aether.) A
+        # back-reference names its producer or refuses, as every "this way"
+        # here does: the record is written by the counter as it removes the
+        # spell, so with no unpriced counter in front of it the branch would
+        # never run on a card reporting itself supported.
+        if COUNTERED_SPELL_THIS_WAY not in produced:
+            raise LoweringError(
+                "'countered this way' with no counter before it in this effect "
+                "that counters as it resolves",
+                node=condition,
+            )
+        return {"kind": "it_happened", "key": COUNTERED_SPELL_THIS_WAY}
     if isinstance(condition, ast.DestroyedThisWay):
         # A back-reference names its producer or refuses, as the coin flip above
         # does: with no earlier step of this effect that armed a destruction,

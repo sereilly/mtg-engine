@@ -38,6 +38,7 @@ from ..oracle_types import (MANA_PAID_BY_SEAT, REVEALED_TOP_CARDS_BY_SEAT,
                             OracleInstruction, SECRET_NUMBERS_BY_SEAT,
                             EVENT_SPELL_MANA_COST,
                             OTHER_THAN_EVENT_SUBJECT_PLAYER,
+                            COUNTERED_SPELL_CONTROLLER_ACTOR,
                             STACK_TARGET_CONTROLLER, carries_x_bound,
                             substitute_x_bounds, without_x_bounds)
 from ..mana_payment import mana_cost_label
@@ -958,6 +959,19 @@ def _offered_seats(
         from ._targets import stack_target_controller_seat
 
         seat = stack_target_controller_seat(game, context, spells_only=True)
+        if seat is None or game.players[seat].lost:
+            return []
+        return [seat]
+    if actor == COUNTERED_SPELL_CONTROLLER_ACTOR:
+        # "If that spell is countered this way, **its controller** may put a
+        # creature card from their hand onto the battlefield." (Fold into
+        # Aether.) The seat the counter step recorded as it chose its spell,
+        # read as a rider reads it (``recorded_only``): with no record the
+        # counter chose nothing and nobody is offered — never the top of the
+        # stack, which by now is the resolving object itself.
+        from ._targets import stack_target_controller_seat
+
+        seat = stack_target_controller_seat(game, context, recorded_only=True)
         if seat is None or game.players[seat].lost:
             return []
         return [seat]

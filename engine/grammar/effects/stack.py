@@ -366,6 +366,16 @@ def _parse_countered_destination(
             stream.reset(mark)
             return None, "", None
     stream.accept_punct(",")
+    # "If that spell is countered this way, **its controller may put a
+    # creature card from their hand onto the battlefield**." (Fold into
+    # Aether.) Not a destination at all: the arm is a statement of its own
+    # about what happens *after* the counter, read as an ordinary conditional
+    # (``record_conditions``' ``CounteredThisWay``) once this declines. Only
+    # the two verbs a destination is printed with keep the loud reading
+    # below, so a destination tail this cannot read still fails by name.
+    if not stream.at_word("exile", "put"):
+        stream.reset(mark)
+        return None, "", None
     # "…**exile it** instead of putting it into its owner's graveyard."
     # (Dissipate.) The same CR 614.1 replacement of CR 701.6a's destination
     # written with the destination as a *verb* rather than as a zone — which is

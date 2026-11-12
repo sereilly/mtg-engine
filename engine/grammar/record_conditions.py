@@ -353,6 +353,16 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     if stream.accept_phrase("that", "player", "discards", "a", "card", "this", "way"):
         return ast.DiscardedThisWay()
     stream.reset(this_way)
+    # "Counter target spell. **If that spell is countered this way,** its
+    # controller may put a creature card from their hand onto the
+    # battlefield." (Fold into Aether.) The same yes/no reading over a counter
+    # the sentence in front of it made. The counter's own redirect tails
+    # ("…, exile it instead …") are read by the counter production and never
+    # reach a condition; this is the clause whose arm is a statement of its
+    # own.
+    if stream.accept_phrase("that", "spell", "is", "countered", "this", "way"):
+        return ast.CounteredThisWay()
+    stream.reset(this_way)
     # "**If you discard a creature card this way,** return it from your
     # graveyard to the battlefield …" (Aether Rift.) The same back-reference
     # with the ability's controller as the discarder and a noun between the

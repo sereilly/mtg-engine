@@ -44,8 +44,9 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from .. import simultaneous_damage
-from ..oracle_types import (ONE_DEALING, PER_OBJECT_SEAT_RECORDS,
-                            OracleInstruction, STACK_TARGET_CONTROLLER)
+from ..oracle_types import (COUNTERED_SPELL_CONTROLLER_ACTOR, ONE_DEALING,
+                            PER_OBJECT_SEAT_RECORDS, OracleInstruction,
+                            STACK_TARGET_CONTROLLER)
 from ..resumption import run_resumable
 from ..mana_payment import mana_cost_label
 from ..models import Permanent
@@ -738,6 +739,12 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
         # `_EVENT_ACTORS`. The action is the evidence: a `may` with only a cost
         # names a payer, and its consequence prints its own subject.
         or (actor in _EVENT_ACTORS and bool(_steps(instruction, "action")))
+        # The countered spell's controller performing what it is offered (Fold
+        # into Aether) — see ``oracle_types.COUNTERED_SPELL_CONTROLLER_ACTOR``.
+        or (
+            actor == COUNTERED_SPELL_CONTROLLER_ACTOR
+            and bool(_steps(instruction, "action"))
+        )
     )
 
     def offer(player_index: int) -> None:

@@ -356,6 +356,28 @@ class DiscardedThisWay:
     None is the bare "a card" every printing before it asks about.
     """
     filter: "ObjectFilter | None" = None
+
+
+@dataclass(frozen=True)
+class CounteredThisWay:
+    """"Counter target spell. **If that spell is countered this way,** its
+    controller may put a creature card from their hand onto the battlefield."
+    (Fold into Aether.)
+
+    The yes/no reading of "this way" over a *counter*, a sibling of
+    :class:`DiscardedThisWay`: what happened is not "the previous instruction
+    ran" but "the spell it chose was removed from the stack" — a spell that
+    can't be countered leaves the counter resolved and the branch unrun (the
+    card's ruling, 2004-12-01: "nothing happens").
+
+    Carries no field: "that spell" is always the one the counter in front of
+    it chose, and the lowering refuses the words without a step of this effect
+    that records the counter (``oracle_types.COUNTERED_SPELL_THIS_WAY``).
+    The redirect tails ("…, exile it instead …", Dissipate) are the counter's
+    own and never reach here.
+    """
+
+
 @dataclass(frozen=True)
 class WasKicked:
     """"If **this spell was kicked**, …" (Dismantling Blow) / "…, if **it was

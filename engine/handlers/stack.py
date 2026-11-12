@@ -31,7 +31,7 @@ from ..faces import is_face, spell_named, whole_card
 from ..flashback import leaves_stack_to_exile
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
-                            COUNTERED_SPELL_NAME)
+                            COUNTERED_SPELL_NAME, COUNTERED_SPELL_THIS_WAY)
 from ._amounts import count_from_payload, resolve_amount
 from ._filters import _card_matches_filter
 from ._targets import triggering_spell
@@ -1083,6 +1083,13 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # here without this handler knowing the condition exists.
         game.counter_stack_object(target)
         countered = target
+        # "**If that spell is countered this way**, its controller may put a
+        # creature card from their hand onto the battlefield." (Fold into
+        # Aether.) Written here and nowhere above: every refusal before this
+        # line — a spell that can't be countered, a narrowing it fails — left
+        # it on the stack, and "nothing happens" (the card's ruling,
+        # 2004-12-01). See ``oracle_types.COUNTERED_SPELL_THIS_WAY``.
+        context.results[COUNTERED_SPELL_THIS_WAY] = True
         # "…add an amount of {C} equal to **that spell's** mana value." (Mana
         # Drain.) The countered spell's mana value, recorded in the resolution
         # scratchpad the moment it is known: the next sentence creates a
