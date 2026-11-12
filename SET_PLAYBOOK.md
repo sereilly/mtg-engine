@@ -84,12 +84,15 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   still greps for the names of the functions it adds a caller to, because a
   caller census lists callers by name (Onslaught's
   `test_aura_host_protection` was red for four links after a branch added one).
-  Nor does it name a census reached through a seat's choice or a
-  trigger-condition kind rather than an import or a registry: Darksteel's
+  While a set is measured, its fourth reason (**measured**) names every test
+  whose population walks the set for any `engine/`, `web/`, `data/` or
+  `cards/` diff — the censuses no import or registry reaches: Darksteel's
   W1G3 shipped a red in the AI's graveyard-denial census it never ran, and
   the conditional-grants and upkeep-window censuses surfaced only in the
-  rehearsal (each now in `surprises.txt`). A brief says to grep `tests/` for
-  the card names and the functions a change reaches.
+  rehearsal; all three are on that list. Between sets a brief still says to
+  grep `tests/` for the card names and the functions a change reaches. Its
+  base is where the branch started (`--base` / `$MTG_DIFF_BASE`), not
+  `main`.
   The full suite is the integrator's,
   one at a time: `-n 8` when the machine is yours, `-n 4` while agents run.
   The runner caps any `-n` at what free memory holds (`tests/memory_guard.py`
@@ -161,7 +164,13 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
 ### Briefing
 
 Assemble a brief from the instruments (Phase 1's census, `card_table.py`,
-`gen_cards.py`, `furthest.py`), not from memory. Every brief says:
+`gen_cards.py`, `furthest.py`), not from memory: **`write_briefs.py CODE
+--groups <groups.json> --census <dir> --out <scratch> [--yield YIELD.md]`**
+writes the common brief from `scripts/integration/brief_templates/` — the
+rules below once, the census's counts, hollow cards, keyword reading, groups,
+base, size band, per-set sections and yield filled — and a skeleton per
+group; its `TODO` lines are the integrator's (`--wave 2` for wave 2). A rule a
+set corrects is corrected in the template, once. Every brief says:
 
 - **A name-keyed hook is the last resort** — every wave, explicitly. The brief
   does that work, not the reviewer.
@@ -270,8 +279,10 @@ And when writing one:
 - **A group launched after the first merges starts from the latest gated
   link**, not the wave's base: it reuses its siblings' work instead of
   rebuilding it, and its merge meets less. Tell it what the link already holds.
-- **Brief wave 2 from wave 1's reports as they arrive**, on the link holding the
-  files it will touch, and extend a running group by message — census path,
+- **Brief wave 2 from wave 1's reports as they arrive — and launch it then**,
+  on the link holding the files it will touch (Darksteel's AI group waited for
+  all nine merges, though its blocking item was known from Phase 1's
+  yield), and extend a running group by message — census path,
   parts, and the names a sibling already took, so the two union rather than
   fork. File the measured-and-declined pile **by subject**, not by reporting
   group: five reports each holding a piece become one brief.
@@ -621,6 +632,17 @@ on at least one resolution.
      satisfies "is it imported?" and still raises at import or collection.
   6. *What reads the module by name*: grep the tests for its bare name. A guard
      with a hand-written list of modules stops reading whatever moves out.
+- **A third differential for a split: a dump of every moved definition** —
+  bytecode, constants, defaults and what each global resolves to — of the base
+  file against the new modules, under `PYTHONHASHSEED=0` or with set reprs
+  canonicalised (they reorder between processes); and **an import-order
+  diff**: a new module's slot in a package's import list can move what loads
+  first (pre5dn S4: `bound_reanimation`'s alphabetical slot moved 18 engine
+  modules earlier, so it sits beside `reanimation`). **A method cut adds a
+  call hop**: a census that counts calls from a seam (`test_kg3_batch_roads`)
+  counts the moved step at its caller. A split's own final run is two runs —
+  the importers `tests_for_diff` names with `--quick`, and the `full`-marked
+  structural guards (plus any full test patching a moved name) whole.
 - **A category names the migration family a kind belongs to, never the module
   its lowering lives in.** A new category name is missing from
   `GRAMMAR_CATEGORIES`, which has no fallback, so every card whose kind moved
@@ -681,7 +703,8 @@ on at least one resolution.
   passed as themselves, an early return where the run could return), inputs
   and outputs from a liveness analysis. The proof is that inlining every
   helper back gives an AST equal to the original. `_cast_onto_stack` and
-  `_activate_onto_stack` (1,865 and 2,433 lines) were cut that way by CR
+  `_activate_onto_stack` (1,865 and 2,433 lines), and in pre5dn `_cast_onto_stack`
+  and `_resolve_card` again, were cut that way by CR
   601.2 / 602.2 step.
 
 ### Mechanical edits
@@ -708,7 +731,10 @@ instruments current, and no module the set will reach inside the band.
    `.test_timings.json`, and the main checkout's is what `tests_for_diff.py`
    shows every agent of the round before it runs a file: run this suite as the
    full pass (`--full`) there, or copy in the file from the tree where the
-   latest full pass ran (Phase 1's).
+   latest full pass ran (Phase 1's). **When `main`'s tip already passed a
+   full pass** — the last promotion's or round's gate, any fix re-run as the
+   full pass — the quick pass and `check_all --freshness` are enough: the full
+   pass Darksteel's Phase 0 ran repeated its predecessor's gate (26 minutes).
 2. If the set postdates `data/vocabulary/manifest.json`'s `fetched_at`, run
    `scripts/fetch_vocabulary.py` and commit the diff on its own: an unknown
    creature type or keyword refuses to parse exactly like a grammar gap and gets
@@ -757,7 +783,12 @@ carry its row, and the census is in hand.
    release-ordered (`card_loader.register_measured_set`). Everything else reads
    the manifest (`tests/sets/README.md`, "Adding a set"). Promotion to `sets`
    stays Phase 4's reviewed move.
-2. Run the **full pass** (`pytest --full`) and **treat what fires as yield,
+2. **First, `tests_for_diff.py --ingest <CODE> --run -n 4`**: every test whose
+   population walks the measured set, by node id, in the full pass, longest
+   first — checked against six ingests' full passes (every one of their reds
+   named: DST 13, JUD 32, LGN 2, MRD 13, ONS 8, SCG 6) — so its reds go into
+   `yield.txt` and the briefs before the fan-out, where Darksteel's arrived 80
+   minutes into the wave. Then run the **full pass** (`pytest --full`) and **treat what fires as yield,
    not noise** — the quick pass samples the censuses, and Legions' one
    engine yield (a trigger census naming Chromeshell Crab) hid in a sample
    until a meeting run named the file and it ran whole: a new set's
@@ -888,8 +919,8 @@ Rounds run as waves of groups, briefed, merged and gated as in Integration.
    card that moved. It stores programs in full with payloads, because counts and
    kinds are both blind to a narrowing; every lossy hand-rolled version has
    hidden a real defect. A round that adds a defaulted field to a dataclass the
-   snapshot reprs strips that field's default spelling from both sides and
-   reports the filtered count. Know its blind spots: a **text-keyed table** (a
+   snapshot reprs reads its real moves: `compare` counts a card moved only by
+   the new field's default spelling on that field's own line. Know its blind spots: a **text-keyed table** (a
    round editing one owes a differential over that table — a census of boards ×
    the whole pool), and dispatch, the wire, prompts and AI policy, which is
    where the pool's remaining defects mostly live. Keep running it, and never
@@ -1465,7 +1496,7 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     Lumengrid Augur's untap payoff is unpriced (it breaks ties only); a
     one-shot certainly lost stays unpriced by design (when to spend one is a
     timing question).
-  - Picks (kg5 `ai2`): `ai_targets._role_chain`'s graveyard roles rank by
+  - Picks (kg5 `ai2`): `ai_slot_targets._role_chain`'s graveyard roles rank by
     mana value with no can-enter check (Cruel Revival returns to a hand, so
     no shipped card); a return to a library is unranked (Bone Harvest,
     Reinforcements, Misinformation); Adarkar Unicorn's "{U} or {C}{U}" is not
@@ -1618,21 +1649,20 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   Overlay paths of the restructured keep modal. *Clears:* (a) a damage
   round; (b)–(e) a client round.
 
-- **The toolkit wishes Darksteel's groups wrote down** (each cost a round's
-  worth of minutes somewhere): `oracle_diff compare` cannot filter a new
-  defaulted field's spelling (W1G2's nine moves read as 2,407; its
-  `scratch/dst/w1g2/od_filtered.py` is the filter); `sim_fingerprint` has no
-  `snapshot --rev <commit>` (three groups rebuilt a base snapshot from an
-  export); `probe_line.py` shows no AST fields and not the innermost
-  `LoweringError`'s file and line (W1G2, W1G3, W1G9 each wrote a scratch
-  probe); `simulate_ai_games.py` and `checked_sim.py` take no pinned cards;
-  no `explain_cast` for an activation (W2G2); no `fails_before.sh <test>
-  <file…>` to show a test red against a module's base version (W2G3 swapped
-  files by hand four times); `tests_for_diff.py --list` writes CRLF paths
-  and reads from `main` by default (512 files for a wave-2 branch); no
-  canvas position handle for a browser test (W2G1's `scratch/dst/w2g1/pw.sh`)
-  and `serve_board.py` does not reload code; and **Phase 1's yield arrived
-  about 80 minutes into the wave**, every one of its 13 reds a census whose
-  population reads the measured set — a marker (or a `tests_for_diff` mode)
-  naming those tests would run them first, in minutes, and put the table in
-  the briefs. *Clears:* a toolkit round, before the next set.
+- **What the pre-Fifth-Dawn round left** (pre5dn cleared the rest of
+  Darksteel's toolkit wishes: `oracle_diff`'s defaulted fields, `snapshot
+  --rev`, `probe_line --ast` and its raise site, `--require`, `fails_before.sh`,
+  `tests_for_diff`'s base, LF and `--ingest`, the canvas position accessor and
+  `serve_board.py --reload`). Left: no `explain_cast` for an activation
+  (W2G2 spied on `_land_ability_worth` by hand); `--ingest` names ~495 tests
+  because ten sharded AI censuses walk both roles — `stable_sample` always
+  taking the measured set's cards and sampling the rest would cut it (T2's
+  proposal, `tests/helpers.py`); and three of the profiler's speed items not
+  taken: the continuous-effect recompute inside every state-based pass
+  changes nothing ≥98.3% of the time (a dirty marker under
+  `fast_paths.CHECKING`; a missed invalidation is a stale P/T or type, so
+  high risk; ~7% of the full pass), backwards censuses re-run whole (~858 s;
+  a smaller sample weakens what they prove), and the state-based pass's own
+  internals (ten sweeps a pass, `has_supertype`). Its profiles are in
+  `scratch/pre5dn/p1/`. *Clears:* a speed round with `fast_paths.CHECKING`
+  runs as its gate; the rest a toolkit round.

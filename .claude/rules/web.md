@@ -23,6 +23,7 @@ and a module may import only from an earlier one
 | `seats.py` | seat kind, who has lost, whether to hold priority |
 | `offers.py` | what a viewer's object offers right now as the engine answers it: a tap's mana, each ability's mana and refusal, a cast's mana colour, text-change words, payable X |
 | `serialization.py` | engine object → client JSON, one function per kind |
+| `player_view.py` | one player's zones as one viewer is shown them: hidden hands, face-down exile, the controller-only views, the viewer's own activation offers |
 | `catalog.py` | the pool and decks as the client browses them |
 | `verification_report.py` | the verification tracker's read side |
 | `pregame.py` | coin flip and mulligans |
@@ -94,7 +95,7 @@ cost — `mana_combination.cast_split_offer`), the active seat's
 `combat.attack_requirements` and a defending seat's `combat.block_requirements`
 (each with `most_obeyable`); and while a permanent's "as it enters" choice is
 owed, that permanent listed in its controller's `battlefield` as arriving
-(`serialization._serialize_arriving`, `entering: true`; the engine has it in
+(`player_view._serialize_arriving`, `entering: true`; the engine has it in
 no zone until the answer, CR 614.12a), as are an open entry event's puts —
 to their controller alone (CR 101.4a). A permanent's `name` is its name (CR
 707.2: a copy's is what it copies) and `printed_name` the physical card's (a
