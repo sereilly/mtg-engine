@@ -10,6 +10,7 @@
     "Craw Wurm",
     "Crimson Kobolds",
     "Crookshank Kobolds",
+    "Dross Crocodile",
     "Durkwood Boars",
     "Dwarven Trader",
     "Eager Cadet",
@@ -206,6 +207,15 @@
     "Wall of Wood"
   ],
   [
+    "Clergy en-Vec",
+    "Femeref Healer",
+    "Loxodon Anchorite",
+    "Master Healer",
+    "Orim, Samite Healer",
+    "Samite Healer",
+    "Sanctum Custodian"
+  ],
+  [
     "Craven Giant",
     "Goblin Raider",
     "Hulking Cyclops",
@@ -269,14 +279,6 @@
     "Rushwood Dryad",
     "Shanodin Dryads",
     "Slinking Serpent"
-  ],
-  [
-    "Clergy en-Vec",
-    "Femeref Healer",
-    "Master Healer",
-    "Orim, Samite Healer",
-    "Samite Healer",
-    "Sanctum Custodian"
   ],
   [
     "Divine Transformation",
@@ -373,6 +375,13 @@
     "Circle of Protection: White"
   ],
   [
+    "Covert Operative",
+    "Metathran Soldier",
+    "Phantom Warrior",
+    "Plasma Elemental",
+    "Tidal Kraken"
+  ],
+  [
     "Crystal Rod",
     "Iron Star",
     "Ivory Cup",
@@ -399,6 +408,13 @@
     "Pearl Medallion",
     "Ruby Medallion",
     "Sapphire Medallion"
+  ],
+  [
+    "Firefly",
+    "Furnace Whelp",
+    "Granite Gargoyle",
+    "Hellkite Punisher",
+    "Shivan Dragon"
   ],
   [
     "Goblin Chariot",
@@ -472,12 +488,6 @@
     "Yavimaya Wurm"
   ],
   [
-    "Covert Operative",
-    "Metathran Soldier",
-    "Phantom Warrior",
-    "Tidal Kraken"
-  ],
-  [
     "Crossbow Infantry",
     "D'Avenant Archer",
     "Elite Archers",
@@ -494,12 +504,6 @@
     "Spirit Shield",
     "Tawnos's Weaponry",
     "Zelyon Sword"
-  ],
-  [
-    "Firefly",
-    "Granite Gargoyle",
-    "Hellkite Punisher",
-    "Shivan Dragon"
   ],
   [
     "Fists of the Anvil",
@@ -687,6 +691,10 @@
     "Dragon Engine"
   ],
   [
+    "Advanced Hoverguard",
+    "Glimmering Angel"
+  ],
+  [
     "Aladdin's Ring",
     "Rod of Ruin"
   ],
@@ -721,6 +729,10 @@
   [
     "Angelic Wall",
     "Wall of Swords"
+  ],
+  [
+    "Anodet Lurker",
+    "Onulet"
   ],
   [
     "Arcane Laboratory",
@@ -1195,6 +1207,10 @@
     "Thornwind Faeries"
   ],
   [
+    "Merfolk Looter",
+    "Thought Courier"
+  ],
+  [
     "Merfolk Traders",
     "Vodalian Merchant"
   ],
@@ -1233,6 +1249,10 @@
   [
     "Narwhal",
     "Silver Knight"
+  ],
+  [
+    "Nim Grotesque",
+    "Nim Lasher"
   ],
   [
     "Noble Elephant",
@@ -1299,6 +1319,14 @@
     "Rootwalla"
   ],
   [
+    "Quirion Explorer",
+    "Sylvok Explorer"
+  ],
+  [
+    "Qumulox",
+    "Somber Hoverguard"
+  ],
+  [
     "Reckless Ogre",
     "Rogue Kavu"
   ],
@@ -1361,6 +1389,10 @@
   [
     "Talruum Minotaur",
     "Wild Colos"
+  ],
+  [
+    "Tel-Jilad Lifebreather",
+    "Village Elder"
   ],
   [
     "Telepathic Spies",

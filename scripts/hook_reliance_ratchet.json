@@ -15,6 +15,11 @@
       "hooked_cards_pct_of_supported": 4.1,
       "hooked_lines_pct_of_supported": 2.7
     },
+    "5DN": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
+    },
     "5ED": {
       "entries_per_100_supported_cards": 1.8,
       "hooked_cards_pct_of_supported": 1.6,

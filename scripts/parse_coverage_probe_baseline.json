@@ -269,6 +269,13 @@
   ]
  },
  {
+  "card": "Arcbound Wanderer",
+  "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Arcbound Worker",
   "clause": "you may put a +1/+1 counter on target artifact creature for each +1/+1 counter on this permanent",
   "ignored": [
@@ -434,6 +441,13 @@
  {
   "card": "Blinding Light",
   "clause": "tap all nonwhite creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Blinkmoth Infusion",
+  "clause": "untap all artifacts",
   "ignored": [
    "all"
   ]
@@ -735,6 +749,13 @@
    "all",
    "all",
    "all"
+  ]
+ },
+ {
+  "card": "Clearwater Goblet",
+  "clause": "you may gain life equal to the number of charge counters on this artifact",
+  "ignored": [
+   "artifact"
   ]
  },
  {
@@ -1298,6 +1319,14 @@
   ]
  },
  {
+  "card": "Engineered Explosives",
+  "clause": "destroy each nonland permanent with mana value equal to the number of charge counters on this artifact",
+  "ignored": [
+   "each",
+   "artifact"
+  ]
+ },
+ {
   "card": "Ensnare",
   "clause": "tap all creatures",
   "ignored": [
@@ -1713,6 +1742,13 @@
   "clause": "draw an additional card",
   "ignored": [
    "additional"
+  ]
+ },
+ {
+  "card": "Granulate",
+  "clause": "destroy each nonland artifact with mana value 4 or less",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -2453,6 +2489,13 @@
   ]
  },
  {
+  "card": "Lunar Avenger",
+  "clause": "this creature gains your choice of flying, first strike, or haste until end of turn",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Lurking Jackals",
   "clause": "if this permanent is an enchantment, it becomes a 3/2 jackal creature",
   "ignored": [
@@ -2775,6 +2818,14 @@
   "card": "Mutilate",
   "clause": "all creatures get -1/-1 until end of turn for each swamp you control",
   "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Myr Servitor",
+  "clause": "if this creature is on the battlefield, each player returns all cards named myr servitor from their graveyard to the battlefield",
+  "ignored": [
+   "creature",
    "all"
   ]
  },
@@ -3344,6 +3395,13 @@
   ]
  },
  {
+  "card": "Razormane Masticore",
+  "clause": "you may have this creature deal 3 damage to target creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Reality Ripple",
   "clause": "target artifact, creature, or land phases out",
   "ignored": [
@@ -3435,6 +3493,13 @@
   ]
  },
  {
+  "card": "Retaliate",
+  "clause": "destroy all creatures that dealt damage to you this turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Retract",
   "clause": "return all artifacts you control to their owner's hand",
   "ignored": [
@@ -3520,6 +3585,13 @@
   ]
  },
  {
+  "card": "Roar of Reclamation",
+  "clause": "each player returns all artifact cards from their graveyard to the battlefield",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Roar of the Kha",
   "clause": "untap all creatures you control",
   "ignored": [
@@ -3557,6 +3629,13 @@
  {
   "card": "Rout",
   "clause": "destroy all creatures. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Rude Awakening",
+  "clause": "untap all lands you control",
   "ignored": [
    "all"
   ]
@@ -4460,6 +4539,13 @@
   "clause": "it deals x damage to any target, where x is the number of verse counters on this enchantment",
   "ignored": [
    "enchantment"
+  ]
+ },
+ {
+  "card": "Tornado Elemental",
+  "clause": "it deals 6 damage to each creature with flying",
+  "ignored": [
+   "each"
   ]
  },
  {
