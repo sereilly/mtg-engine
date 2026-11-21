@@ -466,6 +466,65 @@ def copy_offer_turns_on_its_taker(game: Game, player_index: int, entry: dict) ->
     )
 
 
+#: The steps whose yield a branch is counted by, as kind -> how many cards
+#: reach the offered seat's hand: a draw by its printed number, its own spell
+#: returned to its owner's hand as one.
+_HAND_YIELDS = {
+    "draw_controller_cards": lambda payload: payload.get("amount", 0),
+    "return_source_card_to_owners_hand": lambda payload: 1,
+}
+
+
+def _branch_hand_yield(steps) -> int:
+    """How many cards a branch of an offer puts into the offered seat's hand,
+    counted off the steps :data:`_HAND_YIELDS` names (a step whose number is
+    not a printed one counts nothing)."""
+    total = 0
+    for step in steps or ():
+        reader = _HAND_YIELDS.get(getattr(step, "kind", None))
+        if reader is None:
+            continue
+        amount = reader(step.payload or {})
+        if isinstance(amount, int):
+            total += amount
+    return total
+
+
+def offer_declines_into_more_cards(entry: dict) -> bool:
+    """Whether a free "you may A. If you do, B. Otherwise, C." offer is worth
+    declining because the decline branch puts more cards in hand than taking
+    it does.
+
+    "Look at the top three cards of your library. You may put those cards on
+    the bottom of your library in any order. If you do, return Petals of
+    Insight to its owner's hand. **Otherwise, draw three cards.**" (Petals of
+    Insight.) The standing policy reads a printed "otherwise" as a toll's
+    penalty, which it is everywhere a decline costs something — and here it
+    is the purchase: three cards against the spell back in hand. Taken by
+    rule, the seat recast a five-mana sorcery every turn to bottom three cards
+    and never drew one (a seeded CHK run at W1G7). Only a free offer made to
+    its own controller, and only where the decline branch is **nothing but**
+    cards to hand — "If you don't, sacrifice this creature and draw a card"
+    (Lim-Dûl's Paladin) is a toll whose penalty happens to draw, and a draw
+    in another seat's branch (Gravestorm's "if that player doesn't, you may
+    draw") is not the offered seat's — so every other offer keeps the policy
+    it had.
+    """
+    if entry.get("cost") or entry.get("life_cost"):
+        return False
+    if entry.get("_offered_actor", "you") != "you":
+        return False
+    declined = list(entry.get("_on_decline") or ())
+    if not declined or any(
+        getattr(step, "kind", None) not in _HAND_YIELDS for step in declined
+    ):
+        return False
+    decline = _branch_hand_yield(declined)
+    if decline <= 0:
+        return False
+    return decline > _branch_hand_yield(entry.get("_on_accept"))
+
+
 def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asked declines one link of an "unless **any
     player** pays" chain (`handlers/offers.unless_player_pays`).
