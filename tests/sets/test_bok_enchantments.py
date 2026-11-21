@@ -127,6 +127,67 @@ def test_w1g4_threads_of_disloyalty_falls_off_a_three_drop(set_pool):
     assert "Threads of Disloyalty" in [c.name for c in game.players[0].graveyard]
     assert game.controller_index_of(giant) == 1
 
+
+def _w1g4_names(cards):
+    return [c.name for c in cards]
+
+
+def test_w1g4_kumanos_blessing_exiles_what_its_host_traded_with(set_pool):
+    """"If a creature dealt damage by enchanted creature this turn would die,
+    exile it instead": the blocker the enchanted Bears killed is exiled (no
+    death, CR 614.6), the Bears itself — dealt damage by the other one — dies
+    as usual, and the Aura follows its host to the graveyard."""
+    from tests.helpers import declare_attack, drive_combat
+
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Kumano's Blessing"], mine=["Grizzly Bears"], theirs=["Grizzly Bears"],
+    )
+    result = game.cast_from_hand(
+        0, "Kumano's Blessing", target_player_index=0,
+        target_permanent_ids=[mine[0].permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g4_settle(game)
+    declare_attack(game, 0, blocks={0: 0})
+    drive_combat(game)
+    assert _w1g4_names(game.players[1].exile) == ["Grizzly Bears"], game.log
+    assert _w1g4_names(game.players[1].graveyard) == []
+    assert sorted(_w1g4_names(game.players[0].graveyard)) == [
+        "Grizzly Bears", "Kumano's Blessing",
+    ]
+
+
+def test_w1g4_kumanos_blessing_reads_its_host_as_the_creature_dies(set_pool):
+    """Flashed onto a Craw Wurm *after* the Wurm dealt 6 to a Wall of Stone:
+    the Aura's static ability reads "enchanted creature" as the Wall would die
+    (the reading Vampiric Embrace's death trigger takes), so the Wall a Bolt
+    finishes is exiled — and a Bear the Wurm never touched dies as usual."""
+    from tests.helpers import declare_attack, drive_combat
+
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Kumano's Blessing", "Lightning Bolt", "Lightning Bolt"],
+        mine=["Craw Wurm"], theirs=["Wall of Stone", "Grizzly Bears"],
+    )
+    wurm, (wall, bears) = mine[0], theirs
+    declare_attack(game, 0, blocks={0: 0})
+    drive_combat(game)
+    assert game.is_on_battlefield(wall) and wall.damage_marked == 6, game.log
+    result = game.cast_from_hand(
+        0, "Kumano's Blessing", target_player_index=0,
+        target_permanent_ids=[wurm.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g4_settle(game)
+    for victim in (wall, bears):
+        bolt = game.cast_from_hand(
+            0, "Lightning Bolt", target_player_index=1,
+            target_permanent_ids=[victim.permanent_id],
+        )
+        assert bolt.supported, bolt.details
+        _w1g4_settle(game)
+    assert _w1g4_names(game.players[1].exile) == ["Wall of Stone"], game.log
+    assert _w1g4_names(game.players[1].graveyard) == ["Grizzly Bears"]
+
 # ==== end w1g4 ======================================================
 
 

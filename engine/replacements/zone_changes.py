@@ -118,40 +118,87 @@ _DEALT_DAMAGE_BY_SELF_EXILE = re.compile(
 #: The "this <noun>" spellings the subject may take for the source itself.
 _SELF_NOUN_SUBJECTS = frozenset({"this creature", "this permanent"})
 
+#: "If a creature dealt damage by **enchanted creature** this turn would die,
+#: exile it instead." (Kumano's Blessing.) The same standing replacement with
+#: the damager the permanent its source is attached to (CR 301.5f makes the two
+#: attachment words one rule) rather than the source itself.
+_ATTACHED_NOUN_SUBJECTS = frozenset({"enchanted creature", "equipped creature"})
+
+#: Which permanent a dealt-damage exile line names as the damager.
+DEALT_DAMAGE_BY_SELF = "self"
+DEALT_DAMAGE_BY_ATTACHED = "attached"
+
 
 def dealt_damage_exile_line(line: str, card_name: str | None = None) -> bool:
-    """Whether *line* is, in full, "If a creature dealt damage by <itself>
-    this turn would die, exile it instead" — the subject "this creature" or
-    the card's own name (CR 201.5, a legend's short name included). One
-    reader for the interceptor below and :func:`replacement_claims_line`, so
-    what exiles and what is claimed cannot drift."""
-    return _dealt_damage_exile_line(
+    """Whether *line* is, in full, "If a creature dealt damage by <itself or
+    its host> this turn would die, exile it instead" — the subject "this
+    creature", the card's own name (CR 201.5, a legend's short name included)
+    or "enchanted/equipped creature". One reader for the interceptor below,
+    :func:`replacement_claims_line` and the Aura gate
+    (``auras.aura_continuous_claim``), so what exiles and what is claimed
+    cannot drift."""
+    return dealt_damage_exile_subject(line, card_name) is not None
+
+
+def dealt_damage_exile_subject(line: str, card_name: str | None = None) -> str | None:
+    """:data:`DEALT_DAMAGE_BY_SELF` or :data:`DEALT_DAMAGE_BY_ATTACHED` — which
+    permanent *line*'s "dealt damage by <subject>" names — or None when the
+    line is not, in full, the dealt-damage exile."""
+    return _dealt_damage_exile_subject(
         " ".join((line or "").strip().lower().rstrip(".").split()),
         (card_name or "").strip().lower() or None,
     )
 
 
 @lru_cache(maxsize=None)
-def _dealt_damage_exile_line(normalized: str, card_name: str | None) -> bool:
+def _dealt_damage_exile_subject(normalized: str, card_name: str | None) -> str | None:
     match = _DEALT_DAMAGE_BY_SELF_EXILE.match(normalized)
     if match is None:
-        return False
+        return None
     subject = match.group("subject")
     if subject in _SELF_NOUN_SUBJECTS:
-        return True
+        return DEALT_DAMAGE_BY_SELF
+    if subject in _ATTACHED_NOUN_SUBJECTS:
+        return DEALT_DAMAGE_BY_ATTACHED
     if card_name is None:
-        return False
+        return None
     from ..self_reference import _collapse_self_references
 
-    return _collapse_self_references(subject, card_name, "this creature") == "this creature"
+    if _collapse_self_references(subject, card_name, "this creature") == "this creature":
+        return DEALT_DAMAGE_BY_SELF
+    return None
+
+
+def _dealt_damage_damager(game, source, subject: str):
+    """The permanent whose damage *source*'s line asks about, or None.
+
+    The source itself for "this creature". For "enchanted creature" (Kumano's
+    Blessing) the permanent the source is attached to **now** — a static
+    ability reads its words as the event happens, the reading Vampiric
+    Embrace's "a creature dealt damage by enchanted creature this turn dies"
+    already takes at the death fire site. The live record first; the one
+    ``detach_aura`` kept as the host left (CR 603.10a) only when that host
+    left in this same event, so a creature trading with its victim in one
+    state-based check still counts, and a host bounced earlier does not.
+    """
+    if subject == DEALT_DAMAGE_BY_SELF:
+        return source
+    host = source.metadata.get("attached_to")
+    if host is not None:
+        return host
+    kept = source.metadata.get("last_attached_to")
+    if kept is not None and any(gone is kept for gone in game.departed_in_this_event()):
+        return kept
+    return None
 
 
 def _dealt_damage_exilers(game, payload: dict) -> list:
     """Every permanent whose standing "if a creature dealt damage by this
-    creature this turn would die, exile it instead" covers the dying
-    creature: on the battlefield, or taken off it by the same event
-    (``departed_in_this_event``), printing the line about itself, and with an
-    entry in the turn's damage ledger from it to the dying creature. Pure."""
+    creature [enchanted creature] this turn would die, exile it instead"
+    covers the dying creature: on the battlefield, or taken off it by the
+    same event (``departed_in_this_event``), printing the line, and with an
+    entry in the turn's damage ledger from the creature the line names to the
+    dying creature. Pure."""
     from ..damage_ledger import dealt_damage_to_permanent_this_turn
 
     dying = payload["permanent"]
@@ -171,14 +218,16 @@ def _dealt_damage_exilers(game, payload: dict) -> list:
         text = printed.oracle_text or ""
         if "dealt damage by" not in text.lower():
             continue
-        if not any(
-            dealt_damage_exile_line(raw, printed.name) for raw in text.splitlines()
-        ):
-            continue
-        if dealt_damage_to_permanent_this_turn(
-            game, source.permanent_id, dying.permanent_id
-        ):
-            found.append(source)
+        for raw in text.splitlines():
+            subject = dealt_damage_exile_subject(raw, printed.name)
+            if subject is None:
+                continue
+            damager = _dealt_damage_damager(game, source, subject)
+            if damager is not None and dealt_damage_to_permanent_this_turn(
+                game, damager.permanent_id, dying.permanent_id
+            ):
+                found.append(source)
+                break
     return found
 
 

@@ -1433,6 +1433,18 @@ def aura_continuous_claim(line: str) -> str | None:
         )
     if aura_controller_cast_ban(normalized) is not None:
         return "cast restriction on the host's controller — auras.controller_cast_ban"
+    # "If a creature dealt damage by enchanted creature this turn would die,
+    # exile it instead." (Kumano's Blessing.) CR 614's would-die exile keyed on
+    # the host's damage this turn, asked of the reader the interceptor
+    # self-selects on — so a subject it cannot name leaves the line unclaimed.
+    from .replacements.zone_changes import (DEALT_DAMAGE_BY_ATTACHED,
+                                            dealt_damage_exile_subject)
+
+    if dealt_damage_exile_subject(normalized) == DEALT_DAMAGE_BY_ATTACHED:
+        return (
+            "CR 614 would-die exile keyed on the host's damage — "
+            "replacements.zone_changes._dealt_damage_exilers"
+        )
     if aura_grants_chosen_landwalk(normalized):
         return "landwalk of the chosen type (layer 6) — auras.chosen_landwalk_grants"
     return None
