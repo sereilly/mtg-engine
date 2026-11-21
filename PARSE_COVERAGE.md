@@ -25,36 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**14 unclaimed sentence(s) across 14 supported card(s).**
+**1 unclaimed sentence(s) across 1 supported card(s).**
 
-- **Blessed Breath**
-  - `splice onto arcane {w}`
-- **Consuming Vortex**
-  - `splice onto arcane {3}{u}`
-- **Dampen Thought**
-  - `splice onto arcane {1}{u}`
-- **Desperate Ritual**
-  - `splice onto arcane {1}{r}`
-- **Glacial Ray**
-  - `splice onto arcane {1}{r}`
-- **Hideous Laughter**
-  - `splice onto arcane {3}{b}{b}`
-- **Kodama's Might**
-  - `splice onto arcane {g}`
-- **Lifted by Clouds**
-  - `splice onto arcane {1}{u}`
-- **Psychic Puppetry**
-  - `splice onto arcane {u}`
-- **Soulless Revival**
-  - `splice onto arcane {1}{b}`
-- **Strange Inversion**
-  - `splice onto arcane {1}{r}`
 - **Swirl the Mists**
   - `all instances of color words in the text of spells and permanents are changed to the chosen color word`
-- **Through the Breach**
-  - `splice onto arcane {2}{r}{r}`
-- **Wear Away**
-  - `splice onto arcane {3}{g}`
 
 ## Acknowledged simplifications
 

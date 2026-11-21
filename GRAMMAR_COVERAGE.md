@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 440 | 81.1% | 80.2% | 57.7% | 210 |
+| CHK *(measured)* | 291 | 440 | 81.8% | 81.1% | 58.6% | 214 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,9 +71,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1003 | 508 | expected a subject |  |
+| 1002 | 507 | expected a subject |  |
 | 198 | 100 | unrecognized effect verb |  |
-| 148 | 77 | unconsumed text |  |
+| 147 | 76 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -1758,6 +1758,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target spell.`
 - **Candelabra of Tawnos**
   - `{X}, {T}: Untap X target lands.`
+- **Candles' Glow**
+  - `Prevent the next 3 damage that would be dealt to any target this turn. You gain life equal to the damage prevented this way.`
 - **Cannibalize**
   - `Choose two target creatures controlled by the same player. Exile one of those creatures and put two +1/+1 counters on the other.`
 - **Canopy Claws**
@@ -3240,6 +3242,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}, {T}: Target permanent you control gains protection from instant spells and from sorcery spells until end of turn.`
 - **Devour in Shadow**
   - `Destroy target creature. It can't be regenerated. You lose life equal to that creature's toughness.`
+- **Devouring Greed**
+  - `Target player loses 2 life plus 2 life for each Spirit sacrificed this way. You gain that much life.`
+- **Devouring Rage**
+  - `Target creature gets +3/+0 until end of turn. For each Spirit sacrificed this way, that creature gets an additional +3/+0 until end of turn.`
 - **Devouring Strossus**
   - `At the beginning of your upkeep, sacrifice a creature.`
   - `Sacrifice a creature: Regenerate this creature.`
@@ -12088,6 +12094,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever another creature enters, you gain 1 life.`
 - **Soul of Magma**
   - `Whenever you cast a Spirit or Arcane spell, this creature deals 1 damage to target creature.`
+- **Soulblast**
+  - `Soulblast deals damage to any target equal to the total power of the sacrificed creatures.`
 - **Soulcatcher**
   - `Whenever a creature with flying dies, put a +1/+1 counter on this creature.`
 - **Soulcatchers' Aerie**
