@@ -701,6 +701,13 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     activated = aura_activated_ability_claim(normalized_line, card_name)
     if activated is not None:
         return activated
+    # "Konda's Banner can be attached only to a legendary creature." The
+    # Equipment's restriction on its own attachment (CR 301.5b), asked of the
+    # reader ``equipment.equip_refusal`` enforces with — so nothing lowers.
+    from .equipment import attach_only_to_filter
+
+    if attach_only_to_filter(normalized_line, card_name) is not None:
+        return "attachment restriction (CR 301.5b) — equipment.attach_only_to_refusal"
     return aura_continuous_claim(normalized_line)
 
 

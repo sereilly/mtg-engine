@@ -210,6 +210,39 @@ def lower_record_condition(
             # refuses when the guarded branch names no object, rather than
             # asking the question of whichever half of the resolution context
             # happened to hold something.
+            #
+            # "Whenever equipped creature dies, return that card to the
+            # battlefield under your control **if it's a Samurai card**."
+            # (Oathkeeper, Takeno's Daisho.) Under an event whose fire site
+            # froze the dead card (``_deaths.BOUND_CARD_EVENTS``), "it" is that
+            # card — the object the guarded "that card" names — and the
+            # question is asked of the card as it is in the graveyard (the
+            # card's 2004-12-01 ruling: "checks whether the card's creature
+            # type is Samurai, not whether the creature was a Samurai when it
+            # left the battlefield"). Read before the target reading, which
+            # needs a guarded branch naming a permanent.
+            from ._deaths import BOUND_CARD_EVENTS
+
+            if event in BOUND_CARD_EVENTS and referent != "permanent":
+                # The type words alone (the gate below), read by the card
+                # matcher: ``_filter_payload`` refuses a card's filter because
+                # its readers search the battlefield, and this one does not.
+                described = condition.filter.to_payload()
+                leftover = _restrictions_beyond(
+                    condition.filter,
+                    {"card_types", "is_card", "type_match", "excluded_types",
+                     "subtypes", "subtype_match", "supertypes"},
+                )
+                if leftover or not described or untestable_filter_keys(described):
+                    raise LoweringError(
+                        "the dead card's test cannot ask this of a card: "
+                        + ", ".join(leftover or ("nothing printed",)),
+                        node=condition,
+                    )
+                payload = {"kind": "dead_card_is", "filter": described}
+                if condition.negated:
+                    payload["negated"] = True
+                return payload
             if referent == "permanent":
                 # "If it's a **Goblin**, …": a bare creature type names a
                 # permanent with the subtype (CR 205.3m, 308.2 — a Kindred

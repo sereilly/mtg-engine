@@ -572,6 +572,39 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("exile_attached_permanent")
+def exile_attached_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When Oathkeeper is put into a graveyard from the battlefield, **exile
+    equipped creature**." (Oathkeeper, Takeno's Daisho.)
+
+    The exile twin of ``destroy_attached_permanent`` and
+    ``return_attached_permanent_to_hand``: "equipped creature" names the
+    permanent this one is attached to (CR 301.5a), so nothing is chosen and
+    nothing targeted. Under a leaves-the-battlefield trigger the source is
+    already in a graveyard and attached to nothing, so the host is the one it
+    was last attached to (``attached_host``'s CR 603.10a fallback) — provided
+    that host is still on the battlefield; one that left first is a new
+    object (CR 400.7) the sentence does not name.
+
+    To its **owner's** exile, through the one transition off the battlefield
+    and the one arrival in exile.
+    """
+    from ._targets import attached_host
+
+    host = attached_host(game, context.source_permanent)
+    if host is None or not game.is_on_battlefield(host):
+        game.log.append(f"{context.card.name}: nothing attached to exile")
+        return True, "resolved"
+    controller_index = game.controller_index_of(host)
+    owner_index = game.owner_index_of(host)
+    game.remove_from_battlefield(host)
+    if owner_index is None:
+        owner_index = controller_index if controller_index is not None else 0
+    game.put_card_into_exile(owner_index, host.card)
+    game.log.append(f"{context.card.name} exiled {host.card.name}")
+    return True, "resolved"
+
+
 @effect_handler("exile_target_graveyard")
 def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile target player's graveyard." (Tormod's Crypt.)

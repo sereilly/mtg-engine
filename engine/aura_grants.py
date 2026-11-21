@@ -150,6 +150,16 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         if not _static_ability_line(line):
             continue
         tail = line[match.end():].lstrip()
+        # **The grant's own sentence**, outside any quoted ability: the
+        # duration and condition checks below are about *this* grant, and a
+        # later sentence of the same printed line is another ability.
+        # "Equipped creature gets +1/+1. **As long as it's legendary**, it
+        # gets an additional +2/+2." (Tenza, Godo's Maul.) Asked of the whole
+        # line, the second sentence's condition declined the first's flat
+        # +1/+1 — and the second is its own conditional static
+        # (``line_rewrites.expand_attached_condition_paragraph_lines``).
+        own_tail = tail.split('"', 1)[0].split(".", 1)[0]
+        own_prefix = line[:match.start()].rsplit(".", 1)[-1]
         # The duration, wherever in the tail it is printed. `_STATIC_PT_GRANT`'s
         # own lookahead and this check both used to require it immediately after
         # the numbers, so "gets +4/+0 **and gains trample** until end of turn"
@@ -163,7 +173,7 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # belongs to the ability the host is granted, and read as this grant's
         # own it made the Aura's -1/-1 vanish — the card reported supported,
         # the host kept its printed size, and a 1/1 it enchanted lived.
-        if "until end of turn" in tail.split('"', 1)[0]:
+        if "until end of turn" in own_tail:
             continue
         # "…gets +2/+2 **as long as an opponent controls a black permanent**"
         # (Ice Age's five Scarabs), and "for as long as this artifact remains
@@ -184,9 +194,7 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # ``static_lines._parse_conditional_grant_line``) would have made each
         # a +1/+1 from here *on top of* the conditional one. Two readers of one
         # clause again, and a word between them again.
-        if re.search(
-            r"\bas long as\b", (line[:match.start()] + tail).split('"', 1)[0]
-        ):
+        if re.search(r"\bas long as\b", own_prefix.split('"', 1)[0] + " " + own_tail):
             continue
         # "…gets +3/+3 **unless it shares a color with the most common color**
         # …" (Heroic Defiance). "As long as" with the polarity printed the

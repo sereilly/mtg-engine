@@ -260,6 +260,39 @@ class LordBuffsMixin:
             word = getattr(source_perm, "metadata", {}).get("chosen_creature_type")
             if not word or not target_perm.has_type(str(word)):
                 return False
+        # "Creatures that share a color with equipped creature get +1/+1." /
+        # "…a creature type with equipped creature…" (Konda's Banner.) A
+        # relation to the permanent *source_perm* is attached to (CR 301.5f),
+        # asked through the layers on both ends: colours by layer 5 (CR 105.2,
+        # an intersection — a colourless host shares nothing), creature types
+        # by layer 4 (CR 205.3m). The host shares with itself when it has one
+        # (the card's 2004-12-01 rulings). Attached to nothing, the anthem
+        # reaches nothing.
+        if (
+            filt.shares_color_with_attached_host
+            or filt.shares_creature_type_with_attached_host
+        ):
+            host = (
+                None if isinstance(source_perm, GraveyardSource)
+                else attached_host(self, source_perm, last_known=False)
+            )
+            if host is None:
+                return False
+            if filt.shares_color_with_attached_host:
+                from ..object_colors import share_a_color
+
+                if not share_a_color(
+                    self._effective_colors(host), self._effective_colors(target_perm)
+                ):
+                    return False
+            if filt.shares_creature_type_with_attached_host:
+                from ..object_creature_types import creature_types
+
+                if not (
+                    set(creature_types(self, host))
+                    & set(creature_types(self, target_perm))
+                ):
+                    return False
         # "…as long as **that player** controls three or fewer lands." (Sheltering
         # Prayers.) A condition whose pronoun is the permanent being reached, so
         # it is part of "does this lord reach this permanent?" — asked here, once,

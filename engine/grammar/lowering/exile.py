@@ -48,7 +48,7 @@ from ._sweeps import lower_exile_sweep
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload,
     _describe_several_targets, _describe_targets, _filter_payload,
-    _names_several_targets, _restrictions_beyond,
+    _is_enchanted, _names_several_targets, _restrictions_beyond,
 )
 
 
@@ -810,6 +810,24 @@ def _lower_exile(
         return (_lower_exile_card_from_hand(node, subject),)
     if _is_chosen_permanent_exile(subject):
         return _lower_chosen_permanent_exile(node, subject)
+    # "When Oathkeeper is put into a graveyard from the battlefield, **exile
+    # equipped creature**." (Oathkeeper, Takeno's Daisho.) The attachment's
+    # own host, which CR 301.5a / 303.4b name rather than choose: no target,
+    # no picker — the exile twin of ``destroy_attached_permanent`` and
+    # ``return_attached_permanent_to_hand``, read by its own handler for
+    # their reason (what it has to *find* is the source's host, last known
+    # when the source has just left, CR 603.10a). The card types restate the
+    # attachment's own clause and are honoured; any other narrowing refuses.
+    if _is_enchanted(subject):
+        assert isinstance(subject, ast.TargetSpec)
+        leftovers = _restrictions_beyond(
+            subject.filter, frozenset({"is_enchanted", "card_types"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the attached exile does not honour {leftovers[0]!r}", node=node
+            )
+        return (OracleInstruction("exile_attached_permanent", "", {}),)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"

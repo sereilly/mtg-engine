@@ -485,6 +485,7 @@ TRIGGERED_LABELS: dict[str, str] = {
     "add_named_counter_to_target": "triggered_counter",
     "prevent_damage_to_target_until_eot": "triggered_prevention",
     "exile_target_permanent": "triggered_exile",
+    "exile_attached_permanent": "triggered_exile",
     "exile_bound_card_from_graveyard": "triggered_exile",
     "deny_regeneration_to_block_pair": "spell_pattern",
     # Icatian Skirmishers. The activated twin above is `activated_pump`,

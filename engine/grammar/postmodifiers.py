@@ -639,6 +639,22 @@ def _parse_postmodifiers(
             ) or stream.accept_phrase("shares", "a", "color", "with", "it"):
                 d.shares_color_with_it = True
                 continue
+            # "Creatures **that share a color with equipped creature** get
+            # +1/+1." (Konda's Banner.) The same relation with its far end
+            # printed — the permanent this one is attached to (CR 301.5f's
+            # "equipped", 303.4's "enchanted") — so its own field, which only a
+            # matcher holding the source can answer.
+            elif (
+                stream.at_word("share", "shares")
+                and stream.peek_word(1) == "a"
+                and stream.peek_word(2) == "color"
+                and stream.peek_word(3) == "with"
+                and stream.peek_word(4) in ("equipped", "enchanted")
+                and stream.peek_word(5) == "creature"
+            ):
+                stream.advance(6)
+                d.shares_color_with_attached_host = True
+                continue
             # "…target permanent another player controls **that shares a
             # card type with it**" (Confusion in the Ranks). CR 205.2a's
             # relation to the object the pronoun names, the colour arm above
@@ -671,6 +687,14 @@ def _parse_postmodifiers(
                     stream.advance()
                 if stream.accept_word("it"):
                     d.shares_creature_type_with = "it"
+                    continue
+                # "…that share a creature type with **equipped creature**"
+                # (Konda's Banner): the far end ``subject_verb`` gives the
+                # Crowns' "it" once it rebinds the pronoun, printed outright.
+                if stream.accept_phrase("equipped", "creature") or stream.accept_phrase(
+                    "enchanted", "creature"
+                ):
+                    d.shares_creature_type_with = "attached_host"
                     continue
                 if stream.accept_phrase("the", "sacrificed", "creature"):
                     d.shares_creature_type_with = "sacrificed_for_cost"

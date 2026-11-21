@@ -216,6 +216,10 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         # set, so a lowering that does not lift it out and resolve the pronoun
         # refuses the phrase rather than sweeping without the narrowing.
         payload["shares_color_with_it"] = True
+    if self.shares_color_with_attached_host:
+        # Emitted for the reason directly above: outside every testable set;
+        # the anthem lowering carries it to the one matcher holding a source.
+        payload["shares_color_with_attached_host"] = True
     if self.shares_card_type_with_it:
         # Emitted for the reason directly above: outside every testable set.
         payload["shares_card_type_with_it"] = True

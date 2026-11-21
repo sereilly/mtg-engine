@@ -324,6 +324,11 @@ def expand_ability_lines(
     # grant (Tribal Golem). Its own statement for cycling's reason; it reads
     # only a line no other rewrite produces or consumes.
     oracle_text = expand_distributed_condition_lines(oracle_text)
+    # An attached-permanent paragraph's "As long as …, it …" sentences written
+    # out one line each about the attached permanent (Tenza, Godo's Maul).
+    # Its own statement for cycling's reason; it reads only a line no other
+    # rewrite produces or consumes.
+    oracle_text = expand_attached_condition_paragraph_lines(oracle_text)
     return expand_same_is_true_lines(
         expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
             expand_buyback_lines(
@@ -530,6 +535,54 @@ def expand_distributed_condition_lines(oracle_text: str) -> str:
             continue
         head = f"{match.group('subject')} {match.group('verb')}"
         out.extend(f"{head} {pair}." for pair in pairs)
+    return "\n".join(out)
+
+
+#: "**Equipped creature** gets +1/+1. As long as it's legendary, **it** gets an
+#: additional +2/+2. As long as it's red, **it** has trample." (Tenza, Godo's
+#: Maul.) A paragraph about the attached permanent whose later sentences name
+#: it by pronoun, each a conditional static ability of its own (CR 611.3a) —
+#: so the rewrite writes each one out as the sentence the grammar already reads
+#: about the attached permanent, condition last: "Equipped creature gets +2/+2
+#: as long as it's legendary." ("an additional" is the bonus beside the first
+#: sentence's, which a second static stacking in layer 7c already is.)
+#: :func:`expand_same_is_true_lines`' move: every reader downstream sees
+#: ordinary attached conditional statics, and none of them learns the pronoun.
+_ATTACHED_PARAGRAPH_LINE = re.compile(
+    r"^(?P<subject>(?:Enchanted|Equipped) [a-z]+) (?P<lead>(?:gets|has) [^.]+\.)"
+    r"(?P<rest>(?: As long as [^,.]+, it (?:gets an additional|gets|has) [^.]+\.)+)$"
+)
+_ATTACHED_PARAGRAPH_SENTENCE = re.compile(
+    r" As long as (?P<condition>[^,.]+), it "
+    r"(?P<verb>gets an additional|gets|has) (?P<effect>[^.]+)\."
+)
+
+
+def expand_attached_condition_paragraph_lines(oracle_text: str) -> str:
+    """*oracle_text* with an attached-permanent paragraph's "As long as …, it
+    …" sentences written out, one "<subject> <verb> <effect> as long as
+    <condition>." line each, behind the paragraph's own first sentence.
+
+    Text without that shape is returned unchanged; the full-consumption
+    invariant is the rest of the safety — a written-out sentence no reader
+    claims leaves the card unsupported naming it.
+    """
+    if not oracle_text or "As long as" not in oracle_text:
+        return oracle_text
+    out: list[str] = []
+    for line in oracle_text.splitlines():
+        match = _ATTACHED_PARAGRAPH_LINE.match(line.strip())
+        if match is None:
+            out.append(line)
+            continue
+        subject = match.group("subject")
+        out.append(f"{subject} {match.group('lead')}")
+        for sentence in _ATTACHED_PARAGRAPH_SENTENCE.finditer(match.group("rest")):
+            verb = "has" if sentence.group("verb") == "has" else "gets"
+            out.append(
+                f"{subject} {verb} {sentence.group('effect')} as long as "
+                f"{sentence.group('condition')}."
+            )
     return "\n".join(out)
 
 
