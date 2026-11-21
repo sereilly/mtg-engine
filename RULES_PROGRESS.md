@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**452 / 663 tracked rules covered (68%)** — 3806 tests, 0 unannotated.
+**453 / 664 tracked rules covered (68%)** — 3813 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 20/20 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 43/43 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 44/44 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -672,7 +672,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
 - [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(362 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(32 tests, subrules a)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(33 tests, subrules ac)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
 - [x] **601.6** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -920,6 +920,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.45** Bushido *(10 tests, subrules ab)*
 - [x] **702.46** Soulshift *(7 tests, subrules ab)*
 - [x] **702.47** Splice *(24 tests, subrules abcde)*
+- [x] **702.48** Offering *(8 tests, subrules abc)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 

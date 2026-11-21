@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | CHK | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| BOK *(measured)* | 165 | 288 | 70.5% | 65.6% | 49.7% | 113 |
+| BOK *(measured)* | 165 | 288 | 70.8% | 66.7% | 50.7% | 116 |
 | **All (shipped)** | **9904** | **14799** | **89.5%** | **89.0%** | **62.0%** | **7785** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -72,7 +72,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1048 | 532 | expected a subject |  |
+| 1047 | 531 | expected a subject |  |
 | 206 | 107 | unrecognized effect verb |  |
 | 158 | 85 | unconsumed text |  |
 | 90 | 70 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -3437,6 +3437,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
   - `{3}, {T}: Target player discards a card. Activate only during your turn.`
+- **Disrupting Shoal**
+  - `Counter target spell if its mana value is X.`
 - **Disruptive Pitmage**
   - `{T}: Counter target spell unless its controller pays {1}.`
 - **Disruptive Student**
@@ -9373,6 +9375,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever Patron of the Akki attacks, creatures you control get +2/+0 until end of turn.`
 - **Patron of the Kitsune**
   - `Whenever a creature attacks, you may gain 1 life.`
+- **Patron of the Moon**
+  - `{1}: Put up to two land cards from your hand onto the battlefield tapped.`
+- **Patron of the Nezumi**
+  - `Whenever a permanent is put into an opponent's graveyard, that player loses 1 life.`
 - **Patron of the Orochi**
   - `{T}: Untap all Forests and all green creatures. Activate only once each turn.`
 - **Patron of the Wild**
