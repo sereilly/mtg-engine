@@ -762,6 +762,12 @@ def evaluate_state_condition(
             from ._amounts import count_from_payload
 
             bound = count_from_payload(game, context, counted)
+        if payload.get("count_is_x"):
+            # "Counter target spell if its mana value is **X**." (Disrupting
+            # Shoal.) The resolving spell's announced X (CR 107.3a) — the
+            # number its pitch was paid at — read as every X amount is; an
+            # unannounced one is the 0 it reads as everywhere else.
+            bound = max(0, int(context.x_value or 0))
         return _comparison_holds(
             {"op": payload.get("op", "eq"), "value": bound}, value,
         )
