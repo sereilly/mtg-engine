@@ -225,7 +225,8 @@ first combat and in response to another seat's object
   never the log or a process-wide counter, and a seeded run in one process
   plays as in a fresh one (`tests/ai/test_kg4_determinism_rehearsal_seed.py`,
   `test_kg4_determinism_process_state.py`). An opponent's mode choice (CR
-  700.2e), a copy offer's reply and a copy of an exiled card cast during a
+  700.2e), a copy offer's reply and a copy of an exiled card — or the card
+  itself, out of its owner's exile (Shell of the Last Kappa) — cast during a
   resolution (Isochron Scepter, `ai_policy.choose_copy_cast`) are the prompts
   rehearsed inside a rehearsal, one level down (`ai_prompt_picks._one_level_deeper`), so a
   caster's rehearsal prices the answer it will get.

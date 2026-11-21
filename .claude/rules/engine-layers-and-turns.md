@@ -9,6 +9,7 @@ paths:
   - "engine/printed_characteristics.py"
   - "engine/copies.py"
   - "engine/text_changes.py"
+  - "engine/global_text_changes.py"
   - "engine/keywords.py"
   - "engine/color_changes.py"
   - "engine/fast_paths.py"
@@ -73,10 +74,17 @@ and you can open this file directly whenever its subject is yours.
   `tests/engine/test_layer_reads.py` guards. **"What does it say?" is `Permanent.effective_card`** (layer 1 copy,
   layer 3 text change, granted abilities); `perm.card.oracle_text` and
   `perm.card.keywords` are the card as printed — except a face-down object's,
-  whose `card` is the blank 2/2 (CR 708.2) — and a keyword also wants
+  whose `card` is the blank 2/2 (CR 708.2), and a flipped permanent's, whose
+  `card` is its bottom half (CR 710.1b, `flip_cards.flipped_face`) — and a keyword also wants
   `_has_keyword` (layer 6). A spell's is `text_changes.spell_text_card(item)`
   (CR 612.1 on a stack object; `item.card` is the printed card that moves,
-  held by `tests/engine/test_kg3_textspell_spell_text_reads.py`).
+  held by `tests/engine/test_kg3_textspell_spell_text_reads.py`). A text
+  change printed as a static ability of a permanent ("all instances of color
+  words in the text of spells and permanents", Swirl the Mists) is
+  `engine/global_text_changes.py`: one record per source on every permanent
+  and every spell, with the source's timestamp (CR 613.7a), kept in step with
+  the board by one writer at the board-wide pass and at the stack push, so a
+  source that leaves takes its records with it.
   - Folds are memoised by what the card *is* (`copies.card_identity`), **never by
     `id()`** — CPython reuses a freed object's address.
     `tests/regressions/test_derived_card_memo_identity.py` fails a module-level
@@ -169,7 +177,9 @@ and you can open this file directly whenever its subject is yours.
   Equipment that is a creature may activate equip, which then does nothing,
   CR 301.5c; a creature whose own text says it "can't be equipped",
   `equipment.self_cant_be_equipped_line`, is a legal target the Equipment
-  then does not move onto, per Goblin Brawler's 2004-12-01 ruling). An
+  then does not move onto, per Goblin Brawler's 2004-12-01 ruling; so is one
+  outside the Equipment's own "can be attached only to …", CR 301.5b,
+  `attach_only_to_refusal`, read off its effective text: Konda's Banner). An
   Equipment is supported only if its equip ability compiles
   and every effect line is claimed.
 - Text-keyed derivation tables (parameters are payload, and the support gate
@@ -195,7 +205,15 @@ and you can open this file directly whenever its subject is yours.
   each requirements module the requirement list and the maximisation that
   judges a declaration and the AI's proposal — and `block_triggers.py` beside
   them, and the combat damage step has `combat_damage_assignment.py` (CR
-  510.1) beside it. The cleanup step gives priority when a state-based action
+  510.1) beside it. A blocker's untapped requirement (CR 509.1a) is
+  `Game._tapped_out_of_blocking` (`block_legality`; Masako the Humorless's
+  waiver is `engine/tapped_blockers.py`), never `blocker.tapped` — every gate,
+  `legality.legal_blocker_assignments`, the AI and the wire's
+  `can_block_while_tapped` ask it. A seat's one-shot skip ("you skip your next
+  untap step": Avizoa, Yosei, Shisato) is `Game.skip_step_counts`, spent by
+  the step itself (`_consume_step_skip`) and read unspent by
+  `step_skip_owed`, so a decision inside a step that will not happen (Winter
+  Orb's untap choice) is never offered. The cleanup step gives priority when a state-based action
   or a trigger needs it (CR 514.3a: active player first, an offer round on the
   empty stack, then another cleanup step, bounded by `_MAX_CLEANUP_ROUNDS`) —
   at a table a priority driver plays; a person is not yet asked there

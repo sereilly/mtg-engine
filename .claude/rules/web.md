@@ -81,7 +81,9 @@ default (`mana_combination.triggered_split`);
 decides; null for an ability that adds no mana), `ability_text_change` and a
 cast's `text_change` (the words a text change announces), `x_payable` /
 `ability_x_payable` (`{pool, board, colors}`: the payable X as the cast or
-activation path prices it), `cast_mana`, a card's `cost_before_modifiers`
+activation path prices it), a spec's `x_is_target_mana_value` with each
+target's `mana_value` (an X the target's mana value must equal: Hearth Kami,
+Gorilla Shaman, `offers.mark_mana_value_x`), `cast_mana`, a card's `cost_before_modifiers`
 beside its charged price, `ability_prices` (an ability's charged price where
 a modifier moved it, by ability index) and `ability_cost_alternatives` (a
 Shard's two printed costs; the activate action sends `alternative_cost_index`),
@@ -102,15 +104,22 @@ offer, `cast_alternative_costs._same_price`), a castable spell's
 combination (`count`, or `count_by_cost` per permanent that could pay its
 cost — `mana_combination.cast_split_offer`), the active seat's
 `combat.attack_requirements` and a defending seat's `combat.block_requirements`
-(each with `most_obeyable`); and while a permanent's "as it enters" choice is
+(each with `most_obeyable`), a permanent's `can_block_while_tapped`, a hand
+card's `splice_offers` (each card that may be spliced onto it, its cost and
+the `target_spec` of the text it would add — `offers.splice_offers`; the cast
+and the `payment_plan` preview send `splice_cards`, and a stack item lists
+its `spliced` texts with their targets); and while a permanent's "as it enters" choice is
 owed, that permanent listed in its controller's `battlefield` as arriving
 (`player_view._serialize_arriving`, `entering: true`; the engine has it in
 no zone until the answer, CR 614.12a), as are an open entry event's puts —
 to their controller alone (CR 101.4a). A permanent's `name` is its name (CR
-707.2: a copy's is what it copies) and `printed_name` the physical card's (a
-face-down one's blank), which the client matches a card across zones and
+707.2: a copy's is what it copies; a flipped flip card's, its bottom half's)
+and `printed_name` the physical card's (a face-down one's blank, a flip
+card's top half), which the client matches a card across zones and
 groups a pile by; a test reading the payload looks a copy up by
-`printed_name`. Every request body the client builds
+`printed_name`. A flip card carries `flip` (`{top, bottom}`, both halves for
+the card viewer, `serialization.flip_halves`) in every zone, and a permanent
+`flipped` (CR 710.3). Every request body the client builds
 is held to its route: presence (`tests/ui/test_kg_client_request_schemas.py`),
 each value's type (`test_kg3_wire_request_shapes.py`), and what an armed
 prompt's handler takes (`test_kg3_wire_prompt_state_bodies.py`). **Every

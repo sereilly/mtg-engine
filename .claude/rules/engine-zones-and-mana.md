@@ -5,6 +5,7 @@ paths:
   - "engine/mixins/stack/pool_payment.py"
   - "engine/entry_awaiting.py"
   - "engine/faces.py"
+  - "engine/flip_cards.py"
   - "engine/face_down.py"
   - "engine/linked_exile.py"
   - "engine/mana_*.py"
@@ -141,6 +142,13 @@ and you can open this file directly whenever its subject is yours.
   names both for the length of a payment (`payment_wants_in_force`,
   `payment_prices_in_force`). A cost is a symbol dict everywhere
   (`generic_cost(n)`).
+- **Mana with a rider** (CR 106.6's second kind: Boseiju, Who Shelters All;
+  Hall of the Bandit Lord) is `engine/mana_riders.py`: its units travel in a
+  restricted bucket whose row admits every payment
+  (`restricted_mana.RIDER_KEYS`), the cast measures which rider buckets
+  `_pay_cast_mana` drew on, and the rider is written where the cast's other
+  stamps are (`StackItem.uncounterable_by`; haste on the permanent, with no
+  duration). Spent on anything else, it is plain mana.
 - **What a mana ability is** is one predicate, `engine/mana_abilities.is_mana_ability` (CR 605.1a's
   four criteria, including "doesn't move a card to or from a library"), asked
   **fail-closed**: a zone-moving step beside an add-mana step is presumed to
@@ -148,6 +156,11 @@ and you can open this file directly whenever its subject is yours.
   (`tests/engine/test_mana_ability_library_criterion.py`).
 - **"Tapped for mana" is one event** (CR 106.12), `Game._land_tapped_for_mana`,
   on all three roads (explicit tap, a cost an effect collects, an activation).
+  A trigger on it that requires a target is no mana ability (CR 605.5a,
+  `mana_abilities.requires_a_target`: Forbidden Orchard) and is enqueued for
+  the stack — inside a cast's payment, deferred until the spell is on it
+  (`deferring_triggers`); the rest resolve at the tap (ROADMAP, "Tapped for
+  mana", has why).
   **A tap is the activation of one mana ability, and asking for a symbol picks
   it** (`board_payment.tap_alone_ability_for`); what a land can make is read per
   ability (`tap_alone_symbols`), never off the printed summary. **Two
@@ -168,13 +181,22 @@ and you can open this file directly whenever its subject is yours.
   other permanents (`nonland_sources=True` — what a player is asked; the
   castable highlight passes it), or from the pool alone (`pool_only=True`).
 - `engine/faces.py` — multi-face cards (CR 709). **A face is a card**: each half
-  is derived once as its own `CardDefinition` carrying `face_of`, and that half
-  compiles and goes on the stack; `whole_card` is CR 709.4 at the zone seams —
-  and CR 708.9 for a face-down object, whose real card it returns. The
-  whole card's program has **no instructions**, so a guard whose population is
+  of a split card is derived once as its own `CardDefinition` carrying
+  `face_of`, and that half compiles and goes on the stack; `whole_card` is CR
+  709.4 at the zone seams — and CR 708.9 for a face-down object, whose real
+  card it returns, and CR 710.4 for a flipped permanent. A split card's
+  whole-card program has **no instructions**, so a guard whose population is
   "each card, compiled" passes over every half without examining one — blind,
-  not red. Text questions iterate `faces.compilation_units(pool)` /
-  `oracle.compiled_units`; card questions keep the card. Held by
+  not red. **A flip card (CR 710, `engine/flip_cards.py`) is the other
+  shape: the loaded card *is* its top half** in every zone (CR 710.2), both
+  halves on `faces`, and a flipped permanent's `card` is its bottom half
+  (`flipped_face`, carrying `face_of`; morph's substitution, the status a
+  `FLIPPED` mark beside it, forgotten on re-entry, CR 110.5b). The bottom half
+  is never a spell, so the cast path's `castable_faces` never yields it, and a
+  flip card handed whole is read as its top half — the same guard blind to
+  the other half. Text questions iterate `faces.compilation_units(pool)` /
+  `oracle.compiled_units` (`text_faces`: both halves of either layout); card
+  questions keep the card. Held by
   `tests/engine/test_face_blind_guards.py`.
 - `engine/face_down.py` — morph (CR 702.37) and face-down spells and
   permanents (CR 708). **While hidden, a face-down `StackItem.card` /

@@ -15,6 +15,8 @@ paths:
   - "engine/derived_static_claims.py"
   - "engine/amplify.py"
   - "engine/storm.py"
+  - "engine/bushido.py"
+  - "engine/soulshift.py"
   - "data/vocabulary/**"
   - "scripts/parse_coverage*.py"
   - "scripts/grammar_coverage.py"
@@ -87,11 +89,19 @@ family independence and flat re-export.
   A keyword admitted by the reader that implements it is not in the set
   when listing it would admit more than that reader does: one that carries an
   argument, because listing it would admit the bare word — morph, madness,
-  and amplify (CR 702.38, `NUMERIC_ARGUMENT_KEYWORDS`, `engine/amplify.py`'s
-  `entry_reveal` as the creature enters) — and storm, which takes none but
+  amplify (CR 702.38, `NUMERIC_ARGUMENT_KEYWORDS`, `engine/amplify.py`'s
+  `entry_reveal` as the creature enters) and splice (CR 702.47, a quality
+  and a cost: `engine/splice.py`'s `splice_part_offer`, which
+  `keyword_lines._argument_keyword_ability` asks, and `unread_splice_line`
+  its support gate) — and storm, which takes none but
   is built for instants and sorceries only (`engine/storm.py`'s `is_storm`;
   `unread_storm_line` refuses it on a permanent, whose copy would become a
-  token, CR 707.10f).
+  token, CR 707.10f). **An argument keyword a card
+  grants or counts is listed anyway** — rampage and bushido (CR 702.45,
+  `engine/bushido.py`): the grant gate (`lowering/_common._check_grantable`)
+  reads the set, and `NUMERIC_ARGUMENT_KEYWORDS` makes a grant with no
+  number refuse; the price is that a bare printed "Bushido" line would be
+  admitted with no trigger, which no card prints.
 - **Rewrite keywords** are expanded by `line_rewrites.expand_ability_lines` before any
   line is classified, so the word is not in `IMPLEMENTED_KEYWORDS`: equip
   (CR 702.6a), buyback (702.27a), kicker (702.33a), flashback (702.34),
@@ -103,10 +113,12 @@ family independence and flat re-export.
   mode), modular (702.43a, `engine/modular.py` — "enters with N +1/+1
   counters" and the dies trigger whose count is the departure look-back;
   `has_printed_modular` answers "a creature with modular"; Modular—Sunburst,
-  702.44c, is the same pair counting colours spent) and sunburst (702.44a,
+  702.44c, is the same pair counting colours spent), sunburst (702.44a,
   `engine/sunburst.py` — CR 702.44a's own text on one line, read at entry off
   the colours the cast recorded spending, `StackItem.choices`'
-  `mana_spent_to_cast`). Every
+  `mana_spent_to_cast`) and soulshift (702.46a, `engine/soulshift.py` — the
+  rule's own dies trigger returning a Spirit card, Gravedigger's return with
+  two narrowings). Every
   reader of a card's lines (`legality.py`, `parse_coverage.py`,
   `hook_reliance.py`) must start from that function or it reads a different card.
 - **Ability words** (CR 207.2c) are dropped by `oracle_types.strip_ability_word`

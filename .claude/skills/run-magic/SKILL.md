@@ -232,7 +232,7 @@ if ($xy) { $x, $y = $xy.Split(' '); & $pw mousemove $x $y; & $pw mousedown; & $p
 |---|---|
 | `settled` | false while a card, the stack or a camera is still easing — a point read then can move; read again |
 | `mana_fan_open` | the land mana fan is modal and takes every press |
-| `permanents[]` | `id`, `seat`, `index` (battlefield slot), `name`, `printed_name`, `tapped`, `attached_to_id`, `group` (`{kind: "aura"\|"pile", position, size}` — position 0 is the host / bottom), `rect` `{x,y,w,h}`, `click` `{x,y}` or null, `share` (how much of the card a click can reach: ~0.18 for a tucked attachment) |
+| `permanents[]` | `id`, `seat`, `index` (battlefield slot), `name`, `printed_name`, `flipped` (a flip card turned to its bottom half, CR 710), `tapped`, `attached_to_id`, `group` (`{kind: "aura"\|"pile", position, size}` — position 0 is the host / bottom), `rect` `{x,y,w,h}`, `click` `{x,y}` or null, `share` (how much of the card a click can reach: ~0.18 for a tucked attachment) |
 | `stack[]`, `zones[]`, `emblems[]` | the floating stack cascade by index, the zone piles by seat and kind, the viewer's emblems — each with `rect`, `click`, `share` |
 | `hand[]` | the viewer's hand: `index`, `name`, `selector` (`#selfHand .hand-fan-slot[data-hand-index="N"]`), `rect`, `click`, `share` — fanned cards overlap, so click the point, not the selector's centre |
 
