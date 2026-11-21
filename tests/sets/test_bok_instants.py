@@ -248,6 +248,50 @@ def test_w1g5_aura_barbs_each_enchantment_deals_the_damage(set_pool, interactive
     assert "Holy Strength deals 2 damage to P0" not in game.log
     assert giant.damage_marked == 2 and game.is_on_battlefield(giant), game.log
 
+@_w1g5_pytest.mark.parametrize("interactive", _W1G5_SEATS)
+def test_w1g5_shining_shoal_moves_x_points_of_the_chosen_source(set_pool, interactive):
+    """"The next X damage that a source of your choice would deal to you
+    and/or creatures you control this turn is dealt to any target instead."
+    Cast for X=3 naming the opponent's Pestilence and aimed at the opponent:
+    of Pestilence's sweep, the chunks to the caster, the Bears and the Hill
+    Giant — three points — are dealt to the opponent instead ("The redirection
+    protects both you and your creatures from the source", ruling
+    2005-02-01); the opponent's own Craw Wurm is not protected. The pool is
+    spent, so the next sweep lands everywhere. Another source's damage is
+    never moved."""
+    bok, lea, ed2 = set_pool("BOK"), set_pool("LEA"), set_pool("2ED")
+    game = _w1g5_table(
+        set_pool, interactive, hand=[bok["Shining Shoal"]],
+        opponent_hand=[lea["Lightning Bolt"]],
+    )
+    bears = _w1g5_put(game, lea["Grizzly Bears"])
+    giant = _w1g5_put(game, lea["Hill Giant"])
+    pestilence = _w1g5_put(game, ed2["Pestilence"], seat=1)
+    wurm = _w1g5_put(game, lea["Craw Wurm"], seat=1)
+    _w1g5_cast(
+        game, 0, "Shining Shoal", x_value=3, target_player_index=1,
+        chosen_source_seat=1,
+        chosen_source_permanent_index=game.battlefield_index_of(pestilence),
+    )
+    _w1g5_cast(game, 1, "Lightning Bolt", target_player_index=0)
+    assert game.players[0].life == 17, game.log
+
+    def sweep():
+        result = game.activate_permanent_ability(
+            1, pestilence.card.name,
+            permanent_index=game.battlefield_index_of(pestilence),
+        )
+        assert result.supported
+        _w1g5_settle(game)
+
+    sweep()
+    assert [p.life for p in game.players] == [17, 16], game.log
+    assert (bears.damage_marked, giant.damage_marked, wurm.damage_marked) == (0, 0, 1)
+    sweep()
+    assert [p.life for p in game.players] == [16, 15], game.log
+    assert (bears.damage_marked, giant.damage_marked, wurm.damage_marked) == (1, 1, 2)
+
+
 # ==== end w1g5 ======================================================
 
 

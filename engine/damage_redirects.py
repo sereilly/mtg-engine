@@ -188,6 +188,18 @@ class DamageRedirect:
     #: the same source until the dealing finishes. ``None`` for every other
     #: record.
     occasion: SharedNextTime | None = None
+    #: "…would deal to **you and/or creatures you control** …" (Shining
+    #: Shoal): a class-scoped record (``recipients``) that also watches the
+    #: seat it hangs on — one point pool for the player and the class
+    #: together ("The redirection protects both you and your creatures from
+    #: the source", ruling 2005-02-01). Found for the seat among its own
+    #: records, and for a permanent through :func:`class_redirects`.
+    guards_seat: bool = False
+    #: CR 109.5's "you" inside ``recipients`` ("creatures **you** control"),
+    #: captured as the record is armed: the seat that controls the effect,
+    #: which a class asked of a damaged permanent needs as its observer.
+    #: None for every record whose phrase names no seat.
+    filter_seat: int | None = None
 
     @property
     def spent(self) -> bool:
@@ -472,7 +484,11 @@ def class_redirects(game, recipient) -> list[DamageRedirect]:
         for record in redirects_on(player):
             if record.recipients is None:
                 continue
-            if subject_matches(game, recipient, record.recipients):
+            # "creatures **you** control" (Shining Shoal) is the arming seat's
+            # "you"; a phrase naming no seat ignores the observer.
+            if subject_matches(
+                game, recipient, record.recipients, observer=record.filter_seat,
+            ):
                 found.append(record)
     return found
 
@@ -714,7 +730,9 @@ def applicable_redirect(
     """
     own = [
         r for r in redirects_on(recipient)
-        if r.recipients is None and not r.any_recipient
+        # A class record that also guards its own seat (Shining Shoal's "you
+        # and/or creatures you control") is the seat's own record too.
+        if (r.recipients is None or r.guards_seat) and not r.any_recipient
     ]
     for redirect in (
         # The derived records come after the armed ones for the reason the

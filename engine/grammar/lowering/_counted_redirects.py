@@ -378,3 +378,97 @@ def _lower_next_damage_redirect_from_source(
             "redirect_next_damage_from_source_until_eot", "", payload
         ),
     )
+
+
+def _lower_chosen_source_point_pool(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"The next X damage that a source of your choice would deal to you
+    and/or creatures you control this turn is dealt to any target instead."
+    (Shining Shoal.)
+
+    CR 615.7's point pool with CR 614.9's verb, keyed on CR 609.7a's chosen
+    source, over the caster **and** a described class of permanents — one
+    pool for all of them: "The redirection protects both you and your
+    creatures from the source" (ruling 2005-02-01). So it is Nova Pentacle's
+    ``redirect_damage_from_chosen_source_until_eot`` (the picker asks for the
+    taker as a target and for the source beside it, General's Regalia's two
+    announcements) with ``amount`` and the class as payload; the handler arms
+    one record on the caster that watches the caster and every permanent the
+    class describes when the damage would be dealt.
+
+    Refused, each a way the sentence could mean more than it says: a first
+    protected end other than "you"; a class ``subject_matches`` cannot test
+    (it is asked of every damaged permanent); a taker other than one
+    announced target; any window but this turn; and the shapes the other
+    redirects read (a named source, a combat scope, an opponent's pick, an
+    offer, a next-time bound).
+    """
+    if (
+        node.dealt_by is not None
+        or node.one_shot
+        or node.chooser is not None
+        or node.combat_only
+        or node.optional
+        or node.spell_types
+        or node.to_damage_source
+    ):
+        raise LoweringError(
+            "a chosen-source point pool names no other source, bound, chooser, "
+            "combat scope or offer",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if not _is_you(node.to):
+        raise LoweringError(
+            "a chosen-source point pool protects its controller first", node=node
+        )
+    taker = node.new_recipient
+    if (
+        not isinstance(taker, ast.TargetSpec)
+        or taker.quantifier not in ("target", "any_target")
+        or not taker.targeted
+        or _names_several_targets(taker)
+    ):
+        raise LoweringError(
+            "a chosen-source point pool moves the damage onto one announced "
+            "target",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "to_self": True,
+        "amount": _amount_payload(node.amount),
+        "new_recipient": "target",
+    }
+    if node.also_to is not None:
+        also = node.also_to
+        if not (
+            isinstance(also, ast.TargetSpec)
+            and not also.targeted
+            and also.quantifier in ("all", "each")
+        ):
+            raise LoweringError(
+                "a chosen-source point pool's second end is a described class",
+                node=node,
+            )
+        described = _filter_payload(also.filter)
+        untestable = untestable_filter_keys(described)
+        if not described or untestable:
+            raise LoweringError(
+                "a redirect cannot test the class it protects", node=node
+            )
+        payload["also_protects"] = described
+    _describe_targets(payload, taker)
+    untestable = untestable_filter_keys(
+        (payload.get("targets") or {}).get("filter") or {}
+    )
+    if untestable:
+        raise LoweringError(
+            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "redirect_damage_from_chosen_source_until_eot", "", payload
+        ),
+    )

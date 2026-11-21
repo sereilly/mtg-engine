@@ -50,7 +50,8 @@ from ._common import (_REST_OF_TURN, _describe_targets,
 # "The next **N** damage …" (Daughter of Autumn, Zhalfirin Crusader): the
 # counted half of the one production, a floor this module hands the sentence
 # down to the moment the printed quantity is a number.
-from ._counted_redirects import (_lower_next_damage_redirect,
+from ._counted_redirects import (_lower_chosen_source_point_pool,
+                                 _lower_next_damage_redirect,
                                  _lower_next_damage_redirect_from_source)
 # "The next time **this creature** / **target attacking creature** would deal
 # damage …" (Soltari Guerrillas, Shield Dancer): CR 615.8's instance named by
@@ -95,6 +96,14 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.amount is not None and node.from_chosen_source:
+        # "The next X damage that **a source of your choice** would deal to
+        # you and/or creatures you control this turn is dealt to any target
+        # instead." (Shining Shoal.) A point pool keyed on a chosen source,
+        # over the protected recipients it names — read ahead of the
+        # second-recipient guard below, which was written for the one
+        # next-time shape and asks the wrong question of this one.
+        return _lower_chosen_source_point_pool(node)
     if node.also_to is not None and not (
         node.one_shot
         and node.amount is None
