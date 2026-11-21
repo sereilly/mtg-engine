@@ -312,6 +312,16 @@ def accept_life_loss(
         amount = parse_amount(stream)
         if stream.accept_word("life"):
             player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
+            # "loses **2 life plus** 2 life for each Spirit sacrificed this
+            # way" (Devouring Greed): a constant, then the rate the per-each
+            # below multiplies. The constant is carried as ``plus`` and the
+            # second number is the amount, so every per-each reading below
+            # sees the rate it always saw.
+            plus: "ast.Amount | None" = None
+            if stream.accept_word("plus"):
+                plus = amount
+                amount = parse_amount(stream)
+                stream.expect_word("life")
             # "loses 2 life for each creature card in their graveyard"
             # (Liliana, Death Mage) — a multiplier over a count of objects,
             # recorded rather than consumed-and-dropped.
@@ -341,13 +351,25 @@ def accept_life_loss(
                 # "fungus" is a creature type the noun parser would claim.
                 per_each = _parse_per_each_counters(stream)
             if per_each is None:
+                # "…loses 2 life for each Spirit **sacrificed this way**."
+                # (Devouring Greed.) What the spell's own additional cost (or
+                # a step in front) sacrificed — the reader the gain one branch
+                # over asks for Renounce, read before the noun fallback below
+                # for that reader's reason: the fallback takes "Spirit" as a
+                # count of the battlefield and strands the participle.
+                per_each = parse_for_each_sacrificed_this_way(
+                    stream, parse_object_filter
+                )
+            if per_each is None:
                 for_each_mark = stream.mark()
                 if stream.accept_phrase("for", "each"):
                     try:
                         per_each = parse_counted_objects(stream)
                     except GrammarError:
                         stream.reset(for_each_mark)
-            return ast.LoseLife(player, amount, per_each=per_each)
+            if plus is not None and per_each is None:
+                raise stream.error("'plus' names the constant beside a per-each rate")
+            return ast.LoseLife(player, amount, per_each=per_each, plus=plus)
     except GrammarError:
         pass
     stream.reset(mark)

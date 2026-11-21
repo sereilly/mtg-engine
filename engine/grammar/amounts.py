@@ -498,6 +498,24 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     if named is not None:
         return named
 
+    # "…equal to **the total power of the sacrificed creatures**" (Soulblast):
+    # the sum of what the spell's own additional cost ate, read by the one
+    # reader the ", where X is …" trailer asks (Sword of the Ages), in either
+    # word order. Gated on its own opening words, so every other "the …"
+    # below keeps the reading it had.
+    if (
+        stream.at_word("the") and stream.peek_word(1) == "total"
+        and stream.peek_word(2) == "power"
+    ):
+        from .where_x import accept_total_power_sacrificed
+
+        total_mark = stream.mark()
+        stream.advance()
+        total = accept_total_power_sacrificed(stream)
+        if total is not None:
+            return total
+        stream.reset(total_mark)
+
     # Remembered rather than discarded, because two branches below need to know
     # whether the sentence printed a determiner at all: "**the** artifact's mana
     # value" (Viashino Heretic) arrives here with its article already eaten, and

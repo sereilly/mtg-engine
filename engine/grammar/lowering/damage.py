@@ -34,6 +34,7 @@ from ._counted_damage import (
     _lower_cost_discard_damage,
     _lower_cost_tap_damage,
     _lower_counted_damage,
+    lower_cost_sacrificed_power_damage,
     lower_ledger_damage,
     lower_difference_damage,
     lower_maximum_damage,
@@ -541,6 +542,10 @@ def _lower_damage_shape(
         return lower_ledger_damage(node)
     if isinstance(node.amount, ast.SacrificedForCost):
         return _lower_cost_sacrifice_damage(node)
+    # "…equal to **the total power of the sacrificed creatures**" (Soulblast):
+    # a sum over the same payment, beside the one-creature read above.
+    if isinstance(node.amount, ast.TotalPowerSacrificedThisWay):
+        return lower_cost_sacrificed_power_damage(node)
     # "…equal to **the tapped creature's power**" (Unerring Sling) — the same
     # shape one payment over, and beside it for that branch's reason: a
     # characteristic of what the cost acted on rather than a count of anything

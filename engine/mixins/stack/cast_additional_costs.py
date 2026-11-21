@@ -1146,10 +1146,15 @@ class AdditionalCastCostsMixin:
                     caster_index, cost, giving_up="sacrifice_all"
                 )
                 # "…all permanents you control" at once: one event (CR 603.10a).
+                # The set is recorded on the "any number" channel
+                # (``sacrificed_set_for_cost``): "…equal to the total power of
+                # the sacrificed creatures" (Soulblast) reads what this cost
+                # ate, each as it last existed (CR 608.2h).
                 with self.leaving_together():
                     for victim in victims:
                         name = victim.card.name
                         if self.sacrifice_permanent(victim) is not None:
+                            sacrificed_set.append(victim)
                             self.log.append(
                                 f"{caster.name} sacrificed {name} to cast {card.name}"
                             )

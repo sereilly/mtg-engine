@@ -277,6 +277,66 @@ def lower_pump_per_sacrificed(
     return (OracleInstruction("pump_target_creature_until_eot", "", payload),)
 
 
+def fused_base_and_sacrifice_rate_pump(
+    steps: tuple, produced: frozenset[str], event: str | None = None,
+) -> "tuple[OracleInstruction, ...] | None":
+    """"Target creature gets +3/+0 until end of turn. For each Spirit
+    sacrificed this way, that creature gets an additional +3/+0 until end of
+    turn." (Devouring Rage.) None for every other pair of steps.
+
+    Two pumps on **one** chosen creature — the second is the pronoun rider's
+    copy of the first's subject (``second_pumps._parse_pronoun_pump_rider``),
+    so CR 601.2c's one choice — where the second is a rate over what the
+    spell's cost sacrificed (:func:`lower_pump_per_sacrificed`). Lowered as
+    one instruction, the rate's, counting one more than was sacrificed (the
+    count spec's ``offset``): the base pump *is* one more repetition of the
+    same +P/+T. Fused rather than lowered as two steps because two targeted
+    pumps in a sequence are two targets to every reader
+    (``fusions._fused_two_target_pump`` refuses the pair for that reason).
+
+    Refused, rather than admitted for less than the card says, when the two
+    halves differ in size or duration (the offset would be the wrong number)
+    or the base pump carries a count of its own.
+    """
+    if len(steps) != 2:
+        return None
+    first, second = steps
+    if not (isinstance(first, ast.Pump) and isinstance(second, ast.Pump)):
+        return None
+    if second.per_each_sacrificed is None or not _is_target(first.subject):
+        return None
+    if second.subject != first.subject:
+        return None
+    if (
+        first.per_each is not None or first.per_each_sacrificed is not None
+        or first.per_each_recorded is not None or first.per_each_milled is not None
+        or first.per_each_counters is not None or first.per_each_tapped_this_way
+        or first.x_definition is not None
+    ):
+        raise LoweringError(
+            "a base pump counted off its own record has no rate to join",
+            node=first,
+        )
+    if (
+        first.power, first.power_negative, first.toughness,
+        first.toughness_negative, first.duration,
+    ) != (
+        second.power, second.power_negative, second.toughness,
+        second.toughness_negative, second.duration,
+    ):
+        raise LoweringError(
+            "an additional pump per sacrifice joins a base pump of the same "
+            "size and duration",
+            node=second,
+        )
+    (rate,) = lower_pump_per_sacrificed(second, produced, event)
+    spec = dict(rate.payload["x_from_count"])
+    spec["offset"] = int(spec.get("offset", 0) or 0) + 1
+    return (
+        OracleInstruction(rate.kind, rate.value, {**rate.payload, "x_from_count": spec}),
+    )
+
+
 def _lower_pump_per_counter(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     """"Target creature gets +1/+1 until end of turn **for each +1/+1 counter on
     this creature**." (Canopy Crawler.)

@@ -67,6 +67,12 @@ class LoseLife:
     # action of the preceding step ("discard"). Attached by the rider fold in
     # the sentence loop, never parsed on its own.
     who_could_not: str | None = None
+    # "Target player loses **2 life plus** 2 life for each Spirit sacrificed
+    # this way." (Devouring Greed.) The constant printed in front of the
+    # per-each rate, which ``amount`` above is; None for every loss that
+    # prints none. Only beside a ``per_each``: on its own the word adds
+    # nothing a single amount could not say.
+    plus: "Amount | None" = None
 
 
 @dataclass(frozen=True)
