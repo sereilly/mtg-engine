@@ -63,7 +63,11 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   9–17 GB stayed free, so gates ran at `-n 3` or `-n 4` and four of seven
   wave-2 groups launched at once, the other three as wave-1 agents finished;
   at Fifth Dawn 30–40 GB stayed free, enough for seven wave-1 agents beside
-  the `-n 4` Phase 1 full pass and four wave-2 agents beside the gates. A
+  the `-n 4` Phase 1 full pass and four wave-2 agents beside the gates; at
+  Champions of Kamigawa 21–25 GB stayed free all session (the owner's work
+  held the rest of 93 GB), and nine wave-1 agents ran beside a `-n 3` Phase 1
+  full pass (1h29m), and four wave-2 agents beside `-n 4` gates with the
+  wave-1 groups resumed for follow-ups beside those, with no memory death. A
   tool an agent runs counts by its processes: `sim_fingerprint`'s default
   four workers, at seven groups snapshotting together, is ~40 GB, so briefs
   ask for `--workers 1`.
@@ -200,7 +204,9 @@ set corrects is corrected in the template, once. Every brief says:
 And when writing one:
 
 - **A refusal site is a work-list entry, not a diagnosis.** It names where the
-  line was refused, not what is absent, and it usually over-states: probe the
+  line was refused, not what is absent — the layer it names is right more
+  often than the frame (Champions of Kamigawa's W1G7 found the frame wrong on
+  seven of thirteen cards) — and it usually over-states: probe the
   sentence before believing it, and treat "this is only a probe artifact" as the
   claim most likely to cost a card. **Probe it with `scripts/probe_line.py
   --card NAME`** (or a raw line), not a hand-written probe — Mirrodin's groups
@@ -242,7 +248,12 @@ And when writing one:
   (722, Preparation Cards, for controlling a player) is caught; a neighbour
   that shares the vocabulary is not, so **read the words**: Mirrodin's
   brief cited 205.2a (the list of card types) where 205.2b (an object with
-  two types) was meant, and the printed subject said so. Rulings come from
+  two types) was meant, and the printed subject said so. **Read them for the
+  claim as well as the number**: Champions of Kamigawa's briefs cited three
+  neighbours (205.1b for 205.1a, setting creature types; 301.5c for 301.5b,
+  an Equipment's attach restriction; 603.7d for 603.7e, a delayed ability's
+  source) and stated one rule backwards — CR 707.2 says a text-changing
+  effect is *not* copied — and each misled the group it was sent to. Rulings come from
   `bulk_rulings.py CODE <out>` (Scryfall's bulk file, one download; the
   per-card fetch is rate-limited).
 - **List the base's known reds in every brief, and ask for both
@@ -392,12 +403,16 @@ And when writing one:
   whole (three per-set reds surfaced late in kg3). It takes about a minute
   at `-n 4`; Mirrodin skipped it for the graveyard's arrival seam and a full
   gate found the Tempest Efreet red two links later. A link whose branch
-  changes what a wire field means runs `tests/ui` and `tests/regressions`
-  whole too: a test reading the payload through `web.app`'s `TestClient`
-  imports none of the modules the change edits, so neither `tests_for_diff`
-  nor the meeting names it (kg5's `client` made a copy's `name` its copiable
-  name; `test_batch15` looked a Copy Artifact up by the old one, and the red
-  waited seven links for a gate that ran `tests/regressions`).
+  edits `web/` — a new wire field as much as a changed meaning — runs
+  `tests/ui` and `tests/regressions` whole too: a test reading the payload
+  through `web.app`'s `TestClient` imports none of the modules the change
+  edits, so neither `tests_for_diff` nor the meeting names it (kg5's
+  `client` made a copy's `name` its copiable name; `test_batch15` looked a
+  Copy Artifact up by the old one, and the red waited seven links for a gate
+  that ran `tests/regressions`), and the web source scans read what a new
+  field reads (Champions of Kamigawa's splice serializer read a segment's
+  printed text, which `tests/ui/test_layer_reads_in_web.py` names; the
+  wave-1 close gate found it, no meeting having run the file).
 - **Two branches may share one meeting**: stage and commit the first link
   with its scans (oracle_diff, dups, missing and import names), stage the
   second on it, and run the meeting at the top. A red is bisected onto the
@@ -439,8 +454,11 @@ And when writing one:
 - **A merge commit claims only what was verified when it was made** — the
   conflict resolutions, `oracle_diff` over that merge, the scans, the meeting
   run — and says where the full gate's result will be recorded.
-- **The integrator's own commit between merges gets the gate a merge gets.**
-  Nothing a group is asked to do is optional for the integrator.
+- **The integrator's own commit between merges gets the gate a merge gets,
+  and claims only what was read.** Nothing a group is asked to do is optional
+  for the integrator: Champions of Kamigawa's label-row link said its census
+  was green under `MTG_PROMOTE` before the run was read, and the census's
+  second inventory sat behind its first (amended before anything merged it).
 - **Bisect a red on a cumulative tree by running the failing test on each link
   beneath it** — seconds, not a suite.
 - **A red carried across links is read again at each link, by what it names,
@@ -547,7 +565,14 @@ on at least one resolution.
 - **Two fixes of one bug: take the one that subsumes the other, and prove it
   with the losing branch's tests.** When one is a hand-written list and the
   other derives the set, take the derivation and carry the list's additions
-  onto it — the list was the bug.
+  onto it — the list was the bug. **Then read the losing branch's whole diff
+  of that function, not only the conflict**: part of it can merge clean
+  outside the region. Champions of Kamigawa's W1G3 and W1G8 each made the
+  untap step spend a skip record (Avizoa's drawback had never happened); the
+  conflict held the two `if` arms, and W1G3's own consumption line merged
+  clean above it, so keeping W1G8's side of the conflict alone would have
+  spent two records per skip (`scratch/chk/resolve_w1g3_untap.py` removed
+  it).
 - **One channel carrying two value shapes** (a list from one producer and a bare
   id from another; ids from one and live objects from another). Settle the
   channel's arity **and** its element type in one round, at one reader, never by
@@ -820,13 +845,13 @@ carry its row, and the census is in hand.
    stays Phase 4's reviewed move.
 2. **First, `tests_for_diff.py --ingest <CODE> --run -n 4`**: every test whose
    population walks the measured set, by node id, in the full pass, longest
-   first — checked against seven ingests' full passes (every one of their
-   reds named: 5DN 5, DST 13, JUD 32, LGN 2, MRD 13, ONS 8, SCG 6) — so its
+   first — checked against eight ingests' full passes (every one of their
+   reds named: CHK 10, 5DN 5, DST 13, JUD 32, LGN 2, MRD 13, ONS 8, SCG 6) — so its
    reds go into `yield.txt` and the briefs before the fan-out, where
    Darksteel's arrived 80 minutes into the wave. Then run the **full pass**
-   (`pytest --full`) and **treat what fires as yield, not noise**: Fifth
-   Dawn's `--ingest` (497 tests in 225 files) named all five reds its whole
-   full pass found (~37 minutes at `-n 4`, beside the seven wave-1 agents),
+   (`pytest --full`) and **treat what fires as yield, not noise**: Champions
+   of Kamigawa's `--ingest` (499 tests in 227 files) named all ten reds its
+   whole full pass found (1h29m at `-n 3`, beside the nine wave-1 agents),
    and the pass is what checks the list, so it stays. The quick pass samples
    the censuses, and Legions' one
    engine yield (a trigger census naming Chromeshell Crab) hid in a sample
@@ -912,8 +937,13 @@ provides?* Three sweeps, in order of blast radius:
    planeswalkers, a new multi-face layout or any other new machine cannot
    promote whatever its text work. Each is a subsystem: scope it first, because
    it gates Phase 4 absolutely and decides whether the set is one session or
-   ten. A face is a card (`engine/faces.py`) is the precedent for a layout, and
-   a new layout owes the face-blind census before its promotion (Phase 4).
+   ten. Two layouts are the precedents: a split card's face is a card
+   (`engine/faces.py`), and a flip card is its top half everywhere, a flipped
+   permanent's card substituted by its bottom half as morph's face-down blank
+   is (`engine/flip_cards.py`) — read which shape a new layout is before
+   choosing, by what `.card.name` and the zone seams would have to answer. A
+   new layout owes the face-blind census before its promotion, and then the
+   censuses that build boards from its faces (Phase 4).
 2. **Keywords.** Diff the set's keyword lines against
    `vocabulary.IMPLEMENTED_KEYWORDS` **and** `keyword_lines.UNSUPPORTED_KEYWORDS` — a
    third table that outranks both and is matched against the ingested
@@ -923,8 +953,11 @@ provides?* Three sweeps, in order of blast radius:
    keyword being granted or named); listing one fails `test_keyword_registry`
    or admits a costless ability. Each genuinely missing keyword is one entry
    plus behaviour covering everywhere the CR says it applies, not just the
-   paths this pool exercises (CLAUDE.md's lifelink). Its tests go in
-   `tests/rules/` with `@pytest.mark.cr`; widen `rules_progress.py`'s `SCOPE`
+   paths this pool exercises (CLAUDE.md's lifelink). A keyword that acts on
+   another spell while it is cast (splice, CR 702.47) is cast machinery with
+   a support gate of its own (`engine/splice.py`, `unread_splice_line`), not
+   a line: ask of each keyword where its printed line does anything. A
+   keyword's tests go in `tests/rules/` with `@pytest.mark.cr`; widen `rules_progress.py`'s `SCOPE`
    for a new section. Keywords usually open Phase 3: most cards per change.
 3. **Everything else** goes to the backlog through `GRAMMAR_COVERAGE.md`'s
    reason table and the fragments census. **Rank by sentence shape, never by a
@@ -1151,12 +1184,26 @@ green, the trackers agreeing the set ships.
    that function reads a different card.
 5. **Re-run `picker_sweep.py`**: promotion is what puts the set in front of the
    client.
-6. **A new layout makes guards blind, not red.** A multi-face card's whole-card
+6. **A new layout makes guards blind, not red.** A split card's whole-card
    program is supported and has no instructions, so every guard whose
-   population is "each card, compiled" walks past both halves. The next layout
-   owes the census `tests/engine/test_face_blind_guards.py` came from (a scratch
-   plugin that promoted the set in memory and recorded every site handed a
-   multi-face card whole) before its promotion, as a group's work.
+   population is "each card, compiled" walks past both halves; a flip card
+   handed whole is its top half, so the same guard reads it and never its
+   bottom. Each layout owes the census `tests/engine/test_face_blind_guards.py`
+   came from (a scratch plugin that promotes the set in memory and records
+   every site handed a card whole; Champions of Kamigawa's is
+   `scratch/chk/w1g1/flip_census_plugin.py`) before its promotion, as a
+   group's work. **And that census is not the last the layout meets**: once
+   its faces are compilation units, every census that *places* a unit on a
+   board puts them through the entry seam, and every census that looks a unit
+   up by name meets a name no whole card has. Champions of Kamigawa's flip
+   group ran the face-blind census in wave 1, and its faces still turned five
+   census files red at the wave-1 close gate and the rehearsal (Shidako,
+   Nighteyes, Autumn-Tail, Tobita): three through its entry-seam reset, which
+   turned every placed bottom half back into its top half — each unit-board
+   census had been reading the top half twice, blind rather than red, until a
+   by-name lookup missed — and two whose own name maps and casts knew whole
+   cards alone. The layout's group runs the censuses that build boards from
+   compilation units under `MTG_PROMOTE` before it reports.
 7. **Preview the `--accept`s in a second throwaway tree and read their diffs
    there**; the promotion commit is then the same commands again. Expect the
    trackers' aggregates to move on membership alone (the All row is
@@ -1597,6 +1644,7 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     side's `_better_than_the_seat`). The web auto-tap never plans through
     Doubling Cube (`web/payment_plan` calls `planner.plan` directly, where
     the simulator's `_plan_land_taps` reaches `_plan_through_a_pool_doubler`).
+  <!-- chk integrator: W2G2 AI -->
   *Clears:* the next AI round.
 
 - **Three mana readers still skip what a substitution does** (kg5 `mana2`,
@@ -1705,7 +1753,9 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   redirect re-issues the damage as a separate event, so a creature dealt
   Incinerate's or Flamebreak's damage through a redirect is not stamped
   "can't be regenerated" (`handlers/damage._after_dealt` reads the original
-  event; no ruling covers it). (b) The engine log names a restricted mana's
+  event; no ruling covers it); Yamabushi's Flame's and Storm's "exile it
+  instead" rides the same `then` (`exile_if_dealt`, Champions of Kamigawa's
+  W1G8), so presumably the same — read, not driven. (b) The engine log names a restricted mana's
   raw key ("spendable only on artifact_or_artifact_ability",
   `handlers/mana.py`) where the wire's `restricted_mana_words` has the
   sentence. (c) A granted ability's served text is lowercased by the Aura
@@ -1746,8 +1796,9 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   channel outside the compile: Cyclopean Tomb, Drain Life, Lich, Time Vault,
   Jihad, City in a Bottle, Call to Arms, Soul Burn, Soul Echo, Kaervek's
   Torch, Torrent of Lava, Transcendence, Consume Spirit and Lich's Tomb
-  (`probe_line`'s refused lines on supported cards,
-  `scratch/5dn/w2g2/measure_dropped_lines.py`, re-run on Phase 6's base).
+  (`probe_line`'s refused lines on supported cards over both manifest roles,
+  `scratch/5dn/w2g2/measure_dropped_lines.py`, re-run on Champions of
+  Kamigawa's Phase 6 base: the same fourteen, none of the set's 291).
   Parts, either: (a) the compiler records the lines it dropped on each
   noncreature program, so a quick test pins the fourteen; or (b) a
   compile-side claim for each of those fourteen outside channels, and then an
@@ -1759,7 +1810,10 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   creates it in the hand it copies: the engine has no cast out of another
   player's hand (`copy_casts.arm_copy_cast`'s `from_hand_of`), so anything
   reading the zone a spell was cast from reads exile. Part: a cast road for a
-  card in another seat's hand, the copy made there. (b) All Suns' Dawn asks
+  card in another seat's hand, the copy made there — the exile half exists
+  since Champions of Kamigawa (Shell of the Last Kappa casts a card out of
+  its owner's exile: `arm_copy_cast(original=)`, `offer_permission(zone_seat=)`,
+  `PermittedCast`'s cross-seat case). (b) All Suns' Dawn asks
   nobody which colour a multicoloured target fills: the colour each target
   was chosen as is recorded since W2G2 (`per_color_targets`, re-asked by
   both CR 608.2b checks), but the choice is the engine's WUBRG matching.
@@ -1816,6 +1870,79 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   Yes/No prompt drops "That creature gains haste until end of turn.".
   *Clears:* (a) a round with its engine half; (b)–(g) a client round.
 
+- **A spell cast under Swirl the Mists chooses its targets by its printed
+  text** (CR 601.2c) and resolves by the changed one. Swirl's board-wide
+  change is a record on every permanent and on every spell as it is pushed
+  (`engine/global_text_changes.py`), but the cast's picker and gate derive
+  their spec off the printed card (`derive_cast_spec`). The two agree, so
+  nothing is offered and then refused: with red chosen, a Terror is offered
+  Shivan Dragon, which its changed "nonred" makes illegal as it resolves (CR
+  608.2b), and is never offered the black creature it could destroy (W2G4
+  drove the resolution half). **The integrator accepted it for the
+  promotion**: Swirl ships supported with this gap. Reach, only while a Swirl
+  is out: W2G4 counted 60 shipped instants and sorceries with a colour word
+  in a target phrase, and four Auras print one in their Enchant line (Mind
+  Harness, Armor of Thorns, Decomposition, Coral Net). Parts: a game-aware
+  "this card's text as a spell" fold fed to the cast gate
+  (`cast_target_validation._validate_cast_targets`, through
+  `cast_announcement._mode_target_refusal`), and the same fold at the 32
+  `derive_cast_spec` call sites outside `targeting.py` (the web's
+  serialization and state view, the AI's cast and target modules, the
+  legality modules), so picker and gate stay one reading. Beside it: a copy
+  of a spliced spell runs its spliced text with no text change (both copy
+  arms in `mixins/stack/resolution.py` call `splice.spliced_steps` without
+  `text_change_effects`); no pool splice card prints a colour word.
+  *Clears:* a targets round.
+
+- **Champions of Kamigawa's engine leftovers, each measured.** (a) Every
+  delayed-mark writer but the sacrifice's takes its source only from what is
+  resolving: `mark_delayed_destruction` is called with no `source=` in
+  `handlers/combat.py` (a block trigger's end-of-combat destroy),
+  `handlers/combat_declarations.py` (five writers), `handlers/pump.py`
+  (Berserk's end-step destroy) and `handlers/damage.py` (Rocket Launcher's),
+  so one run from an answered prompt, after its object left the stack, would
+  create its delayed ability under nothing, as Junkyo Bell's did until W2G4
+  passed `source=context.card` in `handlers/destruction.py` (CR 603.7e; not
+  checked card by card). (b) A bare "it" inside a board loop lowers to the
+  ability's source for every verb but return ("destroy it" is
+  `destroy_self`): W1G4 bound the return to the loop's object
+  (`lowering/_bound_returns.lower_untargeted_return`, Cut the Tethers, which
+  had bounced itself) and found no pool card printing another verb there.
+  (c) Two Uba Masks' `effect_order` options carry one label ("Exile that card
+  face up instead", static in `replacements/opponent_library_draws.py`), as
+  two Shared Fates' do, so a person cannot tell which Mask applies. (d)
+  Wording: Kitsune Healer's prevent-all logs "dealt 0 damage" (W1G2); "costs
+  less to cast (Long-Forgotten Gohei)" prints with no generic mana to reduce
+  (`mixins/stack/casting.py`; the charge is right); a look-only
+  `reorder_library` logs "Top 1 cards … reordered"
+  (`mixins/stack/choices/library.py`). *Clears:* (a) and (b) an
+  engine-defaults round; (c) a prompts round; (d) any round in those files.
+
+- **Champions of Kamigawa's client leftovers.** W2G1 clicked every prompt
+  wave 1's reports named, launched before wave 2's cards merged. (a) The
+  splice prompt hangs off `startCastTargetCascade` (`app.js`'s
+  `startCastSplicePrompt`), which `dispatchModalCast` does not reach, so a
+  modal Arcane spell would be cast with no splice offered (no Champions
+  Arcane spell is modal). (b) The card-name search does not know a flip
+  card's bottom name, so typing one passes the client's land check and the
+  server decides (CR 710.5 lets it be named). (c) Shell of the Last Kappa's
+  offer to cast the exiled card itself (`copy_cast` with `copy: false`) is
+  titled and buttoned "Cast a copy": the copy-cast panel reads no `copy`
+  field, and only its body, the server's sentence, is right — found by
+  reading. (d) The several-target modal labels its tiles by owner alone
+  ("AI's"), and an action hint lingers through an optional prompt. (e) Not
+  driven in a browser: wave 2's cards — Uba Mask's plays from a face-up exile
+  pile, Struggle for Sanity's `revealed_hand_pick` alternating between seats
+  with the hand's owner choosing, Swirl the Mists' changed words on every
+  permanent, Shell's offer out of another seat's exile, Hankyu's two granted
+  abilities, Kusari-Gama, Reweave — and from W2G1's own list Plaguebearer's
+  X, a stack target's `mana_value` (Spell Blast), Psychic Puppetry and
+  Blessed Breath spliced, a splice onto Swallowing Plague, Sensei
+  Golden-Tail's target, the `optional_pay` prompts of Ore Gorger, Sire of the
+  Storm, Hikari, Teller of Tales and Junkyo Bell, Commune with Nature's
+  `look_top_pick` and Hisoka's discard cost. *Clears:* (a)–(d) a client
+  round; (e) Phase 5 or a client round.
+
 - **The toolkit and speed wishes still open**, each written down by a group
   that paid for its absence. Tools: an `explain_cast` for an activation
   (Darksteel's W2G2 spied on `_land_ability_worth`, Fifth Dawn's W2G4 called
@@ -1836,14 +1963,30 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   line-ending check (a heredoc drops a backslash, an inline edit missed on a
   CRLF file, and `grep -c $'\r$'` reads 0 on a CRLF file in Git Bash); a map
   of `sequences.py`'s riders by antecedent; a hold-priority recipe in the
-  `run-magic` skill (W2G1 lost ~40 minutes to Darksteel's (d) above).
+  `run-magic` skill (W2G1 lost ~40 minutes to Darksteel's (d) above); the
+  layout census committed (Champions of Kamigawa's W1G1 wrote
+  `scratch/chk/w1g1/flip_census_plugin.py`, every test site handed a flip
+  card whole under `MTG_PROMOTE`); the `Game` entry points a test drives,
+  listed in `board.py`'s docstring (W1G2: `cast_from_hand`, not
+  `cast_spell`; `activate_permanent_ability(permanent_index=)`;
+  `resolve_cleanup_step` — and W1G6: a response at a headless table takes
+  `queue_from_hand` / `queue_permanent_ability`, since `cast_from_hand`
+  resolves at once); a `run_and_wait.sh` that waits longer than 110 s a call
+  (W1G5 and W2G3 made 20–25 calls a long run); a `simulate_ai_games` exit
+  code that tells a measured set's unsupported cards dealt from a failure
+  (four wave-1 groups read exit 1 caused by other groups' cards).
   Readers that mislead: `serve_board.py`'s command folder runs a `.py` the
   moment it appears, so a file still being written runs empty (write
   `.tmp`, then `mv`); the `tests/ui` files that lift client functions out of
   `app.js` by name carry hand-written preludes, and `tests_for_diff` names
   none of them (one helper call added to `sendAction` broke five, found only
-  by `tests/ui` whole);
-  `probe_line` shows nothing of what a pronoun's rebound filter carries, its
+  by `tests/ui` whole; Champions of Kamigawa's W2G1 grepped 64 by hand, where
+  reading each file's `run_app_js([...])` list would name them);
+  `probe_line` shows nothing of which object a pronoun binds or what its
+  rebound filter carries (Hikari and Cut the Tethers were silent wrong
+  bindings, W1G4), nor which rider of the sentence loop consumed which tokens
+  (W1G2 monkeypatched `_with_gained_type_conjunct` to find
+  `_parse_pronoun_grant_rider`), its
   `--card` takes one card (the last flag wins), and it judges a noncreature
   card's static line by the creature gate
   (`static_line_support._is_supported_static_creature_line`), which is how it
@@ -1853,9 +1996,20 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   a name the fix adds (the "before" run is a collection error until the
   import moves inside the test); a headless `table()`/`start_next_turn`
   answers an upkeep trigger's prompt only at the next settle, after the
-  draw. Briefs: never name `tests/engine/test_catalog_sweep.py` whole (one
+  draw; a refused cast puts the pool back as a new dict
+  (`pool_payment`), so a test holding the old `mana_pool` reads stale counts
+  (W1G5); `controlled_by` returns an iterator, so `assert not
+  game.controlled_by(1)` always passes, and a cast's `target_stack_index`
+  counts `game.stack` from the bottom where the picker's `stack_index` counts
+  from the top (W1G4); a prompt kind is not its instruction's kind
+  (`choose_number` arms `number_choice`, W1G7); nothing points from a grammar
+  cost node to its text-side charger (`activation_costs`), which would have
+  charged Hankyu's counters off the creature (W2G3), or says which runtime
+  readers read the printed text rather than the rewritten lines (Tenza's
+  flat +1/+1, dropped by `aura_grants.aura_static_pt_grant`, hid from every
+  gate, W1G9). Briefs: never name `tests/engine/test_catalog_sweep.py` whole (one
   test a card, hours serially; `-k <card>`). `--ingest` names ~500 tests
-  (Fifth Dawn's: 497 in 225 files) because ten sharded AI censuses walk both
+  (Fifth Dawn's 497 in 225 files, Champions of Kamigawa's 499 in 227) because ten sharded AI censuses walk both
   roles — `stable_sample` always taking the measured set's cards and
   sampling the rest would cut it (T2's proposal, `tests/helpers.py`). Speed,
   from pre5dn's profiler: the continuous-effect recompute inside every
