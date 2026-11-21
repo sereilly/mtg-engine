@@ -124,6 +124,54 @@ def test_w1g4_glimpse_of_nature_ignores_other_spells_and_other_turns(set_pool):
     _w1g4_settle(game)
     assert len(game.players[0].library) == library, game.log
 
+
+def test_w1g4_cut_the_tethers_bounces_each_spirit_whose_controller_does_not_pay(set_pool):
+    """"For each Spirit, return it to its owner's hand unless that player
+    pays {3}." — the drive list's mis-player: the bare "it" in the loop's body
+    lowered as the spell's own source, so the sorcery went back to its
+    caster's hand and every Spirit stayed. Bob (asked) pays {3} for one Spirit
+    and has nothing left for the other; Alice (unasked, no mana) cannot pay for
+    hers; the Bears is no Spirit; and the sorcery ends in the graveyard."""
+    from engine.models import Permanent
+
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _W1G4Game(players=[
+        _W1G4PlayerState(name="Alice", hand=[chk["Cut the Tethers"]],
+                         library=[lea["Island"]] * 10),
+        _W1G4PlayerState(name="Bob", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {1}
+
+    def put(seat, card):
+        permanent = Permanent(card=card)
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        game._sync_control()
+        return permanent
+
+    kami = put(0, chk["Kami of the Hunt"])
+    soilshaper = put(1, chk["Soilshaper"])
+    bears = put(1, lea["Grizzly Bears"])
+    kumo = put(1, chk["Orbweaver Kumo"])
+    game.start_turn(0)
+    _w1g4_settle(game)
+    game.players[1].mana_pool.update({"C": 3})
+    assert game.queue_from_hand(0, "Cut the Tethers").supported
+    offers = []
+
+    def pay_once(game, choice):
+        offers.append(choice.player_index)
+        assert game.confirm_optional_pay(choice.player_index, accept=len(offers) == 1)
+
+    _w1g4_settle(game, answers={"optional_pay": pay_once})
+    assert offers == [1], game.log
+    assert {p.card.name for p in game.all_permanents()} == {"Soilshaper", "Grizzly Bears"}
+    assert game.is_on_battlefield(soilshaper) and game.is_on_battlefield(bears)
+    assert not game.is_on_battlefield(kami) and not game.is_on_battlefield(kumo)
+    assert [c.name for c in game.players[0].hand] == ["Kami of the Hunt"]
+    assert [c.name for c in game.players[1].hand] == ["Orbweaver Kumo"]
+    assert [c.name for c in game.players[0].graveyard] == ["Cut the Tethers"]
+
 # ==== end w1g4 ======================================================
 
 
