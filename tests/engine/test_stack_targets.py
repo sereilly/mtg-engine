@@ -822,6 +822,21 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # a real combat damage step each targets the damaged player's permanent
     # and acts on it (tests/sets/test_ons_creatures.py, W1G1's section).
     "Dawning Purist#0", "Skirk Commando#0", "Snapping Thragg#0",
+    # Betrayers of Kamigawa, W1G1 — reached the moment ninjutsu was read.
+    # "Whenever this creature deals combat damage to a player, you may return
+    # target creature **that player controls** to its owner's hand"
+    # (Mistblade Shinobi), "…destroy target nonblack creature **that player
+    # controls**" (Throat Slitter): Spark Mage's shape. "…put target creature
+    # card from **that player's** graveyard onto the battlefield under your
+    # control" (Ink-Eyes): Scion of Darkness's pile. "…exile up to two target
+    # cards from **that player's** graveyard" (Skullsnatcher): Rysorian
+    # Badger's and Zombie Cannibal's, picked as the ability resolves out of
+    # the pile the damage event froze. Each is driven through a real combat
+    # damage step after a ninjutsu swap (tests/sets/test_bok_creatures.py,
+    # W1G1's section): only the damaged player's objects are offered and the
+    # one named is acted on; the attacker's own stay.
+    "Mistblade Shinobi#0", "Throat Slitter#0", "Ink-Eyes, Servant of Oni#0",
+    "Skullsnatcher#0",
     # no picker derived
     # Goblin Grenadiers ("…destroy target creature and target land") sat here
     # until LGN W1G4: a trigger's roles announcement (Chromeshell Crab's
