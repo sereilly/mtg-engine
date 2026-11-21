@@ -679,6 +679,7 @@ def _each_seat_optional_put_from_hand(
         or action.entering_colors
         or action.entering_subtypes
         or getattr(action, "tapped", False)
+        or getattr(action, "attacking", False)
         or getattr(action, "actor", None) is not None
     ):
         raise LoweringError(

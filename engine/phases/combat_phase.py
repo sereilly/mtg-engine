@@ -49,6 +49,33 @@ class CombatPhaseMixin:
             and not self.combat_attackers
         )
 
+    def blockers_have_been_declared(self) -> bool:
+        """Whether this combat's blockers have been declared (CR 509.1) — from
+        the moment the declaration is locked in until the combat phase ends.
+
+        The clock of CR 509.1h's two statuses: "An attacking creature with one
+        or more creatures declared as blockers for it becomes a blocked
+        creature; one with no creatures declared as blockers for it becomes an
+        unblocked creature." Before the declaration an attacker is neither
+        (the ninjutsu rulings, 2021-03-19), so "unblocked" asks this beside
+        the permanent's own ``blocked`` flag
+        (``subject_filters.subject_matches``' ``unblocked_only``). One answer
+        with "Activate only during combat after blockers are declared" (Trap
+        Runner, ``activation_restrictions``), which reads it: the lock, not
+        the step's arrival, and never a combat whose declare blockers step
+        was skipped (CR 508.8).
+        """
+        if self.current_turn_phase != "combat":
+            return False
+        if self.combat_skips_blocks_and_damage():
+            return False
+        if self.current_step in ("combat_damage", "end_of_combat"):
+            return True
+        return (
+            self.current_step == "declare_blockers"
+            and self.combat_blockers_locked
+        )
+
     def combat_defending_players(self) -> set[int]:
         """CR 802.2: every player currently a defending player this combat — i.e.
         named as the target of at least one declared attacker. Empty before

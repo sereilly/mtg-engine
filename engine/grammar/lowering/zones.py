@@ -603,6 +603,66 @@ def _lower_put_own_card_from_graveyard(
     return (OracleInstruction("return_source_card_to_battlefield", "", payload),)
 
 
+#: The instruction kind of "Put this card onto the battlefield from your hand
+#: [tapped and attacking]" — ninjutsu's effect (CR 702.49a).
+PUT_SOURCE_CARD_FROM_HAND = "put_source_card_from_hand_onto_battlefield"
+
+
+def _lower_put_own_card_from_hand(
+    node: ast.PutOntoBattlefield,
+) -> tuple[OracleInstruction, ...]:
+    """"Put **this card** onto the battlefield **from your hand** tapped and
+    attacking." (Ninjutsu's rules text, CR 702.49a, ``engine/ninjutsu.py``.)
+
+    The ability's own card, named by reference (CR 700.7): nothing is chosen
+    or matched, so the handler looks for that object in its owner's hand by
+    identity as the ability resolves — gone from there and nothing enters
+    (CR 400.7; the 2021-03-19 ruling: "If it leaves your hand before then, it
+    won't enter the battlefield at all").
+
+    The sentence moves the card out of a hand, so the ability functions only
+    from there (CR 113.6m) — stamped as ``functions_from``, the key
+    ``engine/activation_zones.py`` reads before any cost, for the reason the
+    graveyard self-return stamps its zone.
+
+    "tapped" and "attacking" are entry state the handler carries out
+    (CR 110.5b, 508.4). Every other rider refuses: none is carried by the move.
+    """
+    target = node.target
+    assert isinstance(target, ast.TargetSpec)
+    filt = target.filter
+    leftovers = _restrictions_beyond(
+        filt, frozenset({"is_source", "is_card", "zone", "zone_owner"})
+    )
+    if leftovers:
+        raise LoweringError(
+            f"the source's own put from hand does not honour {leftovers[0]!r}",
+            node=node,
+        )
+    if filt.zone_owner is None or filt.zone_owner.kind != "you":
+        raise LoweringError(
+            "the source's own put reads 'from your hand'", node=node,
+        )
+    if (
+        node.gains or node.sacrifice_when_control_lost or node.attached_to_source
+        or node.attached_to_chosen is not None or node.entering_colors
+        or node.entering_subtypes or node.bound_card_from
+        or node.under_your_control or node.under_owners_control
+        or node.under_actors_control or node.actor is not None
+    ):
+        raise LoweringError(
+            "the source's own put from hand carries no rider but 'tapped' "
+            "and 'attacking'",
+            node=node,
+        )
+    payload: dict[str, object] = {"functions_from": "hand"}
+    if node.tapped:
+        payload["tapped"] = True
+    if node.attacking:
+        payload["attacking"] = True
+    return (OracleInstruction(PUT_SOURCE_CARD_FROM_HAND, "", payload),)
+
+
 def _lower_put_onto_battlefield(
     node: ast.PutOntoBattlefield, event: str | None = None,
     produced: frozenset[str] = frozenset(),
@@ -623,6 +683,8 @@ def _lower_put_onto_battlefield(
     filt = target.filter
     if _is_source(target) and filt.zone == "graveyard":
         return _lower_put_own_card_from_graveyard(node, produced)
+    if _is_source(target) and filt.zone == "hand":
+        return _lower_put_own_card_from_hand(node)
     if node.under_actors_control:
         # "…under **their** control" is read off the printed subject, and only
         # the branch above reads one for this move. Anywhere else the words

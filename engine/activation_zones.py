@@ -75,6 +75,13 @@ def ability_functions_from(ability) -> str:
         and getattr(cost, "exile_zone", BATTLEFIELD) == HAND
     ):
         return HAND
+    # …and the third: "**Reveal this card from your hand**" (ninjutsu's rules
+    # text, CR 702.49a). The card stays in the hand, but a card on the
+    # battlefield is in no hand to be revealed from — CR 113.6j once more, and
+    # CR 702.49a's own "functions only while the card … is in a player's
+    # hand" said by its cost.
+    if getattr(cost, "reveal_self_from_hand", False):
+        return HAND
     return BATTLEFIELD
 
 

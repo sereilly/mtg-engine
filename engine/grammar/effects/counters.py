@@ -94,6 +94,16 @@ def _accept_bottom_instead_rider(
     return tuple(colors), True
 
 
+def _accept_attacking_rider(stream: TokenStream, *, tapped: bool) -> bool:
+    """"…onto the battlefield tapped **and attacking**" / "…**attacking**"
+    (CR 508.4) — whether the entry printed it. After "tapped" the word is
+    joined by "and"; on its own it stands bare. Consumes nothing when it
+    answers False."""
+    if tapped:
+        return bool(stream.accept_phrase("and", "attacking"))
+    return bool(stream.accept_word("attacking"))
+
+
 def _counted_kind_label(kind: str, count) -> str:
     """One option of a choice between counter kinds, said with its count:
     "a +1/+1 counter", "two charge counters" — or "that many charge
@@ -241,6 +251,9 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             # under your control"), and recorded rather than consumed: CR 110.5b
             # enters a permanent untapped unless the effect says otherwise.
             tapped = bool(stream.accept_word("tapped"))
+            # "…tapped **and attacking**" (CR 508.4) — read where it is printed;
+            # the lowering decides who can honour it.
+            attacking = _accept_attacking_rider(stream, tapped=tapped)
             # "…onto the battlefield **face up**." (Dermoplasm: "put a creature
             # card with a morph ability from your hand onto the battlefield
             # face up".) CR 110.5b: "Permanents enter the battlefield …
@@ -343,10 +356,20 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
                     )
                 else:
                     stream.reset(trailing)
+            # "Put this card onto the battlefield from your hand **tapped and
+            # attacking**." (Ninjutsu's rules text, CR 702.49a.) The entry
+            # state printed *after* the trailing zone rather than straight
+            # after "battlefield" — the same words the reading above takes,
+            # one place later, so either order is one AST. Only where neither
+            # was read already: a sentence saying "tapped" twice is two
+            # answers.
+            if not tapped and not attacking:
+                tapped = bool(stream.accept_word("tapped"))
+                attacking = _accept_attacking_rider(stream, tapped=tapped)
             return ast.PutOntoBattlefield(
                 moved, under_your_control=under, under_owners_control=owners,
                 attached_to_source=attached, tapped=tapped,
-                attached_to_chosen=chosen_host,
+                attached_to_chosen=chosen_host, attacking=attacking,
             )
     stream.reset(move_mark)
     up_to = stream.accept_phrase("up", "to")

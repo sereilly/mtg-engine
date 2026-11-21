@@ -679,13 +679,23 @@ def _lower_exile(
                     "printed seat", node=node,
                 )
             pile_owner = _CHOSEN_GRAVEYARD_PILE
-        elif owner is None or owner.kind not in _GRAVEYARD_PILE_SEATS:
-            raise LoweringError(
-                "the counted graveyard exile reads one named player's pile",
-                node=node,
-            )
-        else:
+        elif owner is not None and owner.kind in _GRAVEYARD_PILE_SEATS:
             pile_owner = owner.kind
+        else:
+            # "Whenever this creature deals combat damage to a player, exile
+            # up to two target cards from **that player's** graveyard."
+            # (Skullsnatcher.) The seat the damage froze — the pile Zombie
+            # Cannibal's one card is picked from, read through the same
+            # ``frozen_pile_record`` — and so Rysorian Badger's arrangement:
+            # no ``targets`` description, the pick made over that one pile as
+            # the trigger resolves. Under an event that froze no seat the
+            # possessive names nobody and the line refuses.
+            pile_owner = frozen_pile_record(owner, event)
+            if pile_owner is None:
+                raise LoweringError(
+                    "the counted graveyard exile reads one named player's pile",
+                    node=node,
+                )
         if len(filt.card_types) > 1:
             # A union ("artifact or creature card") is a second shape the
             # prompt's candidate rule would have to learn; until a card prints

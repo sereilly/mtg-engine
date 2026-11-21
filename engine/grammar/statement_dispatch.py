@@ -481,6 +481,29 @@ def lower_statement(
             statement, statement.bound_card_from or event, produced
         )
 
+    if isinstance(statement, ast.PutOntoBattlefield) and statement.attacking:
+        # "…onto the battlefield from your hand tapped **and attacking**"
+        # (ninjutsu's rules text, CR 702.49a). CR 508.4's entry is carried out
+        # by one handler — the ability's own card put from its owner's hand
+        # (``zones._lower_put_own_card_from_hand``) — so the word is refused
+        # here, once, for every other reading rather than dropped by each of
+        # them: a card entering untouched where the sentence says it attacks
+        # is the silent direction.
+        target = statement.target
+        if not (
+            isinstance(target, ast.TargetSpec)
+            and target.filter.is_source
+            and target.filter.zone == "hand"
+        ):
+            raise LoweringError(
+                "only the source's own put from hand enters attacking "
+                "(CR 508.4)",
+                node=statement,
+            )
+        return _lower_put_onto_battlefield(
+            statement, statement.bound_card_from or event, produced,
+        )
+
     if isinstance(statement, ast.PutOntoBattlefield):
         # One node, two families, composed here because composing them is what
         # this dispatch is for. No printed "target" plus a graveyard named by a

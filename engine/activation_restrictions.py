@@ -364,17 +364,11 @@ def _after_blockers_are_declared(game: "Game", controller_index: int, source) ->
     CR 506.8g applies to abilities): the end of combat step after it is not
     after blockers were declared, though it is the step that follows a real
     declaration too (``Game.combat_skips_blocks_and_damage``).
+
+    The window itself is ``Game.blockers_have_been_declared`` — the same clock
+    CR 509.1h's "unblocked" reads — so the two cannot drift apart.
     """
-    if game.current_turn_phase != "combat":
-        return False
-    if game.combat_skips_blocks_and_damage():
-        return False
-    if game.current_step in ("combat_damage", "end_of_combat"):
-        return True
-    return (
-        game.current_step == "declare_blockers"
-        and game.combat_blockers_locked
-    )
+    return game.blockers_have_been_declared()
 
 
 def _opponents_turn_before_attackers(game: "Game", controller_index: int, source) -> bool:

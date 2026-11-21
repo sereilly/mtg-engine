@@ -315,6 +315,73 @@ def resolve_source_counted_mana_value(filt: dict, source) -> dict:
     return resolved
 
 
+@effect_handler("put_source_card_from_hand_onto_battlefield")
+def put_source_card_from_hand_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put **this card** onto the battlefield from your hand tapped and
+    attacking." (Ninjutsu's rules text, CR 702.49a.)
+
+    The ability's own card, looked for in its activator's hand — the hand it
+    was revealed from, which is its owner's (CR 400.3) — by identity as the
+    ability resolves. Gone from there and nothing enters: "If it leaves your
+    hand before then, it won't enter the battlefield at all" (2021-03-19), and
+    a card that went and came back is a new object (CR 400.7). CR 400.4a and
+    614.17 are asked before it leaves (``stays_out_of_battlefield``).
+
+    "Tapped" is entry state (CR 110.5b), set on the object before it enters.
+    "Attacking" is CR 508.4's, written as the permanent arrives
+    (``attacking_entry.enter_attacking``), at what the stack object recorded
+    as its cost was paid — CR 702.49c's "the same player, planeswalker, or
+    battle as the creature that was returned" — and otherwise at a defending
+    player, the choice CR 508.4 gives its controller (the token road's).
+    Nothing announces an attack: it was never declared (CR 508.4, the
+    2021-03-19 ruling).
+
+    A limit worth naming: every copy of a card in a hand is one
+    ``CardDefinition``, so with two copies held, one leaving does not stop the
+    other from entering.
+    """
+    from ..attacking_entry import ENTERS_ATTACKING, enter_attacking
+
+    payload = instruction.payload
+    card = context.card
+    owner = context.caster
+    seat = game.players.index(owner)
+    if not any(held is card for held in owner.hand):
+        game.log.append(
+            f"{card.name} is no longer in {owner.name}'s hand and does not "
+            "enter the battlefield"
+        )
+        return True, "resolved"
+    if stays_out_of_battlefield(game, card, owner, "hand"):
+        return True, "resolved"
+    game.take_card_from_hand(owner, card)
+    arrival = Permanent(card=card, tapped=bool(payload.get("tapped")))
+    recorded = (context.choices or {}).get(ENTERS_ATTACKING) or {}
+
+    def arrived() -> None:
+        if not entry_happened(arrival):
+            return
+        attacked = None
+        if payload.get("attacking"):
+            target_seat = recorded.get("seat")
+            if not isinstance(target_seat, int):
+                target_seat = next(iter(sorted(game.combat_defending_players())), None)
+            if isinstance(target_seat, int) and enter_attacking(
+                game, arrival, seat=target_seat,
+                planeswalker_id=recorded.get("planeswalker_id"),
+            ):
+                attacked = game.players[target_seat].name
+        how = " tapped" if arrival.tapped else ""
+        if attacked is not None:
+            how += f" and attacking {attacked}" if how else f" attacking {attacked}"
+        game.log.append(
+            f"{owner.name} put {card.name} onto the battlefield{how}"
+        )
+
+    game._put_permanent_onto_battlefield(seat, arrival, None, then=arrived)
+    return True, "resolved"
+
+
 @effect_handler("put_chosen_card_from_hand_onto_battlefield")
 def put_chosen_card_from_hand_onto_battlefield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…put **a** permanent card from their hand onto the battlefield."

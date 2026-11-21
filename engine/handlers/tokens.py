@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..attacking_entry import enter_attacking
 from ..death_tally import died_this_turn_count
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
@@ -379,15 +380,10 @@ def _token_arrived(game: Game, payload: dict, context: OracleExecutionContext, t
         if not isinstance(defending, int):
             defending = next(iter(sorted(game.combat_defending_players())), None)
         if isinstance(defending, int):
-            slot = game.battlefield_index_of(token)
-            if slot is not None:
-                game.combat_attackers[slot] = defending
-                # CR 508.8: "put onto the battlefield attacking" keeps the
-                # declare blockers and combat damage steps as a declared
-                # attacker does.
-                game.combat_creatures_attacked = True
-                token.attacking = True
-                token.defending_player_index = defending
+            # The combat record's one write for a permanent put onto the
+            # battlefield attacking (CR 508.4), shared with ninjutsu's card
+            # (``engine/attacking_entry.py``).
+            enter_attacking(game, token, seat=defending)
 
 
 @effect_handler("create_token")

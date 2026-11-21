@@ -303,6 +303,22 @@ class ReturnSelfToHandCost:
 
 
 @dataclass(frozen=True)
+class RevealSelfFromHandCost:
+    """"**Reveal this card from your hand**" — ninjutsu's cost (CR 702.49a,
+    written out by ``engine/ninjutsu.py``).
+
+    Beside :class:`ReturnSelfToHandCost` and for its reason: nothing is
+    chosen, nothing can make it unpayable while the card is in its owner's
+    hand, and nothing is recorded. Its own node because, unlike a discard or an
+    exile, the card *stays where it is* — revealed until the ability leaves
+    the stack (CR 702.49b) — and a card on the battlefield is in no hand to be
+    revealed from, which is the whole of CR 113.6j's zone read
+    (``engine/activation_zones.py``).
+    """
+    pass
+
+
+@dataclass(frozen=True)
 class ReturnPermanentsToHandCost:
     """"**Return a Forest you control to its owner's hand**: Untap target
     creature" (Quirion Ranger); "{U}{U}, **Return two Islands you control to
@@ -533,5 +549,5 @@ Cost = Union[
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
     PutHandCardOnLibraryCost, PutGraveyardCardsOnLibraryBottomCost, MillCost,
     RemoveCounterCost, PayAttachedManaCost,
-    ReturnSelfToHandCost, UnattachGranterCost
+    ReturnSelfToHandCost, RevealSelfFromHandCost, UnattachGranterCost
 ]

@@ -24,6 +24,7 @@ from ...cost_modifiers import ability_cost_reduction, ability_cost_tax
 from ...cycling import is_cycling_ability
 from ...events import emit
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
+from ...attacking_entry import ENTERS_ATTACKING, attack_target_of
 from ...targeting import usable_activated_abilities
 from ...mana_abilities import is_mana_ability
 from ...game_types import (OracleExecutionContext, OracleStateMachine,
@@ -99,6 +100,63 @@ def hand_activation_cost(game, controller_index: int, card, ability):
     return required, notes
 
 
+#: The ``ActivatedAbilityCost`` fields a hand ability's cost may carry beside
+#: its mana — the payments ``Game.activate_from_hand`` charges. Every other
+#: field a hand ability prints refuses it (:func:`hand_cost_refusal`): an
+#: allow list over the dataclass rather than a deny list of today's fields,
+#: so a cost kind added later is refused here by default instead of waived.
+_HAND_CHARGED_COST_FIELDS = frozenset({
+    "mana",
+    # "Discard this card" (cycling, Waker of Waves).
+    "discard_self",
+    # "Exile this card from your hand" (Elvish Spirit Guide): the pair.
+    "exile_self", "exile_zone",
+    # "Reveal this card from your hand" (ninjutsu, CR 702.49a).
+    "reveal_self_from_hand",
+    # "Return an unblocked attacking creature you control to its owner's
+    # hand" (ninjutsu): the chosen return every board path charges.
+    "return_to_hand_filter", "return_to_hand_count",
+})
+
+
+def hand_cost_refusal(game, controller_index: int, card, ability) -> str | None:
+    """Why *ability*'s cost — beside its mana — cannot be paid from a hand
+    right now, or None (CR 601.2h through CR 602.2b).
+
+    Two questions, one answer for every reader: the activation itself, the
+    web layer's ``payable`` flag on the hand-ability button and the AI's hand
+    loop. A cost kind the hand door does not charge refuses outright
+    (:data:`_HAND_CHARGED_COST_FIELDS`) — the door charged mana and its one
+    card move, so anything else printed on a hand ability would have been
+    waived; and a chosen return ("Return an unblocked attacking creature you
+    control to its owner's hand", ninjutsu) with too few candidates is
+    unpayable — before blockers are declared there are none at all, because
+    no creature is unblocked yet (CR 509.1h; ``subject_matches``).
+    """
+    import dataclasses
+
+    cost = ability.cost
+    for field in dataclasses.fields(cost):
+        if field.name in _HAND_CHARGED_COST_FIELDS:
+            continue
+        default = (
+            field.default if field.default is not dataclasses.MISSING
+            else field.default_factory() if field.default_factory is not dataclasses.MISSING  # type: ignore[misc]
+            else None
+        )
+        if getattr(cost, field.name) != default:
+            return f"{card.name}: its {field.name} cost is not charged from a hand"
+    if cost.return_to_hand_count and len(
+        game._return_cost_candidates(cost, controller_index)
+    ) < cost.return_to_hand_count:
+        return (
+            f"{card.name}: not enough "
+            f"{filter_head_noun(cost.return_to_hand_filter or {})}s to return "
+            "for its cost"
+        )
+    return None
+
+
 def _graveyard_cost_refusal(cost) -> str | None:
     """Why this activation cost cannot be charged from a graveyard, or None.
 
@@ -139,6 +197,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("pay_life", "a life cost"),
         ("loyalty", "a loyalty cost"),
         ("loyalty_x_sign", "a loyalty cost"),
+        ("reveal_self_from_hand", "a reveal-this-card-from-your-hand cost"),
     ):
         if getattr(cost, field, None):
             return f"{label} is not charged from a graveyard"
@@ -219,9 +278,14 @@ class CardActivationMixin:
         card_name: str,
         ability_index: int = 0,
         hand_index: int | None = None,
+        # "…, Return an unblocked attacking creature you control to its
+        # owner's hand: …" (ninjutsu, CR 702.49a). Which permanents pay a
+        # chosen return, by id — the battlefield door's spelling; None is the
+        # deterministic pick.
+        cost_permanent_ids: "list[int] | None" = None,
     ) -> SimulationResult:
         """Activate an ability of a card **in hand** — cycling (CR 702.29a),
-        Waker of Waves.
+        Waker of Waves, ninjutsu (CR 702.49a).
 
         CR 113.6: an ability functions only from the battlefield unless
         something says otherwise, and a cost the card can only pay from hand —
@@ -285,6 +349,41 @@ class CardActivationMixin:
                 card.name, "unsupported", prohibited.details,
             )
 
+        # CR 601.2h before anything is paid: a cost kind this door does not
+        # charge refuses rather than being waived, and a chosen return with
+        # too few candidates is unpayable — ninjutsu's "unblocked attacking
+        # creature" has none before blockers are declared (CR 509.1h).
+        unpayable = hand_cost_refusal(self, controller_index, card, ability)
+        if unpayable is not None:
+            return refuse(card.name, "unsupported", unpayable)
+        # …and which permanents pay the chosen return: the payer's named ids
+        # first, a named one that cannot pay being a refusal rather than a
+        # request for the default (CR 601.2h, ``_named_cost_refusal``), then
+        # the deterministic pick in board order — the battlefield door's rule.
+        returned: list = []
+        wanted_returns = ability.cost.return_to_hand_count
+        if wanted_returns:
+            candidates = self._return_cost_candidates(ability.cost, controller_index)
+            named_cost_refusal = self._named_cost_refusal(
+                card, controller, candidates, cost_permanent_ids or None, None,
+            )
+            if named_cost_refusal is not None:
+                return refuse(card.name, "unsupported", named_cost_refusal)
+            for found in (
+                self.permanent_by_id(pid) for pid in (cost_permanent_ids or ())
+            ):
+                if (
+                    found is not None and len(returned) < wanted_returns
+                    and any(found is candidate for candidate in candidates)
+                    and not any(found is chosen for chosen in returned)
+                ):
+                    returned.append(found)
+            for candidate in candidates:
+                if len(returned) >= wanted_returns:
+                    break
+                if not any(candidate is chosen for chosen in returned):
+                    returned.append(candidate)
+
         # CR 601.2f: the cost is computed as the ability is activated, and
         # that includes every increase and reduction on any battlefield —
         # "Activated abilities of creatures cost {1} more" (Gloom's family)
@@ -323,25 +422,64 @@ class CardActivationMixin:
             )
             return refuse(card.name, "unsupported", details)
 
-        # The card leaves the hand as the cost is paid (CR 602.2b), before the
-        # ability is on the stack — so an effect that looks at the hand during
-        # resolution does not see the card that paid for it.
-        del controller.hand[index]
-        if ability.cost.exile_self and not ability.cost.discard_self:
-            # "**Exile this card from your hand**: Add {G}." (Elvish Spirit
-            # Guide.) The other cost that names a hand, and not a discard: the
-            # card goes to exile, so nothing watching a discard sees one and
-            # nothing can bring it back from a graveyard.
-            self.put_card_into_exile(controller, card)
+        if ability.cost.reveal_self_from_hand:
+            # "Reveal this card from your hand" (ninjutsu, CR 702.49a). The
+            # card stays where it is — revealed to every player until the
+            # ability leaves the stack (CR 702.49b), which the stack object
+            # naming it shows — and is put onto the battlefield only if it is
+            # still there as the ability resolves.
+            self.record_reveal(controller_index, [card.name])
             self.log.append(
-                f"{controller.name} exiled {card.name} from their hand to "
+                f"{controller.name} revealed {card.name} from their hand to "
                 "activate its ability"
             )
         else:
-            self._discard_card(controller, card, as_cost=True)
-            self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
-            if is_cycling_ability(card, ability):
-                self._announce_cycle(controller_index, card)
+            # The card leaves the hand as the cost is paid (CR 602.2b), before
+            # the ability is on the stack — so an effect that looks at the
+            # hand during resolution does not see the card that paid for it.
+            del controller.hand[index]
+            if ability.cost.exile_self and not ability.cost.discard_self:
+                # "**Exile this card from your hand**: Add {G}." (Elvish
+                # Spirit Guide.) The other cost that names a hand, and not a
+                # discard: the card goes to exile, so nothing watching a
+                # discard sees one and nothing can bring it back from a
+                # graveyard.
+                self.put_card_into_exile(controller, card)
+                self.log.append(
+                    f"{controller.name} exiled {card.name} from their hand to "
+                    "activate its ability"
+                )
+            else:
+                self._discard_card(controller, card, as_cost=True)
+                self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
+                if is_cycling_ability(card, ability):
+                    self._announce_cycle(controller_index, card)
+
+        # The chosen return, paid at the same moment (CR 601.2h): what the
+        # first returned creature was attacking is read first, while its slot
+        # still says (CR 702.49c — once returned it is removed from combat,
+        # CR 506.4), and rides the stack object for the entry it decides.
+        choices: dict = {}
+        if returned:
+            attacked = attack_target_of(self, returned[0])
+            if attacked is not None:
+                choices[ENTERS_ATTACKING] = attacked
+            with self.entering_together(), self.leaving_together():
+                for returned_for_cost in returned:
+                    owner_seat = self.owner_index_of(returned_for_cost)
+                    name = returned_for_cost.card.name
+                    self.remove_from_battlefield(returned_for_cost)
+                    self.put_card_into_hand(
+                        self.players[
+                            owner_seat if owner_seat is not None else controller_index
+                        ],
+                        returned_for_cost.card,
+                        from_battlefield=returned_for_cost,
+                    )
+                    self.log.append(
+                        f"{controller.name} returned {name} to its owner's "
+                        f"hand to activate {card.name}"
+                    )
 
         if is_mana_ability(ability):
             # CR 605.3b: an activated mana ability does not use the stack,
@@ -374,10 +512,12 @@ class CardActivationMixin:
                 ability_instruction=ability.instruction,
                 ability_effect_kind=ability.effect_kind,
                 # No source permanent: the object is a card in a graveyard by
-                # now, and an ability activated from hand has none by
-                # construction. A handler that needs one refuses on its own.
+                # now (or still in the hand, revealed), and an ability
+                # activated from hand has none by construction. A handler that
+                # needs one refuses on its own.
                 source_permanent=None,
                 ability_text=ability.source_line,
+                choices=choices,
             )
         )
         self.log.append(f"{card.name} ability added to stack")

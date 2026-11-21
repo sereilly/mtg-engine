@@ -716,6 +716,14 @@ class PutOntoBattlefield:
     #: under the *ability's controller* while the card names somebody else —
     #: so every branch that does not read the actor refuses the words.
     under_actors_control: bool = False
+    #: "Put this card onto the battlefield from your hand tapped **and
+    #: attacking**." (Ninjutsu's rules text, CR 702.49a.) CR 508.4: a creature
+    #: put onto the battlefield attacking was never declared as an attacker,
+    #: and which player it attacks is chosen as it enters unless the effect
+    #: says. Recorded rather than swallowed, and refused by every lowering
+    #: but the one that enters the card attacking
+    #: (``statement_dispatch``'s ``PutOntoBattlefield`` arm says so once).
+    attacking: bool = False
 
 
 @dataclass(frozen=True)

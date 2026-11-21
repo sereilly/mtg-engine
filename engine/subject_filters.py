@@ -1022,6 +1022,14 @@ def subject_matches(
     # matcher runs. Refusing rather than ignoring is what the pure half does
     # with every seat-relative key, and this is the reader that supplies the
     # seat.
+    # "…an **unblocked** attacking creature" (ninjutsu's cost, Gossamer
+    # Chains' target). CR 509.1h makes "unblocked" a status a creature gets
+    # when blockers are declared — before that an attacker is "neither
+    # blocked nor unblocked" (the ninjutsu rulings, 2021-03-19). The pure
+    # matcher reads the permanent's half (attacking and not blocked); the
+    # clock is the game's, answered here and the key left for the pure half.
+    if described.get("unblocked_only") and not game.blockers_have_been_declared():
+        return False
     if described.get("attacked_you_this_turn"):
         from .turn_state import attacked_seat_this_turn
 
