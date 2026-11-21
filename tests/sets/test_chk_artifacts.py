@@ -466,7 +466,7 @@ from tests.helpers import settle as _w2g3_settle
 
 
 def _w2g3_card(set_pool, name):
-    for code in ("CHK", "LEA"):
+    for code in ("CHK", "LEA", "INV"):
         pool = set_pool(code)
         if name in pool:
             return pool[name]
@@ -675,5 +675,131 @@ def test_w2g3_hankyu_destroyed_in_response(set_pool):
     _w2g3_settle(game)
     assert not game.is_on_battlefield(hankyu)
     assert game.players[1].life == 18
+
+
+def _w2g3_shell_table(set_pool, *, their_hand=(), mine=("Shell of the Last Kappa",),
+                      interactive=()):
+    game, placed, theirs = _w2g3_table(
+        set_pool, mine=mine, theirs=["Hill Giant"], interactive=interactive,
+    )
+    game.players[1].hand.extend(_w2g3_card(set_pool, n) for n in their_hand)
+    return game, placed, theirs
+
+
+def _w2g3_shell_exile(game, shell):
+    """Shell's first ability aimed at the spell on top of the stack."""
+    shell.tapped = False
+    return game.queue_permanent_ability(
+        0, shell.card.name, permanent_index=_w2g3_slot(game, shell),
+        ability_index=0, target_stack_index=len(game.stack) - 1,
+    )
+
+
+def test_w2g3_shell_exiles_a_spell_that_targets_you_even_one_that_cant_be_countered(set_pool):
+    """"{3}, {T}: Exile target instant or sorcery spell that targets you. (The
+    spell has no effect.)" Bob's Lightning Bolt at Alice goes to Bob's exile,
+    exiled with the Shell (CR 607.2a); so does Urza's Rage, which can't be
+    countered — the 2004-12-01 ruling: exiling it "doesn't technically
+    'counter' anything". Alice takes no damage."""
+    from engine.linked_exile import linked_entries
+
+    game, mine, _theirs = _w2g3_shell_table(
+        set_pool, their_hand=["Lightning Bolt", "Urza's Rage"],
+    )
+    shell = mine[0]
+    for spell in ("Lightning Bolt", "Urza's Rage"):
+        assert game.queue_from_hand(1, spell, target_player_index=0).supported
+        assert _w2g3_shell_exile(game, shell).supported
+        _w2g3_settle(game)
+    assert game.players[0].life == 20
+    assert [c.name for c in game.players[1].exile] == ["Lightning Bolt", "Urza's Rage"]
+    assert [entry["card"].name for entry in linked_entries(shell)] == [
+        "Lightning Bolt", "Urza's Rage",
+    ]
+    assert not any("countered" in line for line in game.log)
+
+
+def test_w2g3_shell_offers_only_a_spell_that_targets_you(set_pool):
+    """The 2004-12-01 ruling: "Shell of the Last Kappa's first ability can only
+    target a spell that targets you." A Bolt at Alice's Bears is no target:
+    the activation is refused with nothing paid (the Shell stays untapped),
+    and the Bolt resolves."""
+    game, mine, _theirs = _w2g3_shell_table(
+        set_pool, their_hand=["Lightning Bolt"],
+        mine=("Shell of the Last Kappa", "Grizzly Bears"),
+    )
+    shell, bears = mine
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    refused = _w2g3_shell_exile(game, shell)
+    assert not refused.supported
+    assert not shell.tapped
+    _w2g3_settle(game)
+    assert "Grizzly Bears" in [c.name for c in game.players[0].graveyard]
+    assert game.players[1].exile == []
+
+
+def test_w2g3_shell_sacrificed_casts_one_exiled_spell_for_free(set_pool):
+    """"{3}, {T}, Sacrifice Shell of the Last Kappa: You may cast a spell from
+    among cards exiled with Shell of the Last Kappa without paying its mana
+    cost." The pile survives the Shell's sacrifice as the cost. Alice, a
+    person, is offered each exiled card in turn (``copy_cast``, the card
+    itself, ``_original``): she declines the Bolt and casts Urza's Rage out of
+    Bob's exile at Bob — one spell, so the Bolt stays exiled — and the Rage
+    goes to its owner's graveyard."""
+    game, mine, _theirs = _w2g3_shell_table(
+        set_pool, their_hand=["Lightning Bolt", "Urza's Rage"], interactive={0},
+    )
+    shell = mine[0]
+    for spell in ("Lightning Bolt", "Urza's Rage"):
+        assert game.queue_from_hand(1, spell, target_player_index=0).supported
+        assert _w2g3_shell_exile(game, shell).supported
+        _w2g3_settle(game)
+    shell.tapped = False
+    assert game.activate_permanent_ability(
+        0, shell.card.name, permanent_index=_w2g3_slot(game, shell), ability_index=1,
+    ).supported
+    offers = [c for c in game.pending_choices if c.kind == "copy_cast"]
+    assert [c.data["card_name"] for c in offers] == ["Lightning Bolt", "Urza's Rage"]
+    assert all(c.data.get("_original") for c in offers)
+    assert "Shell of the Last Kappa" in [c.name for c in game.players[0].graveyard]
+    assert game.confirm_copy_cast(0, False)
+    assert game.confirm_copy_cast(
+        0, True, card_name="Urza's Rage", target_player_index=1,
+    )
+    _w2g3_settle(game)
+    assert game.players[1].life == 17
+    assert [c.name for c in game.players[1].exile] == ["Lightning Bolt"]
+    assert "Urza's Rage" in [c.name for c in game.players[1].graveyard]
+    assert not [c for c in game.pending_choices if c.kind == "copy_cast"]
+
+
+def test_w2g3_shell_casts_an_exiled_sorcery_on_the_opponents_turn(set_pool):
+    """The cast is made while the ability resolves (CR 608.2g), so a sorcery's
+    timing does not apply: on Bob's turn Alice — a seat nobody asks, answered
+    by the AI's cast chooser out of Bob's exile — sacrifices the Shell and
+    casts the Lava Spike it took from Bob, at Bob."""
+    game, mine, _theirs = _w2g3_shell_table(set_pool, their_hand=["Lava Spike"])
+    shell = mine[0]
+    game.start_turn(1)
+    _w2g3_settle(game)
+    assert game.queue_from_hand(1, "Lava Spike", target_player_index=0).supported
+    assert _w2g3_shell_exile(game, shell).supported
+    _w2g3_settle(game)
+    assert game.players[0].life == 20
+    shell.tapped = False
+    assert _w2g3_activate(game, shell, ability_index=1).supported
+    assert game.players[1].life == 17
+    assert [c.name for c in game.players[1].graveyard] == ["Lava Spike"]
+
+
+def test_w2g3_shell_with_nothing_exiled_casts_nothing(set_pool):
+    """Sacrificed with an empty pile, the ability does nothing and offers
+    nothing."""
+    game, mine, _theirs = _w2g3_shell_table(set_pool, interactive={0})
+    assert _w2g3_activate(game, mine[0], ability_index=1).supported
+    assert not game.pending_choices
+    assert "Shell of the Last Kappa: no card exiled with it to cast" in game.log
 
 # ==== end W2G3 ====

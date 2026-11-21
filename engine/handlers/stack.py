@@ -149,10 +149,24 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
         announcement=_stack_announcement(target),
         awaiting_arrival=True,
     )
+    exile_before = list(owner.exile)
     game._bin_spell_card(
         owner, target.card, exile_instead=True,
         verb=f"was exiled by {context.card.name}",
     )
+    # "Exile target instant or sorcery spell that targets you." (Shell of the
+    # Last Kappa.) The card is exiled **with** the permanent whose ability
+    # moved it (CR 607.2a), so that permanent's "cast a spell from among cards
+    # exiled with <it>" names exactly this pile. The object the pile now holds
+    # is the one recorded (``Game.put_card_into_exile`` may hand back a new,
+    # equal object); a card that did not land in exile links nothing.
+    source = context.source_permanent
+    if instruction.payload.get("linked_to_source") and source is not None:
+        from ..linked_exile import link_exiled_card
+
+        for arrived in owner.exile:
+            if not any(arrived is held for held in exile_before):
+                link_exiled_card(source, arrived, owner_index)
     # The record goes into the resolution scratchpad under the key
     # ``record_in_context`` reads: ``create_delayed_trigger`` freezes the whole
     # scratchpad into the entry's ``captured`` and
@@ -310,6 +324,54 @@ def cast_copy_of_exiled_card(game: Game, instruction: OracleInstruction, context
         if one_of_taken(one_of):
             break
         arm_copy_cast(game, seat, card, context.card.name, one_of=one_of)
+    return True, "resolved"
+
+
+@effect_handler("cast_card_exiled_with_source")
+def cast_card_exiled_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{3}, {T}, Sacrifice Shell of the Last Kappa: You may cast a spell from
+    among cards exiled with Shell of the Last Kappa without paying its mana
+    cost." (Shell of the Last Kappa.)
+
+    The Isochron Scepter offer (``cast_copy_of_exiled_card`` above) on the
+    card itself (``copy_casts.ORIGINAL``): cast during this resolution
+    (CR 608.2g) from the exile that holds it, its mana cost waived (CR 118.9).
+
+    "Cards exiled with" the source is its linked pile (CR 607.2a), read off
+    the permanent *object* — which survives its own sacrifice as the cost
+    (``linked_exile``'s Knowledge Vault reason), so the pile is still there
+    when the ability resolves. A card that has left exile since is not
+    offered. "**A** spell from among" is one of them (CR 607.3), offered card
+    by card under one record: the first taken is the choice, declining one
+    passes to the next, and declining all casts nothing. The printed filter
+    narrows the offer; a land in the pile is never one (a land is not cast,
+    CR 305.1).
+    """
+    from ..copy_casts import arm_copy_cast, new_one_of, one_of_taken
+    from ..linked_exile import cards_still_exiled_with
+    from ._filters import _card_matches_filter
+
+    seat = next(
+        (i for i, seated in enumerate(game.players) if seated is context.caster),
+        None,
+    )
+    wanted = instruction.payload.get("filter") or {}
+    exiled = [
+        (card, owner)
+        for card, owner in cards_still_exiled_with(game, context.source_permanent)
+        if card.primary_type != "land"
+        and _card_matches_filter(card, wanted, game=game, owner=game.players[owner])
+    ]
+    if seat is None or not exiled:
+        game.log.append(f"{context.card.name}: no card exiled with it to cast")
+        return True, "resolved"
+    one_of = new_one_of()
+    for card, _owner in exiled:
+        if one_of_taken(one_of):
+            break
+        arm_copy_cast(
+            game, seat, card, context.card.name, one_of=one_of, original=True,
+        )
     return True, "resolved"
 
 
@@ -635,6 +697,31 @@ def _spell_targets_matching(
         if subject_matches(
             game, found, described, observer=observer, source=source
         ):
+            return True
+    return False
+
+
+def spell_targets_seat(game, item, seat: int | None) -> bool:
+    """Whether the stack object *item* chose the player in *seat* as a target —
+    "…instant or sorcery spell **that targets you**" (Shell of the Last Kappa),
+    "you" being the seat whose ability is asking (CR 109.5).
+
+    Read off the object's own announcement (``stack_targets.chosen_targets``,
+    CR 601.2c) and the announcements of any text spliced onto it, whose
+    targets are the spell's own (CR 702.47d) — so a Glacial Ray spliced onto a
+    host and aimed at you makes the host a spell that targets you. A target
+    once chosen still counts after it has gone (CR 115.9a counts what was
+    chosen); a seat that has left the game is no seat (CR 800.4a).
+    """
+    from ..stack_targets import chosen_targets, permanent_spell_targets_nothing
+
+    if seat is None or permanent_spell_targets_nothing(item):
+        return False
+    if getattr(game.players[seat], "lost", False):
+        return False
+    for holder in (item, *(getattr(item, "spliced", ()) or ())):
+        chosen = chosen_targets(game, holder) or ()
+        if any(t.kind == "player" and t.seat == seat for t in chosen):
             return True
     return False
 

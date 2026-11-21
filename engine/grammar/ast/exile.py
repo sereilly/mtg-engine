@@ -488,3 +488,8 @@ class CastFromExiledWith:
     """
     filter: ObjectFilter
     free: bool = True
+    #: "You may cast a spell from among cards exiled with Shell of the Last
+    #: Kappa without paying its mana cost." (Shell of the Last Kappa.) No
+    #: duration printed: the cast is made **during** the ability's resolution
+    #: (CR 608.2g) or not at all, rather than permitted until end of turn.
+    now: bool = False

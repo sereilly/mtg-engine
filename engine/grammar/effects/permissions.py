@@ -517,11 +517,20 @@ def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
     The cost waiver is required: without it the permission is a different one
     and strictly weaker, and a card that dropped the words would be cheaper to
     misread than to notice.
+
+    ``You may cast a spell from among cards exiled with Shell of the Last Kappa
+    without paying its mana cost.`` (Shell of the Last Kappa.) The same pile
+    and waiver with **no duration**: not a permission that outlasts the
+    resolution but a cast made *during* it (CR 608.2g) or not at all —
+    ``CastFromExiledWith.now``. The card naming itself ("exiled with **Shell
+    of the Last Kappa**") is the SELF token with no "this" in front.
     """
-    if not stream.accept_phrase("until", "end", "of", "turn"):
-        return None
-    stream.accept_punct(",")
+    mark = stream.mark()
+    now = not stream.accept_phrase("until", "end", "of", "turn")
+    if not now:
+        stream.accept_punct(",")
     if not stream.accept_phrase("you", "may", "cast", "a"):
+        stream.reset(mark)
         return None
     try:
         filt = parse_object_filter(stream)
@@ -533,9 +542,14 @@ def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
     # filter that would name some other zone.
     if filt.zone != "stack":
         return None
-    if not stream.accept_phrase("from", "among", "cards", "exiled", "with", "this"):
+    if not stream.accept_phrase("from", "among", "cards", "exiled", "with"):
         return None
-    if stream.accept_kind(SELF) is None:
+    if not stream.accept_word("this"):
+        # "…exiled with **Shell of the Last Kappa**": the card naming itself,
+        # one SELF token, and nothing else in this position.
+        if stream.accept_kind(SELF) is None:
+            return None
+    elif stream.accept_kind(SELF) is None:
         # The noun is **required**, not merely accepted: without it the sentence
         # still matched and the word could be deleted with no change to what was
         # lowered, which is exactly what the parse-coverage deletion probe is
@@ -548,7 +562,7 @@ def _parse_cast_from_exiled_with(stream: TokenStream) -> ast.Statement | None:
         "without", "paying", "its", "mana", "cost",
     ):
         return None
-    return ast.CastFromExiledWith(filt)
+    return ast.CastFromExiledWith(filt, now=now)
 
 
 def parse_extra_land_plays(stream: TokenStream) -> "ast.ExtraLandPlays | None":

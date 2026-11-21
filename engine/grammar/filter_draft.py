@@ -305,6 +305,8 @@ class _FilterDraft:
     subtype_match: str = "any"
     any_classes: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     targets_object: ast.ObjectFilter | None = None
+    #: See ``ast.ObjectFilter.targets_you``.
+    targets_you: bool = False
     target_count: int | None = None
 
 
@@ -349,6 +351,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         excluded_basic_lands=d.excluded_basic_lands,
         any_classes=d.any_classes,
         targets_object=d.targets_object,
+        targets_you=d.targets_you,
         target_count=d.target_count,
         created_with_source=d.created_with_source,
         put_onto_battlefield_by_source=d.put_onto_battlefield_by_source,

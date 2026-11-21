@@ -417,6 +417,13 @@ class StackTargetsMixin:
                 source=targets_source,
             ):
                 return False
+        # "…spell **that targets you**" (Shell of the Last Kappa): the player
+        # half, against the same seat (CR 109.5), through the one reader.
+        if spec.get("stack_targets_you"):
+            from .handlers.stack import spell_targets_seat
+
+            if not spell_targets_seat(self, item, caster_index):
+                return False
         # "…**with a single target** [if that target is you]" (Deflection,
         # Reflecting Mirror — CR 115.7a / CR 115.9a). Asked through the one
         # reader the retarget handler asks at resolution, against the same

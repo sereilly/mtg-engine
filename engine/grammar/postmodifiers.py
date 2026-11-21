@@ -744,6 +744,12 @@ def _parse_postmodifiers(
             # noun phrase is parsed in full and recorded whole, and every
             # lowering not written for it refuses the field by name.
             elif stream.accept_word("targets"):
+                # "…spell **that targets you**" (Shell of the Last Kappa): the
+                # player half of the same question — the seat whose ability is
+                # asking, which no noun phrase reads.
+                if stream.accept_word("you"):
+                    d.targets_you = True
+                    continue
                 stream.accept_word("a", "an")
                 d.targets_object = parse_filter(stream)
                 continue

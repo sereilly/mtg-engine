@@ -1140,6 +1140,13 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
                 None,
             ),
         }
+    # "You may cast a spell from among cards exiled with Shell of the Last
+    # Kappa without paying its mana cost." The offer casts the exiled card
+    # **itself** (``copy_casts.ORIGINAL``) — no copy is made — so the client
+    # words it so (``copy: false``); everything else about the answer is the
+    # copy offer's. Its exile is its owner's, which ``exile_seat`` already says.
+    original = bool(choice.data.get("_original"))
+    what = name if original else f"a copy of {name}"
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
@@ -1148,8 +1155,9 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
         "exile_seat": where[0],
         "exile_index": where[1],
         **hand_place,
+        **({"copy": False} if original else {}),
         "prompt": (
-            f"Cast a copy of {name} without paying its mana cost "
+            f"Cast {what} without paying its mana cost "
             f"({choice.data.get('source_name', '')})?"
         ),
     }
