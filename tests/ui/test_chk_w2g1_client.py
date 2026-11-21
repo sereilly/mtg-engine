@@ -453,3 +453,112 @@ def test_w2g1_a_tapped_creature_masako_lets_block_is_offered_and_declarable(set_
     pairs, may, verdict = asked()
     assert not any(blocker == game.players[0].battlefield.index(wurm) for blocker, _ in pairs)
     assert may is False and verdict == "Craw Wurm is tapped and can't block."
+
+
+# ---------------------------------------------------------------------------
+# Gifts Ungiven: different names, then the opponent's chain of picks
+# ---------------------------------------------------------------------------
+
+
+def _w2g1_hvh_session(seed: int = 11):
+    created = client.post("/api/sessions", json={
+        "mode": "human_vs_human", "host_name": "Caster", "guest_name": "Chooser", "seed": seed,
+    })
+    assert created.status_code == 200, created.text
+    sid = created.json()["session_id"]
+    client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Chooser"})
+    session = seat_plays_first(sid)
+    game = session.game
+    for player in game.players:
+        player.battlefield = []
+        player.hand = []
+        player.graveyard = []
+    game._sync_control()
+    return sid, game
+
+
+def _w2g1_act(sid: str, seat: int, action: str, **extra):
+    return client.post(f"/api/sessions/{sid}/action", json={"seat": seat, "action": action, **extra})
+
+
+def test_w2g1_gifts_ungiven_refuses_a_repeated_name_and_counts_the_opponents_picks(set_pool):
+    """The search is sent `distinct_names`: the grid refuses a second Lightning
+    Bolt (`searchRepeatedName`) exactly where the engine does (a 400), and
+    takes four different names. The opponent is then asked a chain of one-card
+    picks: "(1 of 2)" with `remaining` 2, and after the first answer "(2 of 2)",
+    the card already chosen marked as chosen rather than as unchoosable."""
+    sid, game = _w2g1_hvh_session()
+    game.enforce_mana_costs = False
+    caster = game.players[0]
+    caster.hand = [_w2g1_card(set_pool, "Gifts Ungiven")]
+    caster.library = [
+        _w2g1_card(set_pool, name)
+        for name in ("Lightning Bolt", "Lightning Bolt", "Shock", "Grizzly Bears", "Hill Giant", "Island")
+    ]
+    cast = _w2g1_act(sid, 0, "cast", card_name="Gifts Ungiven", target_seat=1)
+    assert cast.status_code == 200, cast.text
+    _w2g1_act(sid, 0, "pass_priority")
+    _w2g1_act(sid, 1, "pass_priority")
+    search = _w2g1_state(sid, 0)["search_library"]
+    assert search and search["distinct_names"] is True and search["max_picks"] == 4
+    cards = search["cards"]
+    clashes = run_app_js(
+        ["searchRepeatedName"],
+        """
+        const [bolt, bolt2, shock] = INPUT.cards;
+        return [
+          searchRepeatedName(INPUT.search, [bolt], bolt2),
+          searchRepeatedName(INPUT.search, [bolt], shock),
+          searchRepeatedName({...INPUT.search, distinct_names: false}, [bolt], bolt2),
+        ];
+        """,
+        {"search": search, "cards": cards},
+    )
+    assert clashes == ["Lightning Bolt", "", ""]
+    both_bolts = _w2g1_act(sid, 0, "search_library_confirm", search_picks=[
+        {"zone": "library", "index": 0}, {"zone": "library", "index": 1},
+    ])
+    assert both_bolts.status_code == 400, both_bolts.text
+    taken = _w2g1_act(sid, 0, "search_library_confirm", search_picks=[
+        {"zone": "library", "index": index} for index in (0, 2, 3, 4)
+    ])
+    assert taken.status_code == 200, taken.text
+
+    picks = _w2g1_state(sid, 1)["opponent_picks_revealed"]
+    assert picks["remaining"] == 2
+    prelude = "var seat = 1;"
+    first = run_app_js(
+        ["opponentPicksKey", "opponentPicksChosen", "rememberOpponentPick", "opponentPicksTitle",
+         "opponentPicksRevealedText"],
+        "return [opponentPicksTitle(INPUT), opponentPicksRevealedText(INPUT)];",
+        picks,
+        prelude=prelude + " var opponentPicksMemory = null;",
+    )
+    assert first[0] == "Gifts Ungiven — choose a revealed card (1 of 2)"
+    assert "You choose 2 of them, one at a time" in first[1]
+    assert "The rest go into their hand." in first[1]
+
+    bolt_slot = picks["cards"].index("Lightning Bolt")
+    answered = _w2g1_act(sid, 1, "opponent_picks_revealed_confirm", pile_index=bolt_slot)
+    assert answered.status_code == 200, answered.text
+    second_picks = _w2g1_state(sid, 1)["opponent_picks_revealed"]
+    assert second_picks["remaining"] == 1 and bolt_slot not in second_picks["legal_indices"]
+    second = run_app_js(
+        ["opponentPicksKey", "opponentPicksChosen", "rememberOpponentPick", "opponentPicksTitle",
+         "opponentPicksRevealedText"],
+        """
+        rememberOpponentPick(INPUT.first, INPUT.slot);
+        return [opponentPicksTitle(INPUT.second), opponentPicksChosen(INPUT.second),
+                opponentPicksRevealedText(INPUT.second)];
+        """,
+        {"first": picks, "second": second_picks, "slot": bolt_slot},
+        prelude=prelude + " var opponentPicksMemory = null;",
+    )
+    assert second[0] == "Gifts Ungiven — choose a revealed card (2 of 2)"
+    assert second[1] == [bolt_slot]
+    assert "Only" not in second[2]
+    giant_slot = second_picks["cards"].index("Hill Giant")
+    assert _w2g1_act(sid, 1, "opponent_picks_revealed_confirm", pile_index=giant_slot).status_code == 200
+    settle(game)
+    assert sorted(c.name for c in caster.hand) == ["Grizzly Bears", "Shock"]
+    assert {"Lightning Bolt", "Hill Giant"} <= {c.name for c in caster.graveyard}

@@ -11480,11 +11480,50 @@ function opponentPicksRevealedText(info) {
   const goes = (zone) => destinations[zone] || `to the ${zone}`;
   const total = (info.cards || []).length;
   const legal = Array.isArray(info.legal_indices) ? info.legal_indices.length : total;
+  // "Target opponent chooses **two** of those cards" (Gifts Ungiven): the
+  // engine asks one card at a time, `remaining` counting this one; a card
+  // already chosen earlier in the chain is out of `legal_indices`, and is
+  // not "can't be chosen" — it was (`opponentPicksChosen`).
+  const remaining = Math.max(1, Number(info.remaining || 1));
+  const chosen = opponentPicksChosen(info).length;
   let text = `${revealer} revealed ${total === 1 ? "this" : "these"}${from ? ` ${from}` : ""}. `
-    + `The one you choose goes ${goes(info.fate || "graveyard")}.`;
+    + (remaining > 1
+      ? `You choose ${remaining} of them, one at a time; each one you choose goes ${goes(info.fate || "graveyard")}.`
+      : `The one you choose goes ${goes(info.fate || "graveyard")}.`);
   if (info.other_fate) text += ` The rest go ${goes(info.other_fate)}.`;
-  if (legal < total) text += ` Only ${legal} of them can be chosen.`;
+  if (legal < total - chosen) text += ` Only ${legal} of them can be chosen.`;
   return text;
+}
+
+// The picks this seat already made in the chain a prompt belongs to (the
+// same card, revealer and revealed cards), by index — remembered by the click
+// that sent them, since the payload only drops them from `legal_indices`.
+let opponentPicksMemory = null;
+
+function opponentPicksKey(info) {
+  return JSON.stringify([info?.card_name || "", info?.revealer_seat ?? null, info?.cards || []]);
+}
+
+function opponentPicksChosen(info) {
+  if (!opponentPicksMemory || opponentPicksMemory.key !== opponentPicksKey(info)) return [];
+  const legal = new Set((info.legal_indices || []).map(Number));
+  return opponentPicksMemory.picked.filter((index) => !legal.has(index));
+}
+
+function rememberOpponentPick(info, index) {
+  const key = opponentPicksKey(info);
+  if (!opponentPicksMemory || opponentPicksMemory.key !== key) opponentPicksMemory = { key, picked: [] };
+  if (!opponentPicksMemory.picked.includes(index)) opponentPicksMemory.picked.push(index);
+}
+
+// The prompt's title: which pick of the chain this is, where several are owed.
+function opponentPicksTitle(info) {
+  const remaining = Math.max(1, Number(info?.remaining || 1));
+  const chosen = opponentPicksChosen(info).length;
+  const count = remaining > 1 || chosen
+    ? ` (${chosen + 1} of ${chosen + remaining})`
+    : "";
+  return `${info.card_name} — choose a revealed card${count}`;
 }
 
 function applyOpponentPicksRevealedPrompt(info) {
@@ -11503,8 +11542,9 @@ function applyOpponentPicksRevealedPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = `${info.card_name} \u2014 choose a revealed card`;
+  title.textContent = opponentPicksTitle(info);
   body.textContent = opponentPicksRevealedText(info);
+  const alreadyChosen = new Set(opponentPicksChosen(info));
   // "An opponent chooses **a creature card** from among them" (Animal
   // Magnetism): only `legal_indices` may be named \u2014 the list the resolver
   // re-checks an answer against \u2014 so the rest are shown (they were revealed,
@@ -11515,15 +11555,17 @@ function applyOpponentPicksRevealedPrompt(info) {
     info.cards
       .map(
         (name, index) =>
-          `<button type="button" class="prompt-choice-btn" data-revealed-pick="${index}"` +
-          (legal.has(index) ? "" : ` disabled title="Can't be chosen"`) +
-          `>${escapeHtml(name)}${legal.has(index) ? "" : " (can't be chosen)"}</button>`
+          `<button type="button" class="prompt-choice-btn${alreadyChosen.has(index) ? " selected" : ""}"`
+          + ` data-revealed-pick="${index}"` +
+          (legal.has(index) ? "" : ` disabled title="${alreadyChosen.has(index) ? "Chosen" : "Can't be chosen"}"`) +
+          `>${escapeHtml(name)}${legal.has(index) ? "" : alreadyChosen.has(index) ? " (chosen)" : " (can't be chosen)"}</button>`
       )
       .join("") +
     "</div>";
   steps.querySelectorAll("[data-revealed-pick]").forEach((btn) => {
     if (btn.disabled) return;
     btn.addEventListener("click", async () => {
+      rememberOpponentPick(info, Number(btn.dataset.revealedPick));
       await sendAction({
         seat,
         action: "opponent_picks_revealed_confirm",
@@ -12427,6 +12469,16 @@ function searchPicksAreOrdered(info) {
   return dests.every((dest) => dest === "library_top");
 }
 
+// "Search your library for up to four cards **with different names**" (Gifts
+// Ungiven, the search's `distinct_names`): the name a pick would repeat, or ""
+// when it repeats none. The engine refuses a second card of a name already
+// picked (a 400), so the grid refuses it first, says why, and dims the other
+// copies of every name already taken.
+function searchRepeatedName(info, pickedCards, card) {
+  if (!info?.distinct_names || !card || !card.name) return "";
+  return (pickedCards || []).some((picked) => picked && picked.name === card.name) ? card.name : "";
+}
+
 function renderSearchLibraryModal(info) {
   const modal = document.getElementById("searchLibraryModal");
   if (!modal) return;
@@ -12580,9 +12632,10 @@ function renderSearchLibraryModal(info) {
     } else if (multi) {
       // "Search your library for X cards" prints no "up to" and so must find
       // them all (CR 701.23d): the floor is the count, and "up to" said less.
-      const lead = minPicks > 0 && minPicks >= maxPicks
+      const lead = (minPicks > 0 && minPicks >= maxPicks
         ? `Choose ${maxPicks} cards`
-        : `Choose up to ${maxPicks} cards`;
+        : `Choose up to ${maxPicks} cards`)
+        + (info.distinct_names ? " with different names" : "");
       subtitle.textContent = oneDestination
         ? searchSubtitle(lead, words)
         : `${lead}. You'll choose where each one goes next.`;
@@ -12648,9 +12701,11 @@ function renderSearchLibraryModal(info) {
   function buildSlotRow() {
     const row = document.getElementById("searchLibrarySlots");
     if (!row) return;
-    row.classList.toggle("hidden", slots.length === 0);
+    row.classList.toggle("hidden", slots.length === 0 && !searchLibrarySlotNote);
     if (!slots.length) {
-      row.innerHTML = "";
+      // No descriptions, but a refusal to say (a repeated name, Gifts Ungiven).
+      row.innerHTML = searchLibrarySlotNote
+        ? `<div class="search-slot-note">${escapeHtml(searchLibrarySlotNote)}</div>` : "";
       return;
     }
     const assigned = searchSlotAssignment(slots, [...searchLibrarySelectedMulti]);
@@ -12697,6 +12752,11 @@ function renderSearchLibraryModal(info) {
           : searchLibrarySelectedKey === key;
         if (isSelected) classes.push("selected");
         if (!isLegal) classes.push("illegal");
+        // Another copy of a name already picked, where the names must differ.
+        const nameTaken = multi && !isSelected && searchRepeatedName(
+          info, [...searchLibrarySelectedMulti].map(cardAt), card,
+        );
+        if (nameTaken) classes.push("name-taken");
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
           : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
@@ -12724,8 +12784,18 @@ function renderSearchLibraryModal(info) {
         if (multi) {
           searchLibrarySlotNote = "";
           // Toggle, capped at the printed count — "up to two" never takes three.
+          const repeated = searchLibrarySelectedMulti.has(key) ? "" : searchRepeatedName(
+            info, [...searchLibrarySelectedMulti].map(cardAt), cardAt(key),
+          );
           if (searchLibrarySelectedMulti.has(key)) searchLibrarySelectedMulti.delete(key);
-          else if (slots.length) {
+          else if (repeated) {
+            searchLibrarySlotNote = `You already chose a card named ${repeated} — `
+              + `${info.card_name || "this search"}'s cards must have different names. `
+              + "Click the chosen one to release it first.";
+            updateActionHint(searchLibrarySlotNote, true);
+            buildSlotRow();
+            return;
+          } else if (slots.length) {
             // One card per description: taken only if every picked card can
             // still be given a description of its own with this one beside
             // them. Two creatures are each legal and together a refusal, and

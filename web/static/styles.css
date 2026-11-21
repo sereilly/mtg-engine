@@ -3161,6 +3161,13 @@ pre {
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* Another copy of a name already picked, where the search's cards must have
+   different names (Gifts Ungiven): dimmed, and a click says why it is refused. */
+.library-card-choice.name-taken {
+  cursor: not-allowed;
+  filter: brightness(0.6) saturate(0.4);
+}
+
 .library-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
