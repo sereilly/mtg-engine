@@ -2184,6 +2184,11 @@ h2.targeting-valid {
   width: 100%;
   text-align: left;
   white-space: normal;
+  /* The global `button` margin (6px) beside a full width overflowed the
+     column by 6px: a click on a choice scrolled the steps sideways and cut
+     the first letters off every line of text beside the buttons ("our
+     graveyard:", CHK wave 2). */
+  margin-left: 0;
 }
 
 .prompt-choice-btn {
