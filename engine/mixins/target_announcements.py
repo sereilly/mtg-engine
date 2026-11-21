@@ -859,9 +859,16 @@ class TargetAnnouncementsMixin:
         with self._announcing(item):
             self._announce_targeting_now(item)
 
-    def _announce_targeting_now(self, item) -> None:
-        """:meth:`_announce_targeting`'s announcements, inside its round."""
+    def _announce_targeting_now(self, item, *, host=None) -> None:
+        """:meth:`_announce_targeting`'s announcements, inside its round.
+
+        *host* is the spell a spliced segment rides (CR 702.47d): the segment
+        is announced as the spell-shaped object it is, and the object that
+        targeted — what "counter **that spell** or ability" names — is the
+        spell itself.
+        """
         from ..events import emit
+        from ..turn_state import record_targeted
 
         self._announce_targeted_player(item)
         for permanent_id in target_ids(item.target_permanent_id):
@@ -870,6 +877,10 @@ class TargetAnnouncementsMixin:
             targeted = self.permanent_by_id(permanent_id)
             if targeted is None:
                 continue
+            # "…for the first time each turn" (Jetting Glasskite): counted for
+            # every permanent targeted, before anything asks — the trigger
+            # that reads it fires on the announcement that makes it 1.
+            record_targeted(targeted)
             emit(
                 self, "self_becomes_target",
                 subject=targeted,
@@ -891,13 +902,21 @@ class TargetAnnouncementsMixin:
                 # the stack (CR 603.10).
                 targeted_by_card=item.card,
                 event_subject_player=item.caster_index,
+                # **Which** object targeted, by identity (CR 603.10): "counter
+                # that spell or ability" (Jetting Glasskite) finds it on the
+                # stack, and a ``StackItem`` compares by value — two casts of
+                # one card at one creature are equal. The key Psychic Battle's
+                # and Grip of Chaos's events carry the object under.
+                **{TARGETS_CHOSEN_ITEM: host if host is not None else item},
             )
         # …and what the text spliced onto it targets (CR 702.47d): the same
         # spell's targets, each segment announced as the spell-shaped object
         # it is — its card the spell's characteristics (CR 702.47c), so "the
         # target of an Arcane spell" reads the host.
         for segment in getattr(item, "spliced", ()) or ():
-            self._announce_targeting_now(segment)
+            self._announce_targeting_now(
+                segment, host=host if host is not None else item
+            )
 
     def _announce_targeted_player(self, item) -> None:
         """The **player** half of CR 603.2's "becomes the target of".

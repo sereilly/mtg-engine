@@ -682,6 +682,18 @@ dispatch scopes apart is this group, read by
 
 Above the self spelling, in the order this table's own note asks for.
 '''),
+    ('self_becomes_target', '(?P<first_time_each_turn>)', r'''
+"Whenever this creature becomes the target of a spell or ability **for the
+first time each turn**, counter that spell or ability." (Jetting and
+Shimmering Glasskite; Kira, Great Glass-Spinner grants it.) The self
+spelling narrowed by the targeted permanent's own history this turn —
+Godo's "attacks for the first time each turn" one event over: the
+announcement seam counts each permanent's targetings
+(``turn_state.record_targeted``) and `_self_becomes_target_filter` lets
+the marker through on the count of 1. Above the self row, whose words are
+a strict prefix of these and would leave the narrowing for the effect
+clause to choke on.
+'''),
     ('self_becomes_target', 'or a permanent', r'''
 "Whenever **you or a permanent you control** becomes the target of a spell
 or ability an opponent controls, you may draw a card." (Rayne, Academy

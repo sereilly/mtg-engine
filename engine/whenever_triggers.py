@@ -327,6 +327,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever this (?:creature|artifact|enchantment|land|aura|permanent) becomes "
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
      r"|an ability)"
+     r"(?: (?P<targeting_controller>an opponent controls|you control))?"
+     r" (?P<first_time_each_turn>)for the first time each turn"),
+    ("self_becomes_target",
+     r"whenever this (?:creature|artifact|enchantment|land|aura|permanent) becomes "
+     r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
+     r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     ("self_becomes_target",
      r"whenever (?P<targets_you_or_your_permanent>)you or a permanent you "

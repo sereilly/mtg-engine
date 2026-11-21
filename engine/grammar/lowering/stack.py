@@ -197,7 +197,9 @@ def _counter_targets_filter(
 
 
 def _lower_counter_spell(
-    node: ast.CounterSpell, produced: frozenset[str] = frozenset()
+    node: ast.CounterSpell,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Counter target spell", with the colour, mana-value and "unless … pays"
     riders the pool's counterspells carry. The handler chooses the spell to
@@ -556,7 +558,24 @@ def _lower_counter_spell(
         # No `targets` description at all: a trigger chooses nothing (CR 603.3),
         # and describing one would raise a spell picker in front of an ability
         # that has already been given its spell.
-        payload["bound_to_trigger"] = True
+        #
+        # **Which object the trigger bound is the event's.** Under "…becomes
+        # the target of a spell or ability" it is the object that did the
+        # targeting (Jetting Glasskite's "counter that spell or ability"),
+        # which the announcement freezes by identity
+        # (``stack_targets.TARGETS_CHOSEN_ITEM``) and which may be an
+        # ability; under a cast trigger it is the spell cast (``cast_item``).
+        # The cast record answered for both until this was asked, and under the
+        # targeting event it holds nothing, so the counter countered nothing.
+        if event == "self_becomes_target":
+            payload["bound_to_targeting_object"] = True
+        elif filt.also_ability:
+            raise LoweringError(
+                '"that spell or ability" names the object that targeted, and '
+                "only a targeting event binds one", node=node,
+            )
+        else:
+            payload["bound_to_trigger"] = True
         return (OracleInstruction("counter_top_stack_spell", "", payload),)
     # A counterspell targets a *spell on the stack*, not a permanent. Describing
     # it with the generic object shape would tell the targeting layer to offer

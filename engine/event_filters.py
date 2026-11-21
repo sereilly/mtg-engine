@@ -387,6 +387,19 @@ def _self_becomes_target_filter(
         # look-alike on the same battlefield is a different permanent and would
         # otherwise draw its controller two cards.
         return False
+    if "first_time_each_turn" in trig.condition.payload:
+        # "…becomes the target of a spell or ability **for the first time each
+        # turn**" (Jetting Glasskite; Kira's grant). The targeted permanent's
+        # own history this turn, counted by the announcement seam for every
+        # permanent whatever it says (``turn_state.record_targeted``) — so
+        # this is the announcement that made it 1, a second spell this turn
+        # finds 2, one spell naming it twice (CR 115.3) triggers once, and a
+        # creature that gained the ability after it was first targeted finds
+        # the first time already past. Godo's attack count, one event over.
+        from .turn_state import times_targeted_this_turn
+
+        if event.subject is None or times_targeted_this_turn(event.subject) != 1:
+            return False
     wanted = trig.condition.payload.get("targeted_by")
     if wanted in ("a spell", "an ability"):
         if event.payload.get("targeted_by") != wanted:
