@@ -22,6 +22,8 @@ from ...cost_modifiers import (CostReduction, cost_reduction_for_cast,
                                keyword_cost_modifiers, reduce_cost,
                                spell_cost_tax, spell_symbol_tax)
 from ...models import CardDefinition, Permanent
+from ...oracle_types import (carries_x_bound, substitute_x_bounds,
+                             without_x_bounds)
 from ...subject_filters import card_matches_any, filter_head_noun
 
 
@@ -126,9 +128,20 @@ class AlternativeCastCostsMixin:
         *,
         spell_hand_index: int | None,
         spell: "CardDefinition | None" = None,
+        x_value: "int | None" = None,
     ) -> list["CardDefinition"]:
         """The cards in hand that could pay *cost*'s exile or discard, in hand
         order.
+
+        *x_value* is CR 107.3a's announcement, for a card the clause bounds by
+        it — "exile a red card **with mana value X**" (the Shoals): the cards
+        whose mana value is the announced X. None is "not announced yet", and
+        then every card the rest of the phrase names may pay, its mana value
+        becoming the X (``Game.x_named_by_alternative_card``): a caster who
+        names the card has named the number, which is the pairing the cast
+        path's ``_x_implied_by_target`` makes for "with mana value X" on a
+        target. Never the raw bound — the matcher would compare a mana value
+        against the string ``"x"``.
 
         One enumeration for the gate, the named-card check and the payment, the
         arrangement ``_discard_cost_payers`` and ``_additional_cost_candidates``
@@ -150,6 +163,11 @@ class AlternativeCastCostsMixin:
             cost.exile_from_hand if cost.exile_from_hand is not None
             else cost.discard_from_hand
         )
+        if wanted and carries_x_bound(wanted):
+            wanted = (
+                without_x_bounds(wanted) if x_value is None
+                else substitute_x_bounds(wanted, x_value)
+            )
         payers = [
             held
             for position, held in enumerate(self.players[caster_index].hand)
@@ -184,8 +202,14 @@ class AlternativeCastCostsMixin:
         spell_hand_index: int | None,
         required: "AlternativeCost | None" = None,
         chosen_index: int | None = None,
+        x_value: "int | None" = None,
     ) -> "tuple[AlternativeCost | None, CardDefinition | None, str | None]":
         """CR 601.2b's announcement: ``(cost taken, card that pays it, refusal)``.
+
+        *x_value* is the X announced with the cast, for a card the clause
+        bounds by it ("a red card with mana value X", the Shoals): the card
+        named, or the default pick, must have that mana value. None leaves the
+        bound to the card — see ``_alternative_cost_payers``.
 
         *required* is the alternative cost the **permission** this cast is
         made under demands (CR 118.9b; flashback, CR 702.34a). It is not an
@@ -243,6 +267,7 @@ class AlternativeCastCostsMixin:
             return cost, None, None
         payable = self._alternative_cost_payers(
             caster_index, cost, spell_hand_index=spell_hand_index, spell=card,
+            x_value=x_value,
         )
         if named_hand_index is None:
             # Nothing named is the deterministic default, which keeps AI and
@@ -268,9 +293,38 @@ class AlternativeCastCostsMixin:
             # keep. The same answer the discard cost beside it gives.
             return None, None, (
                 f"{card.name} can't be cast: {hand[named_hand_index].name} does "
-                f"not answer its alternative cost (CR 118.9)"
+                f"not answer its alternative cost"
+                + (
+                    f" with X = {x_value}"
+                    if x_value is not None and cost.exile_from_hand_counts_x
+                    else ""
+                )
+                + " (CR 118.9)"
             )
         return cost, hand[named_hand_index], None
+
+    @staticmethod
+    def x_named_by_alternative_card(
+        cost: "AlternativeCost | None", paying: "CardDefinition | None",
+    ) -> "int | None":
+        """The X a card paying *cost* names, when the cost bounds that card by
+        X and no X was announced, else None.
+
+        "You may exile a blue card with mana value X from your hand rather
+        than pay this spell's mana cost." (Disrupting Shoal.) CR 107.3a makes
+        X the caster's announcement and the clause then holds the exiled card
+        to it; a caster who named the card and not the number has named the
+        number too — the only one the pair is legal at. The card is in a hand,
+        so its mana value counts any {X} it prints as 0 (CR 202.3e; the
+        ruling of 2018-12-07: "If a card in your hand has {X} in its mana
+        cost, X is considered to be 0").
+        """
+        if cost is None or paying is None or not cost.exile_from_hand_counts_x:
+            return None
+        # ``cmc``, the field the hand matcher's own "mana value" key reads
+        # (``handlers/_filters``), so the X named here is the one the payer
+        # list was filtered by.
+        return int(getattr(paying, "cmc", 0) or 0)
 
     @staticmethod
     def alternative_cost_permanent_payment(
@@ -545,10 +599,19 @@ class AlternativeCastCostsMixin:
             or cost.discard_from_hand is not None
         ) and not self._alternative_cost_payers(
             caster_index, cost, spell_hand_index=spell_hand_index, spell=card,
+            # "…a red card with mana value X" (the Shoals): the announced X,
+            # or any mana value when it is the card that names X.
+            x_value=x_value if cost.exile_from_hand_counts_x else None,
         ):
             return (
                 f"{head}: no card in hand answers "
-                f"{its_cost}, {cost.describe()} (CR 601.2h)"
+                f"{its_cost}, {cost.describe()}"
+                + (
+                    f" with X = {x_value}"
+                    if x_value is not None and cost.exile_from_hand_counts_x
+                    else ""
+                )
+                + " (CR 601.2h)"
             )
         # "…discard an Island card **and another card**" (Foil). The Island
         # alone is no more a payment than none: the gate counts the cards left
@@ -716,6 +779,7 @@ class AlternativeCastCostsMixin:
         cost: "AlternativeCost | None",
         *,
         spell_graveyard_slot: "int | None" = None,
+        spell_hand_index: "int | None" = None,
     ) -> "int | None":
         """The largest X *cost*'s counted clauses leave payable, or None when
         it counts nothing by X.
@@ -730,6 +794,19 @@ class AlternativeCastCostsMixin:
         if cost is None:
             return None
         bounds: list[int] = []
+        if cost.exile_from_hand_counts_x:
+            # "…exile a red card **with mana value X** from your hand" (the
+            # Shoals): only an X some card in hand has is payable at all, so
+            # the largest is the one card with the most mana value — an exact
+            # match, never a ceiling with gaps below it. The spell itself is
+            # withheld where its position is known (CR 601.2a).
+            values = [
+                self.x_named_by_alternative_card(cost, held)
+                for held in self._alternative_cost_payers(
+                    caster_index, cost, spell_hand_index=spell_hand_index,
+                )
+            ]
+            bounds.append(max((v for v in values if v is not None), default=0))
         if cost.sacrifice_count_x and cost.sacrifice_filter is not None:
             bounds.append(len(self._additional_cost_candidates(caster_index, cost)))
         if cost.exile_graveyard_count_x and cost.exile_graveyard_filter is not None:

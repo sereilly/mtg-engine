@@ -360,11 +360,35 @@ class AlternativeCost:
         in a clause that is not mana at all. Both are "an alternative cost that
         includes X" (CR 107.3b), so paying either keeps the announced X — only
         an alternative cost with no X anywhere locks X to 0.
+
+        "You may exile a red card **with mana value X** from your hand rather
+        than pay this spell's mana cost" (the Betrayers of Kamigawa Shoals) has
+        it in the *card* the clause names: CR 107.3a's "alternative cost with
+        … X in it", so X is the caster's announcement and the exiled card must
+        have that mana value (:attr:`exile_from_hand_counts_x`).
         """
         return (
             "{X}" in (self.mana or "").upper()
             or self.sacrifice_count_x
             or self.exile_graveyard_count_x
+            or self.exile_from_hand_counts_x
+        )
+
+    @property
+    def exile_from_hand_counts_x(self) -> bool:
+        """Whether the card this cost exiles from hand is bounded by the
+        announced X — "a blue card **with mana value X**" (Disrupting Shoal).
+
+        The bound rides the filter as ``oracle_types.X_BOUND``, the value every
+        "with mana value X" narrowing carries, and is resolved against the
+        announcement by ``substitute_x_bounds`` wherever the hand is scanned
+        (``Game._alternative_cost_payers``): asked of the raw filter, the
+        matcher would compare a mana value against the string ``"x"``.
+        """
+        from .oracle_types import carries_x_bound
+
+        return self.exile_from_hand is not None and carries_x_bound(
+            self.exile_from_hand
         )
 
     def sacrificed_count(self, x_value: "int | None") -> int:
@@ -425,7 +449,14 @@ class AlternativeCost:
                 )
             )
         if self.exile_from_hand is not None:
-            parts.append(f"exile {_a_card_answering(self.exile_from_hand)} from your hand")
+            # "…a red card **with mana value X**" (the Shoals): the bound the
+            # card is held to is the announcement, spelled so the offer names
+            # the price the gate measures.
+            parts.append(
+                f"exile {_a_card_answering(self.exile_from_hand)}"
+                + (" with mana value X" if self.exile_from_hand_counts_x else "")
+                + " from your hand"
+            )
         if self.sacrifice_filter is not None:
             # ``board_noun``, not ``filter_head_noun``. Every card in the pool
             # that prints this clause names a *land subtype* -- Fireblast's two

@@ -894,8 +894,18 @@ class SpellCastingMixin:
                     morph_cost if morph_cost is not None
                     else permission.cost if permission is not None else None
                 ),
+                # "…a red card with mana value X" (the Shoals): the card
+                # named must have the X announced (CR 107.3a).
+                x_value=x_value,
             )
         )
+        if alternative_denial is None and x_value is None:
+            # …and a caster who named the card and not the number named the
+            # number too: the exiled card's mana value is the X (CR 107.3a),
+            # settled here so every gate below and the resolution read it.
+            x_value = self.x_named_by_alternative_card(
+                chosen_alternative, alternative_card,
+            )
         if alternative_denial is None:
             # …and which permanents pay its sacrifice / return / tap half, named
             # by id and checked now, for the hand card's reason above: a named

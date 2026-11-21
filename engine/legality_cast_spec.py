@@ -863,6 +863,18 @@ class CastTargetSpecMixin:
                     if position != spell_hand_index
                     and any(held is payer for payer in payers)
                 ]
+                if cost.exile_from_hand_counts_x:
+                    # "…exile a red card **with mana value X** from your hand"
+                    # (the Shoals): the card chosen *is* the X announced
+                    # (CR 107.3a), so each choice carries the number it names
+                    # and the client sends that X, or none — the cast reads an
+                    # unannounced X off the card (``x_named_by_alternative_card``)
+                    # and refuses a card whose mana value is not the X sent.
+                    entry["x_is_chosen_card_mana_value"] = True
+                    for choice in entry["hand_choices"]:
+                        choice["x"] = self.x_named_by_alternative_card(
+                            cost, caster.hand[choice["index"]],
+                        )
                 # Which zone the chosen card goes to, so the button names it:
                 # "Discard a Swamp card" (Outbreak) and Dream Halls' granted
                 # discard were offered as "Exile Swamp", a price the player is
