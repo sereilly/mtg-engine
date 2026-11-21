@@ -211,17 +211,7 @@ def _shuffle_whole_tables_into_libraries(game, players, *, then_draw_count) -> N
         game.players.index(player): (list(player.hand), list(player.graveyard))
         for player in players
     }
-    owned = {seat: 0 for seat in seats}
-    with game.entering_together(), game.leaving_together():
-        for perm in list(game.all_permanents()):
-            owner_index = game.owner_index_of(perm)
-            if owner_index not in seats or not game.is_on_battlefield(perm):
-                continue
-            owner = game.players[owner_index]
-            game.remove_from_battlefield(perm)
-            game._remove_aura_effects(perm)
-            game.put_card_into_library(owner, perm.card, from_battlefield=perm)
-            owned[owner_index] += 1
+    owned = _owned_permanents_into_libraries(game, seats)
     for player in players:
         seat = game.players.index(player)
         hand, graveyard = piles[seat]
@@ -246,6 +236,28 @@ def _shuffle_whole_tables_into_libraries(game, players, *, then_draw_count) -> N
         )
         if then_draw_count is not None:
             game._draw_with_replacements(player, int(then_draw_count))
+
+
+def _owned_permanents_into_libraries(game, seats: set) -> dict:
+    """Every permanent a seat in *seats* owns (CR 108.3), off the battlefield
+    in one event (CR 603.10a) and into its owner's library (CR 400.3) through
+    the seam that is told which permanent left (a token ceases to exist
+    there, CR 111.8). How many each seat's library took, by seat.
+
+    Its own function so the hand and graveyard cards the caller moves are
+    never read as battlefield exits (``test_leave_battlefield_seam``)."""
+    owned = {seat: 0 for seat in seats}
+    with game.entering_together(), game.leaving_together():
+        for perm in list(game.all_permanents()):
+            owner_index = game.owner_index_of(perm)
+            if owner_index not in seats or not game.is_on_battlefield(perm):
+                continue
+            owner = game.players[owner_index]
+            game.remove_from_battlefield(perm)
+            game._remove_aura_effects(perm)
+            game.put_card_into_library(owner, perm.card, from_battlefield=perm)
+            owned[owner_index] += 1
+    return owned
 
 
 @effect_handler("shuffle_graveyard_into_library")
