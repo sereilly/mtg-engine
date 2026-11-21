@@ -47,7 +47,8 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER,
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import _stamp_x_from_count, count_spec
-from ._collapses import (each_seat_pays_its_own_toll,
+from ._collapses import (defending_player_performs_its_toll,
+                         each_seat_pays_its_own_toll,
                          event_seat_performs, offered_seat_performs,
                          without_restated_target,
                          _each_player_optional_discard,
@@ -960,6 +961,10 @@ def _lower_may(
     # put to every one of them — before the actor is resolved below, which
     # would otherwise read "they" as the resolution's one target seat.
     node = each_seat_pays_its_own_toll(node)
+    # "…unless **defending player sacrifices** a creature of their choice"
+    # (Ogre Marauder): the offered seat performs its own toll, for the
+    # line above's reason with one seat the combat named.
+    node = defending_player_performs_its_toll(node)
     for collapse in (
         _each_player_optional_discard,
         _each_player_optional_pay_mana,

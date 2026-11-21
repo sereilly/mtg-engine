@@ -335,6 +335,42 @@ def offered_seat_performs(node: ast.May) -> ast.May:
     )
 
 
+def defending_player_performs_its_toll(node: ast.May) -> ast.May:
+    """"Whenever this creature attacks, it gains 'this creature can't be
+    blocked' until end of turn **unless defending player sacrifices a
+    creature of their choice**." (Ogre Marauder.) *node* with the toll's
+    performer spelled as the seat the offer is put to.
+
+    CR 118.12a reads the toll as "defending player may sacrifice a creature;
+    if they don't, it gains …", so the parser hands over an offer to
+    ``defending_player`` whose action names the same seat as its performer.
+    ``handlers/control_flow._offer_to_seat`` *rebinds* for that actor
+    (``_EACH_ACTORS``: CR 506.2 makes it a seat the combat named, not one the
+    resolution holds), so while the defender's copy of the offer resolves the
+    defender is its ``caster`` — and the sacrifice is theirs spelled "you",
+    exactly the rewrite :func:`each_seat_pays_its_own_toll` makes for a set
+    of seats. Left as printed, the action was lowered with the event cleared
+    (the offer's branches lose it, ``_lower_may``) and refused naming a seat
+    nothing recorded.
+
+    A sacrifice alone: the one action the pool prints for this seat to take
+    as a toll, and the one ``sacrifice_matching_permanent`` performs from
+    ``caster``. Any other action keeps its printed performer and its refusal.
+    """
+    action = node.action
+    if not (
+        isinstance(node.actor, ast.PlayerRef)
+        and node.actor.kind == "defending_player"
+        and isinstance(action, ast.Sacrifice)
+        and isinstance(action.player, ast.PlayerRef)
+        and action.player.kind == "defending_player"
+    ):
+        return node
+    return dataclasses.replace(
+        node, action=dataclasses.replace(action, player=ast.PlayerRef("you"))
+    )
+
+
 def each_seat_pays_its_own_toll(node: ast.May) -> ast.May:
     """"When this creature enters, **each opponent** sacrifices a permanent of
     their choice **unless they pay {3}**." (Rishadan Brigand, Cutpurse,
