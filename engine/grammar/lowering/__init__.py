@@ -131,6 +131,7 @@ from .characteristics import (
     _lower_pump,
     _lower_change_text,
     _lower_turn_face,
+    _lower_flip_permanent,
 )
 from .colors import _lower_become_color
 from .types import (
@@ -582,6 +583,7 @@ __all__ = [
     "_lower_land_type_while_counter",
     "_lower_become_that_type",
     "_lower_turn_face",
+    "_lower_flip_permanent",
     "_lower_change_supertype",
     "_lower_lose_type",
     "_lower_become_aura",

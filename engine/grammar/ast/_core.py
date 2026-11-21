@@ -214,6 +214,21 @@ class CountOfDiscardsThisWay:
 
 
 @dataclass(frozen=True)
+class CountShortfall:
+    """"…for each **card fewer than three** in their hand." (Stabwhisker the
+    Odious.)
+
+    A count that is a *shortfall*: how many of the counted objects are
+    missing below *base* — ``max(0, base - count)`` (CR 107.1b: never
+    negative). The Rack's "3 minus the number of cards in their hand" said as
+    a per-each multiplier. ``counted`` is the noun phrase of the pile ("card"
+    with the zone phrase after the number), ``base`` the printed number.
+    """
+    counted: "ObjectFilter"
+    base: int
+
+
+@dataclass(frozen=True)
 class EachLifeGained:
     """"…that player loses 2 life **for each 1 life they gained**." (False
     Cure.)

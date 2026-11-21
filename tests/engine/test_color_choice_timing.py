@@ -35,7 +35,7 @@ from engine.aura_attachment import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.mana_abilities import is_mana_ability
 from engine.models import Permanent
-from engine.faces import castable_faces
+from engine.faces import castable_faces, text_faces
 from engine.oracle import compile_card_oracle
 
 #: Every printed spelling of a colour chosen while the effect is applied. "A
@@ -64,7 +64,7 @@ def _w3g2_catalog():
     for card in load_cards(manifest_set_paths(include_measured=True)):
         # One entry per **spell**: a split card's printed lines are on its
         # halves (CR 709.4c), and read whole it has none to hold to this guard.
-        for spell in castable_faces(card):
+        for spell in (text_faces(card) or castable_faces(card)):  # a flip card's bottom half too (faces.text_faces, CR 710)
             cards.setdefault(spell.name, spell)
     return cards
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from engine.faces import face_cards
+from engine.faces import text_faces
 from engine import Game, PlayerState, classify_card
 
 
@@ -63,7 +63,8 @@ def test_classify_card_never_widens_the_compilers_answer():
         # The card *and* each of its faces: `classify_card` is asked of a
         # whole card by the catalog and of a half by the cast path.
         for whole in load_cards(manifest_set_paths(include_measured=True))
-        for card in (whole, *face_cards(whole))
+        # Each text box: a split card's halves, a flip card's bottom half (CR 710).
+        for card in (whole, *[face for face in text_faces(whole) if face is not whole])
         if classify_card(card).supported != compile_card_oracle(card).supported
     ]
 

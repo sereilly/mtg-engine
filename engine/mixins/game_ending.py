@@ -1323,6 +1323,7 @@ class GameEndingMixin:
         emit = _late.events.emit
         STATE_TRIGGER_LATCH = _late.state_triggers.STATE_TRIGGER_LATCH
         announce_watched_counter_thresholds = _late.state_triggers.announce_watched_counter_thresholds
+        announce_source_keyword_states = _late.state_triggers.announce_source_keyword_states
 
         # The two draw announcements — "your second card each turn" and CR
         # 121.2's per-card event — are one method, because the draw step asks
@@ -1628,6 +1629,11 @@ class GameEndingMixin:
         # sweep is its own function (`engine/state_triggers.py`) rather than a
         # sixth block here.
         if announce_watched_counter_thresholds(self):
+            any_changed = True
+        # "When this creature has flying, flip it." (Student of Elements.) The
+        # keyword state trigger with an effect that goes on the stack — the
+        # Floodgate sweep above performs only its own sacrifice.
+        if announce_source_keyword_states(self):
             any_changed = True
 
         return any_changed

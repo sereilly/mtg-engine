@@ -310,9 +310,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage",
      r"whenever (?P<damaged_subject>an? [^,]+) is dealt damage"),
-    ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
+    # "When**ever**" or "When" (Bushi Tenderfoot's flip, CR 603.1: the two
+    # trigger words are one ability), the "when" table's bare death row
+    # stepping aside for both spellings.
+    ("creature_dealt_damage_by_self_dies",
+     r"when(?:ever)? a creature dealt damage by this creature this turn dies"),
     ("creature_dealt_damage_by_attached_dies",
-     r"whenever a creature dealt damage by (?:enchanted|equipped) creature "
+     r"when(?:ever)? a creature dealt damage by (?:enchanted|equipped) creature "
      r"this turn dies"),
     ("self_becomes_target",
      r"when(?:ever)? enchanted (?P<targeted_attached>[a-z]+) becomes "

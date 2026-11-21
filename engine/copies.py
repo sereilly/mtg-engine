@@ -207,6 +207,10 @@ def become_copy(
         # the copy is a face-up object, and the card a face-down permanent
         # wears is the one place the hidden card may ride.
         copied = _late.face_down.FACE_DOWN_CHARACTERISTICS
+    # CR 707.2: "status … not copied", and flipped is a status (CR 110.5). A
+    # copy of a flipped Kenzo the Hardhearted copies the flip card — Bushi
+    # Tenderfoot — and is flipped only if it is (CR 707.3; the fold below).
+    copied = _late.flip_cards.unflipped_card(copied)
     kept.append({
         "source": owner,
         "card": copied,
@@ -508,7 +512,24 @@ def copiable_card(permanent: "Permanent") -> "CardDefinition":
         # sentence).
         return permanent.card
     ordered = derived + sorted(entries or (), key=lambda item: item["timestamp"])
-    return _fold(permanent.card, ordered)
+    return _fold(permanent.card, _as_flipped(permanent, ordered))
+
+
+def _as_flipped(permanent: "Permanent", ordered: list[dict]) -> list[dict]:
+    """*ordered* with each copied flip card read as its bottom half when
+    *permanent* is flipped — CR 707.3: "The copy's copiable values become the
+    copied information, as modified by the copy's status." Tomoya the Revealer
+    (flipped) becoming a copy of Nezumi Shortfang is Stabwhisker the Odious
+    (the rule's example). *ordered* itself, unallocated, for every unflipped
+    permanent."""
+    flip_cards = _late.flip_cards
+    if not flip_cards.is_flipped(permanent):
+        return ordered
+    return [
+        {**entry, "card": flip_cards.flipped_face(entry["card"])}
+        if flip_cards.is_flip_card(entry.get("card")) else entry
+        for entry in ordered
+    ]
 
 
 def face_up_copiable_card(permanent: "Permanent") -> "CardDefinition":

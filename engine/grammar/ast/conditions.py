@@ -134,6 +134,21 @@ class ZoneHasCards:
 
 
 @dataclass(frozen=True)
+class RecordedPileHasCards:
+    """"If **no cards are in that graveyard**, flip this creature." (Nezumi
+    Graverobber.)
+
+    :class:`ZoneHasCards` with the seat named by the pile rather than by a
+    player: "that graveyard" is the one an earlier step of this effect took
+    its target card out of, whose owner that step recorded (CR 608.2h). The
+    lowering admits it only behind such a step; with none, the words name no
+    pile.
+    """
+    zone: str
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class CardsInZones:
     """"If there are **ten or more creature cards total in all graveyards**"
     (Avatar of Woe).
@@ -280,6 +295,21 @@ class IsState:
     subject: TargetSpec
     state: str          # tapped | attacking | blocking | attacked_this_turn
     negated: bool = False
+
+
+@dataclass(frozen=True)
+class EnchantedByAuras:
+    """"if this creature is **enchanted by two or more Auras**" (Kitsune
+    Mystic's flip condition).
+
+    :class:`IsState`'s "enchanted" with a count: CR 303.4's Auras attached to
+    the permanent, how many of them. Its own node rather than a state word,
+    because a state is true or false and this is a number compared against a
+    printed bound. ``subject`` is the source reference the clause printed; the
+    lowering admits the ability's own source and refuses anything else.
+    """
+    subject: TargetSpec
+    comparison: "Comparison"
 @dataclass(frozen=True)
 class SourceOnBattlefield:
     """"if this enchantment is on the battlefield" (Tombstone Stairwell).
@@ -764,6 +794,7 @@ Condition = Union[
     Controls,
     EveryOf,
     IsState,
+    EnchantedByAuras,
     ItIsColor,
     ObjectHasKeyword,
     OnBattlefield,
@@ -788,6 +819,7 @@ Condition = Union[
     SubjectCharacteristicIs,
     TurnIsYours,
     ZoneHasCards,
+    RecordedPileHasCards,
     # Asked of a record of what already happened (``ast/records.py``). The
     # sets a loop walks over a record are not asked and are not here: they
     # are ``ForEach.iterator``'s, in ``ast/loops.py``.

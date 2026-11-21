@@ -63,7 +63,7 @@ def _sweep(only=None) -> dict:
     by_name = {card.name: card for card in catalog}
     found = {"examined": 0, "stamped": 0, "removed": 0, "bare": [], "unoffered": [], "raised": []}
     _past_the_id_floor()
-    units = [face for card in catalog for face in (faces.face_cards(card) or [card])]
+    units = [face for card in catalog for face in (faces.text_faces(card) or [card])]  # a flip card's bottom half too (faces.text_faces, CR 710)
     for card in sorted(units, key=lambda entry: entry.name):
         if only is not None and card.name not in only:
             continue

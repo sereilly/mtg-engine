@@ -504,6 +504,11 @@ def _graveyard_exile_spec(payload: dict) -> dict:
     # unscoped, the picker would offer an opponent's creature cards.
     if payload.get("graveyard_owner") == "you":
         spec["own_graveyard_only"] = True
+    # "…target card **from an opponent's graveyard**" (Nezumi Graverobber):
+    # every pile but the activator's, on the flag the enumeration already
+    # reads for Misinformation.
+    elif payload.get("graveyard_owner") == "an_opponent":
+        spec["opponent_graveyard_only"] = True
     return spec
 
 

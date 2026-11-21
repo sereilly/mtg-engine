@@ -921,3 +921,18 @@ class TurnFace:
 
     subject: Recipient
     face_up: bool
+
+
+@dataclass(frozen=True)
+class FlipPermanent:
+    """``Flip <permanent>`` — "flip this creature", "flip it". (Champions of
+    Kamigawa's ten flip cards: Bushi Tenderfoot, Jushi Apprentice, ….)
+
+    CR 710.2: a permanent's flipped status (CR 110.5) is set, and the flip
+    card's alternative characteristics apply instead of its normal ones — the
+    same object afterwards, as a permanent turned face up is. ``subject`` is
+    the ordinary recipient; every card printing the verb flips its own
+    source, so the lowering admits that and refuses anything else by name.
+    """
+
+    subject: Recipient

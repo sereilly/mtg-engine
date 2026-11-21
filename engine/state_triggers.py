@@ -200,9 +200,68 @@ def announce_watched_counter_thresholds(game: "Game") -> bool:
     return bool(events)
 
 
+#: The condition kind of "When this creature has <keyword>, …" (Floodgate,
+#: Student of Elements).
+SOURCE_HAS_KEYWORD = "source_has_keyword"
+
+
+def announce_source_keyword_states(game: "Game") -> bool:
+    """Put "When this creature has <keyword>, <effect>" on the stack for every
+    permanent that has the keyword and has not announced since it last lacked
+    it (CR 603.8). Returns whether anything was announced.
+
+    "When this creature has flying, flip it." (Student of Elements.) The
+    keyword arrives from an Aura, an Equipment, a granted ability, a board-wide
+    static or a layer effect ending — no fire site to hang on, so the sweep
+    asks the state, through ``_has_keyword`` (layer 6: a granted keyword
+    counts as a printed one, CR 613.1). The latch releases when the keyword is
+    gone, and rides the stack object so a countered ability gives it back.
+
+    Floodgate's "…, sacrifice it" is not announced here: the state-based
+    sweep has performed that one inline since it shipped
+    (``mixins/game_ending``), and announcing it too would sacrifice twice.
+    """
+    events: list[dict] = []
+    for permanent in list(game.all_permanents()):
+        for trig in battlefield_triggers(
+            compile_card_oracle(permanent.effective_card).triggered_abilities
+        ):
+            if trig.condition.kind != SOURCE_HAS_KEYWORD:
+                continue
+            if trig.instruction is None or trig.instruction.kind == "sacrifice_self":
+                continue
+            keyword = str(trig.condition.payload.get("keyword_name") or "")
+            if not keyword:
+                continue
+            key = (SOURCE_HAS_KEYWORD, keyword, trig.source_line)
+            if not game._has_keyword(permanent, keyword):
+                unlatch(permanent, key)
+                continue
+            if is_latched(permanent, key):
+                continue
+            seat = game.controller_index_of(permanent)
+            if seat is None:
+                continue
+            latch(permanent, key)
+            events.append({
+                "controller_index": seat,
+                "source_permanent": permanent,
+                "card": permanent.card,
+                "instruction": trig.instruction,
+                "effect_kind": trig.effect_kind,
+                "ability_text": trig.source_line,
+                "trigger_context": {STATE_TRIGGER_LATCH: key},
+            })
+    if events:
+        game._enqueue_triggered_batch(events)
+    return bool(events)
+
+
 __all__ = [
+    "SOURCE_HAS_KEYWORD",
     "STATE_TRIGGER_LATCH",
     "WATCHED_COUNTER_THRESHOLD",
+    "announce_source_keyword_states",
     "announce_watched_counter_thresholds",
     "is_latched",
     "latch",

@@ -293,6 +293,29 @@ back through the layers from the recorded contribution, which is what keeps
 CR 707.2's boundary — printed values as modified by *copy* effects, and nothing
 else. `tests/engine/test_copy_reads.py` enforces it.
 
+**A flip card is its top half; a flipped permanent's card is its bottom half**
+(CR 710; `engine/flip_cards.py`). The loader keeps a flip entry as its top
+half (`loaded_flip_card`: the normal name, type line, text and P/T, CR 710.1a,
+with the whole card's cost and colours and both printed halves on `faces`), so
+every zone and an unflipped permanent are CR 710.2 with no seam converting
+anything; the card file's "A // B" is a decklist alias (`faces.name_aliases`).
+Flipping (`flip_permanent`, the `flip_self` instruction behind "flip this
+creature" / "flip it") is morph's substitution: `Permanent.card` becomes the
+derived bottom half (`flipped_face`: its name, text, type and P/T, the top
+half's cost and colours, CR 710.1c, `face_of` naming the top), and nothing else
+moves. The departing permanent keeps it (CR 603.10), the zone funnels put
+`whole_card` / `unflipped_card` into the new zone (CR 710.4) and a re-entering
+object forgets the flip (`forget_flip`, CR 110.5b). Status is not copied
+(CR 707.2: `become_copy` copies the unflipped card); a flipped copier's copied
+flip card reads as its bottom half (CR 707.3, `copies._as_flipped`, with
+`flip_cards.FLIPPED` on a permanent whose own card is no flip card). A flip
+card is supported only when both halves are (`oracle._flip_card_program`), and
+a text census reads both through `faces.text_faces` / `compilation_units` —
+`castable_faces` stays the top half alone, because a bottom half is never cast.
+CR 710.5's alternative name is offered and judged by `faces.nameable_faces`.
+The wire carries `flipped`, `printed_name` (the physical top half) and `flip`
+(both halves).
+
 **A face-down object's card is the blank 2/2** (CR 708.2a, layer 1b;
 `engine/face_down.py`). A face-down spell's `StackItem.card` and a face-down
 permanent's `Permanent.card` *are* `face_down.face_down_card(real)` — no

@@ -281,7 +281,15 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # dies".
     ("permanent_dies",
      r"when (?P<dying_subject>the [^,]+) dies"),
-    ("dies",                        r"when (?:this creature|.+) dies"),
+    # "When **a creature dealt damage by this creature this turn** dies, flip
+    # this creature." (Bushi Tenderfoot.) Sengir Vampire's trigger under the
+    # other printed word (CR 603.1), which the `.+` below swallowed whole as
+    # the source's *own* death — the Tenderfoot flipped as it died and never
+    # when its victim did. Excluded here so the line falls through to the
+    # whenever table's row, which has the fire site, rather than given a
+    # second row of the kind in this table.
+    ("dies",
+     r"when (?:this creature|(?!an? creature dealt damage by ).+) dies"),
     # "you_gain_life" was here, spelled "when you gain life", with no dispatcher
     # and no card: a life gain is a repeatable event, so every printing of it is
     # "**Whenever** you gain life" — the row above in the whenever table, which

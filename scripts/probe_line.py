@@ -89,7 +89,7 @@ from engine import card_hooks  # noqa: E402
 from engine import oracle  # noqa: E402
 from engine.card_loader import (load_cards, manifest_measured_codes,  # noqa: E402
                                 manifest_set_paths)
-from engine.faces import face_cards  # noqa: E402
+from engine.faces import text_faces  # noqa: E402
 from engine.grammar import GRAMMAR_CATEGORIES, LoweringError, compile_line  # noqa: E402
 from engine.grammar import stream as grammar_stream  # noqa: E402
 from engine.grammar.lowering.categories import INSTRUCTION_CATEGORIES  # noqa: E402
@@ -1453,9 +1453,10 @@ def _culprit(program, reduced_lines, mapping, reports, newly) -> int | None:
 
 
 def probe_card(card: CardDefinition) -> list[UnitReport]:
-    """One report per compilation unit: each face of a split card, or the card."""
+    """One report per compilation unit: each face of a split card, a flip card
+    and its bottom half, or the card."""
     label = origin_label(card)
-    return [probe_unit(unit, label) for unit in (face_cards(card) or (card,))]
+    return [probe_unit(unit, label) for unit in (text_faces(card) or (card,))]
 
 
 def census_site(line: LineReport) -> tuple[str, str]:

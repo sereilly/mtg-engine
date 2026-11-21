@@ -319,6 +319,26 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                 return ast.LifeTotalDifference(first, second, comparison)
     stream.reset(diff_mark)
 
+    # "If **no cards are in that graveyard**" (Nezumi Graverobber). The pile
+    # named back by the step in front — its seat is that step's record, so
+    # this reads no player at all and the lowering checks the record exists.
+    pile_mark = stream.mark()
+    try:
+        pile_bound = _parse_count_bound(stream)
+    except GrammarError:
+        pile_bound = None
+    if (
+        pile_bound is not None
+        and stream.accept_word("cards", "card")
+        and stream.accept_word("are", "is")
+        and stream.accept_phrase("in", "that")
+        and stream.peek_word() in ("graveyard", "library", "hand")
+    ):
+        zone = stream.peek_word()
+        stream.advance()
+        return ast.RecordedPileHasCards(zone, pile_bound)
+    stream.reset(pile_mark)
+
     # "if **your library has ten or more cards in it**" (Phyrexian Portal).
     # How tall a pile is, which is a different question from every other clause
     # here that reads a player: those ask what the board holds and answer

@@ -210,7 +210,14 @@ def _card_for_raw_permanent(game, raw: dict):
         # the copied object's (CR 707.2), and a paste of Sculpting Steel
         # copying Iron Myr puts back a Sculpting Steel, not an Iron Myr. A
         # paste written before the field existed names the card by ``name``.
-        return _lookup_card_for_raw_state(raw.get("printed_name") or raw["name"])
+        card = _lookup_card_for_raw_state(raw.get("printed_name") or raw["name"])
+        # …and a flipped flip card is put back flipped (CR 710.3's status,
+        # ``flipped``): its card is the bottom half (``engine/flip_cards.py``).
+        if raw.get("flipped"):
+            from engine.flip_cards import flipped_face
+
+            return flipped_face(card) or card
+        return card
     named = raw.get("hidden_card")
     if isinstance(named, dict) and named.get("name"):
         return face_down_card(_lookup_card_for_raw_state(named["name"]))

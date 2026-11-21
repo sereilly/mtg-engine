@@ -59,6 +59,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from engine import card_hooks, load_cards, program_store  # noqa: E402
 from engine.faces import face_cards, whole_card  # noqa: E402
+from engine.flip_cards import flipped_face  # noqa: E402
 from set_argument import add_set_argument, resolve_set  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
@@ -437,6 +438,26 @@ def _kinds_of(instruction) -> set[str]:
 
 
 def analyze_card(card, hooked: HookClaims, run_probe: bool = True) -> CardCoverage:
+    # A flip card (CR 710) is its top half and prints a second text box, its
+    # bottom half's — the card a flipped permanent is (``engine/flip_cards.py``).
+    # Read as handed in, only the top half's sentences are seen and the bottom's
+    # are neither claimed nor unclaimed: the split card's blindness in another
+    # shape. So the card's own text is analysed, then the bottom half's, and
+    # both are reported under the one card a player holds.
+    flipped = flipped_face(card)
+    if flipped is not None:
+        coverage = _analyze_one_text_box(card, hooked, run_probe)
+        part = _analyze_one_text_box(flipped, hooked, run_probe)
+        coverage.supported = coverage.supported and part.supported
+        coverage.claims.extend(part.claims)
+        coverage.unclaimed.extend(part.unclaimed)
+        coverage.acknowledged.extend(part.acknowledged)
+        coverage.probe_findings.extend(part.probe_findings)
+        return coverage
+    return _analyze_one_text_box(card, hooked, run_probe)
+
+
+def _analyze_one_text_box(card, hooked: HookClaims, run_probe: bool = True) -> CardCoverage:
     coverage = CardCoverage(card.name, supported=True)
     program = compile_card_oracle(card)
     if not program.supported:

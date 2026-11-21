@@ -23,6 +23,43 @@ log), not instruction kinds alone.
 # ==== w1g1 ==========================================================
 # w1g1's tests go between this line and the "end w1g1" line.
 
+
+# Drive list: Champions of Kamigawa sorceries supported on arrival, given a game.
+
+from engine import Game as _W1G1Game
+from engine import PlayerState as _W1G1PlayerState
+from tests.helpers import settle as _w1g1_settle
+
+
+def test_w1g1_time_of_need_finds_a_legendary_creature_card(set_pool):
+    """Time of Need: Search your library for a legendary creature card, reveal
+    it, put it into your hand, then shuffle. It finds Isamaru, Hound of Konda;
+    it does not find Akki Lavarunner, whose bottom half is legendary and whose
+    card is not (CR 710.2), nor a Grizzly Bears."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _W1G1Game(players=[
+        _W1G1PlayerState(
+            name="P0", hand=[chk["Time of Need"], chk["Time of Need"]],
+            library=[lea["Grizzly Bears"], chk["Akki Lavarunner"],
+                     chk["Isamaru, Hound of Konda"]],
+        ),
+        _W1G1PlayerState(name="P1", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w1g1_settle(game)
+    assert game.cast_from_hand(0, "Time of Need").supported
+    _w1g1_settle(game)
+    assert "Isamaru, Hound of Konda" in [card.name for card in game.players[0].hand]
+    assert sorted(card.name for card in game.players[0].library) == [
+        "Akki Lavarunner", "Grizzly Bears",
+    ]
+    assert game.cast_from_hand(0, "Time of Need").supported
+    _w1g1_settle(game)
+    assert sorted(card.name for card in game.players[0].library) == [
+        "Akki Lavarunner", "Grizzly Bears",
+    ]
+
 # ==== end w1g1 ======================================================
 
 

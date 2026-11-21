@@ -124,6 +124,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "turn_target_face_down": "characteristics",
     "turn_target_face_up": "characteristics",
     "turn_self_face_down": "characteristics",
+    # "…flip this creature." / "…, flip it." (CR 710.2: the flip card's
+    # alternative characteristics apply instead of its normal ones.) A
+    # permanent's status rewriting what it *is*, turning face up's family.
+    "flip_self": "characteristics",
     # "…becomes the creature type of your choice until end of turn" said of
     # the ability's source (the Mistforms), of an Aura's host (Mistform Mask)
     # and of every creature (Standardize). The same CR 205.1a set landing on a

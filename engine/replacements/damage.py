@@ -422,10 +422,17 @@ def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | N
 _SOURCE_DAMAGE_DELTA = re.compile(
     r"^if an? (?P<source_class>[a-z ]+?) would deal damage to a "
     r"(?P<recipients>permanent or player|creature or player|"
-    r"creature you control), it deals that "
+    r"creature you control|player), it deals that "
     r"much damage (?P<direction>minus|plus) (?P<points>\d+) to that "
-    r"(?P<echo>permanent or player|creature or player|creature) instead$"
+    r"(?P<echo>permanent or player|creature or player|creature|player) instead$"
 )
+
+#: The protected phrase of a delta line that covers **players only** — "…to a
+#: player, it deals that much damage plus 1 to that player instead" (Tok-Tok,
+#: Volcano Born). Not a filter payload: no noun phrase describes a player
+#: (``_delta_covers``), so it is its own marker, read before the permanent
+#: branch.
+PLAYERS_ONLY: dict = {"players_only": True}
 
 #: Who a delta line covers, by the printed phrase behind "to a": the words the
 #: second half must echo it with, and the noun phrase the damaged object has to
@@ -447,6 +454,11 @@ _DELTA_RECIPIENTS: dict[str, tuple[str, dict | None]] = {
     "creature you control": (
         "creature", {"type_filter": "creature", "controller": "you"},
     ),
+    # "If a red source would deal damage to **a player**, it deals that much
+    # damage plus 1 to **that player** instead." (Tok-Tok, Volcano Born.) Every
+    # player, whoever controls the Tok-Tok — the sentence names no seat — and
+    # no permanent at all.
+    "player": ("player", PLAYERS_ONLY),
 }
 
 
@@ -519,6 +531,8 @@ def _delta_covers(game, holder, recipient, protected: dict | None) -> bool:
     """
     if protected is None:
         return True
+    if protected is PLAYERS_ONLY:
+        return not _is_permanent(recipient)
     if not _is_permanent(recipient):
         return False
     from ..subject_filters import subject_matches

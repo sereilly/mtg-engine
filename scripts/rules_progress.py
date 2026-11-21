@@ -178,6 +178,11 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     # 709.3c (casting a copy of a split card) and 709.4d (a fused split spell)
     # stay in the denominator and show as untested, which is the honest reading.
     "709": ("709.1", "709.2", "709.3", "709.4"),
+    # Flip Cards, joined with Champions of Kamigawa's ten
+    # (``engine/flip_cards.py``). Every subrule: 710.3 (that whether a
+    # permanent is flipped is clear at all times) is the wire's ``flipped``
+    # flag, and 710.5 is the alternative name offered when a card is named.
+    "710": "all",
     # Handling Illegal Actions. Both rules are live: every refusal this engine
     # returns is CR 733.1's reversal (``_activate_onto_stack`` and
     # ``queue_from_hand`` check each cost where it is announced and pay it

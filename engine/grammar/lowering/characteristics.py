@@ -1035,6 +1035,25 @@ def _lower_turn_face(node: ast.TurnFace) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction(f"turn_target_face_{direction}", "", payload),)
 
 
+def _lower_flip_permanent(node: ast.FlipPermanent) -> tuple[OracleInstruction, ...]:
+    """``Flip this creature`` / ``flip it`` (CR 710.2) — ``flip_self``, over
+    ``engine/flip_cards.flip_permanent``.
+
+    Every card printing the verb flips the ability's own source (CR 710.1a:
+    the top half "usually contains an ability that causes the permanent to
+    'flip'"), so that is the one shape admitted. Flipping a permanent the
+    ability does not come from — a target, "each creature" — has no handler,
+    and read as the source it would flip the wrong object, so it refuses by
+    name.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "no handler flips a permanent other than the ability's source",
+            node=node,
+        )
+    return (OracleInstruction("flip_self", "", {}),)
+
+
 def _lower_creature_type_text_change(
     node: ast.ChangeText, payload: dict[str, object],
 ) -> tuple[OracleInstruction, ...]:

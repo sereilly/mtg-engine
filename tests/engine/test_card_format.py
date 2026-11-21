@@ -153,16 +153,17 @@ def test_current_pool_is_all_single_faced():
     assert {card.layout for card in load_catalog()} <= SUPPORTED_LAYOUTS
 
 
-@pytest.mark.parametrize("layout", ["flip", "transform", "modal_dfc", "adventure", "meld"])
+@pytest.mark.parametrize("layout", ["transform", "modal_dfc", "adventure", "meld"])
 def test_multi_face_layouts_are_explicitly_unsupported(layout):
     """A multi-face card carries empty top-level mana_cost/oracle_text with the
     real text in card_faces. Compiling it as-is would classify it a supported
     vanilla — a wrong answer with no error. It must refuse instead, naming the
     layout so support_report points at the actual gap.
 
-    ``split`` left this list when CR 709 was implemented; the faces are given
-    here so the refusal is about the *layout* and not about a card with no
-    faces to read (the test below)."""
+    ``split`` left this list when CR 709 was implemented, and ``flip`` when
+    CR 710 was (the flip tests below); the faces are given here so the refusal
+    is about the *layout* and not about a card with no faces to read (the test
+    below)."""
     faces = (
         CardFace("Front", "{1}", "Instant", "Draw a card."),
         CardFace("Back", "{1}", "Instant", "Draw a card."),
@@ -238,6 +239,90 @@ def test_a_split_card_is_supported_only_when_every_half_is():
     program = compile_card_oracle(card)
     assert not program.supported
     assert program.reason.startswith("Right: ")
+
+
+def _flip_entry(top_text: str, bottom_text: str) -> dict:
+    """A flip card as ``cards/*.json`` carries it: the Scryfall spelling of
+    both names, the combined type line, no top-level text, the two halves in
+    ``card_faces`` (the bottom with no mana cost of its own)."""
+    return {
+        "name": "Test Top // Test Bottom", "mana_cost": "{1}{W}", "cmc": 2.0,
+        "type_line": "Creature — Human // Legendary Creature — Human Samurai",
+        "colors": ["W"], "color_identity": ["W"], "keywords": ["Flying"],
+        "power": "1", "toughness": "1", "layout": "flip", "oracle_id": "test-flip",
+        "set": "tst", "collector_number": "1",
+        "card_faces": [
+            {"name": "Test Top", "mana_cost": "{1}{W}", "type_line": "Creature — Human",
+             "oracle_text": top_text, "power": "1", "toughness": "1"},
+            {"name": "Test Bottom", "mana_cost": "",
+             "type_line": "Legendary Creature — Human Samurai",
+             "oracle_text": bottom_text, "power": "3", "toughness": "4"},
+        ],
+    }
+
+
+def _load_flip(tmp_path, top_text: str, bottom_text: str, file: str = "flip.json") -> CardDefinition:
+    path = tmp_path / file
+    path.write_text(json.dumps([_flip_entry(top_text, bottom_text)]), encoding="utf-8")
+    (card,) = load_cards(path)
+    return card
+
+
+def test_a_flip_card_loads_as_its_top_half(tmp_path):
+    """CR 710.2: "In every zone other than the battlefield, and also on the
+    battlefield before the permanent flips, a flip card has only the normal
+    characteristics of the card." So the loaded card *is* the top half — its
+    name (CR 710.1a), type line, text and P/T, with the whole card's cost and
+    colours — and the keywords the ingest keeps per card go to the half that
+    prints them. The card file's "A // B" is an alias a list may write."""
+    from engine.faces import name_aliases
+    from engine.flip_cards import flipped_face, is_flip_card
+
+    card = _load_flip(tmp_path, "{T}: Draw a card. Flip this creature.", "Flying")
+    assert is_flip_card(card)
+    assert (card.name, card.type_line, card.power, card.toughness) == (
+        "Test Top", "Creature — Human", "1", "1",
+    )
+    assert not card.is_legendary and card.keywords == ()
+    assert card.oracle_text == "{T}: Draw a card. Flip this creature."
+    assert "Test Top // Test Bottom" in name_aliases(card)
+    bottom = flipped_face(card)
+    # CR 710.1b / 710.1c: the bottom half's name, text, type and P/T, and
+    # the card's cost and colour unchanged.
+    assert (bottom.name, bottom.type_line, bottom.power, bottom.toughness) == (
+        "Test Bottom", "Legendary Creature — Human Samurai", "3", "4",
+    )
+    assert (bottom.mana_cost, bottom.colors, bottom.keywords) == ("{1}{W}", ("W",), ("Flying",))
+    assert bottom.is_legendary and bottom.face_of is card
+    assert flipped_face(card) is bottom
+
+
+def test_a_flip_card_is_supported_only_when_both_halves_are(tmp_path):
+    """A card is supported when *any* line is — the census weakness a flip
+    card would inherit as "the top half works". It does not: the verdict asks
+    the bottom half too, and the reason names the half that failed."""
+    from engine.oracle import face_programs
+
+    good = _load_flip(tmp_path, "{T}: Draw a card. Flip this creature.", "Flying")
+    assert compile_card_oracle(good).supported
+    assert [face.name for face, _ in face_programs(good)] == ["Test Top", "Test Bottom"]
+    bad = _load_flip(
+        tmp_path, "{T}: Draw a card. Flip this creature.",
+        "Frobnicate the gribble until morning.", file="bad_flip.json",
+    )
+    program = compile_card_oracle(bad)
+    assert not program.supported
+    assert program.reason.startswith("Test Bottom: ")
+
+
+def test_a_flip_card_with_no_faces_is_still_refused():
+    """The one way a flip card can still arrive blank: a card file whose
+    ``card_faces`` was dropped. Nothing to compile, so the layout gate refuses
+    it rather than reading the empty text as a supported vanilla."""
+    card = _card(name="Test flip", mana_cost="", oracle_text="", layout="flip")
+    program = compile_card_oracle(card)
+    assert not program.supported
+    assert "flip" in program.reason
 
 
 def test_normal_layout_still_compiles():

@@ -21,6 +21,7 @@ from engine.color_changes import spell_color_change
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.entry_choices import chosen_as_entered
 from engine.face_down import face_up_morph_cost, hidden_card_of, is_face_down
+from engine.flip_cards import flipped_face, is_flipped, unflipped_card
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.game_types import single_slot, target_ids, target_slots
 from engine.granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
@@ -267,7 +268,42 @@ def _card_preview(card) -> dict:
         # A half on the stack (CR 709.3b): its own name and characteristics,
         # and the card it is half of, so a client can say which card this is.
         preview["face_of"] = whole_card(card).name
+    halves = flip_halves(card)
+    if halves is not None:
+        preview["flip"] = halves
     return preview
+
+
+def _flip_half(card, *, mana_cost: str) -> dict:
+    return {
+        "name": card.name,
+        "type": card.type_line,
+        "oracle_text": card.oracle_text,
+        "power": card.power,
+        "toughness": card.toughness,
+        "mana_cost": mana_cost,
+    }
+
+
+def flip_halves(card) -> dict | None:
+    """Both halves of a flip card (CR 710.1) for the card viewer, or None.
+
+    ``top`` is the card's normal characteristics (CR 710.1a) — what it is in
+    every zone and on the battlefield unflipped — and ``bottom`` its
+    alternative ones (CR 710.1b), which a flipped permanent has instead;
+    both carry the card's one mana cost (CR 710.1c). Asked of a flipped
+    permanent's card (the bottom half) or of the card in any zone, it
+    answers for the same flip card. The client draws the half that applies
+    right side up and the other upside down, as the card is printed.
+    """
+    whole = unflipped_card(card)
+    bottom = flipped_face(whole)
+    if bottom is None:
+        return None
+    return {
+        "top": _flip_half(whole, mana_cost=whole.mana_cost),
+        "bottom": _flip_half(bottom, mana_cost=whole.mana_cost),
+    }
 
 
 def hidden_card_view(obj) -> dict | None:
@@ -430,7 +466,15 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # raw state rebuilds (``debug_actions._card_for_raw_permanent``). The
         # same as ``name`` for anything that is not a copy; a face-down
         # permanent's is the blank's (CR 708.2a), never the card it hides.
-        "printed_name": perm.card.name,
+        "printed_name": unflipped_card(perm.card).name,
+        # CR 710.3: whether this permanent is flipped is clear at all times.
+        # A flipped flip card's every characteristic field here is already
+        # its bottom half's (``engine/flip_cards.py`` substitutes the card);
+        # ``printed_name`` above stays the physical card — Jushi Apprentice
+        # under a Tomoya the Revealer, the card a zone change carries away
+        # (CR 710.4) — and ``flip`` carries both halves for the card viewer.
+        "flipped": is_flipped(perm),
+        **({"flip": flip_halves(perm.card)} if flip_halves(perm.card) else {}),
         # CR 708: this permanent is face down. Public — every player sees a
         # face-down card on the table — and the whole of what anyone but its
         # controller learns: every other field here is the face-down 2/2's

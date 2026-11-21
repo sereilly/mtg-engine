@@ -845,6 +845,23 @@ def _lower_lose_life(
     # then whatever the branches below make of the subject, the gate each of
     # them already puts in front of its word ("defending player" only under an
     # event that froze one) included.
+    # "At the beginning of each opponent's upkeep, **that player** loses 1
+    # life for each card **fewer than three in their hand**." (Stabwhisker the
+    # Odious.) The shortfall of the losing seat's own hand below the printed
+    # number, counted per victim by the handler — held, as the graveyard
+    # count below is, to a pile that *is* the loser's.
+    elif isinstance(node.per_each, ast.CountShortfall):
+        filt = node.per_each.counted
+        if (
+            filt.zone != "hand"
+            or not _counts_the_losers_own_pile(node.player, filt)
+            or not isinstance(node.amount, ast.Fixed)
+        ):
+            raise LoweringError(
+                "a shortfall life loss counts the losing player's own hand",
+                node=node,
+            )
+        payload["per_each"] = {"zone": "hand", "shortfall_below": node.per_each.base}
     elif node.per_each is not None and not isinstance(
         node.per_each, (ast.EachLifeGained, ast.CountersOnSource)
     ):

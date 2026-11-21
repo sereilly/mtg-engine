@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.card_loader import load_cards
-from engine.faces import card_names, face_cards, has_name
+from engine.faces import card_names, face_cards, has_name, name_aliases
+from engine.flip_cards import flipped_face
 from engine.models import CardDefinition
 from set_argument import add_set_argument, resolve_set
 
@@ -42,6 +43,11 @@ def retrieve_oracle_text(
     if mode in (None, "exact"):
         for c in cards:
             if has_name(c, norm):
+                return c, []
+        # …and by a spelling a list writes a multi-face card with: a flip
+        # card's Scryfall "A // B", or its bottom half's name alone (CR 710).
+        for c in cards:
+            if norm in name_aliases(c):
                 return c, []
     # 2. case-insensitive exact
     if mode in (None, "ci", "case_insensitive"):
@@ -84,7 +90,14 @@ def _print_card(card: CardDefinition) -> None:
     # about a two-spell card with a blank.
     for face in face_cards(card):
         print(f"[{face.name} — {face.mana_cost} — {face.type_line}] {face.oracle_text}")
-    if not face_cards(card):
+    # A flip card (CR 710): its top half is the card, and its bottom half the
+    # card a flipped permanent is — both printed, the bottom marked.
+    flipped = flipped_face(card)
+    if flipped is not None:
+        print(card.oracle_text)
+        print(f"[flipped: {flipped.name} — {flipped.type_line} — "
+              f"{flipped.power}/{flipped.toughness}] {flipped.oracle_text}")
+    elif not face_cards(card):
         print(card.oracle_text)
 
 

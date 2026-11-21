@@ -739,6 +739,18 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 stream.reset(that_mark)
     if subject is not None:
         if stream.accept_word("is") or stream.accept_word("'s"):
+            # "…is **enchanted by two or more Auras**" (Kitsune Mystic). The
+            # state word below with a count after it: how many Auras, not
+            # whether any — read first so "enchanted" alone keeps its row.
+            aura_mark = stream.mark()
+            if stream.accept_phrase("enchanted", "by"):
+                try:
+                    bound = parse_comparison(stream)
+                except GrammarError:
+                    bound = None
+                if bound is not None and stream.accept_word("auras", "aura"):
+                    return ast.EnchantedByAuras(subject, bound)
+                stream.reset(aura_mark)
             for word, state, negated in _PRESENT_STATES:
                 if stream.accept_word(word):
                     return ast.IsState(subject, state, negated=negated)
