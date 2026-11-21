@@ -179,6 +179,32 @@ def test_w1g7_mirror_gallery_withdraws_and_restores_a_persons_legend_rule_prompt
     assert game.resolve_pending_choice("legend_rule", 0, permanent_id=second.permanent_id)
     assert game.is_on_battlefield(second) and not game.is_on_battlefield(first)
 
+
+def test_w1g7_two_hokori_under_mirror_gallery_untap_two_lands(set_pool):
+    """Hokori, Dust Drinker's 2005-02-01 ruling: "If there are two Hokori on
+    the battlefield (for example, if Mirror Gallery is on the battlefield),
+    each player untaps two lands they control at the beginning of their
+    upkeep." Both legends stay under the Gallery, no land untaps in the untap
+    step, and each Hokori's upkeep trigger untaps one."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g7_table(set_pool)
+    _w1g7_put(game, bok["Mirror Gallery"])
+    _w1g7_put(game, bok["Hokori, Dust Drinker"])
+    _w1g7_put(game, bok["Hokori, Dust Drinker"])
+    forests = [_w1g7_put(game, lea["Forest"]) for _ in range(3)]
+    game.check_state_based_actions()
+    _w1g7_settle(game)
+    assert len(_w1g7_named(game, "Hokori, Dust Drinker")) == 2
+    for forest in forests:
+        forest.tapped = True
+    game.resolve_cleanup_step(0)
+    game.start_turn(1)
+    _w1g7_settle(game)
+    game.resolve_cleanup_step(1)
+    game.start_turn(0)
+    _w1g7_settle(game)
+    assert sorted(forest.tapped for forest in forests) == [False, False, True]
+
 # ==== end w1g7 ======================================================
 
 
