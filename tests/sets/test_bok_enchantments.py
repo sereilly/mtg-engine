@@ -126,6 +126,87 @@ def test_w1g7_in_the_web_of_war_gives_an_entering_creature_haste_it_attacks_with
     game.resolve_cleanup_step(0)
     assert bears.effective_power == 2 and not game._has_keyword(bears, "haste")
 
+
+def test_w1g7_clash_of_realities_gives_entering_creatures_their_entry_trigger(set_pool):
+    """All Spirits have "When this permanent enters, you may have it deal 3
+    damage to target non-Spirit creature." / Non-Spirit creatures have "…to
+    target Spirit creature." The ability exists as the creature enters (the
+    card's 2005-02-01 ruling: "Clash of Realities's abilities apply as each
+    creature enters and gives them an 'enters' ability"), so a Spirit cast
+    under it shoots a non-Spirit and a non-Spirit shoots a Spirit — and the
+    damage is the entering creature's, not the enchantment's (it says "have
+    it deal")."""
+    bok, chk, lea = set_pool("BOK"), set_pool("CHK"), set_pool("LEA")
+    game = _w1g7_table(set_pool, hand=[chk["Kami of the Hunt"], lea["Grizzly Bears"]])
+    _w1g7_put(game, bok["Clash of Realities"])
+    their_bears = _w1g7_put(game, lea["Grizzly Bears"], seat=1)
+    assert game.cast_from_hand(0, "Kami of the Hunt").supported
+    _w1g7_settle(game)
+    assert "Kami of the Hunt dealt 3 damage to Grizzly Bears" in game.log
+    assert not game.is_on_battlefield(their_bears)
+    (my_kami,) = _w1g7_named(game, "Kami of the Hunt", seat=0)
+    their_kami = _w1g7_put(game, chk["Kami of the Hunt"], seat=1)
+    _w1g7_settle(game)
+    # The opponent's Spirit entered too; its only non-Spirit target would be
+    # nothing at all (mine is a Spirit), so its trigger had no legal target.
+    assert game.is_on_battlefield(my_kami)
+    assert game.cast_from_hand(0, "Grizzly Bears").supported
+    _w1g7_settle(game)
+    assert not game.is_on_battlefield(their_kami)
+    assert "Grizzly Bears dealt 3 damage to Kami of the Hunt" in game.log
+
+
+def test_w1g7_clash_of_realities_asks_a_person_for_the_target_and_the_may(set_pool):
+    """At a seat a person sits at the granted trigger asks its target as it
+    goes on the stack (CR 603.3d) and the "you may" as it resolves; the answers
+    are what happens — the second of two Bears is the one shot, and declining
+    the may shoots nothing."""
+    bok, chk, lea = set_pool("BOK"), set_pool("CHK"), set_pool("LEA")
+    game = _w1g7_table(
+        set_pool, hand=[chk["Kami of the Hunt"], chk["Kami of the Hunt"]], interactive=(0,),
+    )
+    _w1g7_put(game, bok["Clash of Realities"])
+    first = _w1g7_put(game, lea["Grizzly Bears"], seat=1)
+    second = _w1g7_put(game, lea["Grizzly Bears"], seat=1)
+    asked = []
+
+    def pick_second(game, choice):
+        asked.append(choice.kind)
+        offered = [t["permanent_id"] for t in choice.data["targets"]]
+        assert offered == [first.permanent_id, second.permanent_id]
+        assert game.resolve_pending_choice(choice.kind, 0, permanent_id=second.permanent_id)
+
+    def accept(game, choice):
+        asked.append(choice.kind)
+        assert game.resolve_pending_choice(choice.kind, 0, accept=True, option=None)
+
+    assert game.cast_from_hand(0, "Kami of the Hunt").supported
+    _w1g7_settle(game, answers={"trigger_target": pick_second, "optional_pay": accept})
+    assert asked == ["trigger_target", "optional_pay"]
+    assert game.is_on_battlefield(first) and not game.is_on_battlefield(second)
+
+    def decline(game, choice):
+        assert game.resolve_pending_choice(choice.kind, 0, accept=False, option=None)
+
+    assert game.cast_from_hand(0, "Kami of the Hunt").supported
+    _w1g7_settle(game, answers={"optional_pay": decline})
+    assert game.is_on_battlefield(first) and first.damage_marked == 0
+
+
+def test_w1g7_clash_of_realities_a_seat_nobody_asks_declines_to_shoot_its_own(set_pool):
+    """The target is mandatory while one exists (CR 603.3d), so a seat whose
+    only non-Spirit creature is its own names it — and the "may" is the
+    card's answer to that board: a seat nobody asks declines rather than have
+    its new Spirit shoot its own Bears."""
+    bok, chk, lea = set_pool("BOK"), set_pool("CHK"), set_pool("LEA")
+    game = _w1g7_table(set_pool, hand=[chk["Kami of the Hunt"]])
+    _w1g7_put(game, bok["Clash of Realities"])
+    bears = _w1g7_put(game, lea["Grizzly Bears"])
+    assert game.cast_from_hand(0, "Kami of the Hunt").supported
+    _w1g7_settle(game)
+    assert game.is_on_battlefield(bears) and bears.damage_marked == 0
+    assert "P0 declined Kami of the Hunt (it would harm their own permanent)" in game.log
+
 # ==== end w1g7 ======================================================
 
 

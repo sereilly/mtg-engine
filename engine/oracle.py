@@ -821,8 +821,14 @@ def _compile_card_oracle(
         # Plains.") that follow a primary clause already claimed above and that
         # no line above claimed for itself, derived line by line by
         # engine/grammar/derived.py.
+        #
+        # Kept unless the **same instruction** is already there — not the same
+        # kind. Two lines of one table are two statics (Clash of Realities: "All
+        # Spirits have "…"" and "Non-Spirit creatures have "…"", two lord
+        # buffs over two sets), and a kind test kept the first and dropped the
+        # second while the card reported supported on the first.
         for coeffect in _grammar_static_coeffects(oracle_text, name):
-            if coeffect.kind not in {i.kind for i in instructions}:
+            if coeffect not in instructions:
                 instructions.append(coeffect)
 
         # An Aura used to be classified supported by the single whitelist

@@ -778,7 +778,19 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         else:
             break
         index += 1
-    if index < len(words):
+    # "**Non-Spirit** creatures have "…"" (Clash of Realities). A creature type
+    # the buffed permanent must not have — ``LordBuffFilter.excluded_subtypes``,
+    # which Verdeloth's union already rides — read only before a printed head
+    # noun (the check below refuses a bare "non-Spirits"), and only for a word
+    # the creature-type catalog holds, so "non-<anything else>" leaves the word
+    # unconsumed and refuses the line.
+    excluded_subtypes: list[str] = []
+    if index < len(words) and words[index].startswith("non-"):
+        excluded = _creature_subtype(words[index][len("non-"):])
+        if excluded is not None:
+            excluded_subtypes.append(excluded)
+            index += 1
+    if index < len(words) and not excluded_subtypes:
         subtype = _creature_subtype(words[index])
         if subtype is not None:
             subtypes.append(subtype)
@@ -848,9 +860,14 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
 
     if index != len(words):
         return None
+    if excluded_subtypes and card_types != ("creature",):
+        # "Non-Spirit" names creatures only beside the printed noun; read
+        # against any other head it would be a set nothing below narrows.
+        return None
     return LordBuffFilter(
         colors=tuple(colors),
         subtypes=tuple(subtypes),
+        excluded_subtypes=tuple(excluded_subtypes),
         supertypes=tuple(supertypes),
         controller=controller,
         other_than_source=other,

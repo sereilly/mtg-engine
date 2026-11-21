@@ -947,14 +947,25 @@ class OptionalPayChoicesMixin:
         # modular creature's counters, CR 702.43a, when the only artifact
         # creature left to name was across the table): the "may" is the card's
         # answer to that board (`ai_offer_readers.
-        # offered_gift_lands_on_the_wrong_side`).
+        # offered_gift_lands_on_the_wrong_side`) — and a harm whose
+        # announced target is the seat's own (the entry trigger Clash of
+        # Realities grants, when the only creature it could name was the
+        # seat's).
         elif floating is not None and offered_gift_lands_on_the_wrong_side(
             self, choice.player_index, entry
         ):
             floating = None
+            from ....ai_target_sides import ability_target_side
+
+            harms = any(
+                ability_target_side(step) == "opponent"
+                for step in entry.get("_on_accept") or ()
+                if getattr(step, "kind", None)
+            )
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "
-                "(it would help an opponent's permanent)"
+                + ("(it would harm their own permanent)" if harms
+                   else "(it would help an opponent's permanent)")
             )
         # …and a counter on its own source that the source reads as a mana
         # value (Aether Vial's charge counters), where the count it makes

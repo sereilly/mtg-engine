@@ -360,12 +360,22 @@ def offered_gift_lands_on_the_wrong_side(game, seat: int, entry: dict) -> bool:
     answer to that board, asked as it resolves (CR 608.2d): declined where
     every step that names the target helps it (``ai_target_sides.
     ability_target_side`` is "you") and the target sits across the table.
+
+    **And the harm the other way round.** "When this creature enters, you may
+    have it deal 3 damage to target Spirit creature." (the ability Clash of
+    Realities grants every non-Spirit creature.) A seat whose only Spirit is
+    its own still names it (CR 603.3d), and "take gifts" then had its new
+    creature shoot its own Spirit. Declined where every step that names the
+    target hurts it (the side is "opponent") and the target is the seat's own.
     """
     from .ai_target_sides import ability_target_side
     from .game_types import single_chosen_id
 
     steps = [step for step in entry.get("_on_accept") or () if getattr(step, "kind", None)]
-    if not steps or {ability_target_side(step) for step in steps} != {"you"}:
+    if not steps:
+        return False
+    sides = {ability_target_side(step) for step in steps}
+    if sides not in ({"you"}, {"opponent"}):
         return False
     context = entry.get("_context")
     announced = single_chosen_id(getattr(context, "target_permanent_id", None))
@@ -373,7 +383,9 @@ def offered_gift_lands_on_the_wrong_side(game, seat: int, entry: dict) -> bool:
     if target is None or not game.is_on_battlefield(target):
         return False
     controller = game.controller_index_of(target)
-    return controller is not None and controller != seat
+    if controller is None:
+        return False
+    return controller != seat if sides == {"you"} else controller == seat
 
 
 def offered_counter_misses_every_card(game, seat: int, entry: dict) -> bool:
