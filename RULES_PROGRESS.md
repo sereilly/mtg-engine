@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**445 / 656 tracked rules covered (67%)** — 3755 tests, 0 unannotated.
+**445 / 656 tracked rules covered (67%)** — 3756 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -152,7 +152,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(6 tests)*
 - [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(13 tests, subrules abc)*
-- [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(15 tests)*
+- [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(16 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
 - [ ] **105.5** If an effect refers to a color pair, it means exactly two of the five colors. There are ten color...
 
@@ -491,7 +491,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(21 tests, subrules a)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(42 tests, subrules a)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(43 tests, subrules a)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -664,7 +664,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(9 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(24 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(25 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(10 tests, subrules a)*
 
 ### 601. Casting Spells

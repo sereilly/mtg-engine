@@ -62,7 +62,7 @@ Held at this rate, supporting the 26,113-card release line would need about **19
 | DST | 165 | 165 (100.0%) | 0 (0.0%) | 303 | 0 (0.0%) | 0 | 0.0 |
 | 5DN | 165 | 165 (100.0%) | 0 (0.0%) | 274 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| CHK *(measured)* | 291 | 244 (83.8%) | 0 (0.0%) | 368 | 0 (0.0%) | 0 | 0.0 |
+| CHK *(measured)* | 291 | 253 (86.9%) | 0 (0.0%) | 392 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **6739** | **6739 (100.0%)** | **45 (0.7%)** | **10675** | **41 (0.4%)** | **49** | **0.7** |
 
 *(measured)* — CHK are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

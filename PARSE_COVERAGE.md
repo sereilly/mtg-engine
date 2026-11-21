@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**16 unclaimed sentence(s) across 16 supported card(s).**
+**14 unclaimed sentence(s) across 14 supported card(s).**
 
 - **Blessed Breath**
   - `splice onto arcane {w}`
@@ -43,10 +43,6 @@ anything anyone did, and every ingest would arrive red.
   - `splice onto arcane {g}`
 - **Lifted by Clouds**
   - `splice onto arcane {1}{u}`
-- **Night Dealings**
-  - `whenever a source you control deals damage to another player, put that many theft counters on this enchantment`
-- **Orochi Hatchery**
-  - `{5}, {t}: create a 1/1 green snake creature token for each charge counter on this artifact`
 - **Psychic Puppetry**
   - `splice onto arcane {u}`
 - **Soulless Revival**

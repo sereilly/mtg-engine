@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 440 | 79.3% | 77.5% | 56.4% | 209 |
+| CHK *(measured)* | 291 | 440 | 81.1% | 80.2% | 57.7% | 210 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,8 +71,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1005 | 510 | expected a subject |  |
-| 204 | 106 | unrecognized effect verb |  |
+| 1003 | 508 | expected a subject |  |
+| 198 | 100 | unrecognized effect verb |  |
 | 148 | 77 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
@@ -3821,6 +3821,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}, {T}: Prevent the next 2 damage that would be dealt to target legendary creature this turn.`
 - **Eight-and-a-Half-Tails**
   - `{1}{W}: Target permanent you control gains protection from white until end of turn.`
+  - `{1}: Target spell or permanent becomes white until end of turn.`
 - **El-Hajjâj**
   - `Whenever this creature deals damage, you gain that much life.`
   - `Whenever this creature deals damage, you gain that much life.`
@@ -8424,8 +8425,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove a divinity counter from Myojin of Infinite Rage: Destroy all lands.`
 - **Myojin of Life's Web**
   - `Myojin of Life's Web has indestructible as long as it has a divinity counter on it.`
+  - `Remove a divinity counter from Myojin of Life's Web: Put any number of creature cards from your hand onto the battlefield.`
 - **Myojin of Night's Reach**
   - `Myojin of Night's Reach has indestructible as long as it has a divinity counter on it.`
+  - `Remove a divinity counter from Myojin of Night's Reach: Each opponent discards their hand.`
 - **Myojin of Seeing Winds**
   - `Myojin of Seeing Winds has indestructible as long as it has a divinity counter on it.`
   - `Remove a divinity counter from Myojin of Seeing Winds: Draw a card for each permanent you control.`
@@ -8658,6 +8661,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets -1/-1 until end of turn.`
   - `Creatures target player controls get +1/+1 until end of turn.`
 - **Night Dealings**
+  - `Whenever a source you control deals damage to another player, put that many theft counters on this enchantment.`
   - `{2}{B}{B}, Remove X theft counters from this enchantment: Search your library for a nonland card with mana value X, reveal it, put it into your hand, then shuffle.`
 - **Night Soil**
   - `{1}, Exile two creature cards from a single graveyard: Create a 1/1 green Saproling creature token.`
@@ -8996,6 +9000,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Prevent the next 3 damage that would be dealt to any target this turn.`
 - **Ornery Dilophosaur**
   - `Whenever this creature attacks, if you control a creature with power 4 or greater, this creature gets +2/+2 until end of turn.`
+- **Orochi Hatchery**
+  - `{5}, {T}: Create a 1/1 green Snake creature token for each charge counter on this artifact.`
 - **Orochi Leafcaller**
   - `{G}: Add one mana of any color.`
 - **Orochi Ranger**
@@ -9429,6 +9435,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pinpoint Avalanche**
   - `Pinpoint Avalanche deals 4 damage to target creature. The damage can't be prevented.`
 - **Pious Kitsune**
+  - `At the beginning of your upkeep, put a devotion counter on this creature. Then if a creature named Eight-and-a-Half-Tails is on the battlefield, you gain 1 life for each devotion counter on this creature.`
   - `{T}, Remove a devotion counter from this creature: You gain 1 life.`
 - **Pious Warrior**
   - `Whenever this creature is dealt combat damage, you gain that much life.`
