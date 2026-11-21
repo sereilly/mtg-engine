@@ -1947,23 +1947,27 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   modal Arcane spell would be cast with no splice offered (no Champions
   Arcane spell is modal). (b) The card-name search does not know a flip
   card's bottom name, so typing one passes the client's land check and the
-  server decides (CR 710.5 lets it be named). (c) Shell of the Last Kappa's
-  offer to cast the exiled card itself (`copy_cast` with `copy: false`) is
-  titled and buttoned "Cast a copy": the copy-cast panel reads no `copy`
-  field, and only its body, the server's sentence, is right — found by
-  reading. (d) The several-target modal labels its tiles by owner alone
-  ("AI's"), and an action hint lingers through an optional prompt. (e) Not
-  driven in a browser: wave 2's cards — Uba Mask's plays from a face-up exile
-  pile, Struggle for Sanity's `revealed_hand_pick` alternating between seats
-  with the hand's owner choosing, Swirl the Mists' changed words on every
-  permanent, Shell's offer out of another seat's exile, Hankyu's two granted
-  abilities, Kusari-Gama, Reweave — and from W2G1's own list Plaguebearer's
-  X, a stack target's `mana_value` (Spell Blast), Psychic Puppetry and
-  Blessed Breath spliced, a splice onto Swallowing Plague, Sensei
-  Golden-Tail's target, the `optional_pay` prompts of Ore Gorger, Sire of the
-  Storm, Hikari, Teller of Tales and Junkyo Bell, Commune with Nature's
-  `look_top_pick` and Hisoka's discard cost. *Clears:* (a)–(d) a client
-  round; (e) Phase 5 or a client round.
+  server decides (CR 710.5 lets it be named). (c) The several-target modal
+  labels its tiles by owner alone ("AI's"), and an action hint lingers
+  through an optional prompt (and after it: Gifts' "You already chose…").
+  (d) Phase 5's (`scratch/chk/reports/p5.md` §4–5): **the auto-pass takes a
+  person's priority mid-response** — `maybeAutoPassPriority` passes once the
+  AI's spell animation ends unless the stack card is hovered or clicked, so
+  a Shell of the Last Kappa activation begun in response is left as an open
+  "Choose target" over an empty stack (the 5DN entry's subject, now with a
+  reproduction); a refused-cast dialog stays open through End Turn and the
+  AI's turn; the X ceiling ignores splice costs (offered "up to 6" where 4
+  was payable; the cast is refused with a clear reason); Struggle for
+  Sanity's owner-side dialog says "Player 1 revealed their hand" to Player 1
+  and never says their picks return to hand; granted abilities are shown
+  lowercased ("{t}: put an aim counter on Hankyu"); soulshift's
+  `optional_pay` quotes the whole card with its lines joined without a
+  space; Mindblaze's number prompt lacks a space before its quote; two Uba
+  Masks' `effect_order` labels are identical and the log prints "drew 0
+  card(s)" before the choice. Not driven in Phase 5: Orochi Eggwatcher's,
+  Akki Lavarunner's and Initiate of Blood's flips, a flip card's bottom name
+  typed into a name prompt, Untaidake's mana refused for a nonlegendary
+  spell. *Clears:* a client round.
 
 - **The toolkit and speed wishes still open**, each written down by a group
   that paid for its absence. Tools: an `explain_cast` for an activation

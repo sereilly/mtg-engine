@@ -2253,4 +2253,28 @@ the toolkit entry, with this set's wishes; **added** Swirl the Mists' CR
 engine and client leftovers. ROADMAP: the next set is Betrayers of
 Kamigawa; idioms 45 and 46; the keyword reading at 33; flip cards beside
 split cards in the structural gap.
-<!-- chk integrator: W2G2, the promotion gate, Phase 5 -->
+*W2G2, the promotion and Phase 5.* W2G2 made the AI splice (`ai_splice`,
+the combined cast rehearsed) and attack by the fight the blocks read — which
+fixed Chub Toad and Ball Lightning staying home and moved four seeded games —
+and Kiki-Jiki, Wicked Akuba, Hisoka, Devouring Rage and Greed, Forbidden
+Orchard's price and Mindblaze's number. The final rehearsal (quick and sampled,
+on the last link) found Dokai's copy in the activation census (CR 707.3, a
+census premise; fu7) and two of W2G2's (Kenzo's double strike counted once in
+the kills-back forecast, met only once fu1 placed bottom faces as themselves;
+and the Skirk Volcanist test's board, fu8). The promotion (`promote.py CHK`,
+index 41; 7,021 cards) previewed its accepts first: 32 benign deletion-probe
+findings, 289 behaviour classes each a real twin, the All row down 0.2 on
+membership. Its full pass found two full-only AI censuses misreading right
+choices (Captain's Maneuver's moved game, Sensei's Divining Top's library-top
+rescue; fu9, tests only) — the final rehearsal had run the quick pass and the
+sampled censuses, so the full-marked half met CHK first there; the wrong-end
+insert turned only the printing-order guard red, and `main` moved after fu9.
+Phase 5 won two games against the AI with CHK decks, recorded 44 passes and
+two fails (Commune with Nature's look-and-pick had no decline; Hankyu's
+targetless aim opened a picker, and the clicked creature was announced as a
+target — Horobi destroyed it), and fixed two client strings (an X asked once
+per spliced card; Shell's "Cast a copy"). One closer fixed both fails, server
+and client (the announcement seam: an activated ability naming no target
+announces none, CR 115.1c), and the Phase 5 agent re-watched and re-recorded
+both passing: 0 failing, 1,111 passing. Seeded CHK batches (seeds 7, 11, 42,
+and twelve new cards pinned) exited 0 with no illegal interaction.
