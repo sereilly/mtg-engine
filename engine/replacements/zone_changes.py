@@ -20,6 +20,7 @@ there, are ``permanents.py``'s.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from ..effect_ordering import source_names
 from ..hand_locks import lock_card_in_hand
@@ -32,6 +33,7 @@ from ..replacement_choices import (
 )
 from .registry import (DISCARD_DESTINATION, DISCARD_INTO_EXILE,
                        DISCARD_TO_BATTLEFIELD, EXILE_INSTEAD_OF_DYING,
+                       EXILE_INSTEAD_OF_DYING_DEALT_DAMAGE,
                        EXILE_INSTEAD_OF_GRAVEYARD, EXILE_INSTEAD_OF_LEAVING,
                        LIBRARY_TOP_INSTEAD_OF_DYING,
                        RETURN_TO_HAND_INSTEAD_OF_DYING,
@@ -78,6 +80,13 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     The card goes to its **owner's** exile pile, as Dreams of the Dead's
     does: ``payload["player"]`` is the controller, which is not the owner
     the moment the creature was stolen (CR 108.3; kg4)."""
+    return _exile_the_dying_permanent(game, payload)
+
+
+def _exile_the_dying_permanent(game, payload: dict) -> ReplacementOutcome:
+    """The dying permanent into its **owner's** exile (CR 400.3), a token
+    ceasing to exist instead (CR 111.7) — what every "exile it instead" of a
+    death does, whichever effect said it."""
     permanent = payload["permanent"]
     if not permanent.metadata.get("is_token", False):
         owner_index = game.owner_index_of(permanent)
@@ -87,6 +96,101 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
         game.put_card_into_exile(owner, permanent.card)
     game.log.append(f"{permanent.effective_card.name} was exiled instead of dying")
     return ReplacementOutcome(replaced=True)
+
+
+#: "If a creature dealt damage by this creature this turn would die, exile it
+#: instead." (Frostwielder, Kumano's Pupils; Kumano, Master Yamabushi names
+#: itself.) A **static** ability of the damager — Disintegrate's marker is a
+#: resolved spell's and Runesword's a granted rider's, while this one applies
+#: only while its source is there: the rulings (2004-12-01) say "must be on
+#: the battlefield when the creature would be put into a graveyard", and
+#: "even if it's going to the graveyard at the same time" (CR 603.10a's look
+#: back, which one state-based check's departures share,
+#: ``Game.departed_in_this_event``). Derived from the source's text at the
+#: death, never stamped, so a source that loses the ability or leaves stops
+#: exiling.
+_DEALT_DAMAGE_BY_SELF_EXILE = re.compile(
+    r"^if a creature dealt damage by (?P<subject>.+?) this turn would die, "
+    r"exile it instead$"
+)
+
+#: The "this <noun>" spellings the subject may take for the source itself.
+_SELF_NOUN_SUBJECTS = frozenset({"this creature", "this permanent"})
+
+
+def dealt_damage_exile_line(line: str, card_name: str | None = None) -> bool:
+    """Whether *line* is, in full, "If a creature dealt damage by <itself>
+    this turn would die, exile it instead" — the subject "this creature" or
+    the card's own name (CR 201.5, a legend's short name included). One
+    reader for the interceptor below and :func:`replacement_claims_line`, so
+    what exiles and what is claimed cannot drift."""
+    return _dealt_damage_exile_line(
+        " ".join((line or "").strip().lower().rstrip(".").split()),
+        (card_name or "").strip().lower() or None,
+    )
+
+
+@lru_cache(maxsize=None)
+def _dealt_damage_exile_line(normalized: str, card_name: str | None) -> bool:
+    match = _DEALT_DAMAGE_BY_SELF_EXILE.match(normalized)
+    if match is None:
+        return False
+    subject = match.group("subject")
+    if subject in _SELF_NOUN_SUBJECTS:
+        return True
+    if card_name is None:
+        return False
+    from ..self_reference import _collapse_self_references
+
+    return _collapse_self_references(subject, card_name, "this creature") == "this creature"
+
+
+def _dealt_damage_exilers(game, payload: dict) -> list:
+    """Every permanent whose standing "if a creature dealt damage by this
+    creature this turn would die, exile it instead" covers the dying
+    creature: on the battlefield, or taken off it by the same event
+    (``departed_in_this_event``), printing the line about itself, and with an
+    entry in the turn's damage ledger from it to the dying creature. Pure."""
+    from ..damage_ledger import dealt_damage_to_permanent_this_turn
+
+    dying = payload["permanent"]
+    if not dying.is_creature or dying.permanent_id is None:
+        return []
+    found: list = []
+    seen: set[int] = set()
+    for source in [*game.all_permanents(), *game.departed_in_this_event()]:
+        if source.permanent_id is None or source.permanent_id in seen:
+            continue
+        seen.add(source.permanent_id)
+        printed = source.effective_card
+        text = printed.oracle_text or ""
+        if "dealt damage by" not in text.lower():
+            continue
+        if not any(
+            dealt_damage_exile_line(raw, printed.name) for raw in text.splitlines()
+        ):
+            continue
+        if dealt_damage_to_permanent_this_turn(
+            game, source.permanent_id, dying.permanent_id
+        ):
+            found.append(source)
+    return found
+
+
+def _applies_dealt_damage_exile(game, payload: dict) -> bool:
+    return bool(_dealt_damage_exilers(game, payload))
+
+
+@replacement_effect(
+    "would_die", EXILE_INSTEAD_OF_DYING_DEALT_DAMAGE,
+    applies=_applies_dealt_damage_exile,
+    sources=_dealt_damage_exilers,
+    label="Exile it instead of putting it into a graveyard",
+)
+def _exile_instead_of_dying_dealt_damage(game, payload: dict) -> ReplacementOutcome | None:
+    """Frostwielder: "If a creature dealt damage by this creature this turn
+    would die, exile it instead." No dies-trigger fires (CR 614.6)."""
+    return _exile_the_dying_permanent(game, payload)
 
 
 #: "If the creature would leave the battlefield, exile it instead of putting it

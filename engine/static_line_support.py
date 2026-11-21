@@ -585,7 +585,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     from .prevention import prevention_claims_line
     from .replacements import replacement_claims_line
 
-    if replacement_claims_line(normalized):
+    if replacement_claims_line(normalized, card_name):
         return True
     # CR 615's shields, asked the same way and for the same reason: a creature
     # printing a static prevention line works through the interceptor and would

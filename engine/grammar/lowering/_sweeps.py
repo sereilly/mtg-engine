@@ -191,6 +191,12 @@ def lower_each_matching_damage(
     payload: dict[str, object] = {"amount": amount, "filter": described}
     if node.per_each is not None:
         payload["per_recipient_count"] = _per_recipient_multiplier(node)
+    # "If a creature dealt damage this way would die this turn, exile it
+    # instead." (Yamabushi's Storm.) Emitted only when printed, so every
+    # other sweep's payload is unchanged; `_lower_damage`'s post-condition
+    # holds the kind to the riders its handler reads.
+    if node.riders.exile_if_dealt:
+        payload["exile_if_dealt"] = True
     return (OracleInstruction("deal_damage_each_matching", "", payload),)
 
 

@@ -491,7 +491,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # rather than here, because the support gate reads it too: what the engine
     # implements and what it claims to have read cannot drift while both
     # readers ask the implementer.
-    if replacement_claims_line(line):
+    if replacement_claims_line(line, card_name):
         return "replacements"
 
     # engine/life_prohibitions.py — "Players can't gain life." (Forsaken

@@ -166,6 +166,121 @@ def test_w1g8_dosan_leaves_activated_abilities_alone(set_pool):
     _w1g8_settle(game)
     assert game.players[1].life == 19
 
+
+# --- Frostwielder, Kumano's Pupils, Kumano, Master Yamabushi -------------------
+# "If a creature dealt damage by this creature [Kumano] this turn would die,
+# exile it instead." A static replacement of the damager (CR 614.1a), read
+# off the turn's damage ledger at the death: by any means for the rest of the
+# turn (CR 700.4), only while the source is on the battlefield — "even if
+# it's going to the graveyard at the same time" (the 2004-12-01 rulings).
+
+
+def _w1g8_zone_names(game, seat, zone):
+    return [card.name for card in getattr(game.players[seat], zone)]
+
+
+def test_w1g8_frostwielder_exiles_what_its_ping_kills(set_pool):
+    frost = set_pool("CHK")["Frostwielder"]
+    elves = set_pool("LEA")["Llanowar Elves"]
+    game, _, (elf,) = _w1g8_table([frost], [elves])
+    used = game.activate_permanent_ability(
+        0, "Frostwielder", target_permanent_ids=[elf.permanent_id]
+    )
+    assert used.supported, used.details
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "exile") == ["Llanowar Elves"]
+    assert _w1g8_zone_names(game, 1, "graveyard") == []
+
+
+def test_w1g8_frostwielder_exiles_a_damaged_creature_destroyed_later_that_turn(set_pool):
+    frost = set_pool("CHK")["Frostwielder"]
+    giant = set_pool("LEA")["Hill Giant"]
+    terror = set_pool("LEA")["Terror"]
+    game, _, (hill,) = _w1g8_table([frost], [giant], hand=[terror])
+    assert game.activate_permanent_ability(
+        0, "Frostwielder", target_permanent_ids=[hill.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert game.is_on_battlefield(hill)
+    assert game.cast_from_hand(0, "Terror", target_permanent_ids=[hill.permanent_id]).supported
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "exile") == ["Hill Giant"]
+
+
+def test_w1g8_frostwielder_must_be_on_the_battlefield_when_the_creature_dies(set_pool):
+    frost = set_pool("CHK")["Frostwielder"]
+    giant = set_pool("LEA")["Hill Giant"]
+    terror = set_pool("LEA")["Terror"]
+    unsummon = set_pool("LEA")["Unsummon"]
+    game, (wielder,), (hill,) = _w1g8_table(
+        [frost], [giant], hand=[unsummon, terror]
+    )
+    assert game.activate_permanent_ability(
+        0, "Frostwielder", target_permanent_ids=[hill.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert game.cast_from_hand(
+        0, "Unsummon", target_permanent_ids=[wielder.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert game.cast_from_hand(0, "Terror", target_permanent_ids=[hill.permanent_id]).supported
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "graveyard") == ["Hill Giant"]
+    assert _w1g8_zone_names(game, 1, "exile") == []
+
+
+def test_w1g8_frostwielder_does_not_exile_what_another_source_damaged(set_pool):
+    frost = set_pool("CHK")["Frostwielder"]
+    elves = set_pool("LEA")["Llanowar Elves"]
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    game, _, (elf,) = _w1g8_table([frost], [elves], hand=[bolt])
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[elf.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "graveyard") == ["Llanowar Elves"]
+
+
+def test_w1g8_kumanos_pupils_exiles_the_blocker_it_trades_with(set_pool):
+    """The ruling: "even if it's going to the graveyard at the same time as
+    Kumano's Pupils" — one state-based check, both seats swept, the Pupils'
+    seat first."""
+    pupils = set_pool("CHK")["Kumano's Pupils"]
+    giant = set_pool("LEA")["Hill Giant"]
+    game, _, _ = _w1g8_table([pupils], [giant])
+    _w1g8_declare_attack(game, 0, blocks={0: 0})
+    _w1g8_drive_combat(game)
+    assert _w1g8_zone_names(game, 0, "graveyard") == ["Kumano's Pupils"]
+    assert _w1g8_zone_names(game, 1, "exile") == ["Hill Giant"]
+    assert _w1g8_zone_names(game, 1, "graveyard") == []
+
+
+def test_w1g8_kumano_names_itself(set_pool):
+    kumano = set_pool("CHK")["Kumano, Master Yamabushi"]
+    elves = set_pool("LEA")["Llanowar Elves"]
+    game, _, (elf,) = _w1g8_table([kumano], [elves])
+    assert game.activate_permanent_ability(
+        0, "Kumano, Master Yamabushi", target_permanent_ids=[elf.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "exile") == ["Llanowar Elves"]
+
+
+def test_w1g8_the_dealt_damage_exile_reads_only_a_line_about_itself():
+    """The subject is the card itself — "this creature" or its own name (CR
+    201.5, the legend's short name included) — never another card's."""
+    from engine.replacements import replacement_claims_line
+    from engine.replacements.zone_changes import dealt_damage_exile_line
+
+    line = "If a creature dealt damage by Kumano this turn would die, exile it instead."
+    assert dealt_damage_exile_line(line, "Kumano, Master Yamabushi")
+    assert replacement_claims_line(line, "Kumano, Master Yamabushi")
+    assert not dealt_damage_exile_line(line, "Frostwielder")
+    assert not replacement_claims_line(line)
+    assert dealt_damage_exile_line(
+        "If a creature dealt damage by this creature this turn would die, exile it instead."
+    )
+
 # ==== end w1g8 ======================================================
 
 

@@ -23,7 +23,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..damage_events import DAMAGE_DENIES_REGENERATION, DAMAGE_EXILES_INSTEAD
+from ..damage_events import (DAMAGE_DENIES_REGENERATION, DAMAGE_EXILES_INSTEAD,
+                             exile_if_dies_if_dealt)
 from ..effect_ordering import in_apnap_order
 from ..divided_damage import (DIVIDED_TARGETS, EVENLY, announced_no_targets,
                               divide, divided_entry)
@@ -69,11 +70,18 @@ def _after_dealt(instruction, context, permanent):
     shielded from all of it may still regenerate.
     """
     denies = bool(instruction.payload.get("no_regen_if_dealt"))
+    # "If a creature dealt damage this way would die this turn, exile it
+    # instead." (Yamabushi's Flame.) The same moment, one replacement over.
+    exiles = bool(instruction.payload.get("exile_if_dealt"))
 
     def then(dealt: int) -> None:
         context.results["damage_dealt"] = dealt
         if denies:
             deny_regeneration_if_dealt(permanent, dealt)
+        if exiles:
+            exile_if_dies_if_dealt(
+                permanent, dealt, getattr(context.card, "name", None)
+            )
 
     return then
 

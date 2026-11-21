@@ -639,6 +639,9 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
                 statement.riders.no_regen_if_dealt or riders.no_regen_if_dealt
             ),
             exile_if_dies=statement.riders.exile_if_dies or riders.exile_if_dies,
+            exile_if_dealt=(
+                statement.riders.exile_if_dealt or riders.exile_if_dealt
+            ),
             divided=statement.riders.divided,
             divided_evenly=statement.riders.divided_evenly,
             rounding=statement.riders.rounding,

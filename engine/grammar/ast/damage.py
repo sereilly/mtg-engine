@@ -39,6 +39,13 @@ class DamageRiders:
     #: :attr:`no_regen` under a second spelling, and its own payload key.
     no_regen_if_dealt: bool = False
     exile_if_dies: bool = False
+    #: "If **a creature dealt damage this way** would die this turn, exile it
+    #: instead." (Yamabushi's Flame, Yamabushi's Storm.) Disintegrate's
+    #: :attr:`exile_if_dies` about what the damage was *dealt* to, as
+    #: :attr:`no_regen_if_dealt` is to :attr:`no_regen`: prevented damage is
+    #: not dealt (CR 615.1a), so a creature whose share was all prevented is
+    #: not exiled — and a sweep carries it to each creature it dealt to.
+    exile_if_dealt: bool = False
     divided: bool = False
     divided_evenly: bool = False
     #: "…divided evenly, **rounded down**, among any number of targets."

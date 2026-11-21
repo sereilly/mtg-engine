@@ -410,6 +410,8 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
 
     if _accept_damaged_this_way_no_regen(stream):
         return ast.DamageRiders(no_regen_if_dealt=True)
+    if _accept_damaged_this_way_exile(stream):
+        return ast.DamageRiders(exile_if_dealt=True)
 
     if stream.accept_phrase("if", "it", "'s", "a", "creature"):
         stream.accept_punct(",")
@@ -521,6 +523,33 @@ def _accept_damaged_this_way_no_regen(stream: TokenStream) -> bool:
     ):
         _parse_duration(stream)
         return True
+    stream.reset(mark)
+    return False
+
+
+def _accept_damaged_this_way_exile(stream: TokenStream) -> bool:
+    """``If a creature dealt damage this way would die this turn, exile it
+    instead.`` (Yamabushi's Flame, Yamabushi's Storm.)
+
+    :func:`_accept_damaged_this_way_no_regen`'s noun with Disintegrate's
+    replacement behind it: what is exiled is what the damage was **dealt**
+    to (CR 615.1a), so ``DamageRiders.exile_if_dealt``, not
+    ``exile_if_dies``. The noun is "creature" alone for that sibling's reason
+    — the replacement is about dying (CR 700.4), which the handler stamps
+    under an ``is_creature`` test — and the duration is the printed "this
+    turn", which is the marker's lifetime.
+    """
+    mark = stream.mark()
+    if (
+        stream.accept_word("if")
+        and stream.accept_word("a", "an")
+        and stream.accept_word("creature")
+        and stream.accept_phrase("dealt", "damage", "this", "way")
+        and stream.accept_phrase("would", "die", "this", "turn")
+    ):
+        stream.accept_punct(",")
+        if stream.accept_phrase("exile", "it", "instead"):
+            return True
     stream.reset(mark)
     return False
 

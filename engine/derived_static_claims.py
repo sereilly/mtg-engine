@@ -669,7 +669,10 @@ def _derived_static_claims(
     # Every such card in the pool happened to print a second readable line
     # (Lich, Ali from Cairo, Library of Leng, Conclave Mentor), which is why the
     # gap waited for a card whose whole text is one replacement.
-    if any(replacement_claims_line(line) for line in oracle_text.splitlines()):
+    if any(
+        replacement_claims_line(line, card_name)
+        for line in oracle_text.splitlines()
+    ):
         claims.append("replacements")
     # CR 615's half of the same story: a permanent's *static* prevention (Nine
     # Lives) applies from its own text at damage time and produces no

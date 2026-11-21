@@ -266,6 +266,26 @@ def dealt_damage_to_seat_this_turn(game, permanent_id: int | None, seat: int | N
     )
 
 
+def dealt_damage_to_permanent_this_turn(
+    game, source_permanent_id: int | None, recipient_permanent_id: int | None
+) -> bool:
+    """Whether the permanent *source_permanent_id* dealt damage to the
+    permanent *recipient_permanent_id* this turn.
+
+    "If a creature dealt damage by this creature this turn would die, exile
+    it instead." (Frostwielder.) :func:`dealt_damage_to_seat_this_turn` with
+    a permanent at the far end: both by id, which CR 400.7 makes one object
+    per time on the battlefield, and damage *dealt* only (a prevented point
+    never was, CR 615.1a)."""
+    if source_permanent_id is None or recipient_permanent_id is None:
+        return False
+    return any(
+        entry.source_permanent_id == source_permanent_id
+        and entry.recipient_permanent_id == recipient_permanent_id
+        for entry in ledger(game).entries
+    )
+
+
 def damage_dealt_by_cast(game, item) -> int:
     """How much damage one *cast* dealt this turn (CR 120.7's per-cast source)."""
     if item is None:

@@ -321,6 +321,22 @@ def _apply_dealer_riders(game, source, recipient) -> None:
         recipient.metadata[CANT_BE_REGENERATED] = True
 
 
+def exile_if_dies_if_dealt(permanent, dealt: int, arming_name) -> None:
+    """"If **a creature dealt damage this way** would die this turn, exile it
+    instead." (Yamabushi's Flame, Yamabushi's Storm.) On one creature a damage
+    event just dealt to, from inside the event (the ``then`` of
+    ``apply_damage_to_creature``), so the marker the would-die replacement
+    reads (``exile_if_dies_this_turn``, Disintegrate's) is down before the
+    state-based check that would put the creature into a graveyard.
+
+    Only when something was dealt (CR 615.1a: prevented damage is not dealt)
+    and only on a creature — ``regeneration.deny_regeneration_if_dealt``'s
+    twin, one replacement over. *arming_name* is the spell's name, for
+    CR 616.1e's option (``replacements.zone_changes.recorded_name``)."""
+    if dealt > 0 and permanent.is_creature:
+        permanent.metadata["exile_if_dies_this_turn"] = arming_name or True
+
+
 def damage_candidates(recipient, event: dict | None = None) -> list[Candidate]:
     """Every effect attempting to modify a damage event with this recipient
     before it is dealt (CR 120.4b) — shields and replacements together, in
