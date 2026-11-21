@@ -330,6 +330,11 @@
       "status": "pass",
       "updated_at": 1791884616.6367981
     },
+    "Blessed Breath": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277688.300037
+    },
     "Blessing": {
       "reason": "",
       "status": "pass",
@@ -354,6 +359,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884583.8747036
+    },
+    "Boseiju, Who Shelters All": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277699.4060855
     },
     "Bottle of Suleiman": {
       "reason": "",
@@ -400,10 +410,20 @@
       "status": "pass",
       "updated_at": 1793569921.4847918
     },
+    "Brutal Deceiver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795279107.837146
+    },
     "Buried Alive": {
       "reason": "",
       "status": "pass",
       "updated_at": 1791884611.6485288
+    },
+    "Burr Grafter": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277544.7675211
     },
     "Burrowing": {
       "reason": "",
@@ -639,6 +659,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782601599.96855
+    },
+    "Commune with Nature": {
+      "reason": "Browser: the look-top-pick modal shows all five cards with no ineligible marking and no way to decline the may. Clicking a noncreature is refused (400) and the modal hides, stranding the prompt until a page reload; with no creature in the top five nothing can be answered (the action refuses a decline: hand_index is required). The wire omits the engine's optional and filter (live_look_top_candidates).",
+      "status": "fail",
+      "updated_at": 1795277978.332554
     },
     "Condescend": {
       "reason": "",
@@ -890,6 +915,11 @@
       "status": "pass",
       "updated_at": 1792619524.9942865
     },
+    "Devoted Retainer": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277621.933173
+    },
     "Diamond Valley": {
       "reason": "",
       "status": "pass",
@@ -979,6 +1009,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1788902627.897903
+    },
+    "Dripping-Tongue Zubera": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277522.6854007
     },
     "Drop of Honey": {
       "reason": "",
@@ -1370,10 +1405,20 @@
       "status": "pass",
       "updated_at": 1786223889.7736194
     },
+    "Gifts Ungiven": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277921.4086754
+    },
     "Gilded Light": {
       "reason": "",
       "status": "pass",
       "updated_at": 1793971232.3635616
+    },
+    "Glacial Ray": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277733.0230114
     },
     "Glasses of Urza": {
       "reason": "",
@@ -1515,6 +1560,16 @@
       "status": "pass",
       "updated_at": 1792618855.84152
     },
+    "Hall of the Bandit Lord": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277710.7316852
+    },
+    "Hankyu": {
+      "reason": "Browser: the granted {T}: Put an aim counter on Hankyu asks Choose target for the equipped creature, click a valid creature, though the ability targets nothing; its ability_target_specs entry is kind creature with may_name_nothing. Any creature clicked (the AI's included) and the counter still lands on Hankyu. The shot ({T}, remove all aim counters: 2 damage to the AI) and equip work.",
+      "status": "fail",
+      "updated_at": 1795277999.8353286
+    },
     "Hasran Ogress": {
       "reason": "",
       "status": "pass",
@@ -1535,10 +1590,25 @@
       "status": "pass",
       "updated_at": 1783034152.3388038
     },
+    "Hikari, Twilight Guardian": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277799.1361446
+    },
     "Hill Giant": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782544666.9248512
+    },
+    "Hisoka's Defiance": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277743.936027
+    },
+    "Hisoka, Minamo Sensei": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277910.2834408
     },
     "Hollow Specter": {
       "reason": "",
@@ -1750,10 +1820,20 @@
       "status": "pass",
       "updated_at": 1782599240.7461662
     },
+    "Junkyo Bell": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277810.2416499
+    },
     "Junún Efreet": {
       "reason": "",
       "status": "pass",
       "updated_at": 1784609206.830897
+    },
+    "Jushi Apprentice": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277655.2450254
     },
     "Juzám Djinn": {
       "reason": "",
@@ -1774,6 +1854,16 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1792623569.4241867
+    },
+    "Kami of Fire's Roar": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795279118.9625306
+    },
+    "Kami of the Hunt": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277481.964252
     },
     "Karma": {
       "reason": "",
@@ -1815,6 +1905,16 @@
       "status": "pass",
       "updated_at": 1786224819.0839798
     },
+    "Kitsune Blademaster": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277599.945396
+    },
+    "Kodama's Reach": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795279130.0261471
+    },
     "Kormus Bell": {
       "reason": "",
       "status": "pass",
@@ -1845,6 +1945,11 @@
       "status": "pass",
       "updated_at": 1791884781.4385245
     },
+    "Kusari-Gama": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277832.5154736
+    },
     "Lance": {
       "reason": "",
       "status": "pass",
@@ -1854,6 +1959,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791885879.147208
+    },
+    "Lava Spike": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277555.716929
     },
     "Ley Druid": {
       "reason": "",
@@ -2035,6 +2145,11 @@
       "status": "pass",
       "updated_at": 1793993384.8791761
     },
+    "Masako the Humorless": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277754.924602
+    },
     "Meddle": {
       "reason": "",
       "status": "pass",
@@ -2115,6 +2230,11 @@
       "status": "pass",
       "updated_at": 1782105016.6717145
     },
+    "Mindblaze": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277932.5804284
+    },
     "Mistform Sliver": {
       "reason": "",
       "status": "pass",
@@ -2154,6 +2274,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791890836.7556596
+    },
+    "Mothrider Samurai": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277610.921293
     },
     "Mountain": {
       "reason": "",
@@ -2265,6 +2390,11 @@
       "status": "pass",
       "updated_at": 1782590370.9698598
     },
+    "Nezumi Ronin": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277577.8847883
+    },
     "Night's Whisper": {
       "reason": "",
       "status": "pass",
@@ -2334,6 +2464,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782584976.5671804
+    },
+    "Ore Gorger": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277787.9828413
     },
     "Oubliette": {
       "reason": "",
@@ -2505,6 +2640,11 @@
       "status": "pass",
       "updated_at": 1782019690.004691
     },
+    "Psychic Puppetry": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277677.1418464
+    },
     "Psychic Purge": {
       "reason": "",
       "status": "pass",
@@ -2514,6 +2654,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781410771.1947188
+    },
+    "Pull Under": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277644.0333116
     },
     "Purelace": {
       "reason": "",
@@ -2585,6 +2730,11 @@
       "status": "pass",
       "updated_at": 1794488032.822725
     },
+    "Reach Through Mists": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277821.3759408
+    },
     "Reaping the Graves": {
       "reason": "",
       "status": "pass",
@@ -2619,6 +2769,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791900813.0675707
+    },
+    "Rend Flesh": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277633.0142627
     },
     "Renewed Faith": {
       "reason": "",
@@ -2659,6 +2814,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1793968692.7935581
+    },
+    "Reweave": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277854.8466933
     },
     "Righteousness": {
       "reason": "",
@@ -2710,6 +2870,11 @@
       "status": "pass",
       "updated_at": 1782107895.8262937
     },
+    "Ronin Houndmaster": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277500.6065555
+    },
     "Rotting Giant": {
       "reason": "",
       "status": "pass",
@@ -2744,6 +2909,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782107959.368606
+    },
+    "Samurai of the Pale Curtain": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277588.939357
     },
     "Sanctum of Calm Waters": {
       "reason": "",
@@ -2830,6 +3000,11 @@
       "status": "pass",
       "updated_at": 1782542731.2588892
     },
+    "Sensei Golden-Tail": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277899.1711845
+    },
     "Serendib Djinn": {
       "reason": "",
       "status": "pass",
@@ -2884,6 +3059,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1787275251.2945545
+    },
+    "Shell of the Last Kappa": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277843.7092109
     },
     "Shifting Sky": {
       "reason": "",
@@ -2954,6 +3134,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782364315.7092376
+    },
+    "Sire of the Storm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277765.8351917
     },
     "Siren's Call": {
       "reason": "",
@@ -3045,6 +3230,11 @@
       "status": "pass",
       "updated_at": 1782763087.914169
     },
+    "Soul of Magma": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277511.6085238
+    },
     "Spark Spray": {
       "reason": "",
       "status": "pass",
@@ -3130,6 +3320,11 @@
       "status": "pass",
       "updated_at": 1793501913.4047668
     },
+    "Struggle for Sanity": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277877.059329
+    },
     "Stupefying Touch": {
       "reason": "",
       "status": "pass",
@@ -3165,6 +3360,11 @@
       "status": "pass",
       "updated_at": 1794487507.3868134
     },
+    "Swallowing Plague": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277666.2125247
+    },
     "Swamp": {
       "reason": "",
       "status": "pass",
@@ -3174,6 +3374,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1787458119.0190837
+    },
+    "Swirl the Mists": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277888.0578177
     },
     "Swords to Plowshares": {
       "reason": "",
@@ -3215,6 +3420,11 @@
       "status": "pass",
       "updated_at": 1791900815.918794
     },
+    "Teller of Tales": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277776.8377829
+    },
     "Temple of the False God": {
       "reason": "",
       "status": "pass",
@@ -3244,6 +3454,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782587023.8502285
+    },
+    "Thief of Hope": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277566.8433774
     },
     "Thought Courier": {
       "reason": "",
@@ -3345,6 +3560,11 @@
       "status": "pass",
       "updated_at": 1783040874.3107207
     },
+    "Uba Mask": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277865.903876
+    },
     "Underground Sea": {
       "reason": "",
       "status": "pass",
@@ -3365,6 +3585,11 @@
       "status": "pass",
       "updated_at": 1782190359.588932
     },
+    "Unnatural Speed": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277533.737691
+    },
     "Unstable Mutation": {
       "reason": "",
       "status": "pass",
@@ -3374,6 +3599,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544634.319353
+    },
+    "Untaidake, the Cloud Keeper": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795277721.8269496
     },
     "Upwelling": {
       "reason": "",

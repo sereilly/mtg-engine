@@ -8750,9 +8750,13 @@ function applyCopyCastPrompt(info) {
   const card = copyCastExiledCard(info);
   const cardName = info.card_name || normalizeCardName(card) || "the exiled card";
   const source = info.source_name || "an ability";
-  title.textContent = `Cast a copy — ${cardName}`;
+  // `copy: false` (Shell of the Last Kappa): the exiled card itself is cast and
+  // no copy is made, so nothing here may say "copy" (web/prompt_board.py).
+  const original = info.copy === false;
+  const what = original ? cardName : `a copy of ${cardName}`;
+  title.textContent = original ? `Cast ${cardName}` : `Cast a copy — ${cardName}`;
   body.textContent = info.prompt
-    || `Cast a copy of ${cardName} without paying its mana cost (${source})?`;
+    || `Cast ${what} without paying its mana cost (${source})?`;
   const fromHand = copyCastFromHand(info);
   const owner = fromHand
     ? (info.hand_seat !== seat
@@ -8766,9 +8770,11 @@ function applyCopyCastPrompt(info) {
     : Number.isInteger(info.exile_index) ? info.exile_index + 1 : null;
   steps.innerHTML = [
     `<div id="copyCastCardSlot" class="prompt-card-row"></div>`,
-    `<div>${escapeHtml(source)} offers a copy of ${escapeHtml(cardName)}, in ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}.</div>`,
-    "<div>The copy is made in exile and cast now, while the ability resolves — no mana cost. "
-      + "Its targets and modes are chosen next; a copy you don't cast is never made.</div>",
+    `<div>${escapeHtml(source)} offers ${escapeHtml(what)}, in ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}.</div>`,
+    original
+      ? "<div>The card is cast from there now, while the ability resolves — no mana cost. Its targets and modes are chosen next.</div>"
+      : "<div>The copy is made in exile and cast now, while the ability resolves — no mana cost. "
+        + "Its targets and modes are chosen next; a copy you don't cast is never made.</div>",
     // Panoptic Mirror with several imprinted cards copies one of them: the
     // offers come card by card (`then_offers`), so declining this one is how
     // a later card is chosen, and casting this one withdraws the rest.
@@ -8777,7 +8783,7 @@ function applyCopyCastPrompt(info) {
         `${escapeHtml(info.then_offers.join(", then "))} next; cast this copy and no other is offered.</div>`
       : "",
     `<div class="prompt-choice-row">` +
-      `<button type="button" class="prompt-choice-btn" id="copyCastBtn">Cast a copy of ${escapeHtml(cardName)}</button>` +
+      `<button type="button" class="prompt-choice-btn" id="copyCastBtn">Cast ${escapeHtml(what)}</button>` +
       `<button type="button" class="prompt-choice-btn" id="copyCastDeclineBtn">Don't cast it</button>` +
     `</div>`,
   ].join("");
@@ -20394,7 +20400,12 @@ function spliceTargetCard(card, offer) {
     type: card?.type || "",
     oracle_text: spliceOfferCard(offer)?.oracle_text || "",
     mana_cost: offer?.cost || "",
-    target_spec: offer?.target_spec || { kind: "none", requires_target: false, valid_targets: [] },
+    // The offer's spec is judged as the host's (`offers.splice_offers`), so an
+    // X host (Swallowing Plague) hands it `announces_x`; X is announced once,
+    // in the host's own step, never once per spliced card.
+    target_spec: offer?.target_spec
+      ? { ...offer.target_spec, announces_x: false }
+      : { kind: "none", requires_target: false, valid_targets: [] },
     spliced_from: offer?.name || "",
   };
 }

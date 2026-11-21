@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **7021**
 - Distinct behaviours: **6383**
 - Cards sharing a behaviour with another: **927** in **289** classes
-- Unverified cards covered by a verified peer: **263**
+- Unverified cards covered by a verified peer: **267**
 
 | Size | Cards |
 | --- | --- |
@@ -83,13 +83,13 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Crazed Skirge, Rorix Bladewing, Volcanic Dragon |
 | 3 | Darkness, **Fog**, Holy Day |
 | 3 | Dauthi Marauder, Soltari Foot Soldier, Thalakos Sentry |
-| 3 | Devoted Retainer, Nezumi Ronin, Samurai Enforcers |
+| 3 | **Devoted Retainer**, **Nezumi Ronin**, Samurai Enforcers |
 | 3 | **El-Hajjâj**, Horned Cheetah, Zebra Unicorn |
 | 3 | Elvish Berserker, Gang of Elk, Rabid Elephant |
 | 3 | Flowstone Crusher, Flowstone Giant, Flowstone Shambler |
 | 3 | Fountain of Youth, Tanglebloom, Tower of Eons |
 | 3 | Gorilla Chieftain, Skyshroud Troll, Tel-Jilad Exile |
-| 3 | Grasp of Darkness, Pull Under, Shrink |
+| 3 | Grasp of Darkness, **Pull Under**, Shrink |
 | 3 | Hold the Line, **Piety**, Rally |
 | 3 | Kavu Climber, Merchant of Secrets, Striped Bears |
 | 3 | Keeneye Aven, Pendrell Drake, Primoc Escapee |
@@ -154,7 +154,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Concordant Crossroads, Mass Hysteria |
 | 2 | Consume Strength, Steal Strength |
 | 2 | Crimson Acolyte, Obsidian Acolyte |
-| 2 | Cultivate, Kodama's Reach |
+| 2 | Cultivate, **Kodama's Reach** |
 | 2 | **Dandân**, **Sea Serpent** |
 | 2 | Darba, Hungry Mist |
 | 2 | Death Stroke, Vengeance |
