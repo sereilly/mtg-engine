@@ -36,7 +36,7 @@ import re
 from collections import defaultdict
 from typing import Any, Iterable
 
-from .faces import face_cards
+from .faces import text_faces
 from .oracle import compile_card_oracle
 
 _COLOUR_WORD = re.compile(r"\b(white|blue|black|red|green)\b")
@@ -102,8 +102,14 @@ def behaviour_signature(card) -> str:
     # docstring describes. Each face's full signature is part of the card's;
     # the key is absent for a single-face card, so no existing class moves and
     # a split card can never be the peer of a card with one face.
+    # A flip card (CR 710) is its top half, so its own text is read below as
+    # any card's is, and its bottom half — the second text box, the card a
+    # flipped permanent is — is the one entry under the same key: two flip
+    # cards whose bottoms differ are two behaviours, and a flip card is never
+    # the peer of a card with one text box.
     faces = [
-        json.loads(behaviour_signature(face)) for face in face_cards(card)
+        json.loads(behaviour_signature(face))
+        for face in text_faces(card) if face is not card
     ]
     return json.dumps(
         {

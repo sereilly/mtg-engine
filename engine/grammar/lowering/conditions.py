@@ -43,7 +43,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import (count_filter_on_frozen_seat, count_spec,
                        maximum_amount_spec, unspent_mana_spec)
-from ._common import _is_enchanted, testable_filter_payload
+from ._common import _is_enchanted, _is_source, testable_filter_payload
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CAST_SPELL_EVENTS,
                       _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
@@ -689,6 +689,23 @@ def _lower_condition(
                 node=condition,
             )
         return payload
+    if isinstance(condition, ast.EnchantedByAuras):
+        # "if this creature is enchanted by two or more Auras" (Kitsune
+        # Mystic). Asked of the ability's own source, which is what the
+        # evaluator reads; a rebound pronoun naming another permanent has no
+        # reader here and refuses rather than counting the source's Auras.
+        bound = condition.comparison.value
+        if not _is_source(condition.subject) or not isinstance(bound, ast.Fixed):
+            raise LoweringError(
+                "an Aura count is asked of the ability's own source against a "
+                "printed number",
+                node=condition,
+            )
+        return {
+            "kind": "source_aura_count",
+            "op": condition.comparison.op,
+            "value": bound.value,
+        }
     if isinstance(condition, ast.SourceOnBattlefield):
         # "if this enchantment is on the battlefield" (Tombstone Stairwell).
         # The evaluator asks the game which zone the source is in, so a rebound

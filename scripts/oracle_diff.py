@@ -72,7 +72,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
-from engine.faces import face_cards  # noqa: E402
+from engine.faces import text_faces  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402
 from engine import program_store  # noqa: E402
 
@@ -138,8 +138,11 @@ def snapshot_pool() -> dict[str, dict[str, str]]:
     snapshot: dict[str, dict[str, str]] = {}
     for card in load_pool():
         snapshot[card.name] = snapshot_card(card)
-        for face in face_cards(card):
-            snapshot[f"{card.name} [{face.name}]"] = snapshot_card(face)
+        # ``text_faces``: a split card's halves, or a flip card's bottom half
+        # (CR 710; the flip card itself is its top half, the entry above).
+        for face in text_faces(card):
+            if face is not card:
+                snapshot[f"{card.name} [{face.name}]"] = snapshot_card(face)
     return snapshot
 
 

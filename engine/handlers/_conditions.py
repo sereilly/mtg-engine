@@ -779,6 +779,28 @@ def evaluate_state_condition(
         value = permanent_state_holds(source, state)
         return (not value) if payload.get("negated") else value
 
+    if kind == "source_aura_count":
+        # "if this creature is enchanted by two or more Auras" (Kitsune
+        # Mystic). CR 303.4: the Auras attached to the source, asked through
+        # the layers (``has_type``) for ``_is_enchanted``'s reason — an
+        # Equipment on the same attachment list enchants nothing. A source
+        # that has left answers False (CR 603.4's direction for a check it
+        # cannot make).
+        from ..aura_attachment import auras_attached_to
+        from ._filters import _comparison_holds
+
+        source = context.source_permanent
+        if source is None or not game.is_on_battlefield(source):
+            return False
+        count = sum(
+            1 for attachment in auras_attached_to(source)
+            if attachment.has_type("aura")
+        )
+        return _comparison_holds(
+            {"op": payload.get("op", "ge"), "value": int(payload.get("value", 0))},
+            count,
+        )
+
     if kind == "source_is_type":
         # "if this permanent is an enchantment" (the Hidden / Opal / Veiled
         # cycle). CR 205.2's card type asked of the ability's own source and

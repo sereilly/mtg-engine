@@ -279,6 +279,21 @@ class IsState:
     subject: TargetSpec
     state: str          # tapped | attacking | blocking | attacked_this_turn
     negated: bool = False
+
+
+@dataclass(frozen=True)
+class EnchantedByAuras:
+    """"if this creature is **enchanted by two or more Auras**" (Kitsune
+    Mystic's flip condition).
+
+    :class:`IsState`'s "enchanted" with a count: CR 303.4's Auras attached to
+    the permanent, how many of them. Its own node rather than a state word,
+    because a state is true or false and this is a number compared against a
+    printed bound. ``subject`` is the source reference the clause printed; the
+    lowering admits the ability's own source and refuses anything else.
+    """
+    subject: TargetSpec
+    comparison: "Comparison"
 @dataclass(frozen=True)
 class SourceOnBattlefield:
     """"if this enchantment is on the battlefield" (Tombstone Stairwell).
@@ -763,6 +778,7 @@ Condition = Union[
     Controls,
     EveryOf,
     IsState,
+    EnchantedByAuras,
     ItIsColor,
     ObjectHasKeyword,
     OnBattlefield,

@@ -51,7 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from engine.card_loader import load_cards, manifest_measured_codes, manifest_set_paths
 from set_argument import POOL_SCOPE, add_set_argument, resolve_set
 from engine.grammar import GRAMMAR_CATEGORIES, compile_line
-from engine.faces import castable_faces
+from engine.faces import castable_faces, text_faces
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = REPO_ROOT / "GRAMMAR_COVERAGE.md"
@@ -141,9 +141,11 @@ def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[
             # contributes a card to the denominator and no line at all — the
             # parser would be credited or blamed for nothing it printed. Each
             # half is read under its own name, which is its self-reference.
+            # A flip card's bottom half too (``faces.text_faces``, CR 710):
+            # a second text box the parser reads under its own name.
             for face, raw in (
                 (face, raw)
-                for face in castable_faces(card)
+                for face in (text_faces(card) or castable_faces(card))
                 for raw in (face.oracle_text or "").splitlines()
             ):
                 line = raw.strip()

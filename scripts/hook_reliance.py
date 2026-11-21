@@ -77,7 +77,7 @@ from engine.card_loader import (
     manifest_set_paths,
 )
 from engine.grammar import compile_line
-from engine.faces import castable_faces
+from engine.faces import castable_faces, text_faces
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = REPO_ROOT / "HOOK_RELIANCE.md"
@@ -240,7 +240,9 @@ def _count_card(card, hooked_names: set[str], stats: Stats) -> None:
     # under its own name, so that is the name a hook for it would be keyed by —
     # read as handed in, the card has no line and could carry a hook on either
     # half without this instrument counting the card or the line.
-    spells = castable_faces(card)
+    # …and a flip card's bottom half (``faces.text_faces``, CR 710), whose
+    # lines compile under its own name and could carry a hook of their own.
+    spells = text_faces(card) or castable_faces(card)
     if card.name in hooked_names or any(face.name in hooked_names for face in spells):
         stats.hooked_cards += 1
     for face in spells:
@@ -289,7 +291,8 @@ def analyze() -> tuple[dict[str, Stats], Stats, list[Registry], set[str]]:
         name
         for path in all_paths if path.exists()
         for card in load_cards(str(path))
-        for name in {card.name, *(face.name for face in castable_faces(card))}
+        for name in {card.name, *(face.name for face in castable_faces(card)),
+                     *(face.name for face in text_faces(card))}
     }
     registries = discover_registries(pool_names)
     hooked_names: set[str] = set().union(*(r.cards for r in registries)) if registries else set()
