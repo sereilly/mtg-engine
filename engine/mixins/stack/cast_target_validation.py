@@ -41,6 +41,7 @@ from ...subject_filters import subject_matches
 from ...enchant_targets import (_ENCHANT_LAND_SUBTYPES,
                                 enchant_subject_colours,
                                 enchant_subject_keyword_exclusion,
+                                enchant_subject_mana_value,
                                 enchant_subject_supertype_exclusion,
                                 enchant_subject_seat)
 from ...targeting import (derive_cast_spec, role_is_stack, spec_roles,
@@ -183,11 +184,15 @@ class EnchantNounParts(NamedTuple):
     colours: tuple[str, ...]
     colours_excluded: bool
     excluded_supertype: str | None
+    #: "…**with mana value 2 or less**" (Threads of Disloyalty): the lowered
+    #: ``{op, value}`` bound, or None.
+    mana_value: dict | None = None
 
 
 def enchant_noun_parts(noun: str) -> EnchantNounParts:
-    """*noun*'s halves, split in the gate's own order: seat, negated subtype,
-    keyword exclusion, colours, supertype exclusion, then the union.
+    """*noun*'s halves, split in the gate's own order: seat, mana-value bound,
+    negated subtype, keyword exclusion, colours, supertype exclusion, then the
+    union.
 
     The one split :func:`permanent_matches_enchant_noun` tests, handed out
     whole so a reader asking "which matcher row does this clause reach?" asks
@@ -199,6 +204,7 @@ def enchant_noun_parts(noun: str) -> EnchantNounParts:
     correctly unmatched.
     """
     noun = enchant_subject_seat(noun)[0]
+    noun, mana_value = enchant_subject_mana_value(noun)
     excluded = None
     negated = _NON_SUBTYPE_ENCHANT.match(noun)
     if negated is not None:
@@ -213,6 +219,7 @@ def enchant_noun_parts(noun: str) -> EnchantNounParts:
         colours=tuple(colours),
         colours_excluded=colours_excluded,
         excluded_supertype=excluded_supertype,
+        mana_value=mana_value,
     )
 
 
@@ -260,6 +267,20 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
         and permanent.has_supertype(parts.excluded_supertype)
     ):
         return False
+    # "Enchant creature **with mana value 2 or less**" (Threads of Disloyalty).
+    # CR 202.3 off the permanent's effective card — layer 1, so a Clone copying
+    # a three-drop is a three — through the bound reader every lowered
+    # ``mana_value`` filter uses. The rulings (2005-02-01): {X} counts 0 on the
+    # battlefield (the ingested mana value already does), a token's is usually
+    # 0, and an Aura on a creature that came to have 3 or more is put into the
+    # graveyard by the CR 704.5m sweep asking this again.
+    if parts.mana_value is not None:
+        from ...handlers._filters import _comparison_holds
+
+        if not _comparison_holds(
+            parts.mana_value, int(getattr(permanent.effective_card, "cmc", 0) or 0)
+        ):
+            return False
     # "Enchant **artifact or creature**" (Teferi's Curse). A printed union is an
     # OR, so any one member is enough — asked of the same matcher table a single
     # noun uses, which is what keeps a union from being a second vocabulary.

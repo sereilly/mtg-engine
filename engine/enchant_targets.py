@@ -113,12 +113,21 @@ _ENCHANT_NOUN_UNION = (
 #: alternative to add the day a card prints it, and until then the line refuses
 #: (the keyword exclusion's rule above).
 _ENCHANT_SUPERTYPE_EXCLUSION = r"(?:nonbasic )?"
+#: "Enchant creature **with mana value 2 or less**" (Threads of Disloyalty).
+#: CR 202.3's characteristic as a sixth independent half of CR 702.5's
+#: [quality], printed after the noun where the keyword exclusion is, so it
+#: composes with the others instead of multiplying the rows. The bound is
+#: payload. Only "or less" is admitted: "or greater" is one alternative to add
+#: the day a card prints it, and until then such a line refuses (the keyword
+#: exclusion's rule above).
+_ENCHANT_MANA_VALUE_BOUND = r"(?: with mana value \d+ or less)?"
 _ENCHANT_SUBJECT = (
     rf"{_ENCHANT_COLOUR}"
     rf"{_ENCHANT_SUPERTYPE_EXCLUSION}"
     rf"{_ENCHANT_NEGATION}"
     rf"{_ENCHANT_NOUN_UNION}"
     rf"{_ENCHANT_KEYWORD_EXCLUSION}"
+    rf"{_ENCHANT_MANA_VALUE_BOUND}"
     rf"(?: (?:{'|'.join(_ENCHANT_SEAT_CLAUSES)}))?"
 )
 #: The colour half of a subject, split off the way the seat and keyword halves
@@ -224,6 +233,33 @@ def enchant_subject_keyword_exclusion(subject: str) -> tuple[str, str | None]:
     return match.group("noun").strip(), match.group("keyword")
 
 
+#: The mana-value half of a subject, anchored at the end like the keyword half,
+#: and read after the seat clause is off (the order the words are printed in).
+_ENCHANT_WITH_MANA_VALUE = re.compile(
+    r"^(?P<noun>.+?) with mana value (?P<value>\d+) or less$"
+)
+
+
+def enchant_subject_mana_value(subject: str) -> tuple[str, dict | None]:
+    """Split an enchant subject into its noun and its mana-value bound.
+
+    ``"creature with mana value 2 or less"`` -> ``("creature", {"op": "le",
+    "value": 2})``; a subject with no such clause -> ``(subject, None)``. The
+    bound is spelled the way every lowered ``mana_value`` filter is
+    (``handlers/_filters._comparison_holds``), so the picker's ``filter`` and
+    the gate's test read one shape.
+
+    The sixth half of CR 702.5's [quality] (Threads of Disloyalty), split once
+    for :func:`enchant_subject_seat`'s reason: the picker, the cast gate,
+    ``aura_attachment.aura_attach_refusal`` and the CR 704.5m sweep all need
+    it. Ask for the seat first — both are anchored at the end.
+    """
+    match = _ENCHANT_WITH_MANA_VALUE.match(subject)
+    if match is None:
+        return subject, None
+    return match.group("noun").strip(), {"op": "le", "value": int(match.group("value"))}
+
+
 # The graveyard form the scan above deliberately excludes. It is its own entry
 # rather than a loosening of that pattern, because it names a different zone and
 # so a different picker: `_apply_aura_effect` pops the chosen card out of
@@ -267,7 +303,7 @@ def enchant_line_subject(line: str) -> str | None:
         return None
     subject = match.group(1)
     _noun, keyword = enchant_subject_keyword_exclusion(
-        enchant_subject_seat(subject)[0]
+        enchant_subject_mana_value(enchant_subject_seat(subject)[0])[0]
     )
     if keyword is not None and unimplemented_filter_keywords(
         {"without_keywords": [keyword]}
@@ -296,6 +332,7 @@ def enchant_clause_nouns(clause: str) -> tuple[str, ...]:
     it had enchanted a creature. Both reported supported.
     """
     noun = enchant_subject_seat(clause)[0]
+    noun = enchant_subject_mana_value(noun)[0]
     noun = enchant_subject_colours(noun)[0]
     noun = enchant_subject_supertype_exclusion(noun)[0]
     if noun.startswith("non-"):
@@ -392,6 +429,13 @@ def enchant_subject_spec(subject: str) -> dict | None:
     combinations are composed here rather than enumerated.
     """
     noun, seat = enchant_subject_seat(subject)
+    # "creature **with mana value 2 or less**" (Threads of Disloyalty). Carried
+    # into the spec's ``filter`` — the noun phrase the enumerator asks
+    # ``subject_matches`` of, where ``mana_value`` is a testable key answered
+    # off the permanent's effective card (CR 202.3; a token's is 0) — so the
+    # picker offers only the legal hosts, and the gate enforces it off this
+    # same split.
+    noun, mana_value = enchant_subject_mana_value(noun)
     # "non-Wall creature" (Aggression) picks among *creatures*; the exclusion is
     # the cast gate's to enforce, and it reads the whole printed subject. A
     # picker narrowed to the head noun offers a superset and the gate refuses
@@ -442,6 +486,8 @@ def enchant_subject_spec(subject: str) -> dict | None:
             **(spec.get("filter") or {}),
             "exclude_supertypes": [excluded_supertype],
         }
+    if mana_value is not None:
+        spec["filter"] = {**(spec.get("filter") or {}), "mana_value": dict(mana_value)}
     flag = _ENCHANT_SEAT_TO_FLAG.get(seat)
     if flag is not None:
         spec[flag] = True

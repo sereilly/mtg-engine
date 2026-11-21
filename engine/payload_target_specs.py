@@ -1103,6 +1103,23 @@ def _control_gift_spec(payload: dict) -> dict | None:
     return player_pronoun_spec(payload.get("who"))
 
 
+def _exchanged_seat_spec(payload: dict) -> dict | None:
+    """"You and **target opponent** each gain control of all creatures the
+    other controls until end of turn." (Twist Allegiance.)
+
+    The other seat of the mutual control change, under the ``other_seat`` key
+    ``exchange_control_of_sets_until_eot`` reads off the announcement
+    (``context.target``). Reins of Power prints the same sentence with "that
+    opponent", a seat its earlier untap sweep already announced, so its
+    ``other_seat`` is ``that_player`` and the shared reader answers None —
+    the announcement stays where it was. Without this row Twist Allegiance,
+    whose only "target" is this one, derived no picker: the client sent a
+    bare cast the engine then refused (the Roots class, ``picker_sweep``'s
+    one Betrayers of Kamigawa finding).
+    """
+    return player_pronoun_spec(payload.get("other_seat"))
+
+
 def _chosen_from_target_player_spec(payload: dict) -> dict | None:
     """"…**choose a land that player controls**" (Equipoise.)
 
@@ -1440,6 +1457,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "force_subject_to_attack_until_eot": _subject_controller_spec,
     "grant_target_ability_text": _ability_text_grant_spec,
     "give_control_of_source_to_player": _control_gift_spec,
+    "exchange_control_of_sets_until_eot": _exchanged_seat_spec,
     "choose_permanents": _chosen_from_target_player_spec,
     "target_gains_life": _life_gain_spec,
     "target_loses_life": _player_recipient_spec,

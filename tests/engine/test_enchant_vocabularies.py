@@ -97,6 +97,8 @@ def test_every_shipped_auras_enchant_noun_has_a_matcher(catalog):
     ("red or green creature", ("creature",), "colours", ("R", "G")),
     ("nonblack creature", ("creature",), "colours_excluded", True),
     ("nonbasic land", ("land",), "excluded_supertype", "basic"),
+    ("creature with mana value 2 or less", ("creature",), "mana_value",
+     {"op": "le", "value": 2}),
     ("artifact or creature", ("artifact", "creature"), None, None),
 ])
 def test_the_gate_splits_each_half_of_the_clause_off_its_noun(clause, heads, field, value):

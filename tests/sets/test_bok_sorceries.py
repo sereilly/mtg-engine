@@ -41,6 +41,74 @@ log), not instruction kinds alone.
 # ==== w1g4 ==========================================================
 # w1g4's tests go between this line and the "end w1g4" line.
 
+from engine import Game as _w1g4_Game
+from engine import PlayerState as _w1g4_PlayerState
+from engine.models import Permanent as _w1g4_Permanent
+from engine.oracle import compile_card_oracle as _w1g4_compile
+from engine.targeting import derive_cast_spec as _w1g4_derive_cast_spec
+from tests.helpers import settle as _w1g4_settle
+
+
+def _w1g4_card(set_pool, name):
+    """A card by name, from Betrayers of Kamigawa first and Alpha for fillers."""
+    bok = set_pool("BOK")
+    return bok[name] if name in bok else set_pool("LEA")[name]
+
+
+def _w1g4_table(set_pool, hand=(), *, mine=(), theirs=(), active=0):
+    """Seat 0 to act in *active*'s first main phase, mana off; each named
+    permanent untapped and able to act."""
+    card = lambda name: _w1g4_card(set_pool, name)  # noqa: E731
+    game = _w1g4_Game(players=[
+        _w1g4_PlayerState("A", hand=[card(n) for n in hand], library=[card("Forest")] * 12),
+        _w1g4_PlayerState("B", library=[card("Forest")] * 12),
+    ])
+    game.enforce_mana_costs = False
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _w1g4_Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+            placed[seat].append(permanent)
+    game.start_turn(active)
+    game._settle()
+    return game, placed[0], placed[1]
+
+
+def test_w1g4_twist_allegiance_announces_its_opponent(set_pool):
+    """"You and **target opponent** …": the cast derivation offers an
+    opponent picker (``picker_sweep``'s one Betrayers of Kamigawa finding —
+    with none, a client sent a bare cast). Reins of Power, whose seat its
+    untap sweep announces, keeps the picker it had."""
+    twist = set_pool("BOK")["Twist Allegiance"]
+    assert _w1g4_derive_cast_spec(twist, _w1g4_compile(twist)) == {
+        "kind": "player", "opponents_only": True,
+    }
+
+
+def test_w1g4_twist_allegiance_swaps_untaps_and_hastes_both_boards(set_pool):
+    """Each player gains control of every creature the other controlled,
+    untapped and hasty, until end of turn; at cleanup each goes home."""
+    game, mine, theirs = _w1g4_table(
+        set_pool, ["Twist Allegiance"], mine=["Grizzly Bears"], theirs=["Hill Giant"],
+    )
+    mine[0].tapped = theirs[0].tapped = True
+    result = game.cast_from_hand(0, "Twist Allegiance", target_player_index=1)
+    assert result.supported, result.details
+    _w1g4_settle(game)
+    assert game.controller_index_of(theirs[0]) == 0, game.log
+    assert game.controller_index_of(mine[0]) == 1, game.log
+    for creature in (mine[0], theirs[0]):
+        assert not creature.tapped
+        assert game._has_keyword(creature, "haste")
+    game.resolve_end_step(0)
+    game.resolve_cleanup_step(0)
+    _w1g4_settle(game)
+    assert game.controller_index_of(theirs[0]) == 1
+    assert game.controller_index_of(mine[0]) == 0
+    assert not game._has_keyword(theirs[0], "haste")
+
 # ==== end w1g4 ======================================================
 
 
