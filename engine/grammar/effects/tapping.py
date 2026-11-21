@@ -177,8 +177,12 @@ def _accept_source_linked_duration(
     # no change to what was lowered — which is what the parse-coverage
     # deletion probe reports, and the shape three productions in
     # `paragraphs.py` were tightened out of at the same time.
+    #
+    # "…for as long as **this Equipment** remains on the battlefield."
+    # (Neko-Te.) The source named by its subtype, as an Equipment's own text
+    # names it everywhere else (CR 301.5).
     if stream.accept_word(
-        "creature", "artifact", "enchantment", "land", "permanent"
+        "creature", "artifact", "enchantment", "land", "permanent", "equipment"
     ):
         if stream.accept_phrase("remains", "tapped"):
             return ast.DoesntUntapWhileSourceTapped(subject)

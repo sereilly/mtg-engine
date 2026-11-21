@@ -346,6 +346,94 @@ def test_w1g9_ronin_warclub_attaches_nothing_when_the_creature_left_in_response(
     assert club.metadata.get("attached_to") is None
     assert game.is_on_battlefield(club)
 
+# Neko-Te: "Whenever equipped creature deals damage to a creature, tap that
+# creature. That creature doesn't untap during its controller's untap step for
+# as long as this Equipment remains on the battlefield." / "Whenever equipped
+# creature deals damage to a player, that player loses 1 life."
+
+
+def test_w1g9_neko_te_taps_and_holds_the_creature_its_wearer_damaged(set_pool):
+    """Blocked by Bob's Hill Giant, the equipped Craw Wurm deals it combat
+    damage: the Giant survives (6 damage would kill it, so a War Mammoth is
+    used — 3 damage to a 3/3 kills, so the Giant blocks a Grizzly Bears), is
+    tapped, and stays tapped through Bob's untap step while Neko-Te remains.
+    Shattered, Neko-Te releases it at the next untap step (CR 611.2a)."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, hand=["Shatter"], mine=["Neko-Te", "Grizzly Bears"],
+        theirs=["Hill Giant"],
+    )
+    neko, bears = mine
+    giant = theirs[0]
+    assert _w1g9_equip(game, neko, bears).supported
+    _w1g9_declare_attack(game, 0, blocks={_w1g9_slot(game, giant): _w1g9_slot(game, bears)})
+    _w1g9_drive_combat(game)
+    assert game.is_on_battlefield(giant)
+    assert giant.tapped
+    assert "Hill Giant won't untap while Neko-Te remains on the battlefield" in game.log
+
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.active_player_index == 1 and giant.tapped
+
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.queue_from_hand(0, "Shatter", target_permanent_ids=[neko.permanent_id]).supported
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(neko)
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.active_player_index == 1 and not giant.tapped
+
+
+def test_w1g9_neko_te_holds_every_creature_it_has_locked(set_pool):
+    """Each trigger's lock is its own continuous effect (CR 611.2a), and all
+    of them last as long as Neko-Te remains: the equipped Prodigal Sorcerer
+    pings the Hill Giant and then the Grizzly Bears, and both stay tapped
+    through Bob's untap step — the second lock does not release the first."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Neko-Te", "Prodigal Sorcerer"],
+        theirs=["Hill Giant", "Grizzly Bears"],
+    )
+    neko, tim = mine
+    giant, bears = theirs
+    assert _w1g9_equip(game, neko, tim).supported
+    assert _w1g9_activate(game, tim, target_permanent_ids=[giant.permanent_id]).supported
+    tim.tapped = False
+    assert _w1g9_activate(game, tim, target_permanent_ids=[bears.permanent_id]).supported
+    assert giant.tapped and bears.tapped
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.active_player_index == 1
+    assert giant.tapped and bears.tapped
+
+
+def test_w1g9_neko_te_drains_the_player_its_wearer_damaged(set_pool):
+    """"That player" is the damaged player, not the Equipment's controller:
+    the unblocked equipped Bears deal Bob 2 and Neko-Te makes him lose 1 more;
+    Alice's life does not move."""
+    game, mine, _ = _w1g9_table(set_pool, mine=["Neko-Te", "Grizzly Bears"])
+    neko, bears = mine
+    assert _w1g9_equip(game, neko, bears).supported
+    _w1g9_declare_attack(game, 0)
+    _w1g9_drive_combat(game)
+    assert game.players[1].life == 17
+    assert game.players[0].life == 20
+
+
+def test_w1g9_neko_te_does_nothing_for_an_unequipped_damager(set_pool):
+    """Unattached, Neko-Te watches nobody: the Prodigal Sorcerer's ping on the
+    Giant taps nothing and drains nobody."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Neko-Te", "Prodigal Sorcerer"], theirs=["Hill Giant"],
+    )
+    _neko, tim = mine
+    giant = theirs[0]
+    assert _w1g9_activate(game, tim, target_permanent_ids=[giant.permanent_id]).supported
+    assert not giant.tapped
+    tim.tapped = False
+    assert _w1g9_activate(game, tim, target_player_index=1).supported
+    assert game.players[1].life == 19
+
 # ==== end w1g9 ======================================================
 
 

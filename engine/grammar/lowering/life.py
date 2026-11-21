@@ -69,6 +69,7 @@ from ._counted_life import (
     lower_per_each_gain,
 )
 from ._events import (
+    _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
     _EVENT_QUANTITIES,
     _EVENT_SUBJECT_CONTROLLERS,
@@ -897,6 +898,22 @@ def _lower_lose_life(
     if node.player.kind == "that_player" and damage_trigger_names_damaged_end(
         event, event_subject
     ):
+        payload["recipient"] = DAMAGED_PERMANENT_CONTROLLER
+        return (OracleInstruction("target_loses_life", "", payload),)
+    # "Whenever **equipped creature** deals damage to a player, **that
+    # player** loses 1 life." (Neko-Te.) The damager is a *described* creature
+    # here, so the predicate above stands aside — rightly for "that creature",
+    # which then names the damager (Backfire's reading) — but the word is
+    # "player", and the one player a damage event names is the one it damaged:
+    # the damager's controller is "its controller" (Essence Sliver) or "that
+    # creature's controller" (Backfire), never "that player". The same seat
+    # Specter's Shroud's "that player discards a card" already reads
+    # (``_DAMAGED_PLAYER_EVENTS``). Read through the same key as the branch
+    # above, whose handler answers a damaged player and a damaged permanent's
+    # controller alike (``damaged_end_seat``). It fell to the
+    # ``_EVENT_SUBJECT_CONTROLLERS`` branch below and drained the Equipment's
+    # own controller.
+    if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
         payload["recipient"] = DAMAGED_PERMANENT_CONTROLLER
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
