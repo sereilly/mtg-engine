@@ -582,6 +582,62 @@ def _attach_source_damage_lock(
     return True
 
 
+def _attach_damaged_player_gains_no_life(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Append "If that player or that planeswalker's controller would gain
+    life this turn, that player gains no life instead." behind the damage
+    sentence that named that player (Flames of the Blood Hand).
+
+    A step of its own — it arms a turn-long CR 614 replacement — but one whose
+    only antecedent is the sentence in front: "that player" is the damage's
+    announced target read back, and "or that planeswalker's controller" is
+    required exactly when that target was "target player or planeswalker", so
+    the subject restates the damage's recipient or the sentence is left
+    unread (the arrangement ``effects.redirection._attach_damage_redirect_offer``
+    makes for Flaming Gambit's sentence about the same target). The
+    substitute is fixed — no life at all — and "this turn" is required, being
+    the record's only lifetime. Non-consuming on refusal.
+    """
+    from .durations import _parse_duration
+
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.DealDamage) or len(last.recipients) != 1:
+        return False
+    recipient = last.recipients[0]
+    if not (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind in ("target_player", "target_opponent")
+    ):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "that", "player"):
+        return False
+    if recipient.or_planeswalker and not stream.accept_phrase(
+        "or", "that", "planeswalker", "'s", "controller"
+    ):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("would", "gain", "life"):
+        stream.reset(mark)
+        return False
+    duration = _parse_duration(stream)
+    if duration.kind != "this_turn":
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "that", "player", "gains", "no", "life", "instead"
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    steps.append(
+        ast.TurnLifeGainReplacement(ast.PlayerRef("that_player"), duration)
+    )
+    return True
+
+
 def _attach_conditional_damage_riders(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> bool:

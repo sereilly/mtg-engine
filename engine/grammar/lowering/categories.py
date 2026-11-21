@@ -307,6 +307,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the handler, not about which switch gates the card.
     "set_life_total": "life",
     "exchange_life_totals": "life",
+    # "If that player … would gain life this turn, that player gains no life
+    # instead." (Flames of the Blood Hand.) A CR 614 replacement over a life
+    # gain, armed for the turn.
+    "arm_turn_life_gain_replacement": "life",
     "redistribute_life_totals": "life",
     # The ante zone (CR 407). Its own category rather than "zones": every
     # other member of that family moves an object between zones the ordinary
@@ -745,6 +749,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Reckoning.) The sweep beside the targeted bite above, in the same family
     # for the same reason: what differs is how many creatures bite.
     "each_matching_bites_itself": "damage",
+    # "Each enchantment deals 2 damage to its controller, then each Aura
+    # attached to a creature deals 2 damage to the creature it's attached
+    # to." (Aura Barbs.) Every member of a class is a dealer.
+    "deal_damage_from_each_matching": "damage",
     "source_fights_target": "damage",
     # The same CR 701.14 exchange with **neither** fighter being the ability's
     # source (Triangle of War) — two announcements rather than one, which is a

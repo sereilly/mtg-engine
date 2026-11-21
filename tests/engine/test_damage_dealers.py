@@ -186,10 +186,19 @@ def test_w2g5_a_class_or_a_target_as_the_dealer_refuses():
     """
     for sentence in (
         "Target creature deals 3 damage to any target.",
-        "Each creature deals 1 damage to its controller.",
         "Creatures deal 3 damage to any target.",
     ):
         assert not compile_line(sentence, card_name="Probe Card").instructions, sentence
+    # "Each enchantment deals 2 damage to its controller, then …" (Aura
+    # Barbs, Betrayers of Kamigawa): a class each member of which deals a
+    # printed amount to its own controller has a handler now, which makes
+    # each member the source (CR 120.7) — so the sentence this list used to
+    # hold compiles, onto the per-dealer kind and never onto the spell's own
+    # ``deal_damage``.
+    each = compile_line(
+        "Each creature deals 1 damage to its controller.", card_name="Probe Card",
+    )
+    assert [i.kind for i in each.instructions] == ["deal_damage_from_each_matching"]
 
     for name, kept in (("Goblin Grenade", "Goblin"), ("Tribal Flames", "Tribal")):
         whole = compile_line(f"{name} deals 5 damage to any target.", card_name=name)

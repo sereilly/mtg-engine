@@ -623,6 +623,11 @@ def _prevention_shield_spec(payload: dict) -> dict | None:
     """
     if payload.get("to_self") or payload.get("to_source"):
         return None
+    if payload.get("each"):
+        # "…dealt to **each creature and each player** this turn" (Kitsune
+        # Palliator). Every member of the printed sets, enumerated as the
+        # ability resolves; nothing is chosen.
+        return None
     if payload.get("from_source"):
         # "Prevent the next 1 damage that would be dealt **by this artifact**
         # this turn." (Barbed Wire.) The **sixth** answer, and the one this

@@ -543,3 +543,78 @@ def target_bites_target(game, instruction, context):
         asks=True,
     )
     return True, "resolved"
+
+
+@effect_handler("deal_damage_from_each_matching")
+def deal_damage_from_each_matching(game, instruction, context):
+    """"Each enchantment deals 2 damage to its controller, then each Aura
+    attached to a creature deals 2 damage to the creature it's attached to."
+    (Aura Barbs.)
+
+    Every permanent the printed class names, as the effect resolves, deals
+    the printed amount — **as the source** (CR 120.7): "The damage is dealt by
+    the enchantments, not by Aura Barbs" (ruling 2005-02-01) — to the one
+    recipient its own pronoun names: its controller (CR 109.5, asked now), or
+    the creature it is attached to (``attached_host``, the live relation, and
+    held to the printed host phrase). All of one sentence's chunks are one
+    dealing (CR 608.2f, ``deal_at_once``) with every dealer among its sources,
+    asked in APNAP order of the seat each chunk's question goes to; "then"
+    makes the sentence after it a second dealing, which is the next
+    instruction. The class is read before anything is dealt (CR 608.2h), so
+    an Aura whose host dies to the first dealing is no longer attached to a
+    creature by the second — the second asks again.
+    """
+    from ..subject_filters import subject_matches
+
+    payload = instruction.payload
+    described = payload.get("sources") or {}
+    amount = int(payload.get("amount") or 0)
+    to_host = payload.get("recipient") == "host"
+    host_filter = payload.get("host_filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    chunks: list = []
+    for perm in list(game.all_permanents()):
+        if not subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ):
+            continue
+        if to_host:
+            host = attached_host(game, perm, last_known=False)
+            if host is None or not permanent_matches_filter(host, host_filter):
+                continue
+            chunks.append((perm, host))
+        else:
+            seat = game.controller_index_of(perm)
+            if seat is None or game.players[seat].lost:
+                continue
+            chunks.append((perm, game.players[seat]))
+    if amount <= 0 or not chunks:
+        game.log.append(f"{context.card.name}: nothing deals damage")
+        return True, "resolved"
+
+    def deal(entry) -> None:
+        dealer, recipient = entry
+        if to_host:
+            apply_damage_to_creature(
+                game, recipient, amount, dealer,
+                log_message=lambda dealt: (
+                    f"{dealer.card.name} deals {dealt} damage to "
+                    f"{recipient.card.name}"
+                ),
+                asks=True,
+            )
+            return
+        game._deal_damage_to_player(
+            recipient, amount, source=dealer, asks=True,
+            then=lambda dealt: dealt and game.log.append(
+                f"{dealer.card.name} deals {dealt} damage to {recipient.name}"
+            ),
+        )
+
+    deal_at_once(
+        game, chunks, deal, sources=[dealer for dealer, _ in chunks],
+        affected=lambda entry: entry[1],
+    )
+    return True, "resolved"

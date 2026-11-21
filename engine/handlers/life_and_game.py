@@ -465,6 +465,43 @@ def set_life_total(game: Game, instruction: OracleInstruction, context: OracleEx
     return True, "resolved"
 
 
+@effect_handler("arm_turn_life_gain_replacement")
+def arm_turn_life_gain_replacement(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…deals 4 damage to target player or planeswalker. The damage can't be
+    prevented. If that player or that planeswalker's controller would gain
+    life this turn, that player gains no life instead." (Flames of the Blood
+    Hand.)
+
+    A CR 614 replacement a resolving spell creates for the turn, recorded on
+    the caster's seat (CR 109.5) with the damage's announced player as the
+    seat whose gains it replaces (``engine/turn_replacements.py``'s
+    ``LIFE_GAIN``); ``replacements/life_gain`` performs it and the cleanup
+    step's one sweep ends it. The seat is the announcement's player — the
+    targeted planeswalker's controller when a planeswalker was named, which
+    the announcement records beside it — never a seat the damage was later
+    redirected to (ruling 2005-02-01). A player who has become an illegal
+    target has stopped the spell already (CR 608.2b).
+    """
+    from ..turn_replacements import LIFE_GAIN, TurnReplacement, arm_turn_replacement
+
+    target = context.target
+    card_name = getattr(context.card, "name", "Effect")
+    if target is None or target not in game.players or getattr(target, "lost", False):
+        game.log.append(f"{card_name}: no player was named")
+        return True, "resolved"
+    arm_turn_replacement(game, TurnReplacement(
+        seat=game.players.index(context.caster),
+        event=LIFE_GAIN,
+        source_name=getattr(context.card, "name", None),
+        affected_seat=game.players.index(target),
+    ))
+    game.log.append(
+        f"{card_name}: if {target.name} would gain life this turn, they gain "
+        "no life instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("exchange_life_totals")
 def exchange_life_totals(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exchange life totals with target opponent." (Mirror Universe.)

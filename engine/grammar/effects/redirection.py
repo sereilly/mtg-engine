@@ -142,15 +142,32 @@ def _parse_turn_damage_replacement(stream: TokenStream) -> "ast.TurnDamageReplac
     sentence keeps the reader it has.
     """
     mark = stream.mark()
-    if not stream.accept_word("if"):
+    # "**Each time** target permanent would deal damage …" (Overblaze) is the
+    # same CR 614 condition as "If …": every event that matches is replaced,
+    # which is what a replacement does each time anyway.
+    if not (stream.accept_word("if") or stream.accept_phrase("each", "time")):
         return None
+    source_spec: ast.TargetSpec | None = None
     if stream.accept_phrase("a", "creature"):
         source_creature = True
     elif stream.accept_phrase("any", "source"):
         source_creature = False
     else:
-        stream.reset(mark)
-        return None
+        # "Each time **target permanent** would deal damage to a permanent or
+        # player this turn, it deals double that damage …" (Overblaze.) The
+        # source named by announcement rather than as a class: one target,
+        # whose damage alone the record replaces. Anything else is a different
+        # sentence and is left unread.
+        named = parse_recipient(stream)
+        if not (
+            isinstance(named, ast.TargetSpec)
+            and named.quantifier == "target"
+            and named.targeted
+            and named.count == 1
+        ):
+            stream.reset(mark)
+            return None
+        source_creature, source_spec = False, named
     if not stream.accept_phrase("would", "deal"):
         stream.reset(mark)
         return None
@@ -201,6 +218,7 @@ def _parse_turn_damage_replacement(stream: TokenStream) -> "ast.TurnDamageReplac
         at_least=at_least,
         multiplier=multiplier,
         becomes=becomes,
+        source_target=source_spec,
     )
 
 
@@ -248,6 +266,10 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     # without it an unblocked attacker's ping ability moves too — a strictly
     # larger effect, and one no lowering below would have been told about.
     combat_only = bool(stream.accept_word("combat"))
+    if amount is not None and not combat_only:
+        chosen = _accept_chosen_source_point_pool(stream, amount)
+        if chosen is not None:
+            return chosen
     if not stream.accept_phrase("damage", "that", "would", "be", "dealt"):
         stream.reset(mark)
         return None
@@ -334,6 +356,57 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
         chooser=chooser,
         combat_only=combat_only,
         amount=amount,
+    )
+
+
+def _accept_chosen_source_point_pool(
+    stream: TokenStream, amount: "ast.Amount",
+) -> "ast.RedirectDamage | None":
+    """``…damage that a source of your choice would deal to <recipient> [and/or
+    <recipient>] <duration> is dealt to <taker> instead`` after "The next N",
+    or None with the cursor where it was.
+
+    "The next X damage that a source of your choice would deal to you and/or
+    creatures you control this turn is dealt to any target instead." (Shining
+    Shoal.) CR 615.7's point pool read with CR 614.9's verb, as Daughter of
+    Autumn's is, with the damage named the active way round: CR 609.7a's chosen
+    source as the subject of "would deal", and the protected recipients after
+    it — "you and/or creatures you control", the "and/or" Glarecaster prints
+    (``also_to``). Once "is dealt to" is read the sentence is this redirect
+    and nothing else, so from there it raises.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "damage", "that", "a", "source", "of", "your", "choice", "would", "deal",
+        "to",
+    ):
+        return None
+    to = parse_recipient(stream)
+    if to is None:
+        stream.reset(mark)
+        return None
+    also_to: ast.Recipient | None = None
+    conjunct = stream.mark()
+    if stream.accept_phrase("and", "or"):
+        also_to = parse_recipient(stream)
+        if also_to is None:
+            stream.reset(conjunct)
+    duration = _parse_duration(stream)
+    if not stream.accept_phrase("is", "dealt", "to"):
+        stream.reset(mark)
+        return None
+    new_recipient = parse_recipient(stream)
+    if new_recipient is None:
+        raise stream.error("expected who takes the redirected damage")
+    if not stream.accept_word("instead"):
+        raise stream.error("expected 'instead' to end a redirection effect")
+    return ast.RedirectDamage(
+        to=to,
+        new_recipient=new_recipient,
+        from_chosen_source=True,
+        duration=duration,
+        amount=amount,
+        also_to=also_to,
     )
 
 

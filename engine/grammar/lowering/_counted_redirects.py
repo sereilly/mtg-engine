@@ -27,8 +27,8 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_REST_OF_TURN, _amount_payload, _describe_targets,
-                      _filter_payload, _is_source, _is_you,
-                      _names_several_targets)
+                      _filter_payload, _is_enchanted, _is_source, _is_you,
+                      _names_several_targets, _restrictions_beyond)
 
 
 def _lower_next_damage_redirect(
@@ -88,6 +88,32 @@ def _lower_next_damage_redirect(
         # ``new_recipient`` has carried a player since it was written — so
         # the same handler, told which end takes it (``taker``).
         return _with_controller_taking(_lower_next_damage_redirect_to_taker(node))
+    if _is_enchanted(node.to):
+        # "{1}{W}: The next 1 damage that would be dealt to **enchanted
+        # creature** this turn is dealt to any target instead." (Ward of
+        # Piety.) Zhalfirin Crusader's sentence printed on an Aura: the
+        # protected end is the permanent the ability's source is attached to
+        # rather than the source itself (CR 303.4e: the Aura's controller
+        # activates it, whoever controls the host), so it is the same record
+        # armed on the host — ``protects: attached``, read through
+        # ``attached_host`` at resolution. Read ahead of the two-target branch
+        # below, which would take the host for a second announced target.
+        leftover = _restrictions_beyond(
+            node.to.filter, frozenset({"card_types", "is_enchanted"})
+        )
+        if leftover:
+            raise LoweringError(
+                "a redirect off the enchanted permanent cannot narrow by: "
+                + ", ".join(leftover),
+                node=node,
+            )
+        (instruction,) = _lower_next_damage_redirect_from_source(node)
+        return (
+            OracleInstruction(
+                instruction.kind, instruction.value,
+                {**instruction.payload, "protects": "attached"},
+            ),
+        )
     if not _is_source(node.new_recipient) and not _is_source(node.to):
         # "The next X damage that would be dealt to **target creature,
         # planeswalker, or player** this turn is dealt to **another target
@@ -350,5 +376,99 @@ def _lower_next_damage_redirect_from_source(
     return (
         OracleInstruction(
             "redirect_next_damage_from_source_until_eot", "", payload
+        ),
+    )
+
+
+def _lower_chosen_source_point_pool(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"The next X damage that a source of your choice would deal to you
+    and/or creatures you control this turn is dealt to any target instead."
+    (Shining Shoal.)
+
+    CR 615.7's point pool with CR 614.9's verb, keyed on CR 609.7a's chosen
+    source, over the caster **and** a described class of permanents — one
+    pool for all of them: "The redirection protects both you and your
+    creatures from the source" (ruling 2005-02-01). So it is Nova Pentacle's
+    ``redirect_damage_from_chosen_source_until_eot`` (the picker asks for the
+    taker as a target and for the source beside it, General's Regalia's two
+    announcements) with ``amount`` and the class as payload; the handler arms
+    one record on the caster that watches the caster and every permanent the
+    class describes when the damage would be dealt.
+
+    Refused, each a way the sentence could mean more than it says: a first
+    protected end other than "you"; a class ``subject_matches`` cannot test
+    (it is asked of every damaged permanent); a taker other than one
+    announced target; any window but this turn; and the shapes the other
+    redirects read (a named source, a combat scope, an opponent's pick, an
+    offer, a next-time bound).
+    """
+    if (
+        node.dealt_by is not None
+        or node.one_shot
+        or node.chooser is not None
+        or node.combat_only
+        or node.optional
+        or node.spell_types
+        or node.to_damage_source
+    ):
+        raise LoweringError(
+            "a chosen-source point pool names no other source, bound, chooser, "
+            "combat scope or offer",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if not _is_you(node.to):
+        raise LoweringError(
+            "a chosen-source point pool protects its controller first", node=node
+        )
+    taker = node.new_recipient
+    if (
+        not isinstance(taker, ast.TargetSpec)
+        or taker.quantifier not in ("target", "any_target")
+        or not taker.targeted
+        or _names_several_targets(taker)
+    ):
+        raise LoweringError(
+            "a chosen-source point pool moves the damage onto one announced "
+            "target",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "to_self": True,
+        "amount": _amount_payload(node.amount),
+        "new_recipient": "target",
+    }
+    if node.also_to is not None:
+        also = node.also_to
+        if not (
+            isinstance(also, ast.TargetSpec)
+            and not also.targeted
+            and also.quantifier in ("all", "each")
+        ):
+            raise LoweringError(
+                "a chosen-source point pool's second end is a described class",
+                node=node,
+            )
+        described = _filter_payload(also.filter)
+        untestable = untestable_filter_keys(described)
+        if not described or untestable:
+            raise LoweringError(
+                "a redirect cannot test the class it protects", node=node
+            )
+        payload["also_protects"] = described
+    _describe_targets(payload, taker)
+    untestable = untestable_filter_keys(
+        (payload.get("targets") or {}).get("filter") or {}
+    )
+    if untestable:
+        raise LoweringError(
+            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "redirect_damage_from_chosen_source_until_eot", "", payload
         ),
     )

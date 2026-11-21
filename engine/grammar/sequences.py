@@ -111,6 +111,9 @@ from .stream import TokenStream
 from .riders import _attach_silent_target_change, _attach_tied_reveals_unchanged
 # "…exile them, then create that many … tokens. Then shuffle." (Myr Incubator.)
 from .riders import _parse_deferred_search_shuffle
+# "If that player or that planeswalker's controller would gain life this turn,
+# that player gains no life instead." (Flames of the Blood Hand.)
+from .riders import _attach_damaged_player_gains_no_life
 # "This cost is reduced by {2} for each …" (Draco) — a rider on the toll in
 # front of it, and it lives with the tolls because what it narrows is a price.
 from .tolls import _attach_toll_cost_reduction
@@ -742,6 +745,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # to it instead." (Flaming Gambit.) The same kind of sentence
             # about the damage in front of it, folded the same way.
             if _attach_damage_redirect_offer(stream, steps):
+                continue
+            # "If that player or that planeswalker's controller would gain
+            # life this turn, that player gains no life instead." (Flames of
+            # the Blood Hand.) A turn-long replacement over the seat the
+            # damage in front named — its own step, read here beside the two
+            # sentences above about that same damage's target.
+            if _attach_damaged_player_gains_no_life(stream, steps):
                 continue
             reveals = _parse_that_controller_reveals_rider(stream, steps)
             if reveals is not None:

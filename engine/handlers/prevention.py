@@ -430,6 +430,38 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         )
         return True, "resolved"
 
+    # "{T}: Prevent the next 1 damage that would be dealt to **each creature
+    # and each player** this turn." (Kitsune Palliator.) One CR 615.7 pool
+    # per member of the printed sets, enumerated now: the shields are created
+    # as the ability resolves and a creature that enters (or becomes one)
+    # later gets none (ruling 2005-02-01). The phrase is asked through
+    # ``subject_matches`` with the ability's controller as CR 109.5's
+    # observer, the one answer to what a printed noun phrase means.
+    each = instruction.payload.get("each")
+    if isinstance(each, dict):
+        from ..subject_filters import subject_matches
+
+        described = dict(each.get("filter") or {})
+        observer = game.players.index(caster) if caster in game.players else None
+        shielded = 0
+        for permanent in list(game.all_permanents()):
+            if subject_matches(
+                game, permanent, described, observer=observer,
+                source=context.source_permanent,
+            ) and _grant_pool(permanent, amount, source_name, source_filter):
+                shielded += 1
+        if each.get("players"):
+            for player in game.players:
+                if not getattr(player, "lost", False) and _grant_pool(
+                    player, amount, source_name, source_filter,
+                ):
+                    shielded += 1
+        game.log.append(
+            f"{source_name or 'Effect'}: {shielded} prevention shield"
+            f"{'' if shielded == 1 else 's'} for {amount} damage each"
+        )
+        return True, "resolved"
+
     # "Prevent the next 5 damage that would be dealt this turn to **any number
     # of targets, divided as you choose**." (Remedy.) CR 615.7's point pool
     # split across CR 601.2d's announced targets — one shield per recipient,

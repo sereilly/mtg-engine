@@ -110,6 +110,75 @@ def _lower_class_instance_shield(
     )
 
 
+def _lower_counted_pool_over_sets(
+    node: ast.PreventDamage, alternate,
+) -> tuple[OracleInstruction, ...]:
+    """"{T}: Prevent the next 1 damage that would be dealt to each creature
+    and each player this turn." (Kitsune Palliator.)
+
+    CR 615.7's numeric shield, one per member of the printed sets **as the
+    ability resolves**: "Kitsune Palliator's ability creates prevention shields
+    for every creature and player when it resolves. It doesn't affect creatures
+    that enter (or become creatures) later." (ruling 2005-02-01). So the
+    members are enumerated by the handler at resolution and each gets a shield
+    of its own — never a class-scoped shield re-asked at damage time, which
+    would cover a creature that arrives afterwards.
+
+    The set is a noun phrase every key of which ``subject_matches`` can test,
+    asked of each permanent at resolution; "each player" rides as a flag.
+    Everything else a counted shield may carry — a source narrowing, a second
+    size, a division, a CR 615.5 rider, a combat scope — has a reading on one
+    recipient and none on a set, and refuses rather than being dropped.
+    """
+    recipient = node.to
+    if (
+        node.from_filter is not None
+        or node.from_class
+        or node.dealt_by is not None
+        or node.dealt_by_others
+        or node.combat_only
+        or node.division is not None
+        or node.prevented_rider is not None
+        or alternate is not None
+        or not isinstance(node.amount, (ast.Fixed, ast.Var))
+    ):
+        raise LoweringError(
+            "a counted shield around every member of a set carries no source, "
+            "no second size, no division and no rider",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a counted shield around every member of a set lasts this turn",
+            node=node,
+        )
+    players = False
+    for other in node.to_others:
+        if not (isinstance(other, ast.PlayerRef) and other.kind == "each_player"):
+            raise LoweringError(
+                "a counted shield over a set adds only every player", node=node
+            )
+        players = True
+    if recipient.targeted:
+        raise LoweringError(
+            "a counted shield over a set names no target", node=node
+        )
+    described = testable_filter_payload(
+        recipient.filter,
+        refusal="a counted shield over a set cannot test its noun phrase",
+        node=node,
+    )
+    each: dict[str, object] = {"filter": described}
+    if players:
+        each["players"] = True
+    return (
+        OracleInstruction(
+            "grant_prevention_shield", "",
+            {"amount": _amount_payload(node.amount), "each": each},
+        ),
+    )
+
+
 def _lower_prevent_half(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
     """"The next time a source of your choice would deal damage to you this
     turn, prevent half that damage, rounded down." (Dark Sphere.)
@@ -193,6 +262,13 @@ def _lower_prevent_damage(
         raise LoweringError(
             "only a counted shield takes a second size", node=node
         )
+    # "Prevent the next 1 damage that would be dealt to **each creature and
+    # each player** this turn." (Kitsune Palliator.) A counted pool around
+    # every member of a set — read ahead of the multi-recipient guard below,
+    # which was written for the one chosen-source shield over "you and/or
+    # creatures you control" and asks the wrong question of this sentence.
+    if isinstance(recipient, ast.TargetSpec) and recipient.quantifier == "each":
+        return _lower_counted_pool_over_sets(node, alternate)
     # CR 615.5's additional effect ("…**You gain life equal to the damage
     # prevented this way.**"). Exactly one shape below reads it — the
     # unnarrowed chosen-source shield — and it is refused here for every other,

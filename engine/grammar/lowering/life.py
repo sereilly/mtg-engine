@@ -1063,6 +1063,41 @@ def _lower_exchange_life_totals(
         _describe_targets(payload, node.player)
     return (OracleInstruction("exchange_life_totals", "", payload),)
 
+
+def _lower_turn_life_gain_replacement(
+    node: ast.TurnLifeGainReplacement,
+) -> tuple[OracleInstruction, ...]:
+    """"If that player or that planeswalker's controller would gain life this
+    turn, that player gains no life instead." (Flames of the Blood Hand.)
+
+    The seat is the damage sentence's announced target, read back — the
+    player, or the targeted planeswalker's controller, which the announcement
+    records beside it — so the payload names that and describes no target of
+    its own: the spell has one target (CR 601.2c), already announced by the
+    step this follows, and a second description would ask for it twice. The
+    handler arms a ``turn_replacements.TurnReplacement`` over that seat;
+    ``replacements/life_gain`` replaces each of its gains with nothing.
+
+    Refused: any seat but the read-back one (the parse builds only that), and
+    any window but the turn, which is the record's only lifetime.
+    """
+    if node.player.kind != "that_player":
+        raise LoweringError(
+            "a turn life-gain replacement covers the player the damage named",
+            node=node,
+        )
+    if node.duration.kind != "this_turn":
+        raise LoweringError(
+            "a recorded life-gain replacement lasts exactly this turn",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "arm_turn_life_gain_replacement", "", {"affected": "target"},
+        ),
+    )
+
+
 def _lower_set_life_total(node: ast.SetLifeTotal) -> tuple[OracleInstruction, ...]:
     """"That player's life total becomes 20." (Rebirth.)
 

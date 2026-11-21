@@ -50,7 +50,8 @@ from ._common import (_REST_OF_TURN, _describe_targets,
 # "The next **N** damage …" (Daughter of Autumn, Zhalfirin Crusader): the
 # counted half of the one production, a floor this module hands the sentence
 # down to the moment the printed quantity is a number.
-from ._counted_redirects import (_lower_next_damage_redirect,
+from ._counted_redirects import (_lower_chosen_source_point_pool,
+                                 _lower_next_damage_redirect,
                                  _lower_next_damage_redirect_from_source)
 # "The next time **this creature** / **target attacking creature** would deal
 # damage …" (Soltari Guerrillas, Shield Dancer): CR 615.8's instance named by
@@ -95,6 +96,14 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.amount is not None and node.from_chosen_source:
+        # "The next X damage that **a source of your choice** would deal to
+        # you and/or creatures you control this turn is dealt to any target
+        # instead." (Shining Shoal.) A point pool keyed on a chosen source,
+        # over the protected recipients it names — read ahead of the
+        # second-recipient guard below, which was written for the one
+        # next-time shape and asks the wrong question of this one.
+        return _lower_chosen_source_point_pool(node)
     if node.also_to is not None and not (
         node.one_shot
         and node.amount is None
@@ -784,12 +793,24 @@ def _lower_spell_damage_redirect(
                 "target",
                 node=node,
             )
-        if (
+        # "…that damage is dealt to **Opal-Eye** instead." (Opal-Eye, Konda's
+        # Yojimbo.) Reflect Damage's sentence with the taker named rather
+        # than derived: the permanent whose ability this is, which the
+        # handler already has and nothing needs to choose. Every other taker
+        # still refuses below.
+        onto_source = _is_source(node.new_recipient)
+        if not onto_source and (
             not isinstance(node.new_recipient, ast.PlayerRef)
             or node.new_recipient.kind != "that_player"
         ):
             raise LoweringError(
                 "no handler resolves this redirect's new recipient", node=node
+            )
+        if node.chooser is not None or node.combat_only or node.optional:
+            raise LoweringError(
+                "a chosen-source redirect with no recipient names no other "
+                "chooser, combat scope or offer",
+                node=node,
             )
         if node.duration.kind not in _REST_OF_TURN:
             raise LoweringError(
@@ -809,7 +830,8 @@ def _lower_spell_damage_redirect(
             OracleInstruction(
                 "redirect_damage_from_chosen_source_until_eot", "",
                 {"uses": 1, "any_recipient": True,
-                 "new_recipient": "source_controller"},
+                 "new_recipient": "source" if onto_source
+                 else "source_controller"},
             ),
         )
     spec = node.dealt_by
@@ -953,6 +975,28 @@ def _lower_turn_damage_replacement(
         payload["becomes"] = node.becomes
     else:
         payload["multiplier"] = node.multiplier
+    if node.source_target is not None:
+        # "Each time **target permanent** would deal damage …" (Overblaze.)
+        # The record answers to that one object, by identity, which the
+        # handler reads off the announcement; the description is what makes
+        # the picker ask for it, and every key of it is re-checked at
+        # resolution (CR 608.2b), so a narrowing the matcher cannot test is a
+        # record wider than the card.
+        if node.source_creature:
+            raise LoweringError(
+                "a turn damage replacement names its source once", node=node
+            )
+        payload["source"] = "target"
+        _describe_targets(payload, node.source_target)
+        untestable = untestable_filter_keys(
+            (payload.get("targets") or {}).get("filter") or {}
+        )
+        if untestable:
+            raise LoweringError(
+                "a turn damage replacement cannot test "
+                + ", ".join(sorted(untestable)),
+                node=node,
+            )
     return (OracleInstruction("arm_turn_damage_replacement", "", payload),)
 
 

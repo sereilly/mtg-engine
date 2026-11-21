@@ -80,13 +80,26 @@ def gains_no_life_instead_line(line: str) -> str | None:
 
 
 def _replacing_sources(game, payload: dict) -> list:
-    """Every permanent whose text replaces *this* gain. Pure.
+    """Every permanent whose text replaces *this* gain, then every turn-long
+    record a resolved spell armed over the gaining seat, by the name it
+    carries. Pure.
 
     Scanned over the whole board, because the printed subject decides the
     reach: "a player" is everybody, the enchantment's own controller included.
     Read off ``effective_card`` (CR 707.2, CR 612.1), so a copy of the
     enchantment replaces too and one whose text was changed does not.
+
+    "If that player or that planeswalker's controller would gain life this
+    turn, that player gains no life instead." (Flames of the Blood Hand.) The
+    same replacement created by a resolving spell for the turn, which has no
+    line on the battlefield to read: ``turn_replacements``' ``LIFE_GAIN``
+    record over one seat (``affected_seat``). It does the same thing to the
+    same event, so it joins this one contender rather than registering a
+    second — two identical options would be a CR 616.1e question with no
+    difference between its answers.
     """
+    from ..turn_replacements import LIFE_GAIN, armed_turn_replacements
+
     player = payload["player"]
     found = []
     for seat, permanent in game.permanents_with_controller():
@@ -102,6 +115,10 @@ def _replacing_sources(game, payload: dict) -> list:
             ):
                 found.append(permanent)
                 break
+    seat = game.players.index(player) if player in game.players else None
+    for record in armed_turn_replacements(game, LIFE_GAIN):
+        if record.affected_seat == seat and record.source_name not in found:
+            found.append(record.source_name or "a resolved spell")
     return found
 
 

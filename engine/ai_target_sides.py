@@ -93,6 +93,10 @@ _OWN_KINDS = frozenset({
     # ``damage`` category had all three aimed at the opponent's board.
     "redirect_damage_off_target_until_eot",
     "redirect_chosen_source_damage_off_target_until_eot",
+    # "Each time target permanent would deal damage …, it deals double that
+    # damage … instead." (Overblaze.) The named permanent is the *source*
+    # whose damage grows — the caster's own; ``damage`` read it as a burn.
+    "arm_turn_damage_replacement",
     # "Untap target permanent" is categorised ``tapping`` beside "tap target
     # permanent", which is the family and the opposite side: an untap is a
     # second use of something, and every card in the pool printing the bare

@@ -116,6 +116,25 @@ def _lower_halved_damage(
         # Flame's single recipient does.
         payload[X_FROM_COUNT] = {**counted, "half": node.amount.rounding}
         return (dataclasses.replace(whole[0], payload=payload),)
+    per_seat = payload.get(X_FROM_COUNT_PER_RECIPIENT)
+    if isinstance(per_seat, dict):
+        # "…deals damage to each player equal to **half** that player's life
+        # total, rounded down." (Heartless Hidetsugu.) The same fold one seat
+        # at a time: an ordinary count spec reaches ``evaluate_count`` per
+        # seat, which halves it there. The three record shapes
+        # (``per_recipient_amount``) are read out of the resolution's
+        # scratchpad and never reach the evaluator, so a ``half`` beside one
+        # would be dropped — refused rather than dealt unhalved.
+        if {"seat_tally_of", "seat_record", "resolution_record"} & set(per_seat):
+            raise LoweringError("no handler halves this damage amount", node=node)
+        payload[X_FROM_COUNT_PER_RECIPIENT] = {
+            **per_seat, "half": node.amount.rounding,
+            # "a third of …" (``ast.Half``'s divisor), omitted at 2 as every
+            # other spec omits it.
+            **({"divide_by": node.amount.divisor}
+               if node.amount.divisor != 2 else {}),
+        }
+        return (dataclasses.replace(whole[0], payload=payload),)
     if whole[0].kind != "deal_damage":
         # An announced X halves at the *point of use* instead, on a payload key
         # only `deal_damage` reads — so every other shape would deal the

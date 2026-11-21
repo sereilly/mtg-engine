@@ -30,8 +30,8 @@ from ..damage_redirects import DamageRedirect, SharedNextTime, add_redirect
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ._amounts import resolve_amount
 from ._filters import permanent_matches_filter
-from ._targets import (divided_target_permanent, resolve_target_permanent,
-                       resolve_target_slots)
+from ._targets import (attached_host, divided_target_permanent,
+                       resolve_target_permanent, resolve_target_slots)
 from .prevention import chosen_shield_source
 from .registry import effect_handler
 
@@ -83,6 +83,79 @@ def arm_damage_to_counter_removal(game: Game, instruction: OracleInstruction, co
     return True, "resolved"
 
 
+def _arm_chosen_source_point_pool(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"The next X damage that a source of your choice would deal to you
+    and/or creatures you control this turn is dealt to any target instead."
+    (Shining Shoal.)
+
+    One ``DamageRedirect`` on the caster: a point pool (``amount``, CR 615.7
+    read with CR 614.9's verb) answering to the chosen source (CR 609.7a,
+    ``chosen_shield_source`` with the target channel left to the taker), that
+    watches the caster (``guards_seat``) and every permanent the printed class
+    describes when the damage would be dealt (``recipients``, with the caster
+    as the "you" of "you control"). The taker is the announced target — a
+    permanent when one was named, the resolution's player otherwise (CR 115.4)
+    — and CR 614.9's liveness is ``live_recipient``'s: "If the player or
+    creature that was targeted is no longer playing or on the battlefield when
+    the damage would occur, the damage isn't redirected" (ruling 2005-02-01).
+
+    X is the number announced as the spell was cast (CR 601.2b); 0 arms
+    nothing. With no source recorded — an AI or headless cast names none — the
+    pool answers to any source, the fallback every chosen-source record takes;
+    it is spent on X points either way.
+    """
+    from ..subject_filters import subject_matches
+
+    payload = instruction.payload
+    caster = context.caster
+    card_name = getattr(context.card, "name", "")
+    amount = resolve_amount(payload.get("amount", 0), context.x_value)
+    if amount <= 0:
+        game.log.append(f"{card_name}: no damage to move")
+        return True, "resolved"
+    described = (payload.get("targets") or {}).get("filter") or {}
+    observer = game.players.index(caster) if caster in game.players else None
+    taker = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        ),
+        fallback_players=(),
+        fallback_on_invalid_choice=False,
+    )
+    if taker is None and not described:
+        taker = context.target
+    if taker is None or getattr(taker, "lost", False):
+        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+        return True, "resolved"
+    moved_source = chosen_shield_source(game, context, from_target_channel=False)
+    also = payload.get("also_protects")
+    add_redirect(
+        caster,
+        DamageRedirect(
+            new_recipient=taker,
+            source=moved_source,
+            amount=amount,
+            recipients=dict(also) if also else None,
+            guards_seat=True,
+            filter_seat=observer,
+            source_name=card_name or None,
+        ),
+    )
+    taker_name = getattr(taker, "name", None) or taker.card.name
+    named = getattr(getattr(moved_source, "card", moved_source), "name", None)
+    game.log.append(
+        f"{card_name}: the next {amount} damage {named or 'any source'} would "
+        f"deal to {caster.name}"
+        + (" and/or the creatures they control" if also else "")
+        + f" this turn is dealt to {taker_name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler(
     "redirect_damage_from_target_until_eot",
     "redirect_damage_from_chosen_source_until_eot",
@@ -118,6 +191,8 @@ def redirect_damage_until_eot(
     card_name = getattr(context.card, "name", "")
     targets_source = instruction.kind == "redirect_damage_from_target_until_eot"
 
+    if payload.get("amount") is not None:
+        return _arm_chosen_source_point_pool(game, instruction, context)
     if payload.get("any_recipient"):
         # "The next time a source of your choice would deal damage this turn,
         # that damage is dealt to **that source's controller** instead."
@@ -133,6 +208,33 @@ def redirect_damage_until_eot(
         # off, exactly as a class-scoped one does, and
         # `damage_redirects.source_keyed_redirects` is what finds it again.
         moved_source = chosen_shield_source(game, context)
+        named = getattr(getattr(moved_source, "card", moved_source), "name", None)
+        if payload.get("new_recipient") == "source":
+            # "…that damage is dealt to **Opal-Eye** instead." (Opal-Eye,
+            # Konda's Yojimbo.) The same record with its taker named: the
+            # permanent whose ability this is. Fixed here rather than derived,
+            # and CR 614.9's liveness rule is ``live_recipient``'s — if the
+            # Yojimbo has left the battlefield or stopped being a creature by
+            # the time the damage would be dealt, the effect does nothing.
+            taker = context.source_permanent
+            if taker is None or not game.is_on_battlefield(taker):
+                game.log.append(f"{card_name}: its own source is gone")
+                return True, "resolved"
+            add_redirect(
+                caster,
+                DamageRedirect(
+                    new_recipient=taker,
+                    source=moved_source,
+                    uses=payload.get("uses"),
+                    any_recipient=True,
+                    source_name=card_name or None,
+                ),
+            )
+            game.log.append(
+                f"{card_name}: the next damage {named or 'any source'} would "
+                f"deal this turn is dealt to {taker.card.name} instead"
+            )
+            return True, "resolved"
         add_redirect(
             caster,
             DamageRedirect(
@@ -144,7 +246,6 @@ def redirect_damage_until_eot(
                 source_name=card_name or None,
             ),
         )
-        named = getattr(getattr(moved_source, "card", moved_source), "name", None)
         game.log.append(
             f"{card_name}: the next damage {named or 'any source'} would deal "
             "this turn is dealt to its controller instead"
@@ -788,6 +889,17 @@ def redirect_next_damage_from_source_until_eot(
 
     card_name = getattr(context.card, "name", "")
     protected = context.source_permanent
+    if instruction.payload.get("protects") == "attached":
+        # "…dealt to **enchanted creature** this turn is dealt to any target
+        # instead." (Ward of Piety.) The record hangs off the permanent the
+        # Aura is attached to — read through ``attached_host``, the one
+        # accessor for that relation (CR 608.2h: an Aura gone in response is
+        # read as it last was) — and on nothing when it is attached to
+        # nothing.
+        protected = attached_host(game, context.source_permanent)
+        if protected is None:
+            game.log.append(f"{card_name}: nothing is enchanted to protect")
+            return True, "resolved"
     if protected is None or not game.is_on_battlefield(protected):
         game.log.append(f"{card_name}: its own source is gone")
         return True, "resolved"
@@ -1359,6 +1471,25 @@ def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, cont
     from ..turn_replacements import DAMAGE, TurnReplacement, arm_turn_replacement
 
     payload = instruction.payload
+    source_id = None
+    named = None
+    if payload.get("source") == "target":
+        # "Each time **target permanent** would deal damage to a permanent or
+        # player this turn, it deals double that damage …" (Overblaze.) The
+        # announced object, re-checked against its printed phrase (CR 608.2b)
+        # and recorded by id, so the record answers to that permanent and to
+        # no other copy of its card. Nothing announced, nothing armed: a
+        # record with no source would double every source's damage.
+        described = (payload.get("targets") or {}).get("filter") or {}
+        named = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: permanent_matches_filter(perm, described),
+            fallback_players=(),
+        )
+        if named is None:
+            game.log.append(f"{context.card.name}: its target is gone")
+            return True, "resolved"
+        source_id = named.permanent_id
     record = arm_turn_replacement(game, TurnReplacement(
         seat=game.players.index(context.caster),
         event=DAMAGE,
@@ -1371,6 +1502,7 @@ def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, cont
         becomes=(
             int(payload["becomes"]) if payload.get("becomes") is not None else None
         ),
+        source_id=source_id,
     ))
     what = (
         f"becomes {record.becomes}" if record.becomes is not None
@@ -1381,6 +1513,7 @@ def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, cont
         + ("combat " if record.combat_only else "")
         + "damage "
         + ("dealt by a creature " if record.source_creature else "")
+        + (f"dealt by {named.card.name} " if named is not None else "")
         + ("to a creature " if record.recipient_creature else "")
         + what
     )
