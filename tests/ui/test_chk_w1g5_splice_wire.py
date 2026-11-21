@@ -150,3 +150,33 @@ def test_a_stale_id_and_a_self_splice_are_refused_with_nothing_spent():
         "Reach Through Mists", "Glacial Ray", "Kodama's Might",
     ]
     assert not game.stack and giant.damage_marked == 0
+
+
+def test_devouring_rages_offer_lists_the_spirits_it_may_sacrifice_over_http():
+    """'As an additional cost to cast this spell, you may sacrifice any number
+    of Spirits.' The optional offer carries its candidates
+    (``permanent_choices``, no count to meet); the cast takes the offer and
+    names the Spirits on ``cost_permanent_ids``, and the pump counts them."""
+    sid, game, bears, _giant = _make_session()
+    spirits = [Permanent(card=_CHK["Lantern Kami"]), Permanent(card=_CHK["Kami of Ancient Law"])]
+    game.players[0].battlefield.extend(spirits)
+    game.players[0].hand = [_CHK["Devouring Rage"]]
+    game._sync_control()
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    card = _hand_card(state, "Devouring Rage")
+    (offer,) = card["target_spec"]["cost_offers"]
+    assert offer["symbols"] == "sacrifice any number of spirits"
+    assert offer["permanent_count"] is None
+    assert sorted(c["id"] for c in offer["permanent_choices"]) == sorted(
+        s.permanent_id for s in spirits
+    )
+    resp = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "cast", "card_name": "Devouring Rage",
+        "target_seat": 0, "permanent_id": bears.permanent_id,
+        "optional_cost_payments": {"sacrifice any number of spirits": 1},
+        "cost_permanent_ids": [s.permanent_id for s in spirits],
+    })
+    assert resp.status_code == 200, resp.text
+    settle(game)
+    assert bears.effective_power == 2 + 9, game.log
+    assert not any(game.is_on_battlefield(s) for s in spirits)

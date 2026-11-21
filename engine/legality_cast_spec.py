@@ -978,6 +978,27 @@ class CastTargetSpecMixin:
                 # accept, priced by the function that would refuse it.
                 "max_times": 1 if payable else 0,
                 "times": answered.get(cost.optional_key, 0),
+                # "As an additional cost to cast this spell, you may sacrifice
+                # **any number of** Spirits." (Devouring Rage, Devouring
+                # Greed.) Taking the offer is half the answer: *which*
+                # permanents is the caster's (CR 601.2b), answered on the
+                # cast's ``cost_permanent_ids`` — and a set nobody names pays
+                # nothing (no default pick). So the candidates ride the offer,
+                # the list the payment takes from, with no count to meet.
+                **(
+                    {
+                        "permanent_verb": "sacrifice",
+                        "permanent_count": None,
+                        "permanent_choices": [
+                            {"id": perm.permanent_id, "name": perm.effective_card.name}
+                            for perm in self._additional_cost_candidates(
+                                caster_index, cost, giving_up="sacrifice"
+                            )
+                        ],
+                    }
+                    if cost.sacrifice_filter is not None and cost.sacrifice_any_number
+                    else {}
+                ),
             })
 
         every_offer = [
