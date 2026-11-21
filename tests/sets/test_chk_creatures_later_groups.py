@@ -266,6 +266,32 @@ def test_w1g6_eight_and_a_half_tails_whitens_a_permanent_for_the_turn(set_pool):
     game.resolve_cleanup_step(0)
     assert sorted(game._effective_colors(giant)) == ["R"]
 
+
+def test_w1g6_pious_kitsune_gains_per_counter_only_beside_eight_and_a_half_tails(set_pool):
+    """"At the beginning of your upkeep, put a devotion counter on this
+    creature. Then if a creature named Eight-and-a-Half-Tails is on the
+    battlefield, you gain 1 life for each devotion counter on this creature."
+    Beside a Grizzly Bears it only collects counters; beside an opponent's
+    Eight-and-a-Half-Tails (any battlefield) the second upkeep gains two. "{T},
+    Remove a devotion counter: You gain 1 life" spends one."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    for neighbour, gained in ((lea["Grizzly Bears"], 0), (chk["Eight-and-a-Half-Tails"], 2)):
+        game = _w1g6_table(set_pool)
+        kitsune = _w1g6_put(game, chk["Pious Kitsune"], 0)
+        _w1g6_put(game, neighbour, 1)
+        game.start_turn(0)
+        _w1g6_settle(game)
+        assert _w1g6_counters_on(kitsune, "devotion") == 1
+        game.start_turn(0)
+        _w1g6_settle(game)
+        assert _w1g6_counters_on(kitsune, "devotion") == 2
+        assert game.players[0].life == 20 + (1 if gained else 0) + gained
+        life = game.players[0].life
+        assert game.activate_permanent_ability(0, "Pious Kitsune").supported
+        _w1g6_settle(game)
+        assert _w1g6_counters_on(kitsune, "devotion") == 1
+        assert game.players[0].life == life + 1
+
 # ==== end w1g6 ======================================================
 
 

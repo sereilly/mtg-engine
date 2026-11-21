@@ -567,6 +567,14 @@ _DAMAGE_RECIPIENT_TESTS = {
     "you": lambda game, recipient, seat, observer: (
         _is_player(recipient) and seat == observer
     ),
+    # "…deals damage to **another player**" (Night Dealings): a player who is
+    # not the trigger's controller. Its own row rather than a spelling of "an
+    # opponent", which it answers identically at every table this engine seats
+    # — none has teams, and CR 102.3's teammate is the one player the two words
+    # would tell apart, so the printed word is kept for that day.
+    "another player": lambda game, recipient, seat, observer: (
+        _is_player(recipient) and seat != observer
+    ),
     "a planeswalker": lambda game, recipient, seat, observer: _is_walker(recipient),
     "a player or planeswalker": lambda game, recipient, seat, observer: (
         _is_player(recipient) or _is_walker(recipient)

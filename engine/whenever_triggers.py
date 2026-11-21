@@ -193,7 +193,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      # rather than to the ability's controller. Beside the others here because
      # it is a fixed word like them, and tested in `event_filters.py` against the
      # attack declaration.
-     r"|an opponent|a planeswalker|defending player|you)"
+     # "…to **another player**" (Night Dealings): any player but the trigger's
+     # controller, CR 109.5's seat read the other way round from "you".
+     r"|an opponent|another player|a planeswalker|defending player|you)"
      # "…deals damage **to a creature**" (Bellowing Fiend). A recipient that is
      # an *object*: none of the fixed words above can say it, because every one
      # of them names a player or a planeswalker. Delimited as a `damaged_subject`
