@@ -115,6 +115,56 @@ def test_w1g8_yamabushis_flame_at_a_player_is_plain_damage(set_pool):
     _w1g8_settle(game)
     assert game.players[1].life == 17
 
+
+# --- Otherworldly Journey -----------------------------------------------------
+# "Exile target creature. At the beginning of the next end step, return that
+# card to the battlefield under its owner's control with a +1/+1 counter on
+# it." Liberate's delayed return (CR 603.7) with Sand Golem's counter rider:
+# a new object (CR 400.7) with one +1/+1 counter (the 2004-12-01 ruling).
+
+
+def test_w1g8_otherworldly_journey_returns_the_creature_with_a_counter(set_pool):
+    journey = set_pool("CHK")["Otherworldly Journey"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, _, (bear,) = _w1g8_table([], [bears], hand=[journey])
+    cast = game.cast_from_hand(
+        0, "Otherworldly Journey", target_permanent_ids=[bear.permanent_id]
+    )
+    assert cast.supported, cast.details
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "exile") == ["Grizzly Bears"]
+    assert not game.is_on_battlefield(bear)
+
+    game._set_phase_and_step("ending", "end")
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+    returned = [p for p in game.controlled_by(game.players[1])]
+    assert [p.card.name for p in returned] == ["Grizzly Bears"]
+    back = returned[0]
+    assert back is not bear
+    assert (back.effective_power, back.effective_toughness) == (3, 3)
+    assert _w1g8_zone_names(game, 1, "exile") == []
+
+
+def test_w1g8_otherworldly_journey_returns_a_stolen_creature_to_its_owner(set_pool):
+    from engine.control import change_control
+
+    journey = set_pool("CHK")["Otherworldly Journey"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, _, (bear,) = _w1g8_table([], [bears], hand=[journey])
+    change_control(bear, 0, source="a test")
+    game._sync_control()
+    assert game.controller_index_of(bear) == 0
+    assert game.cast_from_hand(
+        0, "Otherworldly Journey", target_permanent_ids=[bear.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    game._set_phase_and_step("ending", "end")
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+    assert [p.card.name for p in game.controlled_by(game.players[1])] == ["Grizzly Bears"]
+    assert [p.card.name for p in game.controlled_by(game.players[0])] == []
+
 # ==== end w1g8 ======================================================
 
 

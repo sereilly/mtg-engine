@@ -452,7 +452,7 @@ def lower_untargeted_return(
             )
         unread = [
             name for name in (
-                "entering_tapped", "entering_counters", "exile_on_leave",
+                "entering_tapped", "exile_on_leave",
                 "repetitions", "actor", "attached_to", "losing_subtypes",
                 "losing_abilities", "gaining_abilities", "also_stack",
             )
@@ -470,11 +470,19 @@ def lower_untargeted_return(
                 "the exiled card's return honours no further narrowing",
                 node=node,
             )
+        returned: dict[str, object] = {"zone": "battlefield", "control": control}
+        if node.entering_counters:
+            # "…return that card to the battlefield under its owner's control
+            # **with a +1/+1 counter on it**." (Otherworldly Journey.) Sand
+            # Golem's rider on the exiled card's return: the counters go on
+            # the permanent that arrives (CR 121.2), which no later step could
+            # name. Emitted only when printed, so Liberate's payload is
+            # unchanged.
+            returned["counters"] = {
+                kind: count for kind, count in node.entering_counters
+            }
         return (
-            OracleInstruction(
-                "put_exiled_cards_into_zone", "",
-                {"zone": "battlefield", "control": control},
-            ),
+            OracleInstruction("put_exiled_cards_into_zone", "", returned),
         )
     # "Whenever a creature becomes the target of a spell or ability, **return
     # that creature to its owner's hand**." (Cowardice.)

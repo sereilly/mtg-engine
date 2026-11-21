@@ -934,6 +934,35 @@ def exile_until_leaves_or_untaps(
     return True, "resolved"
 
 
+def _entering_counters(game: Game, instruction: OracleInstruction, permanent):
+    """The entry's ``then`` that puts the printed counters on *permanent*
+    once it is there, or None when the sentence prints none.
+
+    "…return that card to the battlefield under its owner's control **with a
+    +1/+1 counter on it**." (Otherworldly Journey.) On *this* object (CR
+    121.2; the ruling, 2004-12-01: "plus any other counters that it would
+    normally enter with"), through the placement seams so the P/T pair
+    reaches layer 7d — the way ``return_self_from_graveyard`` places Sand
+    Golem's — and only for an entry that happened."""
+    counters = instruction.payload.get("counters") or {}
+    if not counters:
+        return None
+
+    def place() -> None:
+        if not entry_happened(permanent):
+            return
+        for kind, count in counters.items():
+            if str(kind) == "+1/+1":
+                game.place_plus1_counters(permanent, int(count))
+            else:
+                game.place_pt_counters(permanent, str(kind), int(count))
+            game.log.append(
+                f"{permanent.card.name} enters with {count} {kind} counter(s)"
+            )
+
+    return place
+
+
 @effect_handler("put_exiled_cards_into_zone")
 def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Necropotence: "Put that card into your hand at the beginning of your next
@@ -1065,7 +1094,10 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
                     permanent = Permanent(card=card)
                     if owner_seat != seat:
                         permanent.metadata["owner_player_index"] = owner_seat
-                    game._put_permanent_onto_battlefield(seat, permanent, None)
+                    game._put_permanent_onto_battlefield(
+                        seat, permanent, None,
+                        then=_entering_counters(game, instruction, permanent),
+                    )
                     moved.append(card)
                     returned_to.setdefault(game.players[seat].name, []).append(
                         (card.name, permanent)
