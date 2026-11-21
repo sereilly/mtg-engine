@@ -285,6 +285,15 @@ def targets_mana_value_x(instructions) -> bool:
     return False
 
 
+def mana_value_for_x(obj) -> int:
+    """The mana value a "target … with mana value X" holds X to, of a
+    permanent or a stack object (its card's): what the activation gate
+    (``LegalityAbilitiesMixin._mana_value_x_refusal``) compares a named X
+    with, and what the web layer offers beside each target so a person's X
+    can follow the target they pick (``web/offers.mark_mana_value_x``)."""
+    return int(getattr(getattr(obj, "card", None), "cmc", 0) or 0)
+
+
 def derive_instruction_spec(instructions) -> dict | None:
     """The target spec a bare instruction sequence describes, or None for none.
 

@@ -39,7 +39,7 @@ from engine.revealed_hands import hand_revealed_to
 
 from .offers import (
     _ability_denial, _ability_mana_payload, ability_price, ability_text_change_offer,
-    ability_x_payable,
+    ability_x_payable, mark_mana_value_x,
 )
 from .prompt_values import restricted_mana_words
 from .runtime import CARD_BY_NAME
@@ -117,6 +117,30 @@ def _mark_pickers_that_owe_nothing(perm_dict: dict, usable: list) -> None:
     if _may_name_nothing(top, described):
         top["may_name_nothing"] = True
         top["requires_target"] = False
+
+
+def _mark_mana_value_x_specs(game, perm_dict: dict, usable: list) -> None:
+    """"Destroy target artifact with mana value X" (Hearth Kami, Gorilla
+    Shaman, Plaguebearer): each spec of an ability whose target's mana value
+    is its X says so, with every target's mana value beside it
+    (``offers.mark_mana_value_x``), so the X a person picks follows the
+    target — the gate refuses any other (W1G3). Each per-ability spec by its
+    own ability; the top-level spec by the ability it describes, chosen as
+    ``_mark_pickers_that_owe_nothing`` chooses it.
+    """
+    per_ability = perm_dict.get("ability_target_specs")
+    described = None
+    if isinstance(per_ability, list):
+        for spec, ability in zip(per_ability, usable):
+            mark_mana_value_x(game, spec, [getattr(ability, "instruction", None)])
+            if described is None and spec.get("kind") not in (None, "none"):
+                described = ability
+    elif len(usable) == 1:
+        described = usable[0]
+    if described is not None:
+        mark_mana_value_x(
+            game, perm_dict.get("target_spec"), [getattr(described, "instruction", None)],
+        )
 
 
 def _serialize_mana_pool(player: PlayerState) -> dict:
@@ -414,6 +438,7 @@ def _serialize_player(
                     for k in range(len(usable))
                 ]
             _mark_pickers_that_owe_nothing(perm_dict, usable)
+            _mark_mana_value_x_specs(game, perm_dict, usable)
             # CR 602.5: why each usable ability may not be activated **now**,
             # in the engine's own words, or None — indexed like the
             # ``ability_index`` the activate action takes. The activation

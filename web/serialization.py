@@ -38,8 +38,8 @@ from engine.targeting import derive_cast_spec
 from engine.target_roles import recorded_role_seats
 from engine.text_changes import changed_words, spell_text_card, spell_text_of
 
-from .offers import (_offered_mana, cast_mana_offer, cast_x_payable, splice_offers,
-                     tap_mana_split, text_change_offer)
+from .offers import (_offered_mana, cast_mana_offer, cast_x_payable, mark_mana_value_x,
+                     splice_offers, tap_mana_split, text_change_offer)
 from .runtime import CARD_BY_NAME
 
 
@@ -931,6 +931,9 @@ def _serialize_card(
         serialized["target_spec"] = game.cast_target_spec(
             caster_index, card, from_zone=from_zone, spell_hand_index=hand_index,
         )
+        # "…with mana value X" (Detonate, Spell Blast): each target's mana
+        # value beside it, so the X the client asks follows the target.
+        mark_mana_value_x(game, serialized["target_spec"], compile_card_oracle(card).instructions)
         # The split the spell's mana is made in, chosen with the cast
         # (``mana_combination.cast_split_offer``) — absent for every card that
         # makes none.

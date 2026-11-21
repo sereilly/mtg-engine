@@ -103,6 +103,17 @@ let pendingAnnouncedSeat = null;
 // captures it here instead of sending until every chosen mode has one. Null
 // whenever a cast is not collecting mode targets, which is every other spell.
 let pendingModeCollection = null;
+// Splice onto Arcane (CR 702.47). While the targets of the cards chosen to be
+// spliced are being picked, the collection walking them: each is asked through
+// the ordinary target picker against its own spec (`splice_offers[].target_spec`),
+// and the cast body that picker ends with is captured here by `sendAction`
+// rather than sent (`captureSpliceTarget`), as a mode's is. Null otherwise.
+let pendingSpliceCollection = null;
+// …and the answer, once the splice question is answered: `{cardName, cards}`,
+// the `splice_cards` the cast announces (none when the caster cast the spell
+// alone). Carried onto the cast body by `carrySpliceCards`, whichever picker
+// of the spell's own targets sends it, and onto the auto-tap preview's.
+let pendingCastSplice = null;
 // Casting from the graveyard or exile (a cast permission, e.g. Chandra's
 // "you may cast them this turn"): which zone the pending cast's card leaves.
 // Rides sendAction the same way pendingCastModeIndex does, so every cast path
@@ -664,7 +675,12 @@ function blockAssignmentRejectionReason(state = currentState, blockerIdx, attack
   const blockerIsCreature = blockerCard.is_creature
     || String(blockerCard.type || "").toLowerCase().includes("creature");
   if (!blockerIsCreature) return "Only creatures can block.";
-  if (blockerCard.tapped) return `${blockerCard.name} is tapped and can't block.`;
+  // CR 509.1a: a tapped creature can't block — unless an effect lets it block
+  // as though it were untapped (Masako the Humorless), which the server says
+  // per permanent (`can_block_while_tapped`).
+  if (blockerCard.tapped && blockerCard.can_block_while_tapped !== true) {
+    return `${blockerCard.name} is tapped and can't block.`;
+  }
 
   const legal = getValidBlockerAssignments(state).some(
     (p) => p.blocker_index === Number(blockerIdx) && p.attacker_index === Number(attackerIdx)
@@ -3407,7 +3423,10 @@ function autoTapStateKey(state = currentState) {
 // announcement so far (mode, zone, cost already named) rides module state, so
 // the preview has to carry it too or it would be planning a different cast.
 function autoTapActionBody(pending) {
-  return carryCastZoneAndCost(carryCastMode({ ...pending.actionBody }));
+  const body = carryCastZoneAndCost(carryCastMode({ ...pending.actionBody }));
+  // The splices the cast announces (CR 702.47) are priced too; `typeof` for
+  // the tests that lift this function alone.
+  return typeof carrySpliceCards === "function" ? carrySpliceCards(body) : body;
 }
 
 // Ask the server what it would tap for the pending action. Called from the
@@ -5344,6 +5363,8 @@ function beginPendingHandCast(card, handIndex = null) {
   pendingCastCost = null;
   pendingCastOffers = null;
   pendingCastCreatureType = null;
+  pendingSpliceCollection = null;
+  pendingCastSplice = null;
   pendingCastHandCard = {
     cardName,
     handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
@@ -5366,6 +5387,10 @@ function clearPendingHandCast() {
   // already open, and clearing would take its card away. The collection's own
   // finish clears itself first, so this only ever holds mid-walk.
   if (pendingModeCollection) return;
+  // …and so does a splice collection (`captureSpliceTarget`): its last
+  // capture hands the cast on to the spell's own targets a tick later.
+  if (pendingSpliceCollection) return;
+  pendingCastSplice = null;
   pendingCastHandCard = null;
   pendingModalChoice = null;
   pendingCastModeIndex = null;
@@ -7631,10 +7656,22 @@ function applyNumberChoicePrompt(info) {
         `${escapeHtml(paysLife ? `Pay ${n} life` : String(n))}</button>`
     )
     .join("");
-  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+  // An open number ("a number greater than 0", Mindblaze; CR 107.1 sets no
+  // ceiling) is any number from the floor up: the buttons are the server's
+  // offer — sized off the largest hand, which says nothing about Mindblaze's
+  // count of a library — so a typed number beside them takes any other.
+  const open = !paysLife && !Number.isInteger(info.maximum);
+  const typed = open
+    ? '<div class="prompt-choice-row">'
+      + `<input id="numberChoiceCustom" type="number" min="${escapeHtml(String(info.minimum))}" step="1"`
+      + ` placeholder="Another number" value="${escapeHtml(numberChoiceDraft ?? "")}" />`
+      + '<button type="button" class="prompt-choice-btn" data-number-custom="1">Choose</button></div>'
+    : "";
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>${typed}`;
 
   steps.querySelectorAll("[data-number]").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      numberChoiceDraft = null;
       await sendAction({
         seat,
         action: "number_choice_confirm",
@@ -7642,6 +7679,34 @@ function applyNumberChoicePrompt(info) {
       });
     });
   });
+  const input = steps.querySelector("#numberChoiceCustom");
+  input?.addEventListener("input", () => { numberChoiceDraft = input.value; });
+  const submitTyped = async () => {
+    const number = openNumberChoiceAnswer(info, input?.value);
+    if (number === null) {
+      updateActionHint(`Type a whole number of ${info.minimum} or more.`, true);
+      return;
+    }
+    numberChoiceDraft = null;
+    try {
+      await sendAction({ seat, action: "number_choice_confirm", number });
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  };
+  input?.addEventListener("keydown", (event) => { if (event.key === "Enter") submitTyped(); });
+  steps.querySelector("[data-number-custom]")?.addEventListener("click", submitTyped);
+}
+
+// What a typed answer to an open number choice is: a whole number at or
+// above the floor, or null — the floor is the one bound the rule has.
+let numberChoiceDraft = null;
+
+function openNumberChoiceAnswer(info, text) {
+  const raw = String(text ?? "").trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const number = Number(raw);
+  return Number.isSafeInteger(number) && number >= Number(info?.minimum ?? 0) ? number : null;
 }
 
 // Goblin Game: "Each player hides at least one item, then all players reveal
@@ -11458,11 +11523,50 @@ function opponentPicksRevealedText(info) {
   const goes = (zone) => destinations[zone] || `to the ${zone}`;
   const total = (info.cards || []).length;
   const legal = Array.isArray(info.legal_indices) ? info.legal_indices.length : total;
+  // "Target opponent chooses **two** of those cards" (Gifts Ungiven): the
+  // engine asks one card at a time, `remaining` counting this one; a card
+  // already chosen earlier in the chain is out of `legal_indices`, and is
+  // not "can't be chosen" — it was (`opponentPicksChosen`).
+  const remaining = Math.max(1, Number(info.remaining || 1));
+  const chosen = typeof opponentPicksChosen === "function" ? opponentPicksChosen(info).length : 0;
   let text = `${revealer} revealed ${total === 1 ? "this" : "these"}${from ? ` ${from}` : ""}. `
-    + `The one you choose goes ${goes(info.fate || "graveyard")}.`;
+    + (remaining > 1
+      ? `You choose ${remaining} of them, one at a time; each one you choose goes ${goes(info.fate || "graveyard")}.`
+      : `The one you choose goes ${goes(info.fate || "graveyard")}.`);
   if (info.other_fate) text += ` The rest go ${goes(info.other_fate)}.`;
-  if (legal < total) text += ` Only ${legal} of them can be chosen.`;
+  if (legal < total - chosen) text += ` Only ${legal} of them can be chosen.`;
   return text;
+}
+
+// The picks this seat already made in the chain a prompt belongs to (the
+// same card, revealer and revealed cards), by index — remembered by the click
+// that sent them, since the payload only drops them from `legal_indices`.
+let opponentPicksMemory = null;
+
+function opponentPicksKey(info) {
+  return JSON.stringify([info?.card_name || "", info?.revealer_seat ?? null, info?.cards || []]);
+}
+
+function opponentPicksChosen(info) {
+  if (!opponentPicksMemory || opponentPicksMemory.key !== opponentPicksKey(info)) return [];
+  const legal = new Set((info.legal_indices || []).map(Number));
+  return opponentPicksMemory.picked.filter((index) => !legal.has(index));
+}
+
+function rememberOpponentPick(info, index) {
+  const key = opponentPicksKey(info);
+  if (!opponentPicksMemory || opponentPicksMemory.key !== key) opponentPicksMemory = { key, picked: [] };
+  if (!opponentPicksMemory.picked.includes(index)) opponentPicksMemory.picked.push(index);
+}
+
+// The prompt's title: which pick of the chain this is, where several are owed.
+function opponentPicksTitle(info) {
+  const remaining = Math.max(1, Number(info?.remaining || 1));
+  const chosen = opponentPicksChosen(info).length;
+  const count = remaining > 1 || chosen
+    ? ` (${chosen + 1} of ${chosen + remaining})`
+    : "";
+  return `${info.card_name} — choose a revealed card${count}`;
 }
 
 function applyOpponentPicksRevealedPrompt(info) {
@@ -11481,8 +11585,9 @@ function applyOpponentPicksRevealedPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = `${info.card_name} \u2014 choose a revealed card`;
+  title.textContent = opponentPicksTitle(info);
   body.textContent = opponentPicksRevealedText(info);
+  const alreadyChosen = new Set(opponentPicksChosen(info));
   // "An opponent chooses **a creature card** from among them" (Animal
   // Magnetism): only `legal_indices` may be named \u2014 the list the resolver
   // re-checks an answer against \u2014 so the rest are shown (they were revealed,
@@ -11493,15 +11598,17 @@ function applyOpponentPicksRevealedPrompt(info) {
     info.cards
       .map(
         (name, index) =>
-          `<button type="button" class="prompt-choice-btn" data-revealed-pick="${index}"` +
-          (legal.has(index) ? "" : ` disabled title="Can't be chosen"`) +
-          `>${escapeHtml(name)}${legal.has(index) ? "" : " (can't be chosen)"}</button>`
+          `<button type="button" class="prompt-choice-btn${alreadyChosen.has(index) ? " selected" : ""}"`
+          + ` data-revealed-pick="${index}"` +
+          (legal.has(index) ? "" : ` disabled title="${alreadyChosen.has(index) ? "Chosen" : "Can't be chosen"}"`) +
+          `>${escapeHtml(name)}${legal.has(index) ? "" : alreadyChosen.has(index) ? " (chosen)" : " (can't be chosen)"}</button>`
       )
       .join("") +
     "</div>";
   steps.querySelectorAll("[data-revealed-pick]").forEach((btn) => {
     if (btn.disabled) return;
     btn.addEventListener("click", async () => {
+      rememberOpponentPick(info, Number(btn.dataset.revealedPick));
       await sendAction({
         seat,
         action: "opponent_picks_revealed_confirm",
@@ -12405,6 +12512,16 @@ function searchPicksAreOrdered(info) {
   return dests.every((dest) => dest === "library_top");
 }
 
+// "Search your library for up to four cards **with different names**" (Gifts
+// Ungiven, the search's `distinct_names`): the name a pick would repeat, or ""
+// when it repeats none. The engine refuses a second card of a name already
+// picked (a 400), so the grid refuses it first, says why, and dims the other
+// copies of every name already taken.
+function searchRepeatedName(info, pickedCards, card) {
+  if (!info?.distinct_names || !card || !card.name) return "";
+  return (pickedCards || []).some((picked) => picked && picked.name === card.name) ? card.name : "";
+}
+
 function renderSearchLibraryModal(info) {
   const modal = document.getElementById("searchLibraryModal");
   if (!modal) return;
@@ -12558,9 +12675,10 @@ function renderSearchLibraryModal(info) {
     } else if (multi) {
       // "Search your library for X cards" prints no "up to" and so must find
       // them all (CR 701.23d): the floor is the count, and "up to" said less.
-      const lead = minPicks > 0 && minPicks >= maxPicks
+      const lead = (minPicks > 0 && minPicks >= maxPicks
         ? `Choose ${maxPicks} cards`
-        : `Choose up to ${maxPicks} cards`;
+        : `Choose up to ${maxPicks} cards`)
+        + (info.distinct_names ? " with different names" : "");
       subtitle.textContent = oneDestination
         ? searchSubtitle(lead, words)
         : `${lead}. You'll choose where each one goes next.`;
@@ -12626,9 +12744,11 @@ function renderSearchLibraryModal(info) {
   function buildSlotRow() {
     const row = document.getElementById("searchLibrarySlots");
     if (!row) return;
-    row.classList.toggle("hidden", slots.length === 0);
+    row.classList.toggle("hidden", slots.length === 0 && !searchLibrarySlotNote);
     if (!slots.length) {
-      row.innerHTML = "";
+      // No descriptions, but a refusal to say (a repeated name, Gifts Ungiven).
+      row.innerHTML = searchLibrarySlotNote
+        ? `<div class="search-slot-note">${escapeHtml(searchLibrarySlotNote)}</div>` : "";
       return;
     }
     const assigned = searchSlotAssignment(slots, [...searchLibrarySelectedMulti]);
@@ -12675,6 +12795,11 @@ function renderSearchLibraryModal(info) {
           : searchLibrarySelectedKey === key;
         if (isSelected) classes.push("selected");
         if (!isLegal) classes.push("illegal");
+        // Another copy of a name already picked, where the names must differ.
+        const nameTaken = multi && !isSelected && searchRepeatedName(
+          info, [...searchLibrarySelectedMulti].map(cardAt), card,
+        );
+        if (nameTaken) classes.push("name-taken");
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
           : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
@@ -12702,8 +12827,18 @@ function renderSearchLibraryModal(info) {
         if (multi) {
           searchLibrarySlotNote = "";
           // Toggle, capped at the printed count — "up to two" never takes three.
+          const repeated = searchLibrarySelectedMulti.has(key) ? "" : searchRepeatedName(
+            info, [...searchLibrarySelectedMulti].map(cardAt), cardAt(key),
+          );
           if (searchLibrarySelectedMulti.has(key)) searchLibrarySelectedMulti.delete(key);
-          else if (slots.length) {
+          else if (repeated) {
+            searchLibrarySlotNote = `You already chose a card named ${repeated} — `
+              + `${info.card_name || "this search"}'s cards must have different names. `
+              + "Click the chosen one to release it first.";
+            updateActionHint(searchLibrarySlotNote, true);
+            buildSlotRow();
+            return;
+          } else if (slots.length) {
             // One card per description: taken only if every picked card can
             // still be given a description of its own with this one beside
             // them. Two creatures are each legal and together a refusal, and
@@ -15480,6 +15615,27 @@ function renderActivationPrompt() {
     const zoneWayChoice = !!pendingModalChoice.zoneWayChoice;
     const entwineAsk = pendingModalChoice.entwine && !pendingModalChoice.entwine.declined
       ? pendingModalChoice.entwine : null;
+    if (pendingModalChoice.spliceChoice) {
+      // CR 702.47: which hand cards are revealed and spliced, in the order
+      // their texts happen — a click picks or unpicks, the confirm casts.
+      const view = spliceChoiceView(pendingModalChoice);
+      title.textContent = view.title;
+      body.textContent = view.body;
+      steps.innerHTML = '<div class="prompt-choice-column">' + view.buttons.map((button) =>
+        `<button type="button" class="prompt-choice-btn splice-choice-btn${button.on ? " prompt-choice-btn-on" : ""}"`
+        + ` data-mode-choice="${button.index}"${button.disabled ? " disabled" : ""}`
+        + (button.text ? ` title="${escapeHtml(button.text)}"` : "")
+        + `>${button.on ? "✓ " : ""}${renderSymbolsInline(button.label)}`
+        + (button.text ? `<span class="splice-offer-text">${renderSymbolsInline(button.text)}</span>` : "")
+        + "</button>").join("") + "</div>";
+      okBtn.classList.remove("hidden");
+      okBtn.textContent = view.confirm;
+      okBtn.disabled = false;
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.disabled = false;
+      customOkBtn.disabled = true;
+      return;
+    }
     if (entwineAsk) {
       // CR 702.42a, before any mode: pay the entwine cost and choose them all,
       // or choose one as printed.
@@ -16109,6 +16265,10 @@ function renderActivationPrompt() {
       ? `Choose ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} to ${costVerb} for ${pendingCastTarget.cardName}`
       : picked === "source"
       ? `Choose a source for ${pendingCastTarget.cardName}`
+      // A text spliced onto the spell (CR 702.47d) picks its own target: the
+      // spell is what targets, and the title names whose text asks.
+      : pendingCastTarget.card?.spliced_from
+      ? `Choose target for ${pendingCastTarget.cardName} (${pendingCastTarget.card.spliced_from}'s text, spliced)`
       : `Choose target for ${pendingCastTarget.cardName}`;
     if (pendingCastTarget.targetKind === "land") {
       body.textContent = `Click a valid land on the battlefield to choose the ${picked}.`;
@@ -16475,10 +16635,25 @@ function renderActivationPrompt() {
         : xPayableSentence(payable);
     }
     const choiceButtons = [];
-    for (let value = 0; value <= pendingCastX.maxX; value += 1) {
-      choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
+    if (Array.isArray(pendingCastX.mvChoices)) {
+      // X is a target's mana value: one button per mana value the targets
+      // have, naming them; one the pool cannot pay is shown, not offered.
+      for (const choice of pendingCastX.mvChoices) {
+        const short = choice.x > pendingCastX.maxX;
+        choiceButtons.push(
+          `<button type="button" class="prompt-choice-btn" data-x-choice="${choice.x}"${short ? " disabled" : ""}>`
+          + `X = ${choice.x} — ${escapeHtml(choice.names.join(", "))}${short ? " (can't pay)" : ""}</button>`,
+        );
+      }
+      if (!pendingCastX.mvChoices.length) {
+        choiceButtons.push("<div>No target has a mana value to announce as X.</div>");
+      }
+    } else {
+      for (let value = 0; value <= pendingCastX.maxX; value += 1) {
+        choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
+      }
+      choiceButtons.push('<button type="button" class="prompt-choice-btn" data-x-choice="custom">Custom...</button>');
     }
-    choiceButtons.push('<button type="button" class="prompt-choice-btn" data-x-choice="custom">Custom...</button>');
     steps.innerHTML = (
       pendingCastX.loyalty
         ? [
@@ -18857,9 +19032,12 @@ function resumeActivationAfterCost(card, activation, fields) {
   // spec alone — the target is exactly what is still owed.
   const spec = targetSpecOf(card);
   const costOnly = !spec?.cost_spec && ACTIVATION_COST_FLAGS.some((flag) => spec?.[flag]);
+  // "…target … with mana value X": the X just announced decides which
+  // targets the picker offers (`specNarrowedToManaValueX`).
+  const narrowed = specNarrowedToManaValueX(spec, pendingActivationCost.fields.x_value);
   const rest = costOnly
     ? { ...card, target_spec: { kind: "none", requires_target: false, valid_targets: [] } }
-    : card;
+    : narrowed !== spec ? { ...card, target_spec: narrowed } : card;
   startActivationPrompt(rest, activation.targetSeat, activation.permanentIndex);
 }
 
@@ -19155,6 +19333,11 @@ function declineEntwine() {
 // sorts them into printed order (CR 608.2c), so this order only decides which
 // target is asked for first.
 function confirmModalModes() {
+  // "Splice onto <name>?" rides this prompt; its confirm may pick nothing.
+  if (pendingModalChoice?.spliceChoice) {
+    confirmSpliceChoice();
+    return;
+  }
   const choice = pendingModalChoice;
   if (!choice || !choice.atLeast || !choice.picked.length) return;
   pendingModalChoice = null;
@@ -19232,6 +19415,10 @@ function chooseModalMode(index) {
   const choice = pendingModalChoice;
   const mode = choice.modes[index];
   if (!mode) return;
+  if (choice.spliceChoice) {
+    toggleSpliceChoice(index);
+    return;
+  }
   if (choice.zoneWayChoice) {
     // CR 601.2b: which permission this cast is made under. The cast then
     // runs the ordinary zone-cast chain with that way's price on the card.
@@ -19420,6 +19607,12 @@ function startCastPromptForKind(card, castAction, kind, validTargets = null) {
 // should send the cast itself.
 function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
   if (!card || typeof card !== "object") return false;
+  // CR 702.47a: the cards to splice are revealed as the spell is announced
+  // (CR 601.2b), before its targets — and the spliced texts' targets are
+  // chosen with its own (CR 702.47d). Asked once per cast, here, where every
+  // hand cast's chain arrives once its modes and costs are announced. Through
+  // `typeof` for the tests that lift the cascade without it.
+  if (typeof startCastSplicePrompt === "function" && startCastSplicePrompt(card, castAction)) return true;
   // The target player named beside the other targets comes first: the cards
   // are taken from that player's graveyard (Gaea's Blessing), or counted on
   // them (Reap), so the pickers below are sized by the answer. One legal seat
@@ -20061,6 +20254,268 @@ function startCastCostPermanentPrompt(card, castAction, costSpec) {
 // The rest of a cast whose additional cost has just been paid: the target
 // cascade when the spell targets, the plain cast when it does not. The payment
 // itself is already on `pendingCastCost` and rides whichever body is sent.
+// ---------------------------------------------------------------------------
+// Splice onto Arcane (CR 702.47)
+//
+// "Splice onto Arcane [cost]" means "You may reveal this card from your hand as
+// you cast an Arcane spell. If you do, copy this card's text box onto that
+// spell and pay [cost] as an additional cost to cast that spell" (CR 702.47a).
+// The server lists, on an instant or sorcery in the viewer's hand, every other
+// hand card that may be spliced onto it (`splice_offers`: its `hand_index`,
+// `name`, splice `cost` and the `target_spec` of the text it would add, judged
+// as this spell's, CR 702.47c). The cast announces them as `splice_cards`, in
+// the order their texts happen (CR 702.47b), each with its own targets
+// (CR 702.47d) in the fields a mode's targets use. Nothing here decides what
+// may be spliced or prices it: the preview prices the cast that will be sent.
+// ---------------------------------------------------------------------------
+
+// The offers on a hand card, or null for a card nothing may be spliced onto.
+function castSpliceOffers(card) {
+  const offers = card && typeof card === "object" ? card.splice_offers : null;
+  return Array.isArray(offers) && offers.length ? offers : null;
+}
+
+// Why a candidate can't be spliced right now, or "": a text that names a
+// target with nothing legal to name (CR 702.47b — the cast refuses it), read
+// off the server's spec rather than a second rule here.
+function spliceOfferRefusal(offer) {
+  const spec = offer?.target_spec;
+  if (spec?.requires_target === true && Array.isArray(spec.valid_targets) && spec.valid_targets.length === 0) {
+    return "no legal target";
+  }
+  return "";
+}
+
+// Open "Splice onto <name>?" for a hand cast whose card carries offers and
+// whose splice question is not answered yet. True when the prompt opened.
+// A multi-select on the mode prompt (`spliceChoice`), so Cancel and the
+// "a prompt is open" readers already know it; its OK casts with what is
+// picked — nothing included, which is the spell cast alone.
+function startCastSplicePrompt(card, castAction = "cast") {
+  if (castAction !== "cast" || pendingCastFromZone != null) return false;
+  if (pendingSpliceCollection || pendingCastSplice) return false;
+  const offers = castSpliceOffers(card);
+  if (!offers) return false;
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  pendingModalChoice = {
+    card,
+    cardName,
+    castAction,
+    atLeast: true,
+    picked: [],
+    spliceChoice: { offers },
+    modes: offers.map((offer) => ({ label: offer.name, supported: !spliceOfferRefusal(offer) })),
+  };
+  renderActivationPrompt();
+  updateActionHint(`Splice onto ${cardName}? Pick cards in the order their text happens, or cast it alone.`);
+  return true;
+}
+
+// The hand card an offer names, for its printed text (the offer carries none).
+function spliceOfferCard(offer, state = currentState) {
+  const hand = getCurrentPlayerState(state)?.hand;
+  const entry = Array.isArray(hand) ? hand[offer?.hand_index] : null;
+  return entry && typeof entry === "object" && entry.name === offer?.name ? entry : null;
+}
+
+// The prompt's buttons and confirm, from the choice as it stands.
+function spliceChoiceView(choice) {
+  const picked = choice?.picked || [];
+  const offers = choice?.spliceChoice?.offers || [];
+  return {
+    title: `Splice onto ${choice?.cardName || "this spell"}?`,
+    body: "Reveal cards from your hand to splice onto it (CR 702.47): each one's text is added "
+      + "to the spell and its splice cost is paid on top. Pick them in the order their text "
+      + "happens, after the spell's own; each one then picks its own target.",
+    buttons: offers.map((offer, index) => {
+      const refusal = spliceOfferRefusal(offer);
+      const order = picked.indexOf(index);
+      return {
+        index,
+        on: order >= 0,
+        disabled: !!refusal,
+        label: `${order >= 0 ? `${order + 1}. ` : ""}${offer.name} — splice ${offer.cost || "{0}"}`
+          + (refusal ? ` (${refusal})` : ""),
+        // The text it would add — its splice line itself is the offer, said
+        // already in the label, so only the effect lines are repeated here.
+        text: String(spliceOfferCard(offer)?.oracle_text || "")
+          .split("\n").filter((line) => !/^\s*Splice onto\b/i.test(line)).join("\n"),
+      };
+    }),
+    confirm: picked.length
+      ? `Splice ${picked.map((index) => offers[index]?.name).join(", then ")} and cast`
+      : `Cast ${choice?.cardName || "it"} without splicing`,
+  };
+}
+
+// A click on a candidate: picked (at the end of the order) or unpicked.
+function toggleSpliceChoice(index) {
+  const choice = pendingModalChoice;
+  const offer = choice?.spliceChoice?.offers?.[index];
+  if (!offer) return;
+  const refusal = spliceOfferRefusal(offer);
+  if (refusal) {
+    updateActionHint(`${offer.name} can't be spliced onto ${choice.cardName}: ${refusal}.`, true);
+    return;
+  }
+  const at = choice.picked.indexOf(index);
+  if (at >= 0) choice.picked.splice(at, 1);
+  else choice.picked.push(index);
+  renderActivationPrompt();
+}
+
+// The prompt's OK: walk the picked cards' targets, then the spell's own.
+function confirmSpliceChoice() {
+  const choice = pendingModalChoice;
+  if (!choice?.spliceChoice) return;
+  pendingModalChoice = null;
+  const chosen = choice.picked.map((index) => choice.spliceChoice.offers[index]).filter(Boolean);
+  pendingSpliceCollection = {
+    card: choice.card,
+    cardName: choice.cardName,
+    castAction: choice.castAction,
+    chosen,
+    collected: [],
+    cursor: 0,
+    done: false,
+  };
+  renderActivationPrompt();
+  promptNextSpliceTarget();
+}
+
+// The card the ordinary picker is run on for one spliced text: the spell, as
+// what is targeting is the spell (CR 702.47c), with the spliced text's spec in
+// its own — and no X or offers of its own, so the picker asks for the target
+// alone; the spell's own X and costs are asked once the spliced texts are done.
+function spliceTargetCard(card, offer) {
+  return {
+    name: normalizeCardName(card),
+    type: card?.type || "",
+    oracle_text: spliceOfferCard(offer)?.oracle_text || "",
+    mana_cost: offer?.cost || "",
+    target_spec: offer?.target_spec || { kind: "none", requires_target: false, valid_targets: [] },
+    spliced_from: offer?.name || "",
+  };
+}
+
+// Ask the next chosen card's target, or record a card whose text targets
+// nothing and move on; past the last, the spell's own targets.
+function promptNextSpliceTarget() {
+  const run = pendingSpliceCollection;
+  if (!run || run.done) return;
+  while (run.cursor < run.chosen.length) {
+    const offer = run.chosen[run.cursor];
+    const hint = `${offer.name}, spliced onto ${run.cardName}: choose its target.`;
+    updateActionHint(hint);
+    if (startCastTargetCascade(spliceTargetCard(run.card, offer), run.castAction)) {
+      // Said again once the picker that captured the last target has had its
+      // own "Cast …" say — its `.then` runs after this capture returns.
+      const cursor = run.cursor;
+      setTimeout(() => {
+        if (pendingSpliceCollection === run && run.cursor === cursor) updateActionHint(hint);
+      }, 0);
+      return;
+    }
+    run.collected.push({ hand_index: offer.hand_index });
+    run.cursor += 1;
+  }
+  finishSpliceCollection();
+}
+
+// Every spliced text has its targets: record the announcement and carry the
+// cast on with the spell's own targets. Deferred a tick, because the last
+// picker's own `.then` still runs `clearPendingHandCast` after its body was
+// captured — the open collection keeps that from clearing this cast.
+function finishSpliceCollection() {
+  const run = pendingSpliceCollection;
+  if (!run || run.done) return;
+  run.done = true;
+  pendingCastSplice = { cardName: run.cardName, cards: run.collected.slice() };
+  setTimeout(() => {
+    if (pendingSpliceCollection !== run) return;
+    pendingSpliceCollection = null;
+    updateActionHint(run.collected.length
+      ? `Splicing ${run.chosen.map((offer) => offer.name).join(", then ")} onto ${run.cardName}.`
+      : `Casting ${run.cardName} without splicing.`);
+    continueCastAfterCost(run.card, run.castAction);
+  }, 0);
+}
+
+// A spliced text's target, from the body the ordinary picker built, in the
+// fields `splice_cards[]` takes (web/schemas.SpliceChoice): a permanent by its
+// id, a player by seat, a graveyard card by its place in the pile, a spell by
+// its stack index.
+function spliceEntryFromBody(offer, body) {
+  const entry = { hand_index: offer.hand_index };
+  const graveyard = offer?.target_spec?.kind === "graveyard_creature";
+  if (Number.isInteger(body.target_seat)) entry.target_seat = body.target_seat;
+  if (Number.isInteger(body.target_stack_index)) {
+    entry.target_stack_index = body.target_stack_index;
+    return entry;
+  }
+  if (Array.isArray(body.target_graveyard_indices) && body.target_graveyard_indices.length) {
+    entry.graveyard_indices = body.target_graveyard_indices.slice();
+    return entry;
+  }
+  if (Array.isArray(body.target_permanent_indices) && body.target_permanent_indices.length) {
+    if (graveyard) {
+      entry.graveyard_indices = body.target_permanent_indices.slice();
+      return entry;
+    }
+    const ids = body.target_permanent_indices.map((index) => permanentIdAt(body.target_seat, index));
+    if (ids.every(Number.isInteger)) entry.permanent_ids = ids;
+    return entry;
+  }
+  if (Array.isArray(body.target_permanent_ids) && body.target_permanent_ids.length) {
+    entry.permanent_ids = body.target_permanent_ids.slice();
+    const first = findPermanentInState(currentState, entry.permanent_ids[0]);
+    if (Number.isInteger(first?.seat)) entry.target_seat = first.seat;
+    return entry;
+  }
+  const slot = Number.isInteger(body.permanent_index) ? body.permanent_index : body.target_permanent_index;
+  if (graveyard && Number.isInteger(slot)) {
+    entry.graveyard_indices = [slot];
+    return entry;
+  }
+  if (Number.isInteger(body.target_permanent_id)) {
+    entry.permanent_id = body.target_permanent_id;
+  } else if (Number.isInteger(slot)) {
+    const pid = permanentIdAt(body.target_seat, slot);
+    if (Number.isInteger(pid)) entry.permanent_id = pid;
+  }
+  return entry;
+}
+
+// `sendAction`'s half of the collection: while a spliced text's target is
+// being picked, the cast body its picker ends with is that target — captured
+// and the next card asked, never sent. True when the body was captured.
+function captureSpliceTarget(body) {
+  const run = pendingSpliceCollection;
+  if (!run || run.done || !_CAST_ACTIONS.has(body.action)) return false;
+  const offer = run.chosen[run.cursor];
+  if (!offer) return false;
+  run.collected.push(spliceEntryFromBody(offer, body));
+  run.cursor += 1;
+  promptNextSpliceTarget();
+  return true;
+}
+
+// The announced splices onto the cast body for the spell they were chosen for
+// — and onto the caller's body, so an auto-tap retry resends them. A body
+// that already names its own `splice_cards` is left alone.
+function carrySpliceCards(body, actionBody) {
+  if (
+    !pendingCastSplice || body.action !== "cast" || body.splice_cards != null
+    || body.card_name !== pendingCastSplice.cardName || !pendingCastSplice.cards.length
+  ) return body;
+  body.splice_cards = pendingCastSplice.cards.map((entry) => ({ ...entry }));
+  if (actionBody && typeof actionBody === "object" && actionBody.splice_cards == null) {
+    actionBody.splice_cards = body.splice_cards.map((entry) => ({ ...entry }));
+  }
+  return body;
+}
+
 function continueCastAfterCost(card, castAction = "cast", { targets = true } = {}) {
   // `targets: false` — the cost just paid was the whole announcement (a spec
   // that *is* the cost picker), so there is no target to ask for.
@@ -21513,6 +21968,39 @@ function counterRemovalXKind(activationCost) {
   return match ? match[1].toLowerCase() : "";
 }
 
+// "Destroy target artifact with mana value X" (Hearth Kami, Gorilla Shaman,
+// Plaguebearer; Detonate, Spell Blast on the cast side): the X is the target's
+// mana value, so the X prompt offers the mana values the targets have, each
+// with the targets it names, rather than every X the pool can pay (the engine
+// refuses any other, W1G3). The server marks the spec
+// (`x_is_target_mana_value`) and each target's `mana_value`
+// (web/offers.mark_mana_value_x). Null for every other spec. With
+// *onlyTarget* (a cast, whose target is picked first), that target's alone.
+function manaValueXChoices(spec, onlyTarget = null) {
+  if (!spec?.x_is_target_mana_value) return null;
+  const byX = new Map();
+  for (const entry of Array.isArray(spec.valid_targets) ? spec.valid_targets : []) {
+    if (!Number.isInteger(entry?.mana_value)) continue;
+    if (onlyTarget && !onlyTarget(entry)) continue;
+    if (!byX.has(entry.mana_value)) byX.set(entry.mana_value, []);
+    byX.get(entry.mana_value).push(entry.name || "a target");
+  }
+  return [...byX.entries()].sort(([a], [b]) => a - b).map(([x, names]) => ({ x, names }));
+}
+
+// …and, once X is announced, the targets that match it: the spec with its
+// `valid_targets` narrowed to that mana value (CR 601.2c names a target the
+// announced X allows). Every other spec is returned as it was.
+function specNarrowedToManaValueX(spec, xValue) {
+  if (!spec?.x_is_target_mana_value || !Number.isInteger(xValue)) return spec;
+  return {
+    ...spec,
+    valid_targets: (Array.isArray(spec.valid_targets) ? spec.valid_targets : []).filter(
+      (entry) => !Number.isInteger(entry?.mana_value) || entry.mana_value === xValue,
+    ),
+  };
+}
+
 function startActivationXPrompt(
   card, cardName, targetSeat, permanentIndex, abilityIndex, maxXOverride = null,
   options = {},
@@ -21544,6 +22032,8 @@ function startActivationXPrompt(
     // A "Remove X counters" X: bounded by the counters, never re-priced.
     xFromCounters: maxXOverride !== null,
     awaitingCustomValue: false,
+    // "…target … with mana value X": the X values the targets offer.
+    mvChoices: options.thenTargets ? manaValueXChoices(targetSpecOf(card)) : null,
   };
   renderActivationPrompt();
 }
@@ -21589,6 +22079,13 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     costCard: card,
     maxX: castXCeiling(card, Math.max(0, Number(castXPayable(card)?.board) || 0)),
     awaitingCustomValue: false,
+    // "…target … with mana value X" (Detonate, Spell Blast): the target is
+    // picked, so X is its mana value — the one choice offered.
+    mvChoices: manaValueXChoices(targetSpecOf(card), (entry) => (
+      Number.isInteger(targetStackIndex)
+        ? entry.kind === "stack" && entry.stack_index === targetStackIndex
+        : entry.kind === "permanent" && entry.seat === targetSeat && entry.index === targetPermanentIndex
+    )),
   };
   renderActivationPrompt();
 }
@@ -23103,6 +23600,86 @@ function faceDownPreviewLines(card) {
   return lines;
 }
 
+// CR 710: a flip card's two halves (`flip: {top, bottom}`, sent wherever the
+// card is — a permanent, a hand card, a library or graveyard preview). The
+// half that applies is the one the card's own fields already are: the bottom
+// half for a permanent that has flipped (`flipped: true`), the top half
+// everywhere else (CR 710.2). The viewer shows the other half too, upside
+// down, as it is printed on the card. Null for a card with one half.
+function flipPreviewHalves(card) {
+  const flip = card && typeof card === "object" ? card.flip : null;
+  if (!flip || typeof flip !== "object" || !flip.top || !flip.bottom) return null;
+  const flipped = card.flipped === true;
+  return {
+    flipped,
+    onBattlefield: typeof card.flipped === "boolean",
+    active: flipped ? flip.bottom : flip.top,
+    inactive: flipped ? flip.top : flip.bottom,
+  };
+}
+
+// The line that says which half applies, above the rules text.
+function flipPreviewLead(halves) {
+  if (!halves) return "";
+  if (halves.flipped) {
+    return `⇅ Flipped — this permanent is ${halves.active.name}, the card's bottom half `
+      + `(its colour and mana cost stay the card's, CR 710.1c). ${halves.inactive.name} no longer applies.`;
+  }
+  if (halves.onBattlefield) {
+    return `Flip card, not flipped — ${halves.inactive.name} (upside down below) applies only once it flips (CR 710.1b).`;
+  }
+  return `Flip card — off the battlefield it is only ${halves.active.name} (CR 710.2); `
+    + `${halves.inactive.name} (upside down below) applies to a permanent that flips.`;
+}
+
+// The half that does not apply, printed upside down as it is on the card.
+function flipPreviewInactiveHtml(half) {
+  const pt = half.power != null && half.toughness != null && half.power !== "" ? ` ${half.power}/${half.toughness}` : "";
+  return `<div class="preview-flip-inactive" title="The other half of this flip card (CR 710.1)">`
+    + `<div class="preview-flip-inactive-name">${escapeHtml(half.name || "")}${escapeHtml(pt)}</div>`
+    + `<div class="preview-flip-inactive-type">${escapeHtml(half.type || "")}</div>`
+    + `<div>${renderSymbolsInline(half.oracle_text || "")}</div>`
+    + "</div>";
+}
+
+// A stack object's preview: its card, with what was spliced onto it
+// (CR 702.47 — the cards were revealed, so it is public): the stack item's
+// `spliced`, each card's name, the text it added and that text's targets.
+function stackItemPreviewCard(item) {
+  const card = item?.card;
+  if (!card || typeof card !== "object") return card;
+  const spliced = Array.isArray(item.spliced) ? item.spliced : [];
+  return spliced.length ? { ...card, spliced } : card;
+}
+
+// What one of a stack object's targets is, by name, read off the state the
+// target entry indexes (`{kind, seat, index}`, web/serialization's
+// `_stack_item_targets`).
+function stackTargetLabel(target, state = currentState) {
+  const player = state?.players?.[target?.seat];
+  if (target?.kind === "player") return player?.name || `seat ${target.seat}`;
+  if (target?.kind === "permanent") return player?.battlefield?.[target.index]?.name || "a permanent";
+  if (target?.kind === "graveyard") {
+    const entry = player?.graveyard?.[target.index];
+    return `${(entry && typeof entry === "object" ? entry.name : entry) || "a card"} in ${player?.name || "a"}'s graveyard`;
+  }
+  if (target?.kind === "stack") return state?.stack?.[target.index]?.card?.name || "a spell";
+  return "a target";
+}
+
+// One preview section per card spliced onto the spell, in the order the texts
+// happen (after the spell's own, CR 702.47b).
+function splicedPreviewSections(card) {
+  const spliced = card && typeof card === "object" && Array.isArray(card.spliced) ? card.spliced : [];
+  return spliced.map((entry, at) => {
+    const targets = Array.isArray(entry?.targets) ? entry.targets.map((t) => stackTargetLabel(t)) : [];
+    return `<span class="preview-spliced">${at + 1}. Spliced: <b>${escapeHtml(entry?.name || "")}</b> — `
+      + `${renderSymbolsInline(entry?.text || "")}`
+      + (targets.length ? ` <i>→ ${escapeHtml(targets.join(", "))}</i>` : "")
+      + "</span>";
+  });
+}
+
 // Which way the board moves what this card's cast is charged, from the
 // server's two flags (`cost_increased` / `cost_reduced`, web/serialization's
 // `_cast_price` over `cost_modifiers.cast_mana_charge`): "reduced",
@@ -23156,6 +23733,11 @@ function showCardPreview(card) {
     sections.push("👑 Commander - this is the designated commander card");
   }
   for (const line of faceDownPreviewLines(card)) sections.push(renderSymbolsInline(line));
+  // CR 710: which half of a flip card applies, said before anything else.
+  const flipHalves = flipPreviewHalves(card);
+  if (flipHalves) {
+    sections.push(`<span class="preview-flip-lead">${escapeHtml(flipPreviewLead(flipHalves))}</span>`);
+  }
   const priceNote = castPriceNote(card);
   if (priceNote) sections.push(`<span class="preview-price-${castPriceChange(card)}">${renderSymbolsInline(priceNote)}</span>`);
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
@@ -23181,8 +23763,16 @@ function showCardPreview(card) {
   }
   for (const line of counterLines) sections.push(renderSymbolsInline(line));
   if (sicknessLabel) sections.push(renderSymbolsInline(sicknessLabel));
+  // …and the other half of a flip card, upside down as it is printed.
+  if (flipHalves) sections.push(flipPreviewInactiveHtml(flipHalves.inactive));
+  // A spell on the stack: the cards spliced onto it (CR 702.47).
+  sections.push(...splicedPreviewSections(card));
   const previewEl = q("cardPreviewText");
   if (previewEl) previewEl.innerHTML = sections.join("<br>");
+  // A flipped permanent's card is turned around on the table (CR 710.3): its
+  // printed image is turned too, so the half that applies reads upright and
+  // the other one upside down. Every other card's image is as printed.
+  q("cardPreviewImage")?.classList.toggle("card-preview-image-flipped", !!flipHalves?.flipped);
 
   if (!largeImageUri) {
     q("cardPreview").classList.add("empty-preview");
@@ -28408,7 +28998,7 @@ function initBattlefieldCanvas() {
     onStackCardHover(info) {
       stackCanvasHoverActive = !!info;
       if (info) {
-        if (info.item?.card) showCardPreview(info.item.card);
+        if (info.item?.card) showCardPreview(stackItemPreviewCard(info.item));
         return;
       }
       if (!battlefieldCanvas?.hasAnyHover()) scheduleHidePreview();
@@ -30020,9 +30610,15 @@ async function sendAction(actionBody) {
   // it and open the next mode's prompt instead of sending. Intercepted here
   // because this is the one place every targeting prompt ends up, the same
   // reason the single mode index rides through it.
+  // …and a spliced text's target, the same way (CR 702.47d): the picker run
+  // on the spliced text's spec ends here, and its body is that text's target.
+  // Through `typeof`, as `carryControllerSeat` above, for the tests that lift
+  // this function into bare node with module state of their own.
+  if (typeof captureSpliceTarget === "function" && captureSpliceTarget(body)) return;
   if (captureModeCollectionTarget(body)) return;
   carryAnnouncedSeat(body, actionBody);
   carryCastZoneAndCost(body);
+  if (typeof carrySpliceCards === "function") carrySpliceCards(body, actionBody);
   // A cast that makes mana "in any combination of" (Burnt Offering) owes its
   // split with the announcement: asked here, where every cast body passes,
   // once the cost it may depend on is on the body. Written onto the caller's
@@ -30455,6 +31051,7 @@ function cancelPendingPrompt() {
   pendingAutoTap = null;
   pendingModalChoice = null;
   pendingModeCollection = null;
+  pendingSpliceCollection = null;
   pendingDiscardCost = null;
   pendingPermanentCost = null;
   pendingActivationCost = null;
