@@ -35,6 +35,7 @@ output; the integrator reads the file before sending it.
 from __future__ import annotations
 
 import argparse
+import ast
 import ctypes
 import json
 import os
@@ -91,8 +92,13 @@ def unclaimed_cards(census: Path, low: str) -> list[str]:
 def new_to_pool(census: Path, low: str) -> tuple[int | None, list[str]]:
     text = _read(census / f"{low}_new.log")
     m = re.search(r"new to the pool \((\d+)\)", text)
-    trap = re.search(r"reprints whose only other printings are LATER than \w+ \((\d+)\): (\[.*?\])", text)
-    later = json.loads(trap.group(2).replace("'", '"')) if trap else []
+    # census_new.py prints the list as Python reprs — (name, [later sets])
+    # tuples — so it is read back with literal_eval, to the end of its line
+    # (a lazy match stops inside the first tuple's own list; Kamigawa's
+    # Azusa, Lost but Seeking was the first trap the writer met).
+    trap = re.search(r"reprints whose only other printings are LATER than \w+ \((\d+)\): (\[.*\])$", text, re.M)
+    later = [entry[0] if isinstance(entry, tuple) else entry
+             for entry in ast.literal_eval(trap.group(2))] if trap else []
     return (int(m.group(1)) if m else None), later
 
 
