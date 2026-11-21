@@ -163,4 +163,46 @@ def test_w1g10_enshrined_memories_for_zero_reveals_nothing(set_pool):
     assert alice.hand == []
     assert [card.name for card in alice.library] == ["Grizzly Bears", "Island"]
 
+
+def test_w1g10_psychic_spear_offers_only_spirit_or_arcane_cards(set_pool):
+    """Psychic Spear: "Target player reveals their hand. You choose a Spirit or
+    Arcane card from it. That player discards that card." Asked of a person:
+    of Bob's four cards the picker offers the Spirit creature and the Arcane
+    sorcery, never the Bears or the Bolt; the chosen card is discarded."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    bob_hand = [lea["Grizzly Bears"], bok["Bile Urchin"], lea["Lightning Bolt"],
+                bok["Heed the Mists"]]
+    game = _w1g10_table(set_pool, hand=[bok["Psychic Spear"]], opponent_hand=bob_hand)
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Psychic Spear", target_player_index=1).supported
+    owed = _w1g10_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "revealed_hand_pick"
+    bob = game.players[1]
+    offered = sorted(bob.hand[i].name for i in owed.data["legal_indices"])
+    assert offered == ["Bile Urchin", "Heed the Mists"]
+    index = next(i for i, held in enumerate(bob.hand) if held.name == "Heed the Mists")
+    assert game.confirm_revealed_hand_pick(0, index)
+    _w1g10_settle(game)
+    assert [card.name for card in bob.graveyard] == ["Heed the Mists"]
+    assert sorted(card.name for card in bob.hand) == [
+        "Bile Urchin", "Grizzly Bears", "Lightning Bolt",
+    ]
+
+
+def test_w1g10_psychic_spear_with_no_spirit_or_arcane_discards_nothing(set_pool):
+    """A hand with neither is revealed and nothing is discarded; a headless
+    caster takes a Spirit when there is one."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g10_table(set_pool, hand=[bok["Psychic Spear"]] * 2,
+                        opponent_hand=[lea["Grizzly Bears"], lea["Lightning Bolt"]])
+    assert game.cast_from_hand(0, "Psychic Spear", target_player_index=1).supported
+    _w1g10_settle(game)
+    bob = game.players[1]
+    assert bob.graveyard == [] and len(bob.hand) == 2
+    assert any("Bob revealed their hand (2 card(s))" in line for line in game.log)
+    bob.hand.append(bok["Bile Urchin"])
+    assert game.cast_from_hand(0, "Psychic Spear", target_player_index=1).supported
+    _w1g10_settle(game)
+    assert [card.name for card in bob.graveyard] == ["Bile Urchin"]
+
 # ==== end w1g10 ======================================================

@@ -239,6 +239,18 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
             return True, "resolved"
         any_colors = [str(chosen_color)]
         narrowing["restrictions"] = {"any_colors": any_colors}
+    # "You choose a **Spirit or Arcane** card from it." (Psychic Spear.) The
+    # fifth narrowing, under the search's own subtype keys (``subtypes`` AND'd,
+    # ``any_subtypes`` the printed union) and carried on the prompt for the
+    # four above's reason.
+    subtypes = list(instruction.payload.get("subtypes") or ())
+    any_subtypes = list(instruction.payload.get("any_subtypes") or ())
+    if subtypes or any_subtypes:
+        restrictions = narrowing.setdefault("restrictions", {})
+        if subtypes:
+            restrictions["subtypes"] = subtypes
+        if any_subtypes:
+            restrictions["any_subtypes"] = any_subtypes
     shows = instruction.payload.get("revealer_shows")
     if shows == "x":
         # "…that player reveals **X** cards from their hand and you choose one
@@ -321,6 +333,8 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         card_types=card_types,
         exclude_supertypes=excluded_supertypes,
         any_colors=any_colors,
+        **({"subtypes": subtypes} if subtypes else {}),
+        **({"any_subtypes": any_subtypes} if any_subtypes else {}),
         fate=str(instruction.payload.get("fate", "discard")),
         # The resolution's own scratchpad. Every pick writes the chosen card's
         # name into it — the pick *is* a chosen card, whatever becomes of it —
