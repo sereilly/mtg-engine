@@ -891,6 +891,16 @@ a trigger firing on a strictly larger set, the direction no census sees.
 The bare "a land" row first and the land-type row after it, for the
 reason the "a player" pair above is ordered that way.
 '''),
+    ('land_tapped_for_mana', 'tap this', r'''
+"Whenever you tap **this land** for mana, target opponent creates a 1/1
+colorless Spirit creature token." (Forbidden Orchard.) The second-person
+seat again, and a land named by the source's own reference: the empty
+``tapped_self`` group is tested at the tap seam against the watching
+permanent itself (``_land_tap_trigger_fires``), so the Orchard watches its
+own taps and no other land's. Dropped, it would hand an opponent a Spirit
+for every land its controller tapped. After the land-type row, whose
+"an?" cannot read "this", and before the passive subject row.
+'''),
     ('land_tapped_for_mana', '.+?) is tapped', r'''
 "Whenever **a land an opponent controls** is tapped for mana" (Mana Web).
 The passive voice with a whole *noun phrase* where the three rows above

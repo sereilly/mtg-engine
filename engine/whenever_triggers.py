@@ -380,6 +380,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever you(?P<tapped_by_you>) tap an? "
      r"(?P<tapped_land_subtype>[a-z]+) for mana"),
     ("land_tapped_for_mana",
+     r"whenever you(?P<tapped_by_you>) tap this(?P<tapped_self>) land for mana"),
+    ("land_tapped_for_mana",
      r"whenever (?P<tapped_land_subject>an? .+?) is tapped for mana"),
     ("spell_cast",
      r"whenever a player casts a (?P<cast_colors>(?:white|blue|black|red|green)"

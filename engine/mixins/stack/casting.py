@@ -42,6 +42,7 @@ from ...entwine import entwined_mode_choices
 from ...face_down import announced_morph_cost, face_down_card
 from ...faces import choose_a_face_refusal, spell_named
 from ...mana_combination import split_refusal
+from ...mana_riders import rider_units, riders_spent
 from ...classifier import classify_card
 from ...cost_modifiers import (cost_reduction_for_cast, spell_cost_tax,
                                spell_life_tax, spell_symbol_tax)
@@ -1172,7 +1173,9 @@ class SpellCastingMixin:
             return costs_checked
         owed, resolved_x_value, spell_graveyard_slot = costs_checked
 
-        # CR 601.2g–h: the mana payment, or the waiver.
+        # CR 601.2g–h: the mana payment, or the waiver. Measured across for
+        # the CR 106.6 riders its mana carried (``engine/mana_riders.py``).
+        riders_before = rider_units(caster)
         mana_paid = self._pay_cast_mana(
             card=card, caster=caster, caster_index=caster_index,
             chosen_alternative=chosen_alternative,
@@ -1187,6 +1190,7 @@ class SpellCastingMixin:
         if isinstance(mana_paid, SimulationResult):
             return mana_paid
         permission, resolved_x_value, x_mana_spent, mana_spent_to_cast = mana_paid
+        mana_riders = riders_spent(riders_before, rider_units(caster))
 
         # CR 601.2h: every other cost, paid at one moment.
         (
@@ -1233,7 +1237,7 @@ class SpellCastingMixin:
                 target_permanent_index=target_permanent_index,
                 target_player_index=target_player_index,
                 target_stack_item=target_stack_item, x_mana_spent=x_mana_spent,
-                mana_spent_to_cast=mana_spent_to_cast,
+                mana_spent_to_cast=mana_spent_to_cast, mana_riders=mana_riders,
             )
 
         self._resolve_card(

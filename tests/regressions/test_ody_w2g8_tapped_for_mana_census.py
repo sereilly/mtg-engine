@@ -81,6 +81,7 @@ SUITE_LANDS = (
     "Barbarian Ring",                          # Odyssey: damage on the tap
     "Darkwater Catacombs",                     # priced: "{1}, {T}: Add {U}{B}."
     "Ebon Stronghold",                         # priced: "{T}, Sacrifice this land"
+    "Forbidden Orchard",                       # its own tap trigger uses the stack (CR 605.5a)
 )
 
 #: (who taps, whose turn): the watcher's controller on their own turn and on
@@ -115,8 +116,13 @@ def watchers(pool) -> list[tuple[str, object, str]]:
         program = compile_card_oracle(unit)
         if not program.supported:
             continue
+        # A land whose trigger watches **its own** taps ("Whenever you tap
+        # this land for mana", Forbidden Orchard) watches no other land, so
+        # it is a land to this census (``SUITE_LANDS``: its own effect on
+        # each road), never a watcher placed beside one.
         if any(
             trigger.condition.kind == "land_tapped_for_mana"
+            and trigger.condition.payload.get("tapped_self") is None
             for trigger in program.triggered_abilities
         ):
             found.append((unit.name, unit, "trigger"))
@@ -302,6 +308,13 @@ def drive(pool, road, land_card, tapper, active, watcher=None, how=None,
         "watcher_change": None if after == before else (before, after),
         "deed": player.tapped_land_for_mana_this_turn,
         "mana": _total_mana(player),
+        # The tokens on each side: what a land's own stack-using tap trigger
+        # makes (Forbidden Orchard's Spirit, for the opponent) must be made
+        # whichever road tapped it.
+        "tokens": tuple(
+            sum(1 for perm in game.controlled_by(seat) if perm.metadata.get("is_token"))
+            for seat in range(len(game.players))
+        ),
     }
 
 
@@ -501,34 +514,66 @@ NON_MANA_TAP_TRIGGERS_RESOLVED_INLINE = frozenset({
 #: name as the exiled card is tapped for mana, its controller adds one mana of
 #: any type that land produced" compiled (W1G5): Mana Flare's clause over a
 #: land named like the imprinted card.
+#: Champions of Kamigawa's Heartbeat of Spring arrived supported ("Whenever a
+#: player taps a land for mana, that player adds one mana of any type that
+#: land produced" — Mana Flare's clause again, so a mana ability by the same
+#: rule). Reviewed at the CHK ingest (W1G9): driven, it adds one extra mana
+#: inline with nothing on the stack, one unit for a land that made two (an
+#: Ancient Tomb), and an unrestricted unit beside a land whose own mana is
+#: restricted (Untaidake) — its 2020-08-07 rulings, "you choose one type that
+#: was produced and add one mana of that type" and "with no restrictions or
+#: riders" (``tests/sets/test_chk_enchantments.py``).
 TRIGGERED_MANA_ABILITIES = frozenset({
     "Gauntlet of Might", "Mana Flare", "Snowfall", "Vernal Bloom",
     "Overabundance", "Winter's Night", "Mirari's Wake", "Extraplanar Lens",
+    "Heartbeat of Spring",
 })
 
+#: …and the ones that **require a target**, which CR 605.5a makes abilities
+#: that use the stack however they triggered: the tap seam puts them there
+#: (``Game._land_tapped_for_mana``'s ``requires_a_target`` arm), above the
+#: spell a cast's payment tapped the land for (``deferring_triggers``), so
+#: none of them is resolved inline and none needs an inline arm
+#: (``TAP_TRIGGER_KINDS``). Forbidden Orchard (CHK W1G9): "Whenever you tap
+#: this land for mana, target opponent creates a 1/1 colorless Spirit
+#: creature token."
+TAP_TRIGGERS_ON_THE_STACK = frozenset({"Forbidden Orchard"})
 
-def tap_triggers(pool) -> dict[str, bool]:
-    """Every card with a ``land_tapped_for_mana`` trigger → whether that
-    trigger is a mana ability (CR 605.1b: it could add mana)."""
-    found: dict[str, bool] = {}
+
+def tap_triggers(pool) -> dict[str, str]:
+    """Every card with a ``land_tapped_for_mana`` trigger → how that trigger
+    resolves: ``"mana"`` (a mana ability, CR 605.1b: it could add mana),
+    ``"stack"`` (it requires a target, CR 605.5a) or ``"inline"`` (neither,
+    and still resolved at the tap seam — the measured decline above)."""
+    from engine.mana_abilities import requires_a_target
+
+    found: dict[str, str] = {}
     for unit in compilation_units(list(pool.values())):
         for trigger in compile_card_oracle(unit).triggered_abilities:
             if trigger.condition.kind != "land_tapped_for_mana":
                 continue
             if trigger.instruction is None:
                 continue
+            if requires_a_target(trigger.instruction):
+                found[unit.name] = "stack"
+                continue
             kinds = [step.kind for step in _tap_trigger_steps(trigger.instruction)]
             assert set(kinds) <= TAP_TRIGGER_KINDS, (unit.name, kinds)
-            found[unit.name] = "add_mana_for_tapped_land" in kinds
+            found[unit.name] = (
+                "mana" if "add_mana_for_tapped_land" in kinds else "inline"
+            )
     return found
 
 
 def test_the_tap_triggers_that_are_not_mana_abilities_are_the_known_seven():
     found = tap_triggers(_pool())
-    assert {name for name, adds in found.items() if adds} == TRIGGERED_MANA_ABILITIES
+    assert {name for name, how in found.items() if how == "mana"} == TRIGGERED_MANA_ABILITIES
     assert {
-        name for name, adds in found.items() if not adds
+        name for name, how in found.items() if how == "inline"
     } == NON_MANA_TAP_TRIGGERS_RESOLVED_INLINE
+    assert {
+        name for name, how in found.items() if how == "stack"
+    } == TAP_TRIGGERS_ON_THE_STACK
 
 
 def test_a_non_mana_tap_trigger_still_resolves_before_anything_can_respond():

@@ -263,7 +263,9 @@ def _mana_bucket(caster, spend_only) -> dict:
 
 def _restriction_suffix(spend_only) -> str:
     """The log's note that the mana just made is restricted, or "" when not."""
-    return f" (spendable only on {spend_only})" if spend_only else ""
+    from ..mana_riders import spend_note
+
+    return spend_note(spend_only, f" (spendable only on {spend_only})")
 
 
 def _pick_mana_alternative(alternatives, context) -> tuple:
@@ -934,7 +936,9 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             produced = int(count) * multiplier
             bucket[symbol] = bucket.get(symbol, 0) + produced
             added.append(f"{{{symbol}}}" * produced)
-        suffix = f" (spendable only on {spend_only} spells)" if spend_only else ""
+        from ..mana_riders import spend_note
+
+        suffix = spend_note(spend_only, f" (spendable only on {spend_only} spells)")
         # "…for each" of nothing (Mana Echoes for a creature nothing you control
         # shares a type with) adds no mana, and says so the way every other
         # branch of this handler does rather than "produced " and nothing.

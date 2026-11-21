@@ -166,6 +166,11 @@ CHOICE_KEYS = (
     # spent to cast it" as it arrives — and a permanent that arrives any other
     # way carries none (CR 702.44b).
     "mana_spent_to_cast",
+    # The CR 106.6 riders a cast's mana carried that are about this spell
+    # ("If that mana is spent on a creature spell, it gains haste", Hall of
+    # the Bandit Lord), for the permanent it becomes
+    # (``mana_riders.MANA_RIDERS_SPENT`` names the key).
+    "mana_riders_spent",
     # Whether the spell was cast at a time a sorcery could **not** have been
     # (Mirage's five flash Auras: "If you cast it any time a sorcery couldn't
     # have been cast, …"). On this channel for the same reason as every cost
