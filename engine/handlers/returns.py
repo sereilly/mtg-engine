@@ -272,6 +272,15 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # different question from "how long is it?" — conflating the two is what
     # made the ``> 1`` gate wrong (see there).
     counted_x = printed_count == "x"
+    # "…return **any number of** target Spirit cards from your graveyard to
+    # your hand." (Iname, Life Aspect.) A list with no printed ceiling: every
+    # slot the announcement named, which can be no more than the pile holds —
+    # through the same slot resolver, so zero named returns nothing and a
+    # card that left the pile since (Iname itself, exiled by the step in
+    # front) is dropped (CR 608.2b).
+    if isinstance(targets_desc, dict) and targets_desc.get("unbounded"):
+        counted_x = True
+        printed_count = len(caster.graveyard)
     if printed_count == "x":
         # "Return **X** target creature cards from your graveyard to your hand."
         # (Shattered Crypt.) The announced X (CR 601.2b), which is not a number

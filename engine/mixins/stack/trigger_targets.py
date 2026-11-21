@@ -983,7 +983,13 @@ class TriggerTargetsMixin:
         several = {}
         printed = spec.get("max_targets")
         if unbounded and printed is None:
-            printed = max(2, sum(1 for entry in offered if entry["kind"] == "permanent"))
+            # Every object on offer, a card in a graveyard included: "return
+            # **any number of** target Spirit cards from your graveyard"
+            # (Iname, Life Aspect) offers cards, and a ceiling counted over
+            # permanents alone capped it at two.
+            printed = max(2, sum(
+                1 for entry in offered if entry["kind"] in ("permanent", "graveyard")
+            ))
         quantity_key = spec.get("x_from_trigger")
         if quantity_key:
             # "Whenever this creature deals combat damage to a player, return

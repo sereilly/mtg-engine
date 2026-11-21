@@ -373,6 +373,76 @@ def test_w1g3_ember_fist_zubera_asks_an_interactive_seat_for_any_target(set_pool
     assert "Their Giant" in _w1g3_names(game.players[1].graveyard)
     assert game.players[1].life == 20
 
+
+def _w1g3_iname_table(set_pool, *, interactive=()):
+    pool = set_pool("CHK")
+    bear = _w1g3_card("Graveyard Bear", 2, "Creature — Bear")
+    return _w1g3_table(
+        mine=[pool["Iname, Life Aspect"]], hand=[pool["Rend Spirit"]],
+        graveyard=[pool["Kami of Ancient Law"], pool["Kami of Lunacy"], bear, pool["Hana Kami"]],
+        interactive=interactive,
+    )
+
+
+def _w1g3_kill_iname(game):
+    iname = _w1g3_on_field(game, 0, "Iname, Life Aspect")
+    assert game.cast_from_hand(0, "Rend Spirit", target_permanent_ids=[iname.permanent_id]).supported
+
+
+def test_w1g3_iname_life_aspect_exiles_itself_and_returns_the_spirits_it_named(set_pool):
+    """"…you may exile it. If you do, return any number of target Spirit cards
+    from your graveyard to your hand." The targets are announced as the trigger
+    goes on the stack, any number of them (an interactive seat names two of
+    the three Spirit cards and not the Bear, which is not offered); the
+    exile is the resolution's choice, and then exactly the named cards
+    return."""
+    game = _w1g3_iname_table(set_pool, interactive=(0,))
+    _w1g3_kill_iname(game)
+    asked = _w1g3_settle(game, defaults=False)
+    assert asked is not None and asked.kind == "trigger_target", game.log[-6:]
+    offered = {t["name"]: t["graveyard_index"] for t in asked.data["targets"]}
+    # The 2004-12-01 ruling: Iname may target itself (to no effect).
+    assert set(offered) == {
+        "Kami of Ancient Law", "Kami of Lunacy", "Hana Kami", "Iname, Life Aspect",
+    }
+    assert asked.data.get("max_targets") == 4 and asked.data.get("up_to")
+    assert game.confirm_trigger_target(
+        0, seat=0,
+        graveyard_indices=[offered["Kami of Ancient Law"], offered["Kami of Lunacy"]],
+    )
+    _w1g3_settle(game, answers={
+        "optional_pay": lambda g, c: g.confirm_optional_pay(0, accept=True),
+    })
+    assert sorted(_w1g3_names(game.players[0].hand)) == ["Kami of Ancient Law", "Kami of Lunacy"]
+    assert _w1g3_names(game.players[0].exile) == ["Iname, Life Aspect"]
+    assert "Hana Kami" in _w1g3_names(game.players[0].graveyard)
+
+
+def test_w1g3_iname_declining_the_exile_returns_nothing(set_pool):
+    game = _w1g3_iname_table(set_pool)
+    _w1g3_kill_iname(game)
+    _w1g3_settle(game, answers={
+        "optional_pay": lambda g, c: g.confirm_optional_pay(0, accept=False),
+    })
+    assert game.players[0].hand == []
+    assert "Iname, Life Aspect" in _w1g3_names(game.players[0].graveyard)
+    assert game.players[0].exile == []
+
+
+def test_w1g3_iname_may_be_exiled_with_no_target_named(set_pool):
+    """The 2004-12-01 ruling: "You can exile the card even if you choose no
+    targets." Naming nobody is an answer "any number" allows."""
+    game = _w1g3_iname_table(set_pool, interactive=(0,))
+    _w1g3_kill_iname(game)
+    asked = _w1g3_settle(game, defaults=False)
+    assert asked is not None and asked.kind == "trigger_target"
+    assert game.confirm_trigger_target(0, seat=0, graveyard_indices=[])
+    _w1g3_settle(game, answers={
+        "optional_pay": lambda g, c: g.confirm_optional_pay(0, accept=True),
+    })
+    assert game.players[0].hand == []
+    assert _w1g3_names(game.players[0].exile) == ["Iname, Life Aspect"]
+
 # ==== end w1g3 ======================================================
 
 

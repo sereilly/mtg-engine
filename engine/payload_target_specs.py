@@ -374,7 +374,16 @@ def _graveyard_return_spec(payload: dict) -> dict:
         # Left off, the spec fell back to its one-target default and the
         # browser offered one card for a spell paid for X of them.
         spec["x_targets"] = True
-    if spec.get("max_targets") not in (None, 1) or spec.get("x_targets"):
+    elif (payload.get("targets") or {}).get("unbounded"):
+        # "…return **any number of** target Spirit cards from your graveyard
+        # to your hand." (Iname, Life Aspect.) No maximum at all: the picker's
+        # ceiling is every legal card, the flag every other "any number of"
+        # spec carries (Drafna's Restoration's, one builder down).
+        spec["unbounded_targets"] = True
+    if (
+        spec.get("max_targets") not in (None, 1) or spec.get("x_targets")
+        or spec.get("unbounded_targets")
+    ):
         # CR 115.3, the same derivation ``_from_targets_payload`` makes for a
         # permanent and for the same reason: "**two** target creature cards"
         # (Victimize) is one printed instance of the word made plural, so no
