@@ -178,6 +178,28 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
             }
             for mode in req.mode_choices
         ]
+    # Splice onto Arcane (CR 702.47): each spliced card by its hand position,
+    # with its own targets, forwarded as the plain dicts
+    # ``splice.announce_splices`` reads. A stale id is the 404 a cast's own
+    # is; the engine judges everything else (quality, once each, CR 702.47b's
+    # targets) before anything is paid.
+    splice_cards = None
+    if getattr(req, "splice_cards", None):
+        splice_cards = []
+        for choice in req.splice_cards:
+            ids = list(choice.permanent_ids) if choice.permanent_ids else (
+                [choice.permanent_id] if choice.permanent_id is not None else None
+            )
+            for permanent_id in ids or ():
+                if game.find_permanent_by_id(permanent_id) is None:
+                    raise HTTPException(status_code=404, detail=_GONE)
+            splice_cards.append({
+                "hand_index": choice.hand_index,
+                "target_player_index": choice.target_seat,
+                "target_permanent_ids": ids,
+                "target_graveyard_indices": choice.graveyard_indices,
+                "target_stack_index": _engine_stack_index(choice.target_stack_index),
+            })
     # The cast's target in the engine's zone keywords (`wire_target_keywords`):
     # its ids — the list, the one, or a cast's ``permanent_id`` (which names
     # its target) — else the old slot fields, read in the zone the spell names
@@ -300,6 +322,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         target_stack_index=engine_stack_index,
         mode_index=req.mode_index,
         mode_choices=mode_choices,
+        splice_cards=splice_cards,
         old_color=req.old_color,
         divided_targets=divided,
         from_zone=req.from_zone or "hand",

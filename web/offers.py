@@ -36,6 +36,7 @@ from engine.oracle import compile_card_oracle
 from engine.oracle_types import x_spend_colors_from_text
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.text_changes import TEXT_CHANGE_MODE_KINDS, current_text_card, words_written
+from engine.splice import splice_candidates, spliced_text_card
 
 
 def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
@@ -699,3 +700,37 @@ def ability_price(game: Game, seat: int, perm: Permanent, ability) -> str | None
     if all(int(owed.get(k, 0) or 0) == int(printed.get(k, 0) or 0) for k in keys):
         return None
     return mana_cost_label(owed) if any(owed.values()) else "{0}"
+
+
+def splice_offers(game: Game, seat: int, card, hand_index: int | None) -> list | None:
+    """The cards in *seat*'s hand that may be **spliced onto** *card* — the
+    hand card at *hand_index* — as its cast announces (CR 702.47), or None
+    for a card nothing can be spliced onto.
+
+    One entry per candidate (``splice.splice_candidates``: every other card
+    in the hand printing a splice whose quality the spell has), each
+    ``{"hand_index", "name", "cost", "target_spec"}``: the candidate's place
+    in the hand (the cast's ``splice_cards[].hand_index``), its printed splice
+    cost (an additional cost, CR 601.2f), and the target spec **of the text it
+    would add, judged as this spell's** (CR 702.47c/d —
+    ``splice.spliced_text_card``: a blue host's gained Glacial Ray may target a
+    creature with protection from red). A candidate whose text has nothing to
+    target now is still listed, with an empty ``valid_targets`` where its
+    ``requires_target`` is true — the cast path refuses it (CR 702.47b), and
+    the client greys it out by the spec rather than by a second rule.
+    """
+    if hand_index is None or card.primary_type not in ("instant", "sorcery"):
+        return None
+    offered = []
+    for index, spliced, offer in splice_candidates(
+        game, seat, card, spell_hand_index=hand_index,
+    ):
+        offered.append({
+            "hand_index": index,
+            "name": spliced.name,
+            "cost": offer.cost,
+            "target_spec": game.cast_target_spec(
+                seat, spliced_text_card(card, spliced), from_zone="hand",
+            ),
+        })
+    return offered or None

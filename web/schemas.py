@@ -415,6 +415,29 @@ class ModeChoice(BaseModel):
     target_stack_index: int | None = Field(default=None, ge=0)
 
 
+class SpliceChoice(BaseModel):
+    """One card **spliced onto** the spell being cast (CR 702.47), with the
+    targets chosen for the text it adds (CR 702.47d).
+
+    ``hand_index`` names the card by its place in the caster's hand as the
+    client shows it — the spell being cast still in it, which is why the
+    spell's own place is refused (CR 702.47a: it is on the stack). The
+    hand card's ``splice_offers`` lists every card that may be named here,
+    each with its own ``target_spec``; the target fields mirror a mode's
+    (``ModeChoice``), each zone its own keyword. The list's order is the
+    order the spliced texts happen in, after the spell's own (CR 702.47b).
+    """
+
+    hand_index: int = Field(ge=0)
+    target_seat: int | None = Field(default=None, ge=0)
+    permanent_id: int | None = Field(default=None, ge=1)
+    permanent_ids: list[int] | None = Field(default=None, max_length=8)
+    # A card in a graveyard (Soulless Revival's "target creature card from
+    # your graveyard") by its place in the pile, as a cast names one.
+    graveyard_indices: list[int] | None = Field(default=None, max_length=8)
+    target_stack_index: int | None = Field(default=None, ge=0)
+
+
 class GameActionRequest(BaseModel):
     seat: int = Field(ge=0)
     action: ActionKind
@@ -914,6 +937,12 @@ class GameActionRequest(BaseModel):
     # The engine sorts them into printed order (CR 608.2c), so the order they
     # arrive in is the order the player clicked and means nothing.
     mode_choices: list[ModeChoice] | None = None
+    # Splice onto Arcane (CR 702.47): the cards revealed from the hand and
+    # spliced onto the spell this `cast` announces, in the order their texts
+    # are to happen, each with its own targets (``SpliceChoice``). Absent
+    # splices nothing. Their costs are additional costs (CR 601.2f), so the
+    # auto-tap's preview of the cast prices them with the rest.
+    splice_cards: list[SpliceChoice] | None = Field(default=None, max_length=8)
     # Yes/No answer for an optional ("you may") trigger prompt, sent with the
     # `resolve_optional_trigger` action (true = let the trigger happen).
     accept: bool | None = None
