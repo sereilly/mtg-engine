@@ -48,6 +48,36 @@ def switch_target_pt_until_eot(
     return True, "resolved"
 
 
+@effect_handler("switch_creatures_pt_until_eot")
+def switch_creatures_pt_until_eot(
+    game: "Game", instruction: OracleInstruction, context: "OracleExecutionContext"
+) -> tuple[bool, str]:
+    """"Switch each creature's power and toughness until end of turn."
+    (Mannichi, the Fevered Dream.) Every creature the printed noun phrase
+    reaches **as this resolves** (CR 611.2c: one entering later is not
+    switched), each flipped once in layer 7d (CR 613.4d) — so a creature
+    already switched this turn switches back (the 2021-03-19 ruling: an even
+    number of switches returns it), and a later pump is switched too."""
+    from ..subject_filters import subject_matches
+
+    described = instruction.payload.get("filter") or {}
+    observer = game.players.index(context.caster)
+    affected = [
+        perm for perm in game.all_permanents()
+        if perm.is_creature and subject_matches(
+            game, perm, described, observer=observer,
+            source=context.source_permanent,
+        )
+    ]
+    for perm in affected:
+        switch_pt(perm)
+    game.log.append(
+        f"{context.card.name} switched the power and toughness of "
+        f"{len(affected)} creature(s)"
+    )
+    return True, "resolved"
+
+
 @effect_handler("switch_self_pt_until_eot")
 def switch_self_pt_until_eot(
     game: "Game", instruction: OracleInstruction, context: "OracleExecutionContext"

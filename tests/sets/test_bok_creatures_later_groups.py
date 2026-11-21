@@ -115,6 +115,39 @@ def test_w1g6_forked_branch_garami_each_instance_asks_its_own_target(set_pool):
     assert "Traproot Kami" in _w1g6_names(game.players[0].graveyard)
     assert any("608.2b" in line for line in game.log), game.log
 
+
+def test_w1g6_mannichi_switches_every_creature_on_the_battlefield(set_pool):
+    """"{1}{R}: Switch each creature's power and toughness until end of
+    turn." Every creature on the battlefield as it resolves, both sides
+    (CR 611.2c): Mannichi 1/2 becomes 2/1 and Bob's Wall of Stone 0/8 becomes
+    8/0 and dies (CR 704.5f). A second activation switches back (the
+    2021-03-19 ruling), a creature arriving afterwards is not switched, and
+    cleanup ends it."""
+    lea = set_pool("LEA")
+    bok = set_pool("BOK")
+    game, (mannichi, wall) = _w1g6_table(
+        set_pool, mine=[bok["Mannichi, the Fevered Dream"]],
+        theirs=[lea["Wall of Stone"]],
+    )
+    assert game.activate_permanent_ability(0, "Mannichi, the Fevered Dream").supported
+    _w1g6_settle(game)
+    assert (mannichi.effective_power, mannichi.effective_toughness) == (2, 1)
+    assert wall not in game.controlled_by(1), game.log
+
+    late = _w1g6_put(game, 0, lea["Hurloon Minotaur"])
+    assert (late.effective_power, late.effective_toughness) == (2, 3)
+    assert game.activate_permanent_ability(0, "Mannichi, the Fevered Dream").supported
+    _w1g6_settle(game)
+    assert (mannichi.effective_power, mannichi.effective_toughness) == (1, 2)
+    assert (late.effective_power, late.effective_toughness) == (3, 2)
+    assert game.activate_permanent_ability(0, "Mannichi, the Fevered Dream").supported
+    _w1g6_settle(game)
+    assert (mannichi.effective_power, mannichi.effective_toughness) == (2, 1)
+    assert (late.effective_power, late.effective_toughness) == (2, 3)
+    game.resolve_end_step(0)
+    game.resolve_cleanup_step(0)
+    assert (mannichi.effective_power, mannichi.effective_toughness) == (1, 2)
+
 # ==== end w1g6 ======================================================
 
 
