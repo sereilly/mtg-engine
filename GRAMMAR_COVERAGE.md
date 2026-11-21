@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | CHK | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| BOK *(measured)* | 165 | 288 | 71.2% | 68.4% | 52.4% | 119 |
+| BOK *(measured)* | 165 | 288 | 72.9% | 70.1% | 54.2% | 123 |
 | **All (shipped)** | **9904** | **14799** | **89.5%** | **89.0%** | **62.0%** | **7785** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -72,9 +72,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1047 | 531 | expected a subject |  |
+| 1043 | 527 | expected a subject |  |
 | 206 | 107 | unrecognized effect verb |  |
-| 158 | 85 | unconsumed text |  |
+| 157 | 84 | unconsumed text |  |
 | 90 | 70 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -1226,6 +1226,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All Sliver creatures get +1/+0.`
 - **Blademane Baku**
   - `Whenever you cast a Spirit or Arcane spell, you may put a ki counter on this creature.`
+  - `{1}, Remove X ki counters from this creature: For each counter removed, this creature gets +2/+0 until end of turn.`
 - **Bladewing the Risen**
   - `{B}{R}: Dragon creatures get +1/+1 until end of turn.`
 - **Bladewing's Thrall**
@@ -2140,6 +2141,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}: This artifact becomes an X/X Construct artifact creature until end of turn.`
 - **Chimney Imp**
   - `When this creature dies, target opponent puts a card from their hand on top of their library.`
+- **Chisei, Heart of Oceans**
+  - `At the beginning of your upkeep, sacrifice Chisei unless you remove a counter from a permanent you control.`
 - **Chittering Rats**
   - `When this creature enters, target opponent puts a card from their hand on top of their library.`
 - **Chlorophant**
@@ -11094,8 +11097,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice an artifact: Draw a card.`
 - **Sailmonger**
   - `{2}: Target creature gains flying until end of turn. Any player may activate this ability.`
+- **Sakiko, Mother of Summer**
+  - `Whenever a creature you control deals combat damage to a player, add that much {G}. Until end of turn, you don't lose this mana as steps and phases end.`
 - **Sakura-Tribe Elder**
   - `Sacrifice this creature: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.`
+- **Sakura-Tribe Springcaller**
+  - `At the beginning of your upkeep, add {G}. Until end of turn, you don't lose this mana as steps and phases end.`
 - **Salt Flats**
   - `{T}: Add {C}.`
   - `{T}: Add {W} or {B}. This land deals 1 damage to you.`
@@ -11788,6 +11795,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Shizo, Death's Storehouse**
   - `{T}: Add {B}.`
   - `{B}, {T}: Target legendary creature gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
+- **Shizuko, Caller of Autumn**
+  - `At the beginning of each player's upkeep, that player adds {G}{G}{G}. Until end of turn, they don't lose this mana as steps and phases end.`
 - **Shock**
   - `Shock deals 2 damage to any target.`
   - `Shock deals 2 damage to any target.`
