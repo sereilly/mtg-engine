@@ -111,6 +111,59 @@ def bushido_triggers(keyword_line: str) -> tuple[ParsedTriggeredAbility, ...]:
     )
 
 
+#: "Fumiko the Lowblood has bushido X, where X is the number of attacking
+#: creatures." — a card granting itself bushido with a counted N, once the
+#: short self-reference is written out (``engine/self_reference.py``) and the
+#: reminder text is stripped. The subject is the card's own name or "this
+#: creature"; the count clause is the grammar's to read.
+_BUSHIDO_X_LINE = re.compile(
+    r"^(?P<subject>.+?) has bushido x, where x is (?P<count>.+?)\.?$",
+    re.IGNORECASE,
+)
+
+_REMINDER = re.compile(r"\([^)]*\)")
+
+
+def expand_bushido_x_line(line: str, card_name: str | None) -> str | None:
+    """CR 702.45a's sentence for a card that has "bushido X, where X is …",
+    or None for any other line.
+
+    CR 702.45a defines "Bushido N" as "Whenever this creature blocks or
+    becomes blocked, it gets +N/+N until end of turn", so bushido X is that
+    sentence with X — and X is counted as the ability resolves (Fumiko's
+    2005-02-01 ruling: "The bushido bonus is calculated each time Fumiko's
+    bushido trigger resolves, based on the number of attackers at that
+    time"), which is how the grammar reads a pump's "where X is" clause.
+    The sentence is Chub Toad's with a counted X, so the block dispatchers,
+    the pump handler and the AI's blocked-pump reading meet a known ability;
+    a count the grammar cannot read refuses the rewritten line, naming it.
+    """
+    stripped = " ".join(_REMINDER.sub("", line or "").split()).strip()
+    match = _BUSHIDO_X_LINE.match(stripped)
+    if match is None:
+        return None
+    subject = match.group("subject").strip().lower()
+    if subject != "this creature" and (
+        card_name is None or subject != card_name.strip().lower()
+    ):
+        return None
+    return (
+        f"{_CONDITION_TEXT[0].upper()}{_CONDITION_TEXT[1:]}, it gets +X/+X "
+        f"until end of turn, where X is {match.group('count')}."
+    )
+
+
+def expand_bushido_x_lines(oracle_text: str, card_name: str | None) -> str:
+    """*oracle_text* with every "has bushido X, where X is …" self-grant
+    rewritten to its rules text; text without one is returned unchanged."""
+    if not oracle_text or "bushido x" not in oracle_text.lower():
+        return oracle_text
+    return "\n".join(
+        expand_bushido_x_line(line, card_name) or line
+        for line in oracle_text.split("\n")
+    )
+
+
 def bushido_points(card) -> int:
     """How many points of bushido *card* has: the N of every instance its
     keyword lines state, summed (Takeno, Samurai General's "for each point of
@@ -156,4 +209,6 @@ __all__ = [
     "bushido_amounts",
     "bushido_points",
     "bushido_triggers",
+    "expand_bushido_x_line",
+    "expand_bushido_x_lines",
 ]

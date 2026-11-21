@@ -11,6 +11,8 @@ kg3) is imported for type checking only.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -102,10 +104,51 @@ def _stripped(value: object) -> object:
     return value
 
 
-#: The filter keys whose value is a ``{op, value}`` bound. All three, because
-#: emitting one and resolving another is how a restriction vanishes silently —
-#: the argument ``object_filter_payload`` already makes about emitting them.
-_BOUND_KEYS = ("mana_value", "power", "toughness")
+#: The filter keys whose value is a ``{op, value}`` bound. All of them,
+#: because emitting one and resolving another is how a restriction vanishes
+#: silently — the argument ``object_filter_payload`` already makes about
+#: emitting them. ``graveyard_mana_value`` is a graveyard card's spelling of
+#: the first ("Return target creature card with mana value **X** or less from
+#: your graveyard", Stir the Grave).
+_BOUND_KEYS = ("mana_value", "power", "toughness", "graveyard_mana_value")
+
+
+#: The X the announcement being judged supplies (CR 601.2b, 602.2b), for the
+#: readers below the gates that never see the number: the target enumeration
+#: (``legality_enumeration._enumerate_targets``) and an ability's own target
+#: test (``_ability_target_legal``), asked by the picker, the announcement
+#: gates and the CR 608.2b re-check alike. Set only by :func:`announcing_x`,
+#: around a gate that knows the X — the activation gate, the cast gates, a
+#: resolution's re-check — and None everywhere else, where a bound the
+#: announcement supplies is **stripped** (:func:`without_x_bounds`): the
+#: picker's list is then a hint the gate re-asks with the number, the
+#: arrangement Dominate's cast arm already has. A context variable rather
+#: than a ``Game`` field so no ``vars()`` walker (``position_digest``, the
+#: censuses' board signatures) ever reads it.
+_ANNOUNCED_X: ContextVar = ContextVar("announced_x", default=None)
+
+
+@contextmanager
+def announcing_x(x_value: "int | None"):
+    """Judge targets inside the block against *x_value*, the X announced
+    (None: not announced — every X bound is stripped)."""
+    token = _ANNOUNCED_X.set(None if x_value is None else max(0, int(x_value)))
+    try:
+        yield
+    finally:
+        _ANNOUNCED_X.reset(token)
+
+
+def announced_x_bounds(payload: dict) -> dict:
+    """*payload* with every X bound resolved to the X :func:`announcing_x`
+    put in force, or stripped where none is — *payload* itself when it
+    carries no X bound."""
+    if not _carries_x_bound(payload):
+        return payload
+    x_value = _ANNOUNCED_X.get()
+    if x_value is None:
+        return _stripped(payload)
+    return _substituted(payload, x_value)
 
 
 def _carries_x_bound(value: object) -> bool:

@@ -197,6 +197,15 @@ class LordBuffsMixin:
             target_perm.metadata.get("plus_counters", 0)
         ) <= 0:
             return False
+        # "Each permanent with a **divinity** counter on it has
+        # indestructible." (That Which Was Taken.) The named-counter store
+        # the filter payload's ``with_named_counter`` key asks
+        # (``handlers/_filters``), so the two readers of one phrase agree.
+        if filt.with_named_counter:
+            from ..named_counters import counters_held
+
+            if counters_held(target_perm, str(filt.with_named_counter)) <= 0:
+                return False
         # "Creatures named Kobolds of Kher Keep" (Rohgahh of Kher Keep). By
         # *name*, never identity — a second copy and a token wearing the name
         # both match, and the buffing lord matches itself when it shares it

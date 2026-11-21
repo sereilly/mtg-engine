@@ -357,6 +357,13 @@ class LordBuffFilter:
     # would pump every creature on the board.
     shares_color_with_attached_host: bool = False
     shares_creature_type_with_attached_host: bool = False
+    # "Each permanent **with a divinity counter on it** has indestructible."
+    # (That Which Was Taken.) ``with_plus1_counter``'s twin over CR 122.1's
+    # open kind space, asked of ``named_counters``' store — the same reader
+    # the filter payload's ``with_named_counter`` key asks — so the set is
+    # re-derived on every read: a counter removed takes the permanent out of
+    # the grant at once (CR 611.3a), and one placed brings it in.
+    with_named_counter: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1127,6 +1134,10 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["shares_color_with_attached_host"] = True
     if buff.filter.shares_creature_type_with_attached_host:
         payload["shares_creature_type_with_attached_host"] = True
+    # Emitted only when printed, for the byte-identical reason above; spelled
+    # as the filter payload's own key for the same restriction.
+    if buff.filter.with_named_counter:
+        payload["with_named_counter"] = buff.filter.with_named_counter
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -1180,6 +1191,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             shares_creature_type_with_attached_host=bool(
                 payload.get("shares_creature_type_with_attached_host")
             ),
+            with_named_counter=payload.get("with_named_counter"),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

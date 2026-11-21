@@ -923,6 +923,34 @@ def _lower_switch_pt(node: ast.SwitchPT) -> tuple[OracleInstruction, ...]:
     payload: dict[str, object] = {}
     if _is_source(node.subject):
         return (OracleInstruction("switch_self_pt_until_eot", "", payload),)
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("all", "each")
+        and not node.subject.targeted
+    ):
+        # "{1}{R}: Switch **each creature's** power and toughness until end of
+        # turn." (Mannichi, the Fevered Dream.) The set CR 611.2c fixes as the
+        # effect begins — the creatures on the battlefield as it resolves —
+        # each given the 7d flag the targeted switch sets. The noun phrase
+        # travels whole and the handler asks ``subject_matches`` of every
+        # permanent, so a narrowing it cannot test refuses here rather than
+        # widening the sweep to every creature.
+        described = _filter_payload(node.subject.filter)
+        if node.subject.filter.card_types != ("creature",):
+            raise LoweringError(
+                "a power/toughness switch is over creatures", node=node
+            )
+        untestable = untestable_filter_keys(described)
+        if untestable:
+            raise LoweringError(
+                "the switch sweep cannot test: " + ", ".join(sorted(untestable)),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "switch_creatures_pt_until_eot", "", {"filter": described}
+            ),
+        )
     if not _is_target(node.subject):
         raise LoweringError(
             "no handler switches the power and toughness of this subject", node=node

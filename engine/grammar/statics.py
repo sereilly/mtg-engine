@@ -113,6 +113,10 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         shares_creature_type_with_attached_host=(
             filt.shares_creature_type_with == "attached_host"
         ),
+        # "Each permanent **with a divinity counter on it** has
+        # indestructible." (That Which Was Taken.) Carried for the round
+        # trip's reason, like ``with_plus1_counter`` beside it.
+        with_named_counter=filt.with_named_counter,
     )
 
 
@@ -139,6 +143,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "shares_creature_type_with": (
             "attached_host" if lord.shares_creature_type_with_attached_host else None
         ),
+        "with_named_counter": lord.with_named_counter,
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]

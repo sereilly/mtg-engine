@@ -203,6 +203,12 @@ def _protection_quality_word(kind: str, value: str) -> str:
         # narrowed to spells, spelled as printed. Falling through to the rule
         # below would badge it "instants", which is a wider protection.
         return f"{value} spells"
+    if kind == "typed_except":
+        # "protection from **non-Spirit creatures**" (Harbinger of Spring):
+        # the excluded type in front, as printed. Falling through would badge
+        # it "creature spirits", a protection the card never names.
+        card_type, excluded = value.split()
+        return f"non-{excluded.capitalize()} {card_type}s"
     # A card type or a creature subtype: printed plural, stored singular. The
     # supertyped form ("legendary creature", Tsabo Tavoc) ends in that same
     # noun, so the one rule spells it too — "legendary creatures".

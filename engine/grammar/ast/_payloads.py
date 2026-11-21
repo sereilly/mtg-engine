@@ -415,13 +415,23 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # tests it against the layer-computed stat; a variable bound stays
     # unemitted. Both stats, because emitting one and dropping the other
     # would let a toughness restriction vanish silently.
-    if self.power is not None and isinstance(self.power.value, Fixed):
-        payload["power"] = {"op": self.power.op, "value": self.power.value.value}
-    if self.toughness is not None and isinstance(self.toughness.value, Fixed):
-        payload["toughness"] = {
-            "op": self.toughness.op,
-            "value": self.toughness.value.value,
-        }
+    #
+    # "Target creature with power **X** or less" (Minamo Sightbender) rides
+    # the payload as ``X_BOUND``, mana_value's spelling for a bound the
+    # announcement supplies: substituted at the dispatch point and by the
+    # gates that know the announced X, stripped by a picker that does not.
+    # Only an X — any other variable keeps the key unemitted, so
+    # ``dropped_narrowings`` refuses the line rather than mis-read it.
+    from ._core import Var
+
+    for stat in ("power", "toughness"):
+        bound = getattr(self, stat)
+        if bound is None:
+            continue
+        if isinstance(bound.value, Fixed):
+            payload[stat] = {"op": bound.op, "value": bound.value.value}
+        elif isinstance(bound.value, Var) and bound.value.name == "x":
+            payload[stat] = {"op": bound.op, "value": X_BOUND}
     # "…with power equal to or greater than the enchanted creature's
     # toughness" (Ironclaw Curse). Always emitted when set — there is no
     # "literal only" half to fall back to, and a set field with no key is

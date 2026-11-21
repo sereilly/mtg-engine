@@ -24,6 +24,7 @@ import re
 
 from .oracle_types import strip_ability_word
 from .affinity import expand_affinity_lines
+from .bushido import expand_bushido_x_lines
 from .cycling import expand_cycling_lines
 from .flashback import expand_flashback_lines
 from .equipment import expand_equip_lines
@@ -308,6 +309,13 @@ def expand_ability_lines(
     # trigger returning a Spirit card (``engine/soulshift.py``). Read by none
     # of the rewrites around it.
     oracle_text = expand_soulshift_lines(oracle_text)
+    # CR 702.45a's, for a card granting *itself* bushido with a counted N
+    # ("Fumiko the Lowblood has bushido X, where X is the number of
+    # attacking creatures"): the rule's own sentence with that X, which the
+    # grammar reads as Chub Toad's pump with a where-X count
+    # (``engine/bushido.py``). Needs the card's name, written out in full by
+    # the self-reference rewrite above; read by none of the rewrites around it.
+    oracle_text = expand_bushido_x_lines(oracle_text, card_name)
     # CR 702.44a's, modular's shape with one line out: a sunburst keyword line
     # becomes the rule's own entry replacement, both of its sentences on one
     # line because the second is the first one's "otherwise"

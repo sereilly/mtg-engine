@@ -190,6 +190,13 @@ def _protection_quality_name(stream: TokenStream) -> str | None:
         "each", "of", "the", "exiled", "card", "'s", "card", "types"
     ):
         return "protection from each of the exiled card's card types"
+    # "…from **each color among permanents you control**" (Empty-Shrine
+    # Kannushi). CR 702.16i over the holder's controller's board, read whole
+    # before "each color" would stop two words in.
+    if stream.accept_phrase(
+        "each", "color", "among", "permanents", "you", "control"
+    ):
+        return "protection from each color among permanents you control"
     if stream.accept_phrase("each", "color"):
         return "protection from each color"
     colour = stream.peek_word()

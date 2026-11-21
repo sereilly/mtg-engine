@@ -153,6 +153,9 @@ PUMP_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # switch that could gate half of layer 7 off without the rest.
     "switch_target_pt_until_eot": "pump",
     "switch_self_pt_until_eot": "pump",
+    # "Switch each creature's power and toughness until end of turn."
+    # (Mannichi, the Fevered Dream.) The sweep twin of the two above.
+    "switch_creatures_pt_until_eot": "pump",
     # "…can attack this turn as though it didn't have defender" (Wall of
     # Wonder). CR 609.4 — a permission, not a characteristic change, but it is
     # printed as the tail of the same sentence as the pump and a category of

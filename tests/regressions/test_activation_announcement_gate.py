@@ -46,7 +46,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.shields import shields_on
 from engine.targeting import (
-    activation_target_slot, derive_activation_spec,
+    activation_target_slot, derive_activation_spec, target_x_bound,
     targets_mana_value_x, usable_activated_abilities,
 )
 from engine.target_roles import ROLES_TARGET_KIND
@@ -180,6 +180,24 @@ def _gate(game, source, ability, **named):
         chosen = game.permanent_by_id(named_ids[0]) if named_ids else None
         if chosen is not None:
             x_value = int(getattr(chosen.card, "cmc", 0) or 0)
+    # "Target creature with **power X or less**" (Minamo Sightbender), "...with
+    # **mana value X or less**" (Quillmane Baku): the same pair, the bound
+    # rather than the value -- the picker offers every creature (it lists
+    # before X exists) and the announcement names an X that admits the
+    # target, its own statistic. A smaller X is the gate's refusal, driven in
+    # tests/sets/test_bok_creatures_later_groups.py.
+    bound = target_x_bound([ability.instruction])
+    if bound is not None:
+        named_ids = [
+            pid for pid in named.get("target_permanent_ids") or () if isinstance(pid, int)
+        ]
+        chosen = game.permanent_by_id(named_ids[0]) if named_ids else None
+        if chosen is not None:
+            x_value = {
+                "power": chosen.effective_power,
+                "toughness": chosen.effective_toughness,
+            }.get(bound["stat"], int(getattr(chosen.card, "cmc", 0) or 0))
+            x_value = max(1, int(x_value))
     return game.activation_target_refusal(0, source, ability, x_value=x_value, **named)
 
 

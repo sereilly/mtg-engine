@@ -92,10 +92,50 @@ def graveyard_return_order(game, seat: int, options, destination: str) -> list:
     return sorted(options, key=key)
 
 
+def graveyard_slots_named_on_stack(game, seat: int) -> set:
+    """``{(pile's seat, slot)}`` — the graveyard cards a waiting stack object
+    *seat* controls has already named, located now through its stamps
+    (``Game.chosen_graveyard_index``).
+
+    For the second of two returns announced together: "Soulshift 4,
+    soulshift 4" (Forked-Branch Garami, CR 702.46b), two soulshift creatures
+    dying to one Wrath. Each chooses its own target (CR 603.3d), and naming
+    the card the first already returns makes the second do nothing once the
+    first has resolved (CR 608.2b) — the ruling allows it, and it is never
+    worth more than the card beside it."""
+    named: set = set()
+    for item in getattr(game, "stack", ()) or ():
+        if getattr(item, "caster_index", None) != seat:
+            continue
+        stamps = getattr(item, "target_graveyard_card", None)
+        if not stamps:
+            continue
+        slots = game.chosen_graveyard_index(stamps, None)
+        for stamp, slot in zip(stamps, slots if isinstance(slots, list) else [slots]):
+            if isinstance(slot, int):
+                named.add((stamp.seat, slot))
+    return named
+
+
 def best_graveyard_return(game, seat: int, options, destination: str) -> "dict | None":
     """The first of :func:`graveyard_return_order` — or None when no option's
-    card can arrive at *destination* (the return would do nothing)."""
+    card can arrive at *destination* (the return would do nothing).
+
+    A card another of *seat*'s waiting returns already names
+    (:func:`graveyard_slots_named_on_stack`) is ranked last: the second
+    return would find it gone."""
     ranked = graveyard_return_order(game, seat, options, destination)
+    named = graveyard_slots_named_on_stack(game, seat)
+    if named:
+        def _behind(option) -> tuple:
+            card = _option_card(game, option)
+            slot = (option.get("seat"), option.get("index", option.get("graveyard_index")))
+            return (
+                card is None or not can_be_returned_to(card, destination),
+                slot in named,
+            )
+
+        ranked = sorted(ranked, key=_behind)
     if not ranked:
         return None
     card = _option_card(game, ranked[0])

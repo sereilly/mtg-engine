@@ -267,12 +267,18 @@ def _describe_targets(
     the instruction beside it accepts.
 
     *announced_x_bound* is a lowering's claim that every announcement-time
-    reader of its kind resolves an X bound: the cast gate
-    (``cast_target_validation._validate_cast_targets``) substitutes the announced X before any
-    arm reads the description and the picker probes without it, and the
-    handler re-asks it through the dispatcher's substitution (CR 601.2b, then
-    601.2c, then 608.2b). Only a lowering whose handler re-checks its own
-    description at resolution may make it.
+    reader of its kind resolves an X bound: the gates that know the X (the
+    activation gate, the cast's per-mode target gates, the resolution's
+    CR 608.2b re-check) put it in force (``oracle_types.announcing_x``), the
+    enumeration and ``_ability_target_legal`` read the description through
+    ``announced_x_bounds`` (stripped where no X is in force: the picker's
+    hint), Dominate's cast arm substitutes it itself
+    (``cast_target_validation._validate_cast_targets``), and the handler
+    re-asks it through the dispatcher's substitution (CR 601.2b, then 601.2c,
+    then 608.2b). Only a lowering whose handler re-checks its own description
+    at resolution, on an ability that announces an X (a spell or an activated
+    ability, never a trigger), may make it: Dominate's steal, Minamo
+    Sightbender's unblockable grant, Quillmane Baku's bounce.
     """
     described = _targets_payload(recipient, carried_separately=carried_separately)
     if described is not None:
@@ -286,11 +292,10 @@ def _describe_targets(
         # bound is still the string. Read there it would compare an int against
         # "x"; dropped it would offer every mana value.
         #
-        # So a targeted phrase carrying one refuses, exactly as it did before
-        # the bound had any payload form at all, while the sweep that has no
-        # picker (Meltdown, Ugin) is read. No card in either manifest role
-        # prints the targeted shape; this is the boundary that keeps it that
-        # way rather than a refusal anybody is waiting on.
+        # So a targeted phrase carrying one refuses unless its lowering claims
+        # *announced_x_bound* (above), while the sweep that has no picker
+        # (Meltdown, Ugin) is read: a kind whose handler does not re-ask the
+        # description would be handed a bound nothing re-checks.
         if _carries_x_bound(described):
             raise LoweringError(
                 "a target picker cannot read a bound the announcement supplies",

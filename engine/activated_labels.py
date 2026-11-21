@@ -646,6 +646,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # ``switch_self_pt_until_eot`` directly above is the same act on its own
     # source and reads `activated_pump`, for the reason that entry states.
     "switch_target_pt_until_eot": "activated_pump",
+    # Mannichi, the Fevered Dream switches every creature's: the same act over
+    # a described set, and how many permanents is not the question (the
+    # ``untap_all_matching`` reasoning above).
+    "switch_creatures_pt_until_eot": "activated_pump",
     # --- Tempest, at its promotion ------------------------------------------
     # Seven kinds whose label was falling through to ``activated_{grammar
     # family}``, every one surfaced the moment `load_catalog()` widened. All

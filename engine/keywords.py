@@ -304,6 +304,23 @@ def protection_quality(word: str) -> tuple[str, str] | None:
         if noun is None or noun[0] not in ("card_type", "subtype"):
             return None
         return ("typed", " ".join(sorted(set(words[:-1])) + [noun[1]]))
+    # "Protection from **non-Spirit creatures**" (Harbinger of Spring). A card
+    # type with a creature type taken out — CR 702.16a's card-type quality
+    # (every source of that type, on the battlefield or not) narrowed by an
+    # excluded subtype, so ``("typed_except", "creature spirit")``: the source
+    # must be a creature and must not be a Spirit. One quality, for
+    # ``typed``'s reason: read as protection from creatures it would shield
+    # against the very Spirits the card exempts.
+    if len(words) == 2 and words[0].startswith("non"):
+        excluded = words[0][3:].lstrip("-")
+        noun = protection_quality(words[1])
+        excluded_quality = protection_quality(excluded) if excluded else None
+        if (
+            noun is not None and noun[0] == "card_type"
+            and excluded_quality is not None and excluded_quality[0] == "subtype"
+        ):
+            return ("typed_except", f"{noun[1]} {excluded_quality[1]}")
+        return None
 
     # The grammar's one singularizer, which rebuilds each stem ("-s", "-es",
     # "-ies", the "-ves" of Elves and Wolves) only when the catalog knows it.
@@ -355,11 +372,22 @@ EACH_OF_ITS_COLORS = "each of its colors"
 #: and none while nothing is exiled with the holder.
 EACH_OF_THE_EXILED_CARDS_CARD_TYPES = "each of the exiled card's card types"
 
+#: "This creature has protection from **each color among permanents you
+#: control**." (Empty-Shrine Kannushi.) CR 702.16i's shorthand over a set read
+#: off the *holder's controller's* board (CR 109.5) — one protection ability
+#: per colour among those permanents, the holder itself among them — so, like
+#: "each of its colors", the answer depends on who is asked and is read now.
+#: Pledge of Loyalty prints the same set on an Aura
+#: (``aura_grants.AMONG_CONTROLLED_PROTECTION_COLORS``, read off the Aura's
+#: controller); this is the holder's own static.
+EACH_COLOR_AMONG_PERMANENTS_YOU_CONTROL = "each color among permanents you control"
+
 _WUBRG = ("W", "U", "B", "R", "G")
 
 
 def protection_qualities_named(
     word: str, *, holder_colors=None, exiled_card_types=None,
+    controlled_colors=None,
 ) -> tuple[tuple[str, str], ...] | None:
     """Every quality one member of a protection clause names — or **None**
     when it names nothing a shield answers to.
@@ -379,6 +407,10 @@ def protection_qualities_named(
     (Mirror Golem): the card types of the cards the holder's imprint exiled,
     which only the reader holding the permanent can ask
     (``mixins/protection._protection_qualities``).
+
+    *controlled_colors* is the same for "each color among permanents you
+    control" (Empty-Shrine Kannushi): the layer-5 colours among the
+    permanents the holder's controller controls.
     """
     text = " ".join((word or "").strip().lower().split())
     if text == EACH_COLOR:
@@ -386,6 +418,9 @@ def protection_qualities_named(
     if text == EACH_OF_ITS_COLORS:
         held = set(holder_colors or ())
         return tuple(("color", symbol) for symbol in _WUBRG if symbol in held)
+    if text == EACH_COLOR_AMONG_PERMANENTS_YOU_CONTROL:
+        among = set(controlled_colors or ())
+        return tuple(("color", symbol) for symbol in _WUBRG if symbol in among)
     if text == EACH_OF_THE_EXILED_CARDS_CARD_TYPES:
         return tuple(
             ("card_type", card_type) for card_type in sorted(set(exiled_card_types or ()))
