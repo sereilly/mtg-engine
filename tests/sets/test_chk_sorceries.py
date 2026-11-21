@@ -794,3 +794,123 @@ def test_w1g9_feast_of_worms_takes_a_second_land_only_for_a_legendary_one(set_po
     assert _w1g9_names(game, 1) == ["Shizo, Death's Storehouse", "Swamp"]
 
 # ==== end w1g9 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+from engine import Game as _W2G4Game, PlayerState as _W2G4PlayerState
+from tests.helpers import settle as _w2g4_settle
+
+
+def _w2g4_struggle_table(set_pool, *, interactive=()):
+    """Alice holds Struggle for Sanity; Bob's hand is Shivan Dragon, Lightning
+    Bolt, Forest, Grizzly Bears, Giant Growth."""
+    lea, chk = set_pool("LEA"), set_pool("CHK")
+    game = _W2G4Game(players=[
+        _W2G4PlayerState(name="Alice", hand=[chk["Struggle for Sanity"]],
+                         library=[lea["Island"]] * 10),
+        _W2G4PlayerState(name="Bob", hand=[
+            lea[name] for name in (
+                "Shivan Dragon", "Lightning Bolt", "Forest", "Grizzly Bears", "Giant Growth",
+            )
+        ], library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    _w2g4_settle(game)
+    return game
+
+
+def _w2g4_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w2g4_struggle_for_sanity_alternates_and_splits_by_chooser(set_pool):
+    """"Target opponent reveals their hand. That player exiles a card from it,
+    then you exile a card from it. Repeat this process until all cards in that
+    hand have been exiled. That player returns the cards they exiled this way
+    to their hand and puts the rest into their graveyard." Both seats
+    interactive and answering: Bob picks first, the picks alternate until the
+    hand is empty (five cards: Bob three, Alice two), and the spell stays on
+    the stack until the last pick (CR 608.2). Bob's three come back to his
+    hand; Alice's two go to his graveyard."""
+    game = _w2g4_struggle_table(set_pool, interactive=(0, 1))
+    alice, bob = game.players
+    assert game.cast_from_hand(0, "Struggle for Sanity", target_player_index=1).supported
+    picks = []
+    plan = {1: ["Forest", "Giant Growth", "Grizzly Bears"], 0: ["Shivan Dragon", "Lightning Bolt"]}
+
+    def answer(game, choice):
+        hand = game.players[choice.data["victim_index"]].hand
+        assert choice.data["victim_index"] == 1
+        assert sorted(choice.data["legal_indices"]) == list(range(len(hand)))
+        name = plan[choice.player_index].pop(0)
+        picks.append((choice.player_index, name))
+        index = next(i for i, held in enumerate(hand) if held.name == name)
+        assert game.confirm_revealed_hand_pick(choice.player_index, index)
+
+    _w2g4_settle(game, answers={"revealed_hand_pick": answer})
+    assert picks == [
+        (1, "Forest"), (0, "Shivan Dragon"), (1, "Giant Growth"),
+        (0, "Lightning Bolt"), (1, "Grizzly Bears"),
+    ]
+    assert sorted(_w2g4_names(bob.hand)) == ["Forest", "Giant Growth", "Grizzly Bears"]
+    assert sorted(_w2g4_names(bob.graveyard)) == ["Lightning Bolt", "Shivan Dragon"]
+    assert bob.exile == [] and alice.exile == []
+    assert _w2g4_names(alice.graveyard) == ["Struggle for Sanity"]
+    assert "Bob reveals their hand: Shivan Dragon, Lightning Bolt, Forest, Grizzly Bears, Giant Growth" in game.log
+
+
+def test_w2g4_struggle_for_sanity_waits_on_each_pick(set_pool):
+    """At a table that holds for answers, the first pick owed is Bob's — the
+    revealer's — and nothing has moved to a graveyard yet: the split waits
+    for the loop (CR 608.2)."""
+    game = _w2g4_struggle_table(set_pool, interactive=(0, 1))
+    _alice, bob = game.players
+    assert game.cast_from_hand(0, "Struggle for Sanity", target_player_index=1).supported
+    owed = _w2g4_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "revealed_hand_pick"
+    assert owed.player_index == 1 and owed.data["victim_index"] == 1
+    assert bob.graveyard == [] and len(bob.hand) == 5
+    # The spell is held on the stack while it waits (CR 608.2, 117.3b).
+    assert [item.card.name for item in game.stack] == ["Struggle for Sanity"]
+
+
+def test_w2g4_struggle_for_sanity_by_default_and_on_an_empty_hand(set_pool):
+    """Seats nobody asks take the revealed-hand pick's stated default (the
+    costliest card): Bob keeps the Dragon, Alice bins the Bears, and so on —
+    Bob's three back in hand, Alice's two in his graveyard. An empty hand is
+    revealed and nothing is picked."""
+    game = _w2g4_struggle_table(set_pool)
+    _alice, bob = game.players
+    assert game.cast_from_hand(0, "Struggle for Sanity", target_player_index=1).supported
+    _w2g4_settle(game)
+    assert len(bob.hand) == 3 and len(bob.graveyard) == 2 and bob.exile == []
+    assert "Shivan Dragon" in _w2g4_names(bob.hand)
+    assert "Grizzly Bears" in _w2g4_names(bob.graveyard)
+
+    empty = _w2g4_struggle_table(set_pool)
+    empty.players[1].hand.clear()
+    assert empty.cast_from_hand(0, "Struggle for Sanity", target_player_index=1).supported
+    _w2g4_settle(empty)
+    assert "Bob reveals their hand: (empty)" in empty.log
+    assert empty.players[1].graveyard == []
+
+
+def test_w2g4_struggle_for_sanity_targets_an_opponent_only(set_pool):
+    """"Target opponent": the cast picker offers Bob and not Alice, and a cast
+    at Alice is refused."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    struggle = set_pool("CHK")["Struggle for Sanity"]
+    assert derive_cast_spec(struggle, compile_card_oracle(struggle)) == {
+        "kind": "player", "opponents_only": True,
+    }
+    game = _w2g4_struggle_table(set_pool)
+    assert not game.cast_from_hand(0, "Struggle for Sanity", target_player_index=0).supported
+    assert len(game.players[0].hand) == 1
+
+# ==== end W2G4 ======================================================

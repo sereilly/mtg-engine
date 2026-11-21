@@ -26,6 +26,14 @@ player's, and so are the cards each one exiles.
 One reader of the printed line (:func:`exiler_play_line`) for every caller:
 the parse claim, the support gate, the coverage channel, and the two
 enforcements below.
+
+**A window.** "Each player may play lands and cast spells from among cards
+they exiled with this artifact this turn." (Uba Mask.) The same permission
+with no look (its cards are exiled face up) and bounded by the turn each card
+was exiled on, which its draw replacement stamps on the linked entry
+(:data:`EXILED_TURN_KEY`; ``replacements/opponent_library_draws.py``). "You
+can't play cards you exiled with Uba Mask on previous turns." (Ruling
+2004-12-01.)
 """
 
 from __future__ import annotations
@@ -47,10 +55,32 @@ _late = LateModules(__package__)
 #: imported by every reader.
 EXILER_KEY = "exiler_index"
 
+#: The linked entry's key naming **the turn** the card was exiled on, a
+#: ``turn_state.current_turn_stamp`` (``link_exiled_card``'s ``exiled_turn``).
+#: "Each player may play lands and cast spells from among cards they exiled
+#: with this artifact **this turn**." (Uba Mask.) "You can't play cards you
+#: exiled with Uba Mask on previous turns." (Ruling 2004-12-01.) Absent on
+#: every entry whose permission has no window (Shared Fate's).
+EXILED_TURN_KEY = "exiled_turn"
+
+#: The two windows a printed exiler permission gives, :func:`exiler_play_scope`'s
+#: answers: every card the seat ever exiled with the permanent (Shared Fate),
+#: or only those it exiled during the turn being taken (Uba Mask).
+ANY_TURN = "any_turn"
+THIS_TURN = "this_turn"
+
+_EXILER_NOUN = r"(?:artifact|creature|enchantment|land|permanent)"
+
 _EXILER_PLAY = re.compile(
-    r"^each player may look at cards they exiled with this "
-    r"(?:artifact|creature|enchantment|land|permanent), and they may play "
-    r"lands and cast spells from among those cards$"
+    rf"^each player may look at cards they exiled with this {_EXILER_NOUN}, "
+    r"and they may play lands and cast spells from among those cards$"
+)
+
+#: Uba Mask's second line. No look: the cards its first line exiles are face
+#: up (CR 406.3 lets every player see them), so there is nothing to grant.
+_EXILER_PLAY_THIS_TURN = re.compile(
+    r"^each player may play lands and cast spells from among cards they "
+    rf"exiled with this {_EXILER_NOUN} this turn$"
 )
 
 #: The claim name the support gate and ``engine/grammar/registries.py`` use
@@ -58,27 +88,59 @@ _EXILER_PLAY = re.compile(
 EXILER_PLAY_CLAIM = "exiler_play"
 
 
-def exiler_play_line(line: str) -> bool:
-    """Whether *line* is, in full, the look-and-play static above.
+def exiler_play_scope(line: str) -> str | None:
+    """Which window *line* grants — :data:`ANY_TURN` (Shared Fate's
+    look-and-play) or :data:`THIS_TURN` (Uba Mask's play) — or None when it
+    is neither, in full.
 
-    Read whole: both permissions are carried out (the look by
+    Read whole: every half is carried out (the look by
     ``linked_exile.face_down_exiled_cards``, the play by
-    ``cast_permissions.permission_for``), so a printing that dropped either
-    half, or narrowed what may be played, is a different sentence and stays
-    unclaimed.
+    ``cast_permissions.permission_for``, the window by
+    :func:`exiler_play_permission`), so a printing that dropped a half,
+    narrowed what may be played, or named another window is a different
+    sentence and stays unclaimed.
     """
-    return _EXILER_PLAY.match(" ".join((line or "").split()).lower().rstrip(".")) is not None
+    normalized = " ".join((line or "").split()).lower().rstrip(".")
+    if _EXILER_PLAY.match(normalized):
+        return ANY_TURN
+    if _EXILER_PLAY_THIS_TURN.match(normalized):
+        return THIS_TURN
+    return None
+
+
+def exiler_play_line(line: str) -> bool:
+    """Whether *line* is, in full, one of the exiler permissions above — the
+    one reader the parse claim, the support gate and the coverage channel
+    ask."""
+    return exiler_play_scope(line) is not None
+
+
+def exiler_play_scopes(permanent: "Permanent") -> frozenset:
+    """The windows *permanent*, as layers 1 and 3 leave it (CR 707.2, 612.1),
+    grants — so a copy grants over its own record, and one whose text was
+    changed or whose abilities were removed grants nothing."""
+    return frozenset(
+        scope
+        for line in (permanent.effective_card.oracle_text or "").splitlines()
+        if (scope := exiler_play_scope(line)) is not None
+    )
 
 
 def grants_to_exilers(permanent: "Permanent") -> bool:
-    """Whether *permanent*, as layers 1 and 3 leave it (CR 707.2, 612.1),
-    prints the static — so a copy of a Shared Fate grants over its own
-    record, and one whose text was changed or whose abilities were removed
-    grants nothing."""
-    return any(
-        exiler_play_line(line)
-        for line in (permanent.effective_card.oracle_text or "").splitlines()
-    )
+    """Whether *permanent* prints Shared Fate's static, the one that grants
+    the **look** at a face-down card as well as the play."""
+    return ANY_TURN in exiler_play_scopes(permanent)
+
+
+def _entry_in_window(game, entry: dict, scopes: frozenset) -> bool:
+    """Whether *entry*'s card is one *scopes* lets its exiler play now: any
+    entry under :data:`ANY_TURN`, and under :data:`THIS_TURN` only one
+    stamped with the turn being taken."""
+    if ANY_TURN in scopes:
+        return True
+    if THIS_TURN in scopes:
+        return _late.turn_state.stamped_turn_is_now(game, entry.get(EXILED_TURN_KEY))
+    return False
 
 
 def exiler_may_look(permanent: "Permanent", entry: dict, viewer_index: int) -> bool:
@@ -105,6 +167,11 @@ def exiler_play_permission(
     card in its owner's ``PlayerState.exile`` — an opponent's, for a card
     exiled off that opponent's library, named by ``zone_player_index``, the
     cross-seat spelling Grinning Totem's grant made.
+
+    Uba Mask's window is the entry's own: a card it exiled on an earlier turn
+    is still linked to it (and still exiled — "Any cards you don't play just
+    remain exiled when the turn ends", ruling 2004-12-01) but no longer
+    covered (:func:`_entry_in_window`).
     """
     CastPermission = _late.cast_permissions.CastPermission
     linked_entries = _late.linked_exile.linked_entries
@@ -114,9 +181,14 @@ def exiler_play_permission(
             entry for entry in linked_entries(permanent)
             if entry.get(EXILER_KEY) == player_index and entry.get("card") is card
         ]
-        if not entries or not grants_to_exilers(permanent):
+        if not entries:
+            continue
+        scopes = exiler_play_scopes(permanent)
+        if not scopes:
             continue
         for entry in entries:
+            if not _entry_in_window(game, entry, scopes):
+                continue
             owner = int(entry.get("owner_index", -1))
             if not 0 <= owner < len(game.players):
                 continue

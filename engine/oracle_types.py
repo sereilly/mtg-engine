@@ -280,6 +280,13 @@ REVEALED_THIS_WAY = "revealed_this_way"
 #: ``seat_record`` count.
 REVEALED_BY_SEAT = "revealed_by_seat"
 REVEALED_HAND_CARDS_BY_SEAT = "revealed_hand_cards_by_seat"
+#: "That player exiles a card from it, then you exile a card from it. … That
+#: player returns **the cards they exiled this way** to their hand and puts
+#: the rest into their graveyard." (Struggle for Sanity.) ``{chooser seat:
+#: [exiled cards]}``, written by each answered pick of the alternation (the
+#: ``exile_by_chooser`` fate, ``choices/hand._apply_revealed_hand_fate``) and
+#: read by the split at its end (``handlers/hand_reveals``).
+HAND_EXILES_BY_CHOOSER = "hand_exiles_by_chooser"
 
 # "**Each player reveals the top card of their library.** If all cards revealed
 # this way are creature cards, put those cards onto the battlefield under their

@@ -59,6 +59,8 @@ from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
                                 board_graveyard_play_line)
 from ..cost_modifiers import cost_modifier_claims_line
 from ..exiler_grants import EXILER_PLAY_CLAIM, exiler_play_line
+from ..global_text_changes import (BOARD_TEXT_CHANGE_CLAIM,
+                                   all_color_words_line)
 from ..cycling import CYCLING_BAN_CLAIM, cycling_ban_line
 from ..counted_names import CLAIM as COUNTED_NAMES_CLAIM
 from ..counted_names import counts_as_claims_line
@@ -325,6 +327,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # `cast_permissions.permission_for`), claimed through their one reader.
     if exiler_play_line(normalized):
         return EXILER_PLAY_CLAIM
+
+    # engine/global_text_changes.py — CR 612's layer-3 rewrite as a static
+    # ability over every spell and permanent: "All instances of color words in
+    # the text of spells and permanents are changed to the chosen color word."
+    # (Swirl the Mists.) Written onto each object by the board-wide pass and
+    # read by every fold of what an object says, so there is nothing to lower;
+    # claimed through the reader the writer asks.
+    if all_color_words_line(normalized):
+        return BOARD_TEXT_CHANGE_CLAIM
 
     # engine/activation_restrictions.py — the *board* half of CR 602.5:
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)

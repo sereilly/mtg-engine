@@ -35,7 +35,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Iterable
 
 from .exiled_records import live_records
-from .exiler_grants import EXILER_KEY, exiler_may_look
+from .exiler_grants import EXILED_TURN_KEY, EXILER_KEY, exiler_may_look
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import CardDefinition, Permanent
@@ -116,6 +116,7 @@ def link_exiled_card(
     tapped: bool = False,
     counters: dict[str, int] | None = None,
     attach_to_returned: bool = False,
+    exiled_turn: dict | None = None,
 ) -> dict[str, Any]:
     """Record one card as exiled with *source*, and return its entry.
 
@@ -150,6 +151,12 @@ def link_exiled_card(
     # (``engine/exiler_grants.py``), and only while it is there to.
     if exiler_index is not None:
         entry[EXILER_KEY] = int(exiler_index)
+    # "…from among cards they exiled with this artifact **this turn**." (Uba
+    # Mask.) The turn the card was exiled on, a ``turn_state``
+    # ``current_turn_stamp``: the permanent's static covers only the entries
+    # stamped with the turn being taken (``exiler_grants``).
+    if exiled_turn is not None:
+        entry[EXILED_TURN_KEY] = dict(exiled_turn)
     if tapped:
         entry["tapped"] = True
     if counters:

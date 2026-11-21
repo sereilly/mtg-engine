@@ -1081,6 +1081,26 @@ def _lower_reveal_hand_and_choose(
     return (OracleInstruction("reveal_hand_and_choose", "", payload),)
 
 
+def _lower_alternating_hand_exile(
+    node: "ast.AlternatingHandExile",
+) -> tuple[OracleInstruction, ...]:
+    """Struggle for Sanity's four sentences, one instruction: the reveal, the
+    alternating picks out of the revealed hand until it is empty, and the
+    split of what was exiled by who exiled it — one record, held by the loop
+    that made the picks (``handlers/hand_reveals.exile_hand_alternately``).
+
+    The revealer is the target the spell announces (CR 601.2c); a seat the
+    picker cannot name is refused, as Duress's is."""
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.player)
+    if "targets" not in payload:
+        raise LoweringError(
+            f"the alternating hand exile cannot name the {node.player.kind}",
+            node=node,
+        )
+    return (OracleInstruction("exile_hand_alternately", "", payload),)
+
+
 def _lower_keep_chosen_discard_rest(
     node: "ast.KeepChosenDiscardRest",
 ) -> tuple[OracleInstruction, ...]:

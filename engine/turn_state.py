@@ -400,6 +400,16 @@ def seats_next_turn_window(game, seat: int) -> dict:
     return {"seat": int(seat), "seat_turn": game.seat_turn_counts.get(seat, 0) + 1}
 
 
+def current_turn_stamp(game) -> dict:
+    """The stamp naming the turn being taken — the writer
+    :func:`stamped_turn_is_now` reads back. "…cards they exiled with this
+    artifact **this turn**" (Uba Mask) is a record written as the card is
+    exiled and asked at every later cast; the active seat and its own ordinal
+    name the turn for the reason :func:`seats_next_turn_window` gives."""
+    seat = game.active_player_index
+    return {"seat": int(seat), "seat_turn": game.seat_turn_counts.get(seat, 0)}
+
+
 def stamped_turn_is_now(game, stamp) -> bool:
     """Whether *stamp* names the turn currently being taken.
 

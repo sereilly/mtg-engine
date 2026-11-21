@@ -393,6 +393,29 @@ class RevealHandAndChoose:
 
 
 @dataclass(frozen=True)
+class AlternatingHandExile:
+    """``Target opponent reveals their hand. That player exiles a card from it,
+    then you exile a card from it. Repeat this process until all cards in that
+    hand have been exiled. That player returns the cards they exiled this way
+    to their hand and puts the rest into their graveyard.`` (Struggle for
+    Sanity.)
+
+    Four printed sentences, one node, for :class:`RevealHandAndChoose`'s
+    reason and more: they share the revealed hand, the alternation's bound is
+    that hand emptying, and the last sentence sorts the exiled cards by who
+    exiled each — a record only the loop that made the picks holds. Parsed
+    apart, the third sentence would be a loop around nothing and the fourth a
+    split of a pile no step recorded.
+
+    *player* is the revealer — the hand's owner, who picks first and gets its
+    own picks back; the caster picks second and its picks go to the owner's
+    graveyard.
+    """
+
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class RepeatedGraveyardPick:
     """Forgotten Lore's whole four-sentence effect.
 

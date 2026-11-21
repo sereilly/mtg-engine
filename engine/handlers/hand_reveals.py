@@ -28,7 +28,8 @@ import random
 from typing import TYPE_CHECKING
 
 from ..linked_exile import until_leaves_has_ended
-from ..oracle_types import REVEALED_HAND_CARDS, REVEALED_HAND_SEAT
+from ..oracle_types import (HAND_EXILES_BY_CHOOSER, REVEALED_HAND_CARDS,
+                            REVEALED_HAND_SEAT)
 # The runtime class. The bare name is a TYPE_CHECKING-only import below, and
 # the handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import OracleInstruction as _OracleInstruction
@@ -436,6 +437,109 @@ def _reveal_shown_cards_and_choose(
         lambda seat: game.arm_choose_cards_in_hand(seat, shown_payload, context),
         then=pick,
     )
+    return True, "resolved"
+
+
+#: The last item of one round of :func:`exile_hand_alternately`: where the
+#: loop asks whether the hand still holds a card. A sentinel inside the loop
+#: rather than a line after it, for ``engine/resumption.py``'s standing rule —
+#: a round that stopped for a pick would never reach a line written after it.
+_END_OF_ROUND = object()
+
+
+@effect_handler("exile_hand_alternately")
+def exile_hand_alternately(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target opponent reveals their hand. That player exiles a card from it,
+    then you exile a card from it. Repeat this process until all cards in that
+    hand have been exiled. That player returns the cards they exiled this way
+    to their hand and puts the rest into their graveyard." (Struggle for
+    Sanity.)
+
+    The reveal (CR 701.20a, through ``record_reveal`` and the log, as
+    :func:`reveal_hand` does), then rounds of two picks out of that hand —
+    the revealer's, then the caster's — each Duress's ``revealed_hand_pick``
+    prompt at the picking seat with the ``exile_by_chooser`` fate, which files
+    the exiled card under its chooser (``HAND_EXILES_BY_CHOOSER``). A round
+    ends by asking whether the hand still holds a card; the hand running out
+    after the revealer's pick asks the caster nothing. Then the split: the
+    revealer's own picks return to its hand (``put_card_into_hand``, each
+    leaving exile through ``take_card_from_exile``) and the caster's go to
+    the revealer's graveyard (CR 400.3: the owner's).
+
+    ``run_resumable`` throughout, for ``claim_exiled_cards_in_turn``'s reason:
+    an interactive seat's pick suspends the resolution, and the picks behind
+    it — and the split behind *them* — are the work still owed (CR 608.2). A
+    round in which no card left the hand ends the loop outright rather than
+    asking again: a refused answer would otherwise hand the same hand round
+    for ever.
+    """
+    card_name = getattr(context.card, "name", "an effect")
+    victim = context.target if context.target in game.players else None
+    caster_index = next(
+        (i for i, seated in enumerate(game.players) if seated is context.caster), None
+    )
+    if victim is None or caster_index is None:
+        game.log.append(f"{card_name}: no player to reveal a hand")
+        return True, "resolved"
+    victim_index = game.players.index(victim)
+    names = [held.name for held in victim.hand]
+    context.results[REVEALED_HAND_CARDS] = list(victim.hand)
+    context.results[REVEALED_HAND_SEAT] = victim_index
+    game.record_reveal(victim_index, names)
+    game.log.append(
+        f"{victim.name} reveals their hand: " + (", ".join(names) or "(empty)")
+    )
+    context.results.setdefault(HAND_EXILES_BY_CHOOSER, {})
+
+    def run_round() -> None:
+        at_round_start = len(victim.hand)
+
+        def pick(seat) -> None:
+            if seat is _END_OF_ROUND:
+                if victim.hand and len(victim.hand) < at_round_start:
+                    run_round()
+                return
+            if not victim.hand:
+                return
+            game.arm_pending_choice(
+                "revealed_hand_pick", seat,
+                card_name=card_name,
+                victim_index=victim_index,
+                legal_indices=list(range(len(victim.hand))),
+                remaining=1,
+                fate="exile_by_chooser",
+                exclude_types=[], exclude_basic_lands=False, card_types=[],
+                exclude_supertypes=[], any_colors=[],
+                record=context.results,
+                source_id=None,
+            )
+
+        run_resumable(game, [victim_index, caster_index, _END_OF_ROUND], pick)
+
+    def split() -> None:
+        exiled = context.results.get(HAND_EXILES_BY_CHOOSER) or {}
+        returned: list[str] = []
+        binned: list[str] = []
+        for seat, cards in sorted(exiled.items()):
+            for card in cards:
+                # Only a card still in its owner's exile, by identity: one an
+                # effect moved in between is no longer "a card exiled this
+                # way" (CR 400.7).
+                if not game.take_card_from_exile(victim, card):
+                    continue
+                if seat == victim_index:
+                    if game.put_card_into_hand(victim, card):
+                        returned.append(card.name)
+                else:
+                    game.put_card_into_graveyard(victim, card)
+                    binned.append(card.name)
+        game.log.append(
+            f"{victim.name} returns {', '.join(returned) or 'nothing'} to their "
+            f"hand and puts {', '.join(binned) or 'nothing'} into their "
+            f"graveyard ({card_name})"
+        )
+
+    run_resumable(game, [None], lambda _item: run_round(), then=split)
     return True, "resolved"
 
 

@@ -641,6 +641,10 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
         sacrificed_by=(
             instruction.payload.get("sacrificed_by") if action == "sacrifice" else None
         ),
+        # CR 603.7e: the card whose ability creates it, for an "if you do"
+        # run as an offer is answered, after its object left the stack
+        # (Junkyo Bell) — the mark's writer asks the stack first.
+        source=context.card,
     )
     return True, "resolved"
 

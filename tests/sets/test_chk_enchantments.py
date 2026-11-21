@@ -446,3 +446,127 @@ def test_w1g9_heartbeat_of_spring_adds_one_mana_inline_for_every_players_land(se
     assert _w1g9_pool(bob) == {"U": 2}
 
 # ==== end w1g9 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+from engine import Game as _W2G4Game, PlayerState as _W2G4PlayerState
+from engine.models import Permanent as _W2G4Permanent
+from tests.helpers import settle as _w2g4_settle
+
+
+def _w2g4_card(set_pool, name):
+    for code in ("CHK", "LEA"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w2g4_put(game, card, seat=0):
+    permanent = _W2G4Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w2g4_table(set_pool, *, hand=(), mine=(), theirs=(), opponent_hand=()):
+    card = lambda name: _w2g4_card(set_pool, name)  # noqa: E731
+    game = _W2G4Game(players=[
+        _W2G4PlayerState(name="Alice", hand=[card(n) for n in hand],
+                         library=[card("Island")] * 10),
+        _W2G4PlayerState(name="Bob", hand=[card(n) for n in opponent_hand],
+                         library=[card("Island")] * 10),
+    ])
+    game.enforce_mana_costs = False
+    placed = {
+        seat: [_w2g4_put(game, card(name), seat) for name in names]
+        for seat, names in ((0, mine), (1, theirs))
+    }
+    game.start_turn(0)
+    _w2g4_settle(game)
+    return game, placed[0], placed[1]
+
+
+def _w2g4_cast_swirl(game, set_pool, color):
+    """Alice casts Swirl the Mists as an interactive seat and answers its
+    entry choice ("choose a color word") with *color*; returns the Swirl."""
+    game.players[0].hand.append(_w2g4_card(set_pool, "Swirl the Mists"))
+    game.interactive_seats = {0}
+    assert game.queue_from_hand(0, "Swirl the Mists").supported
+    asked = []
+
+    def answer(game, choice):
+        asked.append(choice.data.get("needs_color"))
+        assert game.confirm_enter_choice(0, mana_color=color)
+
+    _w2g4_settle(game, answers={"enter_choice": answer})
+    game.interactive_seats = set()
+    assert asked == [True]
+    return next(p for p in game.controlled_by(0) if p.card.name == "Swirl the Mists")
+
+
+def test_w2g4_swirl_the_mists_rewrites_every_colour_word_on_the_board(set_pool):
+    """"All instances of color words in the text of spells and permanents are
+    changed to the chosen color word." Swirl naming red: Black Knight's
+    "protection from white" and White Knight's "protection from black" both
+    read "protection from red", so a Lightning Bolt can target neither; once
+    Swirl leaves, "It ends as soon as Swirl the Mists leaves the battlefield"
+    (ruling 2004-12-01) and the Bolt kills the Black Knight."""
+    game, (black_knight, white_knight), _ = _w2g4_table(
+        set_pool, mine=["Black Knight", "White Knight"],
+        opponent_hand=["Lightning Bolt", "Lightning Bolt"],
+    )
+    swirl = _w2g4_cast_swirl(game, set_pool, "R")
+    for knight in (black_knight, white_knight):
+        assert "Protection from red" in knight.effective_card.oracle_text
+        assert not game.cast_from_hand(
+            1, "Lightning Bolt", target_permanent_ids=[knight.permanent_id],
+        ).supported
+    game.sacrifice_permanent(swirl)
+    _w2g4_settle(game)
+    assert "Protection from white" in black_knight.effective_card.oracle_text
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[black_knight.permanent_id],
+    ).supported
+    _w2g4_settle(game)
+    assert not game.is_on_battlefield(black_knight)
+    assert game.is_on_battlefield(white_knight)
+
+
+def test_w2g4_swirl_the_mists_reaches_spells_cast_and_permanents_entering_after_it(set_pool):
+    """"Swirl the Mists' ability also affects spells that are cast and
+    permanents that enter after Swirl the Mists enters." (Ruling 2004-12-01.)
+    Under a red Swirl a Terror on the stack reads "nonartifact, nonred", so
+    one aimed at a Shivan Dragon has an illegal target as it resolves
+    (CR 608.2b) and the Dragon lives; a Black Knight put onto the battlefield
+    afterwards has protection from red as it arrives."""
+    from engine.text_changes import spell_text_card
+
+    game, _mine, (dragon,) = _w2g4_table(set_pool, hand=["Terror"], theirs=["Shivan Dragon"])
+    _w2g4_cast_swirl(game, set_pool, "R")
+    assert game.queue_from_hand(0, "Terror", target_permanent_ids=[dragon.permanent_id]).supported
+    assert "nonred creature" in spell_text_card(game.stack[-1]).oracle_text
+    _w2g4_settle(game)
+    assert game.is_on_battlefield(dragon)
+    assert any("every target is illegal" in line for line in game.log)
+    knight = _w2g4_put(game, _w2g4_card(set_pool, "Black Knight"))
+    assert "Protection from red" in knight.effective_card.oracle_text
+    assert game._has_keyword(knight, "protection")
+
+
+def test_w2g4_swirl_the_mists_at_a_seat_nobody_asks_uses_its_stamped_word(set_pool):
+    """A seat nobody asks takes the entry choice's stated default, and the
+    board reads that word: every colour word on a White Knight becomes it."""
+    from engine.text_changes import COLOR_WORDS
+
+    game, (knight,), _ = _w2g4_table(set_pool, hand=["Swirl the Mists"], mine=["White Knight"])
+    assert game.queue_from_hand(0, "Swirl the Mists").supported
+    _w2g4_settle(game)
+    swirl = next(p for p in game.controlled_by(0) if p.card.name == "Swirl the Mists")
+    word = COLOR_WORDS[swirl.metadata["chosen_color"]]
+    assert f"Protection from {word}" in knight.effective_card.oracle_text
+
+# ==== end W2G4 ======================================================

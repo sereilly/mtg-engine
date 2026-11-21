@@ -437,6 +437,16 @@ returns the card object itself, unallocated. A spell's is applied by
 `text_changes.spell_text_card` over `StackItem.text_change_effects` — the
 stack object's `card` stays the printed card that moves — and carried onto
 the permanent it becomes by `carry_spell_text_changes` (CR 400.7a).
+A **static** text change over the whole board ("All instances of color words
+in the text of spells and permanents are changed to the chosen color word",
+Swirl the Mists) is the same records, written by
+`engine/global_text_changes.py`: one `COLOR_WORD_ALL` record per source, with
+the source's id and timestamp (CR 613.7a), on every permanent and every spell,
+kept in step with the board by `sync_board_text_changes` at the start of the
+board-wide pass (`_refresh_global_statics`, layer 3 ahead of its layer 4, and
+the pass an entering permanent is folded through) and by
+`stamp_board_text_changes` as a spell is pushed. A spell's announcement (CR
+601.2c) still reads its printed text.
 
 **Layer 7c splits by lifetime, and the split is load-bearing.** `power_bonus` is
 persistent (counters, one-shot boosts); `static_buff_*`, `derived_buff_*` and

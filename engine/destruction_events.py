@@ -190,6 +190,7 @@ def cause_seat(game: "Game", cause=RESOLVING) -> int | None:
 def mark_delayed_destruction(
     game: "Game", permanent: "Permanent", mark: str, value=True,
     *, sacrificed_by: str | None = None, together=None, cause=RESOLVING,
+    source=None,
 ) -> None:
     """Create one delayed ability under *permanent*'s *mark*, recording who
     created it and from what.
@@ -226,6 +227,18 @@ def mark_delayed_destruction(
     take an action created the delayed ability, so its controller is the
     caster and its source the card (``Game._resolve_permanent_spell``
     passes both).
+
+    *source* is the card whose spell or ability is creating it, for a writer
+    that knows it while nothing is on ``Game.resolving_items`` to ask: an
+    instruction run by the answer to a prompt its resolution armed. "You may
+    have target creature you control get +X/+X … If you do, sacrifice that
+    creature at the beginning of the next end step." (Junkyo Bell.) The "if
+    you do" runs as the offer is answered, after the trigger has left the
+    stack, and the sacrifice was announced under nothing — so the step named
+    the creature itself ("Grizzly Bears ability resolved"). CR 603.7e: the
+    source of a delayed ability a triggered ability creates is that
+    ability's source, the Bell. The object resolving answers first, as it
+    always did; *source* only fills the gap.
     """
     key = mark + DELAYED_CREATIONS_SUFFIX
     creations = list(permanent.metadata.get(key) or ()) if permanent.metadata.get(mark) else []
@@ -234,7 +247,7 @@ def mark_delayed_destruction(
     members = tuple(together or ())
     creations.append({
         CREATION_SEAT: cause_seat(game, cause),
-        CREATION_SOURCE: resolving[-1].card if resolving else None,
+        CREATION_SOURCE: resolving[-1].card if resolving else source,
         CREATION_SACRIFICER: sacrificed_by,
         CREATION_TOGETHER: members if len(members) > 1 else None,
     })

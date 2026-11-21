@@ -803,3 +803,248 @@ def test_w2g3_shell_with_nothing_exiled_casts_nothing(set_pool):
     assert "Shell of the Last Kappa: no card exiled with it to cast" in game.log
 
 # ==== end W2G3 ====
+
+
+# ==== W2G4 ==========================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+from engine import Game as _W2G4Game, PlayerState as _W2G4PlayerState
+from engine.models import Permanent as _W2G4Permanent
+from tests.helpers import settle as _w2g4_settle
+
+
+def _w2g4_card(set_pool, name):
+    for code in ("CHK", "LEA"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w2g4_put(game, card, seat=0):
+    permanent = _W2G4Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w2g4_table(set_pool, *, hand=(), mine=(), theirs=(), library=None,
+                opponent_library=None, opponent_hand=(), interactive=()):
+    """Two seats on seat 0's first main phase, costs not enforced; *mine* /
+    *theirs* placed and not summoning sick."""
+    card = lambda name: _w2g4_card(set_pool, name)  # noqa: E731
+    game = _W2G4Game(players=[
+        _W2G4PlayerState(name="Alice", hand=[card(n) for n in hand],
+                         library=[card(n) for n in (library or ["Island"] * 12)]),
+        _W2G4PlayerState(name="Bob", hand=[card(n) for n in opponent_hand],
+                         library=[card(n) for n in (opponent_library or ["Island"] * 12)]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = {
+        seat: [_w2g4_put(game, card(name), seat) for name in names]
+        for seat, names in ((0, mine), (1, theirs))
+    }
+    game.start_turn(0)
+    _w2g4_settle(game)
+    return game, placed[0], placed[1]
+
+
+def test_w2g4_junkyo_bell_sacrifices_its_creature_under_its_own_name(set_pool):
+    """Junkyo Bell: "At the beginning of your upkeep, you may have target
+    creature you control get +X/+X until end of turn, where X is the number of
+    creatures you control. If you do, sacrifice that creature at the beginning
+    of the next end step." The "if you do" runs as the offer is answered, after
+    the trigger has left the stack; the delayed sacrifice it creates is the
+    Bell's (CR 603.7e: a triggered ability's delayed ability has that
+    ability's source), so the end step announces it as the Bell's — it was
+    announced as the sacrificed creature's own ("Grizzly Bears ability
+    resolved")."""
+    game, (bears, elves), _theirs = _w2g4_table(set_pool, mine=["Grizzly Bears", "Llanowar Elves"])
+    _w2g4_put(game, _w2g4_card(set_pool, "Junkyo Bell"))
+    game.start_turn(0)
+    _w2g4_settle(game)
+    # X = 2 creatures: the Bears is 4/4 or the Elves 3/3.
+    pumped = [
+        permanent for permanent, size in ((bears, (4, 4)), (elves, (3, 3)))
+        if (permanent.effective_power, permanent.effective_toughness) == size
+    ]
+    assert len(pumped) == 1, [(p.card.name, p.effective_power) for p in (bears, elves)]
+    [target] = pumped
+    survivor = elves if target is bears else bears
+    mark = len(game.log)
+    game.enter_turn_phase("ending")
+    _w2g4_settle(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == sorted(
+        ["Junkyo Bell", survivor.card.name]
+    )
+    tail = game.log[mark:]
+    assert "Junkyo Bell ability resolved" in tail, tail
+    assert f"{target.card.name} ability resolved" not in tail, tail
+
+def _w2g4_names(cards):
+    return [card.name for card in cards]
+
+
+def _w2g4_offered(game, seat):
+    from engine.cast_permissions import playable_from_zones
+
+    return [(entry["zone"], entry["name"], entry["source"]) for entry in playable_from_zones(game, seat)]
+
+
+def _w2g4_mask_table(set_pool, *, masks=1, interactive=()):
+    """Alice controls *masks* Uba Masks; her library is Grizzly Bears, Forest,
+    Lightning Bolt, Mountain, Island…; Bob's is Plains, Shock, Islands."""
+    game, mine, _theirs = _w2g4_table(
+        set_pool, mine=["Uba Mask"] * masks, interactive=interactive,
+        library=["Grizzly Bears", "Forest", "Lightning Bolt", "Mountain"] + ["Island"] * 6,
+        opponent_library=["Plains", "Giant Growth"] + ["Island"] * 6,
+    )
+    return game, mine
+
+
+def test_w2g4_uba_mask_exiles_every_players_draws_face_up(set_pool):
+    """"If a player would draw a card, that player exiles that card face up
+    instead." Every seat's draws (a player), one at a time (CR 121.2): an
+    Ancestral Recall exiles three cards and draws none, the log names each
+    (face up, CR 406.3), and Bob's draw step draw is replaced too."""
+    game, (mask,) = _w2g4_mask_table(set_pool)
+    alice, bob = game.players
+    alice.hand.append(_w2g4_card(set_pool, "Ancestral Recall"))
+    assert game.cast_from_hand(0, "Ancestral Recall", target_player_index=0).supported
+    _w2g4_settle(game)
+    assert alice.hand == []
+    assert _w2g4_names(alice.exile) == ["Grizzly Bears", "Forest", "Lightning Bolt"]
+    assert "Alice exiles Forest face up instead of drawing (Uba Mask)" in game.log
+    game.start_next_turn()
+    _w2g4_settle(game)
+    assert bob.hand == [] and _w2g4_names(bob.exile) == ["Plains"]
+    # Linked to the Mask with each exiler (CR 607.2a): Alice's three, Bob's one.
+    assert [
+        (entry["card"].name, entry["exiler_index"]) for entry in mask.metadata["linked_exile"]
+    ] == [("Grizzly Bears", 0), ("Forest", 0), ("Lightning Bolt", 0), ("Plains", 1)]
+
+
+def test_w2g4_uba_mask_lets_the_exiler_play_them_this_turn_only(set_pool):
+    """"Each player may play lands and cast spells from among cards they
+    exiled with this artifact this turn." Alice plays the Forest (her land
+    drop: a second land from exile is refused, CR 305.2) and casts the Bears
+    from exile; Bob may play none of them. "You can't play cards you exiled
+    with Uba Mask on previous turns" and "Any cards you don't play just remain
+    exiled when the turn ends" (rulings 2004-12-01): the Bolt left over is not
+    offered on Alice's next turn, while that turn's own draw is."""
+    game, (_mask,) = _w2g4_mask_table(set_pool)
+    alice, _bob = game.players
+    # The land drop counted (CR 305.2: the headless table counts it only
+    # while costs are enforced).
+    _w2g4_put(game, _w2g4_card(set_pool, "Forest"))
+    game.enforce_mana_costs = True
+    for _ in range(4):
+        assert game._draw_with_replacements(alice, 1) == 0
+    assert _w2g4_names(alice.exile) == ["Grizzly Bears", "Forest", "Lightning Bolt", "Mountain"]
+    assert _w2g4_offered(game, 0) == [
+        ("exile", "Grizzly Bears", "Uba Mask"), ("exile", "Forest", "Uba Mask"),
+        ("exile", "Lightning Bolt", "Uba Mask"), ("exile", "Mountain", "Uba Mask"),
+    ]
+    assert _w2g4_offered(game, 1) == []
+    played = game.cast_from_hand(0, "Forest", from_zone="exile")
+    assert played.supported, played.details
+    second = game.cast_from_hand(0, "Mountain", from_zone="exile")
+    assert not second.supported
+    # The cast is about the permission, not the mana.
+    game.enforce_mana_costs = False
+    cast = game.cast_from_hand(0, "Grizzly Bears", from_zone="exile")
+    assert cast.supported, cast.details
+    _w2g4_settle(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Forest", "Forest", "Grizzly Bears", "Uba Mask",
+    ]
+    assert _w2g4_names(alice.exile) == ["Lightning Bolt", "Mountain"]
+    # Bob's turn, then Alice's: the draw step's card is exiled and offered;
+    # last turn's two stay exiled and closed.
+    game.start_next_turn()
+    _w2g4_settle(game)
+    assert _w2g4_offered(game, 0) == []
+    game.start_next_turn()
+    _w2g4_settle(game)
+    assert _w2g4_names(alice.exile) == ["Lightning Bolt", "Mountain", "Island"]
+    assert _w2g4_offered(game, 0) == [("exile", "Island", "Uba Mask")]
+    assert not game.cast_from_hand(0, "Lightning Bolt", from_zone="exile",
+                                   target_player_index=1).supported
+
+
+def test_w2g4_uba_mask_each_seat_plays_its_own_and_an_empty_library_loses_nothing(set_pool):
+    """Bob's draw is exiled by Alice's Mask and is Bob's to play (the exiler,
+    not the Mask's controller). CR 614.11: a draw from an empty library is
+    replaced too, so it exiles nothing and the player does not lose
+    (CR 704.5b: no draw was attempted)."""
+    game, (_mask,) = _w2g4_mask_table(set_pool)
+    alice, bob = game.players
+    game._draw_with_replacements(bob, 2)
+    assert _w2g4_names(bob.exile) == ["Plains", "Giant Growth"]
+    assert _w2g4_offered(game, 1) == [
+        ("exile", "Plains", "Uba Mask"), ("exile", "Giant Growth", "Uba Mask"),
+    ]
+    assert _w2g4_offered(game, 0) == []
+    alice.library.clear()
+    assert game._draw_with_replacements(alice, 1) == 0
+    game.check_state_based_actions()
+    assert not alice.lost
+    assert any("Alice exiles nothing instead of drawing" in line for line in game.log)
+
+
+def test_w2g4_uba_mask_leaving_closes_its_cards_and_draws_are_draws_again(set_pool):
+    """The play permission is the Mask's static ability: once it leaves, the
+    cards it exiled this turn stay exiled and are nobody's to play (CR 611.3a;
+    a new Mask is a new object with an empty record, CR 400.7), and a draw is
+    a draw."""
+    game, (mask,) = _w2g4_mask_table(set_pool)
+    alice, _bob = game.players
+    game._draw_with_replacements(alice, 1)
+    assert _w2g4_offered(game, 0) == [("exile", "Grizzly Bears", "Uba Mask")]
+    game.sacrifice_permanent(mask)
+    assert _w2g4_offered(game, 0) == []
+    assert _w2g4_names(alice.exile) == ["Grizzly Bears"]
+    _w2g4_put(game, _w2g4_card(set_pool, "Uba Mask"))
+    assert _w2g4_offered(game, 0) == []
+    game.sacrifice_permanent(next(iter(game.controlled_by(0))))
+    assert game._draw_with_replacements(alice, 1) == 1
+    assert _w2g4_names(alice.hand) == ["Forest"]
+
+
+def test_w2g4_two_uba_masks_the_drawer_picks_one_and_only_that_one_opens_it(set_pool):
+    """Two Masks are two replacement effects for one draw: the drawer picks
+    which applies (CR 616.1e, an ``effect_order`` prompt at an interactive
+    seat; the first by default), the draw is consumed by it, and the card is
+    linked to that Mask — only its leaving closes the card."""
+    for interactive in ((), (0,)):
+        game, (first, second) = _w2g4_mask_table(set_pool, masks=2, interactive=interactive)
+        alice, _bob = game.players
+        assert game._draw_with_replacements(alice, 1) == 0
+        chosen = []
+        if interactive:
+            def answer(game, choice):
+                keys = list(choice.data["_keys"])
+                chosen.append(keys[1])
+                assert game.resolve_pending_choice(
+                    "effect_order", choice.player_index, option_index=1,
+                )
+
+            _w2g4_settle(game, answers={"effect_order": answer})
+            assert len(chosen) == 1
+        assert _w2g4_names(alice.exile) == ["Grizzly Bears"]
+        held = [mask for mask in (first, second) if mask.metadata.get("linked_exile")]
+        assert len(held) == 1
+        [linker] = held
+        if interactive:
+            # The answer named the second Mask, and the card is linked to it.
+            assert chosen == [f"_exile_drawn_card_face_up_instead:{second.permanent_id}"]
+            assert linker is second
+        other = second if linker is first else first
+        game.sacrifice_permanent(other)
+        assert _w2g4_offered(game, 0) == [("exile", "Grizzly Bears", "Uba Mask")]
+        game.sacrifice_permanent(linker)
+        assert _w2g4_offered(game, 0) == []
+
+# ==== end W2G4 ======================================================

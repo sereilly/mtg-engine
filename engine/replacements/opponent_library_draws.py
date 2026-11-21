@@ -24,6 +24,16 @@ the draw is consumed by whichever applies — so the second never sees it.
 Where the drawer has several opponents, which one's library is the drawer's
 choice (``opponent_library_draw``, a CR 614 offer). With one, nothing is
 asked.
+
+**The drawer's own card, face up** (Uba Mask, at the foot of the file): "If a
+player would draw a card, that player exiles that card face up instead." The
+same shape with nothing to choose — "that card" is the one the draw would
+have taken, the top of the drawer's own library — exiled face up, linked with
+its exiler **and the turn** (``exiler_grants.EXILED_TURN_KEY``), because the
+Mask's second line lets each player play "cards they exiled with this
+artifact this turn". An empty library exiles nothing and loses nothing: CR
+614.11 applies a draw replacement even when no card could be drawn, and the
+draw it replaced was never attempted (CR 704.5b).
 """
 
 from __future__ import annotations
@@ -31,8 +41,8 @@ from __future__ import annotations
 from ..replacement_choices import (ReplacementChoice, offer_replacement_choice,
                                    replacement_choice)
 from .draws import QUEUED_EXCLUDES, draws_behind, queued_excludes
-from .registry import (DRAW_EXILES_OPPONENT_TOP, ReplacementOutcome,
-                       replacement_effect)
+from .registry import (DRAW_EXILED_FACE_UP, DRAW_EXILES_OPPONENT_TOP,
+                       ReplacementOutcome, replacement_effect)
 
 
 #: The phrase the interceptor self-selects on, imported by ``lines.py``'s
@@ -217,3 +227,109 @@ def _resolve_opponent_library_draw(
         int(choice.data.get("remaining_draws", 0)),
         choice.data.get(QUEUED_EXCLUDES) or (),
     )
+
+
+#: "If a player would draw a card, that player exiles that card face up
+#: instead." (Uba Mask.) The phrase the interceptor self-selects on, imported
+#: by ``lines.py``'s ``REPLACEMENT_LINES`` so the claim and the interceptor
+#: are one string.
+FACE_UP_DRAW_EXILE_TEXT = (
+    "if a player would draw a card, that player exiles that card face up instead"
+)
+
+
+def face_up_draw_exile_line(line: str) -> bool:
+    """Whether *line* is, in full, Uba Mask's replacement."""
+    return (
+        " ".join((line or "").split()).strip().lower().rstrip(".")
+        == FACE_UP_DRAW_EXILE_TEXT
+    )
+
+
+def _face_up_draw_exile_sources(game, payload: dict) -> list:
+    """Every permanent on the battlefield printing Uba Mask's replacement,
+    less those this event has already been through (CR 614.5). "**A** player"
+    names every seat, so the whole board is asked. Read off ``effective_card``
+    (CR 707.2, 612.1). Pure."""
+    exclude = set(payload.get("exclude_sources") or ())
+    return [
+        permanent
+        for permanent in game.all_permanents()
+        if permanent.permanent_id not in exclude
+        and any(
+            face_up_draw_exile_line(line)
+            for line in (permanent.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _face_up_draw_exile_instances(game, payload: dict) -> list:
+    """One CR 616.1 instance per Mask: two Masks are two effects, and the
+    drawer picks which replaces each draw (CR 616.1e) — the card is linked to
+    that one, and only that one's second line lets it be played. Pure."""
+    return [
+        (str(permanent.permanent_id), permanent.card.name)
+        for permanent in _face_up_draw_exile_sources(game, payload)
+    ]
+
+
+def _applies_face_up_draw_exile(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _face_up_draw_exile_sources(game, payload)
+    )
+
+
+def exile_drawn_card_face_up(game, source, drawer_seat: int) -> None:
+    """Exile the top card of *drawer_seat*'s library — the card the draw would
+    have taken — face up, linked to *source* with *drawer_seat* as its exiler
+    and stamped with the turn being taken. Nothing to exile is nothing done
+    (CR 614.11: the replacement applies to a draw from an empty library, and
+    the draw it replaced was never attempted)."""
+    from ..linked_exile import link_exiled_card
+    from ..turn_state import current_turn_stamp
+
+    drawer = game.players[drawer_seat]
+    by = source.card.name
+    if not drawer.library:
+        game.log.append(
+            f"{drawer.name} exiles nothing instead of drawing: their library "
+            f"is empty ({by})"
+        )
+        return
+    held = game.put_card_into_exile(drawer, drawer.library.pop(0))
+    link_exiled_card(
+        source, held, drawer_seat, exiler_index=drawer_seat,
+        exiled_turn=current_turn_stamp(game),
+    )
+    # Face up (CR 406.3), so every seat may see it and the log may name it.
+    game.log.append(f"{drawer.name} exiles {held.name} face up instead of drawing ({by})")
+
+
+@replacement_effect(
+    "draw", DRAW_EXILED_FACE_UP, applies=_applies_face_up_draw_exile,
+    sources=_face_up_draw_exile_sources,
+    instances=_face_up_draw_exile_instances,
+    label="Exile that card face up instead",
+)
+def _exile_drawn_card_face_up_instead(
+    game, payload: dict, instance: str | None = None,
+) -> ReplacementOutcome | None:
+    """Uba Mask: one draw at a time (CR 121.2), each consumed whole; the draws
+    queued behind go back through the seam, where each is replaced again — by
+    this Mask or, CR 616.1e, another. Nothing is drawn, so this reports 0 and
+    "whenever you draw a card" sees no draw."""
+    player = payload["player"]
+    seat = game.players.index(player)
+    sources = _face_up_draw_exile_sources(game, payload)
+    source = next(
+        (
+            permanent for permanent in sources
+            if instance is not None and str(permanent.permanent_id) == instance
+        ),
+        sources[0],
+    )
+    exile_drawn_card_face_up(game, source, seat)
+    payload["drawn"] = draws_behind(
+        game, player, int(payload["count"]) - 1, queued_excludes(payload)
+    )
+    return ReplacementOutcome(replaced=True)

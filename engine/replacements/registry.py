@@ -322,6 +322,16 @@ DRAW_MAY_BE_SKIPPED = 26  # Obstinate Familiar
 # below; nothing else sits at 27, so its place among every other draw
 # replacement is unchanged.
 DRAW_EXILES_OPPONENT_TOP = 27  # Shared Fate
+# "If a player would draw a card, that player exiles that card face up
+# instead." (Uba Mask.) Shared Fate's slot — a mandatory consuming replacement
+# from a permanent any seat may control, one instance per permanent — and just
+# behind it, because the card it hands the drawer may be played only this turn
+# (its second line) where Shared Fate's may be played for good; ahead of the
+# skip, which hands back nothing. The order the drawing player would choose,
+# which CR 616.1e permits; the default for a seat nobody asks. Everything from
+# the skip down moved up by one to make room, so no two draw replacements
+# changed places.
+DRAW_EXILED_FACE_UP = 28  # Uba Mask
 # "If a player would draw a card, that player skips that draw instead."
 # (Possessed Portal.) Shared Fate's slot exactly — a mandatory consuming
 # replacement from a permanent any seat may control — and just behind it,
@@ -330,7 +340,7 @@ DRAW_EXILES_OPPONENT_TOP = 27  # Shared Fate
 # draw away *and* give something to somebody else or cost more. The order the
 # drawing player would choose, which CR 616.1e permits; the default for a seat
 # nobody asks.
-DRAW_SKIPPED = 28  # Possessed Portal
+DRAW_SKIPPED = 29  # Possessed Portal
 # "Until end of turn, if target player would draw a card, instead that player
 # skips that draw and you draw a card." (Plagiarize.) A mandatory consuming
 # replacement another player armed, so behind everything the drawing player
@@ -341,20 +351,20 @@ DRAW_SKIPPED = 28  # Possessed Portal
 # Plagiarist anyway, and Forbidden Crypt can end the game, where this only
 # takes the draw. CR 616.1e lets the drawing player choose; this is the default
 # for a seat nobody asks.
-DRAW_GIVEN_TO_ANOTHER = 29  # Plagiarize
-DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
+DRAW_GIVEN_TO_ANOTHER = 30  # Plagiarize
+DRAW_DISCARD_INSTEAD = 31  # Chains of Mephistopheles
 # Beside it, and last for the same reason: this one takes the draw away too.
 # Between the two the order is arbitrary — no card in the pool prints both, and
 # CR 616.1e would put the choice to the affected player if one ever did — so
 # they are ordered by the number that keeps each of them behind every
 # replacement the player armed for their own benefit.
-DRAW_REVEALS_TOP = 31  # Enduring Renewal
+DRAW_REVEALS_TOP = 32  # Enduring Renewal
 # The third of the three, and the same reasoning again: it takes the draw away
 # unless somebody buys it back. It goes behind the other two because it is the
 # only one that asks a *different* seat a question — a draw already consumed by
 # a Lamp or a Renewal never puts that question, which is the ordering the
 # drawing player would choose and the rule permits.
-DRAW_REVEALED_UNLESS_PAID = 32  # Zur's Weirding
+DRAW_REVEALED_UNLESS_PAID = 33  # Zur's Weirding
 # The fourth of the consuming draw replacements, and last of them on purpose.
 # CR 616.1e's default is the lowest order, and this is the only replacement in
 # the engine that can **lose the affected player the game**: with an empty
@@ -362,7 +372,7 @@ DRAW_REVEALED_UNLESS_PAID = 32  # Zur's Weirding
 # a Renewal or a Weirding applied first consumes the draw and this never
 # applies, which is the order the drawing player would pick and the rule
 # permits.
-DRAW_RETURNS_FROM_GRAVEYARD = 33  # Forbidden Crypt
+DRAW_RETURNS_FROM_GRAVEYARD = 34  # Forbidden Crypt
 # Last of the draw replacements, and the only one here that does **not** consume
 # the draw: "instead they draw a card and reveal it" still draws (CR 614.1
 # replaces the event with a modified one). So it is a rider, and its order is
@@ -370,7 +380,7 @@ DRAW_RETURNS_FROM_GRAVEYARD = 33  # Forbidden Crypt
 # consuming replacement is one the drawing player would rather have applied,
 # because a draw a Lamp or a Renewal has already taken away never reaches this
 # rider at all. Being last is what lets them.
-DRAW_REVEALED_AND_TAXED = 34  # Breathstealer's Crypt
+DRAW_REVEALED_AND_TAXED = 35  # Breathstealer's Crypt
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
 # Its own event kind (``cant_enter_battlefield``), asked before every entry

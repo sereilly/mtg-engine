@@ -28,6 +28,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ..continuous import next_timestamp
+from ..global_text_changes import stamp_board_text_changes
 from ..game_types import as_graveyard_stamps, as_target_ids, target_ids
 from ..events import emit
 from ..oracle import compile_card_oracle
@@ -534,6 +535,11 @@ class TargetAnnouncementsMixin:
         handed the id of whatever permanent sat in battlefield slot 1."""
         self._stamp_stack_targets(item)
         self.stack.append(item)
+        # "Swirl the Mists' ability also affects spells that are cast … after
+        # Swirl the Mists enters." (Ruling 2004-12-01.) A spell is changed as
+        # it becomes one, so whatever reads what it says reads the change
+        # (``engine/global_text_changes.py``); an ability is left alone.
+        stamp_board_text_changes(self, item)
         if announce:
             self._announce_targeting(item)
 

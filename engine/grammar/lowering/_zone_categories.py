@@ -125,6 +125,12 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the same zone becoming public, so the same category.
     "reveal_hand_while_source_present": "zones",
     "reveal_hand_and_choose": "zones",
+    # "…That player exiles a card from it, then you exile a card from it.
+    # Repeat this process until all cards in that hand have been exiled. …"
+    # (Struggle for Sanity.) Duress's revealed hand picked by both seats in
+    # turn and sorted into hand and graveyard: cards moving between zones, so
+    # the same category and GRAMMAR_CATEGORIES is unchanged.
+    "exile_hand_alternately": "zones",
     # CR 701.20, the reveal on its own (Amnesia, Rag Man). The same category as
     # the template above, so GRAMMAR_CATEGORIES is unchanged: what moves is
     # information about a hand either way.

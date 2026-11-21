@@ -783,49 +783,44 @@ def graveyard_exile_scope(line: str) -> str | None:
     return "you" if whose == "your" else ("opponent" if whose != "a" else "any")
 
 
-def _graveyard_exile_source(game, payload: dict):
-    """The permanent whose printed line would exile this card, or None.
+def _graveyard_exile_permanents(game, payload: dict) -> list:
+    """Every permanent whose printed line would exile this card, battlefield
+    first. Pure.
 
-    Pure, like every other applicability predicate here. The scan is over every
-    battlefield rather than the affected player\'s own, because the scope word
-    is what says whose graveyard is meant: "your" is read relative to the
-    permanent\'s controller (CR 109.5), so an opponent\'s Forbidden Crypt does
-    nothing to your graveyard and a Leyline of the Void does nothing to its
-    own controller\'s.
+    The scan is over every battlefield rather than the affected player\'s own,
+    because the scope word is what says whose graveyard is meant: "your" is
+    read relative to the permanent\'s controller (CR 109.5), so an opponent\'s
+    Forbidden Crypt does nothing to your graveyard and a Leyline of the Void
+    does nothing to its own controller\'s.
+
+    **Three places to look**, as :func:`_permanent_graveyard_exile_sources`
+    does, because the line is a static ability that applies to the event while
+    its source is on the battlefield as the event happens: the battlefield;
+    what the same departure event has already taken off it
+    (``Game.departed_in_this_event``); and the permanent this card *is*
+    (the event's ``permanent``), which a targeted destruction or a sacrifice
+    takes off before the move. "It will replace itself being sent to the
+    graveyard, and exile itself." (Forbidden Crypt, ruling 2004-10-04.) The
+    battlefield alone saw a Tranquility's Crypt (the sweep's cards move while
+    the event is open) and missed a Disenchanted one. A departed permanent's
+    "your" is the seat that controlled it as it left (CR 608.2h's last known
+    information, ``controller_or_last_known``).
     """
-    player = payload.get("player")
-    if player is None:
-        return None
-    seat = game.players.index(player)
-    for permanent in game.all_permanents():
-        controller = game.controller_index_of(permanent)
-        if controller is None:
-            continue
-        for line in (permanent.effective_card.oracle_text or "").splitlines():
-            scope = graveyard_exile_scope(line)
-            if scope is None:
-                continue
-            if scope == "any":
-                return permanent
-            if (seat == controller) == (scope == "you"):
-                return permanent
-    return None
-
-
-def _graveyard_exile_sources(game, payload: dict) -> list:
-    """Every permanent whose printed line would exile this card (Forbidden
-    Crypt, Leyline of the Void), by :func:`_graveyard_exile_source`'s reading
-    — and the card whose effect armed the turn's exile on the seat (Yawgmoth's
-    Will), by the name its marker records (:func:`recorded_name`). Pure."""
     player = payload.get("player")
     if player is None:
         return []
     seat = game.players.index(player)
-    found: list = recorded_name(
-        getattr(player, "exile_cards_bound_for_graveyard_this_turn", None)
-    )
-    for permanent in game.all_permanents():
-        controller = game.controller_index_of(permanent)
+    candidates: list = []
+    for permanent in (
+        *game.all_permanents(), *game.departed_in_this_event(),
+        payload.get("permanent"),
+    ):
+        if permanent is None or any(permanent is seen for seen in candidates):
+            continue
+        candidates.append(permanent)
+    found: list = []
+    for permanent in candidates:
+        controller = game.controller_or_last_known(permanent)
         if controller is None:
             continue
         for line in (permanent.effective_card.oracle_text or "").splitlines():
@@ -835,6 +830,30 @@ def _graveyard_exile_sources(game, payload: dict) -> list:
             if scope == "any" or (seat == controller) == (scope == "you"):
                 found.append(permanent)
                 break
+    return found
+
+
+def _graveyard_exile_source(game, payload: dict):
+    """The permanent whose printed line would exile this card, or None — the
+    first :func:`_graveyard_exile_permanents` finds. Pure, like every other
+    applicability predicate here."""
+    found = _graveyard_exile_permanents(game, payload)
+    return found[0] if found else None
+
+
+def _graveyard_exile_sources(game, payload: dict) -> list:
+    """Every permanent whose printed line would exile this card (Forbidden
+    Crypt, Leyline of the Void), by :func:`_graveyard_exile_permanents`'
+    reading — and the card whose effect armed the turn's exile on the seat
+    (Yawgmoth's Will), by the name its marker records (:func:`recorded_name`).
+    Pure."""
+    player = payload.get("player")
+    if player is None:
+        return []
+    found: list = recorded_name(
+        getattr(player, "exile_cards_bound_for_graveyard_this_turn", None)
+    )
+    found.extend(_graveyard_exile_permanents(game, payload))
     return found
 
 
