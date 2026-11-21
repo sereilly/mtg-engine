@@ -1568,8 +1568,11 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     does not price a card's other uses against holding it: Healing Salve's
     life mode was cast where its shield was held for); the opponent's tricks,
     whose hand on the copy is a redeal (M21 seed 7 lost Keen Glidemaster to
-    Heartfire Immolator); an unblocked attacker's pump; and inside a
-    rehearsal the attack policy still reads printed bodies.
+    Heartfire Immolator); and an unblocked attacker's pump. (Since CHK's
+    W2G2 the attack policy reads each possible block's fight —
+    `ai_declarations._attack_block_score` over
+    `ai_compelled_blocks.fight_outcome`: bushido, first strike,
+    regeneration, prevention — where it read printed bodies.)
   - Combat and Aura prices: a payable toll's own price reads zero
     (`ai_combat_triggers._walk_toll`); a host kill that takes several
     activations is never chosen (`ai_targets._host_its_ability_kills`);
@@ -1645,7 +1648,25 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
     side's `_better_than_the_seat`). The web auto-tap never plans through
     Doubling Cube (`web/payment_plan` calls `planner.plan` directly, where
     the simulator's `_plan_land_taps` reaches `_plan_through_a_pool_doubler`).
-  <!-- chk integrator: W2G2 AI -->
+  - Champions of Kamigawa's AI pile (CHK W2G2 took splicing,
+    `engine/ai_splice.py`; bushido and the fight on the attack; Kiki-Jiki's
+    hasty copy; Wicked Akuba's tapped activation; Hisoka's discard; Devouring
+    Rage/Greed's sacrifice count; Forbidden Orchard's price; Mindblaze's
+    number), left: **the block policy still ranks blocks on printed bodies
+    and never refuses a trade** (`ai_declarations._score_block_pair`): a
+    damaged 4/4 flier blocks and trades with a 3/1, which an attacker's
+    fight reading now exploits (the Skirk Volcanist turn-up, fu8 moved its
+    test to a board that cannot trade); a seat nobody asks pays no optional
+    entry sacrifice (Shimatsu and Wood Elemental enter 0/0 and die — parts:
+    an `ai_prompt_picks` pick for an `up_to` sacrifice with `counters_onto`,
+    weighing each permanent against a +1/+1 counter, routed through
+    `_default_sacrifice`, and the LEG round-31 and CHK Shimatsu tests
+    updated); Mana Seism is never cast (no AI plan spends mana a resolving
+    spell makes); the Deceivers' look is never made (worth nothing to a seat
+    that keeps nothing it was shown, K4); Hankyu's granted aim and shot are
+    never activated (W2G3); and no tool shows which earlier choice a
+    rehearsal's margin depends on (Wail of the Nim's entwine had won by
+    0.25).
   *Clears:* the next AI round.
 
 - **Three mana readers still skip what a substitution does** (kg5 `mana2`,

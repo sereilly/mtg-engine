@@ -43,7 +43,8 @@ count** in `SimulationReport` (`interaction_count`, `lands_played`,
 `rehearsals_raised`, `special_actions_taken`, `refused_special_actions`,
 `special_actions_in_response`, `cards_from_outside_game`, `face_down_casts`,
 `mulligans_taken`, `controlled_turns` (a seat's turn another seat decided,
-CR 723), the combat counts). A run that
+CR 723), `spliced_casts` (CR 702.47, `engine/ai_splice.py`), the combat
+counts). A run that
 cast nothing exits 1. A new piece of the turn arrives with its count. CR 116
 special actions are weighed in `engine/ai_special_actions.py`, before the
 first combat and in response to another seat's object
@@ -163,9 +164,10 @@ first combat and in response to another seat's object
   where it adds a block that pays (`pays_before_the_blocks`; a card whose
   window shuts before the blocks is read for what the fight leaves instead,
   `ai_scoring.read_at_instant_speed`), and a response
-  there (`blocks_owed`) is read through that combat too; at instant speed the
-  activation chooser weighs a tapped or summoning-sick permanent's abilities
-  without {T}. The web AI seat acts only while it holds priority
+  there (`blocks_owed`) is read through that combat too; the activation
+  chooser weighs a tapped or summoning-sick permanent's abilities without
+  {T} at instant speed, and at sorcery speed where something lasts past the
+  turn (Wicked Akuba). The web AI seat acts only while it holds priority
   (`game_flow._ai_holds_priority`, CR 117.1a) and gives that answer
   everywhere but its own main phase with an empty stack; there its doors are
   the casts — asked at every `ai_step` at a table with a person, a loop at a
