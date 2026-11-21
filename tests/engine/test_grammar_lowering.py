@@ -2696,13 +2696,50 @@ from engine.mixins.land_tapped_for_mana import (
 )
 
 
+def _instruction_kinds(instruction) -> list[str]:
+    """Every instruction kind *instruction* carries, nested steps included —
+    what the stack's dispatch will be asked to run."""
+    from engine.oracle_types import OracleInstruction
+
+    found: list[str] = []
+
+    def walk(value) -> None:
+        if isinstance(value, OracleInstruction):
+            found.append(value.kind)
+            walk(value.payload)
+        elif isinstance(value, dict):
+            for inner in value.values():
+                walk(inner)
+        elif isinstance(value, (list, tuple)):
+            for inner in value:
+                walk(inner)
+
+    walk(instruction)
+    return found
+
+
 def test_every_land_tapped_for_mana_trigger_lands_on_a_kind_the_fire_site_runs(catalog):
+    from engine.handlers import EFFECT_HANDLERS
+    from engine.mana_abilities import requires_a_target
     from engine.oracle import compile_card_oracle
 
     undispatched = []
     for card in compilation_units(catalog):
         for trig in compile_card_oracle(card).triggered_abilities:
             if trig.condition.kind != "land_tapped_for_mana" or trig.instruction is None:
+                continue
+            # **The second road.** A tap trigger that requires a target is not
+            # a mana ability (CR 605.1b, 605.5a): the fire site puts it on the
+            # stack through the ordinary enqueue (``_land_tapped_for_mana``'s
+            # ``requires_a_target`` arm) instead of running it by hand, so the
+            # question there is the stack's — a registered handler for every
+            # kind it carries (Forbidden Orchard's ``create_token``).
+            if requires_a_target(trig.instruction):
+                undispatched.extend(
+                    f"{card.name}: {kind} (stack road, no handler)"
+                    for kind in _instruction_kinds(trig.instruction)
+                    if kind not in EFFECT_HANDLERS
+                )
                 continue
             # A printed paragraph is a `sequence`; the site flattens it one
             # level and runs each clause, so the question is asked per clause.

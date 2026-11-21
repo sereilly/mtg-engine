@@ -235,11 +235,30 @@ def _fight(session, shape, asker, subject, foe, spy) -> None:
     spy["game"] = game
     active = session.current_turn
     declared_attackers = declared_blockers = False
+    # **A turn may hold more than one combat phase** (CR 500.8: Godo, Bandit
+    # Warlord's "After this phase, there is an additional combat phase"), and
+    # each one's declarations are made anew (CR 508.1, 509.1). A declaration
+    # this driver saw lock and now sees unlocked again belongs to the next
+    # combat, so it is declared again — the attack as the shape says (Godo,
+    # untapped by his own trigger, attacks a second time and sets nothing
+    # off), the block as the defender now can. Read off the engine's own
+    # locks rather than off which steps the driver happened to stop in: on
+    # the AI's turn ``ai_step`` walks from one combat into the next unseen.
+    attackers_lock_seen = blockers_lock_seen = False
     for _ in range(60):
         if session.current_turn != active or game.is_game_over():
             return
         if game.current_turn_phase == "ending":
             return
+        if game.combat_attackers_locked:
+            attackers_lock_seen = attackers_lock_seen or declared_attackers
+        elif attackers_lock_seen:
+            declared_attackers = declared_blockers = False
+            attackers_lock_seen = blockers_lock_seen = False
+        if game.combat_blockers_locked:
+            blockers_lock_seen = blockers_lock_seen or declared_blockers
+        elif blockers_lock_seen and game.current_step == "declare_blockers":
+            declared_blockers = blockers_lock_seen = False
         if _answer_as_the_human(session):
             continue
         step = game.current_step
