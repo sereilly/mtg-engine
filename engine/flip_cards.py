@@ -264,11 +264,27 @@ def flip_permanent(game: "Game", permanent: "Permanent", *, how: str = "") -> bo
 def forget_flip(permanent: "Permanent") -> None:
     """A permanent object entering the battlefield again is a new object
     (CR 400.7) and enters unflipped (CR 110.5b, CR 710.4): its card is its top
-    half again and the status is gone."""
-    permanent.metadata.pop(FLIPPED, None)
+    half again and the status is gone.
+
+    *Again* is the word that matters, and the status mark is how it is known:
+    a permanent flipped here carries :data:`FLIPPED` (``flip_permanent``
+    stamps it on every flip, and no road off the battlefield clears a
+    permanent's metadata), so an object that was flipped, left and is coming
+    back is unflipped whatever road returns it. An object handed to the entry
+    already wearing a bottom half and never flipped here — a census board
+    placing each compilation unit as a permanent, a test asking for a
+    Shidako, Broodmistress — is not returning from anywhere: it enters as
+    the permanent it was built as, flipped, and is stamped so. No game road
+    makes one: every zone holds top halves (``faces.whole_card``,
+    ``put_card_into_exile``) and a copy copies the unflipped card
+    (``copies.become_copy``)."""
     card = getattr(permanent, "card", None)
+    if permanent.metadata.pop(FLIPPED, None):
+        if is_flipped_face(card):
+            permanent.card = card.face_of
+        return
     if is_flipped_face(card):
-        permanent.card = card.face_of
+        permanent.metadata[FLIPPED] = True
 
 
 __all__ = [

@@ -248,3 +248,48 @@ def test_the_tenderfoot_flips_off_its_victim_and_not_off_itself(set_pool):
     settle(game)
     assert not game.is_on_battlefield(other)
     assert not any("flipped" in line or "flip" in line for line in game.log[since:])
+
+
+@pytest.mark.cr("710.4", "110.5b", "400.7")
+def test_a_flipped_permanent_object_entering_again_enters_unflipped(set_pool):
+    """The same permanent object, flipped, taken off the battlefield and put
+    back (the road a blink that reuses the object takes): it is a new object
+    (CR 400.7) and enters unflipped (CR 110.5b) — Jushi Apprentice again."""
+    chk = set_pool("CHK")
+    game = _table(set_pool)
+    jushi = _put(game, chk["Jushi Apprentice"])
+    flip_permanent(game, jushi)
+    game.remove_from_battlefield(jushi)
+    game._put_permanent_onto_battlefield(0, jushi, None)
+    assert game.is_on_battlefield(jushi)
+    assert not is_flipped(jushi)
+    assert jushi.effective_card.name == "Jushi Apprentice"
+
+
+@pytest.mark.cr("710.2", "110.5b")
+def test_a_permanent_built_wearing_a_bottom_half_enters_as_built(set_pool):
+    """A permanent object handed to the entry already wearing a flip card's
+    bottom half, never flipped here — a census board placing each compilation
+    unit as a permanent — enters as the permanent it was built as: Shidako,
+    Broodmistress, flipped, found by its name, its ability activatable."""
+    from engine.flip_cards import flipped_face
+
+    chk = set_pool("CHK")
+    game = _table(set_pool)
+    shidako = Permanent(card=flipped_face(chk["Orochi Eggwatcher"]))
+    game._put_permanent_onto_battlefield(0, shidako, None)
+    shidako.metadata["summoning_sickness_turn"] = -99
+    assert shidako.card.name == "Shidako, Broodmistress" and is_flipped(shidako)
+    bears = _put(game, set_pool("LEA")["Grizzly Bears"])
+    result = game.activate_permanent_ability(
+        0, "Shidako, Broodmistress", target_permanent_ids=[shidako.permanent_id],
+        cost_permanent_ids=[bears.permanent_id],
+    )
+    assert result.supported, result
+    settle(game)
+    assert (shidako.effective_power, shidako.effective_toughness) == (6, 6)
+    # …and, having been placed flipped, it too forgets the flip if it leaves
+    # and comes back.
+    game.remove_from_battlefield(shidako)
+    game._put_permanent_onto_battlefield(0, shidako, None)
+    assert shidako.effective_card.name == "Orochi Eggwatcher" and not is_flipped(shidako)
