@@ -625,6 +625,20 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     # ships, for Scion's reason above.
     if any(card.name == "Beacon of Unrest" for card in supported_cards):
         reviewed.add("Beacon of Unrest")
+    # Nighteyes the Desecrator (CHK) is the twelfth, reviewed at Champions of
+    # Kamigawa's W1G1, and Coffin Queen's shape on a flip card's bottom half:
+    # "{4}{B}: Put target creature card from a graveyard onto the battlefield
+    # under your control." Seen at all because a flip card's bottom half is a
+    # compilation unit (``faces.text_faces``) — read whole, Nezumi
+    # Graverobber's top half was all this walk examined. `any_graveyard`, and
+    # `derive_activation_spec` answers it (`graveyard_creature`, no
+    # `own_graveyard_only`). Driven (tests/sets/test_chk_creatures.py, W1G1):
+    # the picker offers the creature cards in both graveyards and no land, a
+    # creature from the opponent's pile arrives under the flipped Graverobber's
+    # controller, and one from its own pile returns too. A member only while
+    # Champions of Kamigawa ships, for Scion's reason above.
+    if any(card.name == "Nighteyes the Desecrator" for card in supported_cards):
+        reviewed.add("Nighteyes the Desecrator")
     assert widened == reviewed
 
 

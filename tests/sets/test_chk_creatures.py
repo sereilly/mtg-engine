@@ -269,17 +269,35 @@ def test_w1g1_nezumi_graverobber_takes_nothing_from_its_own_graveyard(set_pool):
 
 def test_w1g1_nighteyes_reanimates_a_creature_card_from_any_graveyard(set_pool):
     """Nighteyes the Desecrator: {4}{B}: Put target creature card from a
-    graveyard onto the battlefield under your control."""
+    graveyard onto the battlefield under your control. Its picker offers the
+    creature cards in both graveyards (``any_graveyard``) and no land; a card
+    from the opponent's pile arrives under its controller, and one from its
+    own pile returns too."""
     from engine.flip_cards import flip_permanent
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
 
     chk, lea = set_pool("CHK"), set_pool("LEA")
     game = _w1g1_table(set_pool)
-    game.players[1].graveyard[:] = [lea["Craw Wurm"]]
+    game.players[1].graveyard[:] = [lea["Forest"], lea["Craw Wurm"]]
+    game.players[0].graveyard[:] = [lea["Grizzly Bears"]]
     robber = _w1g1_put(game, chk["Nezumi Graverobber"])
     flip_permanent(game, robber)
-    _w1g1_activate(game, robber, target_player_index=1, target_graveyard_indices=[0])
+    ability = compile_card_oracle(robber.card).activated_abilities[0]
+    spec = derive_activation_spec(ability)
+    assert "own_graveyard_only" not in repr(spec), spec
+    refused = game.activate_permanent_ability(
+        0, robber.card.name, permanent_index=game.battlefield_index_of(robber),
+        target_player_index=1, target_graveyard_indices=[0],
+    )
+    assert not refused.supported, "a land card is no creature card"
+    _w1g1_activate(game, robber, target_player_index=1, target_graveyard_indices=[1])
     wurm = next(p for p in game.all_permanents() if p.card.name == "Craw Wurm")
-    assert game.controller_index_of(wurm) == 0 and game.players[1].graveyard == []
+    assert game.controller_index_of(wurm) == 0
+    assert [c.name for c in game.players[1].graveyard] == ["Forest"]
+    robber.tapped = False
+    _w1g1_activate(game, robber, target_player_index=0, target_graveyard_indices=[0])
+    assert any(p.card.name == "Grizzly Bears" for p in game.players[0].battlefield)
 
 
 def test_w1g1_nezumi_shortfang_flips_when_the_opponent_is_emptied(set_pool):

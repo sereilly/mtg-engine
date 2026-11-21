@@ -345,8 +345,18 @@ def _one_target_shape(rows) -> set[str]:
             step.kind for step in steps
             if step.kind.startswith("exile_") and "graveyard" in step.kind
         }
-        if exiles and exiles <= GRAVEYARD_DENIAL_KINDS and not _named_on_a_trigger(
-            BY_NAME[name]
+        # "Exile target card from **an opponent's** graveyard." (Nezumi
+        # Graverobber.) A pile the card *prints* is not the shape: the picker
+        # offers that pile alone (``opponent_graveyard_only``), so the old
+        # defaults could not misplace it and the backwards check has nothing
+        # to demand of it.
+        printed_pile = any(
+            step.payload.get("graveyard_owner")
+            for step in steps if step.kind in exiles
+        )
+        if (
+            exiles and exiles <= GRAVEYARD_DENIAL_KINDS and not printed_pile
+            and not _named_on_a_trigger(BY_NAME[name])
         ):
             shaped.add(name)
     return shaped
