@@ -73,6 +73,14 @@ MILLED_FOR_COST = "milled_for_cost"
 #: way"). ``tapped_for_cost`` beside it on the payment path is the first of
 #: them, for a genitive that names one (Unerring Sling's "the tapped creature").
 TAPPED_SET_FOR_COST = "tapped_set_for_cost"
+#: The record a "Remove N/X <kind> counters" cost writes: how many it took off,
+#: on the activation's choices (``counters_removed_for_cost``, the key the
+#: payment path already writes and ``count_from_payload``'s
+#: ``cost_counters_removed`` spec reads). A gate, like the untap row below:
+#: "**For each counter removed,** this creature gets +2/+0" (Blademane Baku)
+#: names no kind and no "this way", so only an ability whose own cost removes
+#: counters gives the words anything to count.
+COUNTERS_REMOVED_FOR_COST = "counters_removed_for_cost"
 
 _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: DISCARDED_FOR_COST,
@@ -113,6 +121,7 @@ _COST_PRODUCES: dict[type, str] = {
     # :func:`shared_creature_type_referent` refuses it on an ability whose cost
     # taps nothing.
     ast.TapPermanentsCost: TAPPED_SET_FOR_COST,
+    ast.RemoveCounterCost: COUNTERS_REMOVED_FOR_COST,
 }
 
 

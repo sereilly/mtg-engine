@@ -357,21 +357,39 @@ def _lower_add_mana(
                 # back-reference names no producer, so the one reader that
                 # decides where one lives says which — the single quantity a
                 # step of this effect produced (the sacrifice's count) — and
-                # anything else (a trigger's number, two candidates) refuses.
+                # anything else (two candidates) refuses.
                 bound = _back_reference_payload(recorded, produced, event)
-                if "amount_from" not in bound:
+                if "amount_from_trigger" in bound and not bound.get("amount"):
+                    # "Whenever a creature you control deals combat damage to
+                    # a player, add **that much** {G}." (Sakiko, Mother of
+                    # Summer.) The firing event's own number, frozen into the
+                    # trigger's context by its fire site (the damage dealt,
+                    # CR 120.4b) — the count spec ``count_from_payload`` reads
+                    # a frozen record through (``trigger_record``), on the
+                    # ``per_each`` multiplier every pip of this production
+                    # already takes. No step of this effect produced a number,
+                    # which is what sent the reader to the trigger.
+                    recorded = None
+                    payload["per_each"] = {
+                        "trigger_record": bound["amount_from_trigger"],
+                    }
+                elif "amount_from" not in bound:
                     raise LoweringError(
                         "'that much' mana names a quantity no step of this "
                         "effect produced", node=node,
                     )
-                recorded = dataclasses.replace(recorded, source=bound["amount_from"])
-            spec = recorded_count_spec(recorded, produced, node)
-            if spec is None:
-                raise LoweringError(
-                    "a mana multiplier per recorded unit names its producer",
-                    node=node,
-                )
-            payload["per_each"] = spec
+                else:
+                    recorded = dataclasses.replace(
+                        recorded, source=bound["amount_from"]
+                    )
+            if recorded is not None:
+                spec = recorded_count_spec(recorded, produced, node)
+                if spec is None:
+                    raise LoweringError(
+                        "a mana multiplier per recorded unit names its producer",
+                        node=node,
+                    )
+                payload["per_each"] = spec
         if node.per_each is not None:
             # The count is taken at resolution through the one evaluator every
             # computed amount shares, so "creature with power 4 or greater you
@@ -674,9 +692,16 @@ def _lower_add_mana_for_tapped_land(
             and not node.additional
             and not node.optional
             and not node.alt_supertype
-            and not node.spend_only
         ):
             frozen_payload: dict[str, object] = {"pips": node.pips}
+            if node.spend_only:
+                # "Until end of turn, they don't lose this mana as steps and
+                # phases end." (Shizuko, Caller of Autumn.) The clause the
+                # grammar folded on — a restriction, a rider or mana kept
+                # until end of turn — written into that seat's bucket by the
+                # handler (``restricted_mana.mana_bucket``), as every other
+                # producer writes its own.
+                frozen_payload["spend_only"] = node.spend_only
             if node.per_each is not None:
                 # "…for each artifact **they control**" (Blinkmoth Urn): the
                 # frozen seat's own board, through the rewrite every count of a

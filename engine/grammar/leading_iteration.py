@@ -34,6 +34,7 @@ from .effects import (_parse_for_each_destroy_unless_paid,
 from .effects.attachments import parse_excess_choice_paragraph
 from .effects.cards import _parse_for_each_revealed_discard
 from .sentence_clauses import (_parse_leading_controller_of_each,
+                               _parse_leading_cost_counters_removed,
                                _parse_leading_count_scale,
                                _parse_leading_for_each,
                                _parse_leading_recorded_count)
@@ -237,6 +238,12 @@ def parse_leading_iteration(
     per_record = _parse_leading_recorded_count(parse_body, stream)
     if per_record is not None:
         return per_record
+    # "**For each counter removed,** this creature gets +2/+0 until end of
+    # turn." (Blademane Baku.) The same rate over the ability's own removal
+    # cost; its four opening words are no noun phrase the loop below reads.
+    per_cost_removal = _parse_leading_cost_counters_removed(parse_body, stream)
+    if per_cost_removal is not None:
+        return per_cost_removal
     # "**For each blue instant card revealed this way,** that player discards
     # that card unless they pay 4 life." (Sirocco.) Read before the general
     # leading loop below, which would take the noun phrase and then fail the

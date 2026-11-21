@@ -96,6 +96,41 @@ def test_w1g4_gods_eye_leaves_a_spirit_behind(set_pool):
 # ==== w1g8 ==========================================================
 # w1g8's tests go between this line and the "end w1g8" line.
 
+from engine import Game as _w1g8_Game, PlayerState as _w1g8_PlayerState
+from tests.helpers import stock_libraries as _w1g8_stock_libraries
+
+
+def test_w1g8_tendo_ice_bridge_spends_its_one_charge_counter_on_a_colour(set_pool):
+    """"This land enters with a charge counter on it. / {T}: Add {C}. / {T},
+    Remove a charge counter from this land: Add one mana of any color." Played
+    from hand it enters with the counter; the second ability makes {U} and
+    takes it; with none left the coloured ability is refused and {C} still
+    comes."""
+    from engine.named_counters import counters_on
+
+    bok = set_pool("BOK")
+    game = _w1g8_Game(players=[_w1g8_PlayerState(name="P0"), _w1g8_PlayerState(name="P1")])
+    _w1g8_stock_libraries(game)
+    game.enforce_mana_costs = True
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    game.players[0].hand.append(bok["Tendo Ice Bridge"])
+    assert game.cast_from_hand(0, "Tendo Ice Bridge").supported
+    (bridge,) = game.controlled_by(0)
+    assert counters_on(bridge, "charge") == 1
+    coloured = game.activate_permanent_ability(
+        0, "Tendo Ice Bridge", ability_index=1, mana_color="U",
+    )
+    assert coloured.supported, coloured.details
+    assert game.players[0].mana_pool["U"] == 1 and counters_on(bridge, "charge") == 0
+    bridge.tapped = False
+    assert not game.activate_permanent_ability(
+        0, "Tendo Ice Bridge", ability_index=1, mana_color="R",
+    ).supported
+    assert game.players[0].mana_pool["R"] == 0
+    assert game.tap_land_for_mana(0, "Tendo Ice Bridge", "C", permanent_id=bridge.permanent_id)
+    assert game.players[0].mana_pool["C"] == 1
+
 # ==== end w1g8 ======================================================
 
 

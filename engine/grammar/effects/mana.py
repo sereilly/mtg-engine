@@ -798,16 +798,20 @@ def _parse_supertype_alternative(
     return supertype, tuple(sorted(pips.items()))
 
 
-def _parse_spend_restriction(stream: TokenStream) -> str | None:
+def _parse_spend_restriction(
+    stream: TokenStream, recipient: ast.PlayerRef
+) -> str | None:
     """``. Spend this mana only to …`` — the restriction key, or None.
 
     The same delegation `riders._attach_spend_only` makes for the ordinary
     "Add {G}" clause, made here because this production reads its own sentences
     to the end: which restrictions exist is `engine/restricted_mana.py`'s
     question, asked through its matcher so a copy of the phrase cannot drift
-    from the predicate that enforces it.
+    from the predicate that enforces it — and asked of *recipient*, because
+    "Until end of turn, **they** don't lose this mana" (Shizuko, Caller of
+    Autumn) names whose pool keeps it (``mana_clause_onto``).
     """
-    from ...restricted_mana import mana_restriction_for
+    from ...restricted_mana import mana_clause_onto
 
     mark = stream.mark()
     if not stream.accept_punct("."):
@@ -815,7 +819,9 @@ def _parse_spend_restriction(stream: TokenStream) -> str | None:
     start = stream.pos
     while not stream.exhausted and not stream.at_punct(".", ";"):
         stream.advance()
-    restriction = mana_restriction_for(stream.text_between(start, stream.pos))
+    restriction = mana_clause_onto(
+        stream.text_between(start, stream.pos), recipient.kind,
+    )
     if restriction is None:
         stream.reset(mark)
         return None
@@ -870,7 +876,8 @@ def _parse_player_adds_mana(
         return ast.AddManaForTappedLand(
             recipient, pips=tuple(sorted(pips.items())), additional=additional,
             optional=optional, alt_supertype=alt_supertype, alt_pips=alt_pips,
-            spend_only=_parse_spend_restriction(stream), per_each=per_each,
+            spend_only=_parse_spend_restriction(stream, recipient),
+            per_each=per_each,
         )
 
     # "one mana of any type that land produced". Every word is read: "any type

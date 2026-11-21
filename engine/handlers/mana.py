@@ -472,16 +472,20 @@ def frozen_seat_adds_mana(game: Game, instruction: OracleInstruction, context: O
         count_from_payload(game, context, per_each, instruction)
         if per_each is not None else 1
     )
+    # "…Until end of turn, they don't lose this mana as steps and phases end"
+    # (Shizuko, Caller of Autumn): the clause folded onto the production,
+    # written into *that seat's* bucket — the seat the mana goes to.
+    spend_only = instruction.payload.get("spend_only")
+    bucket = _mana_bucket(player, spend_only)
     added = 0
     for symbol, amount in instruction.payload.get("pips") or ():
         count = max(0, int(amount)) * multiplier
         if count:
-            player.mana_pool[str(symbol)] = (
-                player.mana_pool.get(str(symbol), 0) + count
-            )
+            bucket[str(symbol)] = bucket.get(str(symbol), 0) + count
             added += count
     game.log.append(
         f"{context.card.name}: {player.name} added {added} mana"
+        f"{_restriction_suffix(spend_only)}"
         if added else f"{context.card.name} produced no mana"
     )
     return True, "resolved"

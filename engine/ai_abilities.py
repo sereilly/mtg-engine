@@ -540,7 +540,20 @@ def _activation_candidate(
     from .cost_x_definitions import cost_x_is_defined
 
     x_symbols = (ability.source_line or "").lower().split(":", 1)[0].count("{x}")
-    if x_symbols and (spec or {}).get("x_targets"):
+    # "{1}, **Remove X ki counters** from this creature: …" (Betrayers of
+    # Kamigawa's ki Baku). An X the activator announces as surely as a mana
+    # X (CR 107.3a through CR 602.2b), which the activation path reads as the
+    # number of counters taken (``counters_removed_for_cost``) — announced
+    # here never, so Skullmane Baku paid {1} and a tap for -0/-0 and Waxmane
+    # Baku was proposed with one target for an X of 0 and refused. Sized by
+    # the same rehearsal, bounded by the counters the source holds
+    # (`_sized_x_activation`); an X sizing the target list is declined as a
+    # mana X's is.
+    removal_x = (
+        str(ability.cost.remove_counter_count or "").lower() == "x"
+        and ability.cost.remove_counter_filter is None
+    )
+    if (x_symbols or removal_x) and (spec or {}).get("x_targets"):
         return None
     if x_symbols and cost_x_is_defined(ability.source_line or ""):
         # The X the activator announces: none, here.
@@ -972,7 +985,7 @@ def _activation_candidate(
             game, player_index, permanent, ability, candidate,
             at_instant_speed=_AT_INSTANT_SPEED.get(),
         )
-    if x_symbols:
+    if x_symbols or removal_x:
         return _sized_x_activation(game, player_index, permanent, ability, candidate)
     if word_choices:
         return _text_change_activation(game, player_index, candidate, word_choices)

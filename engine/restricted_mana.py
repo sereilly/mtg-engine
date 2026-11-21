@@ -90,6 +90,17 @@ class ManaRestriction:
     #: own all the same, because only a bucket can say afterwards which units
     #: a payment took (:func:`debit_restricted_mana`'s attribution).
     rider: bool = False
+    #: Mana that **stays**: "Add {G}. Until end of turn, you don't lose this
+    #: mana as steps and phases end." (Sakura-Tribe Springcaller.) Neither a
+    #: restriction nor a CR 106.6 rider — the mana pays for anything, a payment
+    #: with no purpose included — but an exception to CR 500.5's emptying for
+    #: these units alone, so they need a bucket for the reason a rider's do:
+    #: the pool is a count per symbol and cannot say which {G} stays.
+    #: ``Game.clear_mana_pools`` keeps the bucket as every step ends but the
+    #: cleanup step, where CR 514.2 has already ended the "until end of turn"
+    #: effect, and :func:`take_from_pool` spends it **last** (CR 601.2h: the
+    #: payer chooses, and mana that empties sooner is the mana a payer spends).
+    kept: bool = False
 
 
 def _type_line(obj) -> str:
@@ -222,6 +233,14 @@ def _artifact_spell_or_artifact_ability(purpose: "PaymentPurpose") -> bool:
     return _casting_an_artifact(purpose) or _activating_an_artifact_ability(purpose)
 
 
+#: "Until end of turn, you don't lose this mana as steps and phases end."
+#: Anchored, with the holder captured (:func:`kept_mana_holder`).
+_KEPT_SENTENCE = re.compile(
+    r"^until end of turn, (?P<holder>you|they) don['’]t lose this mana as "
+    r"steps and phases end\.?$"
+)
+
+
 # The printed line, anchored at both ends. Anchored because a sentence saying
 # more than one of these is a restriction this file does not implement, and a
 # prefix match would claim it and then enforce the narrower rule — mana more
@@ -323,18 +342,68 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
         re.compile(r"^if that mana is spent on a creature spell, it gains haste\.?$"),
         ManaRestriction("rider_haste_creature", _any_payment, rider=True),
     ),
+    # Betrayers of Kamigawa's four Snake Shamans: mana an effect adds that the
+    # pool keeps until end of turn (:attr:`ManaRestriction.kept`). A row here
+    # for the riders' reason: the grammar's rider attach asks this one matcher
+    # of the sentence after an "Add …", and the units need a bucket. The holder
+    # is "you" after "add" and "they" after "that player adds" (Shizuko, Caller
+    # of Autumn) — whose pool the mana went into, which the attach checks
+    # against the production it folds onto (:func:`kept_mana_holder`).
+    (
+        _KEPT_SENTENCE,
+        ManaRestriction("kept_until_end_of_turn", _any_payment, kept=True),
+    ),
 )
 
 #: The keys above, for a reader that needs the set rather than a lookup.
 RESTRICTION_KEYS = frozenset(r.key for _pattern, r in _PATTERNS)
 #: The keys whose rows are riders (:attr:`ManaRestriction.rider`).
 RIDER_KEYS = frozenset(r.key for _pattern, r in _PATTERNS if r.rider)
+#: The keys whose rows keep their mana until end of turn
+#: (:attr:`ManaRestriction.kept`).
+KEPT_KEYS = frozenset(r.key for _pattern, r in _PATTERNS if r.kept)
 
 
 def is_rider_key(key: "str | None") -> bool:
     """Whether a bucket *key* holds a rider's mana rather than restricted
     mana — the log's note and the payment's attribution tell them apart."""
     return bool(key) and str(key).partition(PARAMETER)[0] in RIDER_KEYS
+
+
+def is_kept_key(key: "str | None") -> bool:
+    """Whether a bucket *key* holds mana its pool keeps as steps and phases end
+    until end of turn — ``Game.clear_mana_pools`` and the payment's order ask."""
+    return bool(key) and str(key).partition(PARAMETER)[0] in KEPT_KEYS
+
+
+def kept_mana_holder(sentence: str) -> str | None:
+    """Whose pool *sentence* keeps — "you" or "they" — or None when it is not
+    the kept-mana sentence."""
+    match = _KEPT_SENTENCE.match(" ".join(sentence.strip().lower().split()))
+    return match.group("holder") if match else None
+
+
+#: The production's recipient each kept-mana pronoun names: "you" the ability's
+#: controller (a bare "Add …"), "they" the seat the event named ("that player
+#: adds …").
+_KEPT_HOLDER_RECIPIENTS = {"you": "you", "they": "that_player"}
+
+
+def mana_clause_onto(sentence: str, recipient: str) -> ManaRestriction | None:
+    """The clause *sentence* puts on mana an "add" production just made for
+    *recipient* (a ``PlayerRef`` kind: "you" for a bare "Add …"), or None.
+
+    One reader for both of the grammar's attach sites (``riders`` behind an
+    "Add …", ``effects/mana`` behind "that player adds …"), because the kept
+    sentence names a pool: "you don't lose this mana" behind "that player
+    adds" would keep mana in a pool the sentence never named, so a pronoun
+    that disagrees with the recipient is no clause here at all."""
+    restriction = mana_restriction_for(sentence)
+    if restriction is not None and restriction.kept:
+        holder = kept_mana_holder(sentence)
+        if _KEPT_HOLDER_RECIPIENTS.get(holder or "") != recipient:
+            return None
+    return restriction
 
 
 def mana_restriction_for(sentence: str) -> ManaRestriction | None:
@@ -352,14 +421,17 @@ def restriction_admits(key: str, purpose: "PaymentPurpose | None") -> bool:
     An unknown key admits **nothing**. That is the safe direction: a key with no
     predicate behind it is mana whose restriction the engine cannot test, and
     treating it as unrestricted would spend it on anything. A payment with no
-    purpose admits nothing for the same reason.
+    purpose admits nothing for the same reason — except **kept** mana
+    (:attr:`ManaRestriction.kept`), which is plain mana that stays: no clause
+    narrows what it pays for, so a payment nobody classified (an effect's "you
+    may pay", a counterspell's tax) may spend it as it spends the pool.
     """
-    if purpose is None:
-        return False
     name, _, parameter = key.partition(PARAMETER)
     for _pattern, restriction in _PATTERNS:
         if restriction.key != name:
             continue
+        if purpose is None:
+            return restriction.kept and not parameter
         if restriction.reads_parameter:
             return bool(restriction.admits(purpose, parameter))
         # A parameter on a restriction that reads none is a key nobody wrote and
@@ -403,10 +475,11 @@ def spendable_restricted_mana(player, purpose: "PaymentPurpose | None") -> dict[
     Lives here rather than beside one payment path, because there are three of
     those now and a second copy of the merge would be a second opinion about
     what a bucket may pay for.
+
+    A payment with no purpose is offered the kept buckets alone
+    (:func:`restriction_admits`).
     """
     merged: dict[str, int] = {}
-    if purpose is None:
-        return merged
     for key, bucket in (getattr(player, "restricted_mana", None) or {}).items():
         if not any(bucket.values()) or not restriction_admits(key, purpose):
             continue
@@ -423,32 +496,70 @@ def debit_restricted_mana(
     In the merge's own order, so the attribution matches what was offered. The
     order between two admitting buckets is arbitrary and does not matter: both
     are spendable on this payment and both empty at the same step boundary, so
-    no observable differs.
+    no observable differs — except a **kept** bucket, which does not empty
+    then, and is drawn on after every other (:func:`take_from_pool`).
     """
+    taken = _debit_buckets(player, purpose, symbol, amount, kept=False)
+    _debit_buckets(player, purpose, symbol, amount - taken, kept=True)
+
+
+def _debit_buckets(player, purpose, symbol: str, amount: int, *, kept: bool) -> int:
+    """Take up to *amount* of *symbol* out of the admitting buckets whose
+    :func:`is_kept_key` is *kept*; how many were taken."""
     remaining = amount
     for key, bucket in (getattr(player, "restricted_mana", None) or {}).items():
         if remaining <= 0:
             break
-        if not restriction_admits(key, purpose):
+        if is_kept_key(key) != kept or not restriction_admits(key, purpose):
             continue
         taken = min(remaining, bucket.get(symbol, 0))
         if taken:
             bucket[symbol] = bucket.get(symbol, 0) - taken
             remaining -= taken
+    return amount - remaining
+
+
+def take_from_pool(
+    player, purpose: "PaymentPurpose | None", symbol: str, amount: int
+) -> int:
+    """Spend *amount* of *symbol* for *purpose* out of everything *player* holds
+    that may pay for it; how many units could not be found (0 when it paid).
+
+    **In the order a payer would choose** (CR 601.2h: the player paying decides
+    which mana pays): a restricted or rider bucket first, whose units are lost
+    at the next step boundary and may pay for less; then the open pool; then a
+    kept bucket last, because it is the one mana still there after the step
+    ends. The kept-last half is the reason this exists: the casting path
+    attributed what a merged payment spent to the buckets first, which for
+    Sakura-Tribe Springcaller's {G} would spend the mana that stays and leave a
+    Forest's {G} to empty with the main phase.
+    """
+    remaining = amount - _debit_buckets(player, purpose, symbol, amount, kept=False)
+    from_pool = min(remaining, max(0, int(player.mana_pool.get(symbol, 0) or 0)))
+    if from_pool:
+        player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - from_pool
+        remaining -= from_pool
+    remaining -= _debit_buckets(player, purpose, symbol, remaining, kept=True)
+    return remaining
 
 
 __all__ = [
     "ACTIVATE",
     "CAST",
     "CUMULATIVE_UPKEEP",
+    "KEPT_KEYS",
     "PARAMETER",
     "ManaRestriction",
     "PaymentPurpose",
     "RESTRICTION_KEYS",
     "RIDER_KEYS",
     "debit_restricted_mana",
+    "is_kept_key",
     "is_rider_key",
+    "kept_mana_holder",
+    "mana_clause_onto",
     "mana_restriction_for",
     "restriction_admits",
     "spendable_restricted_mana",
+    "take_from_pool",
 ]

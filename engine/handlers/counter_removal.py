@@ -22,7 +22,8 @@ from ..oracle_types import COUNTERS_REMOVED
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
 from ._amounts import resolve_amount
-from ._targets import frozen_that_player_seat, resolve_target_permanent
+from ._targets import (frozen_that_player_seat, recorded_permanent_ids,
+                       resolve_target_permanent)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -252,17 +253,37 @@ def remove_counter_from_target(game: Game, instruction: OracleInstruction, conte
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
-    victim = resolve_target_permanent(
-        game, context,
-        predicate=lambda perm: subject_matches(
-            game, perm, described, observer=observer,
-            source=context.source_permanent,
-        ),
-        fallback_on_invalid_choice=False,
-    )
-    if victim is None:
-        game.log.append(f"{name}: its target is gone")
-        return True, "no target"
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        # "…unless you remove a counter from **a permanent you control**."
+        # (Chisei, Heart of Oceans.) No target: the object the step in front
+        # of this one picked (``choose_permanent``), by id — gone since, and
+        # nothing is named in its place (CR 400.7).
+        victim = next(
+            (
+                found for found in (
+                    game.permanent_by_id(permanent_id)
+                    for permanent_id in recorded_permanent_ids(context, recorded_key)
+                )
+                if found is not None
+            ),
+            None,
+        )
+        if victim is None:
+            game.log.append(f"{name}: nothing was chosen to remove a counter from")
+            return True, "resolved"
+    else:
+        victim = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: subject_matches(
+                game, perm, described, observer=observer,
+                source=context.source_permanent,
+            ),
+            fallback_on_invalid_choice=False,
+        )
+        if victim is None:
+            game.log.append(f"{name}: its target is gone")
+            return True, "no target"
     counter = str(instruction.payload.get("counter", ANY_COUNTER_KIND))
     if counter != ANY_COUNTER_KIND:
         if counters_on(victim, counter) <= 0:
