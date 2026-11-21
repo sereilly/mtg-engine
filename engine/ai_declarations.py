@@ -1026,6 +1026,14 @@ def _kills_back(game: Game, attacker: Permanent, members: list[Permanent]) -> li
     power = pumped_combat_damage(attacker, pumps)
     if power <= 0:
         return shrunk
+    if game._has_keyword(attacker, "double strike"):
+        # CR 702.4b: a double striker assigns its combat damage in both
+        # steps, each divided afresh among the blockers still there — so in
+        # the defender's worst case its power is spent twice. Read once, Kenzo
+        # the Hardhearted (double strike, bushido 2: a 5/6 once blocked) was
+        # forecast to take one of two 3/3s and took both (CHK fu8, the gang
+        # census under the promotion).
+        power *= 2
     costs: list[tuple[Permanent, int]] = []
     for member in members:
         if any(member is gone for gone in shrunk):
