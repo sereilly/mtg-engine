@@ -3,8 +3,8 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **7021**
-- Passed: **1109** (780 checked in-game, 329 auto-passed)
-- Failed: **2**
+- Passed: **1111** (782 checked in-game, 329 auto-passed)
+- Failed: **0**
 - Equivalent to a passing card: **84**
 - Untested: **5826**
 
@@ -1126,7 +1126,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Commander Greven il-Vec | ⬜ untested |  |
 | Commando Raid | ⬜ untested |  |
 | Common Cause | ⬜ untested |  |
-| Commune with Nature | ❌ fail | Browser: the look-top-pick modal shows all five cards with no ineligible marking and no way to decline the may. Clicking a noncreature is refused (400) and the modal hides, stranding the prompt until a page reload; with no creature in the top five nothing can be answered (the action refuses a decline: hand_index is required). The wire omits the engine's optional and filter (live_look_top_candidates). |
+| Commune with Nature | ✅ pass |  |
 | Complex Automaton | ⬜ untested |  |
 | Complicate | ⬜ untested |  |
 | Composite Golem | ⬜ untested |  |
@@ -2644,7 +2644,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Hanabi Blast | ⬜ untested |  |
 | Hand of Justice | ⬜ untested |  |
 | Hand to Hand | ⬜ untested |  |
-| Hankyu | ❌ fail | Browser: the granted {T}: Put an aim counter on Hankyu asks Choose target for the equipped creature, click a valid creature, though the ability targets nothing; its ability_target_specs entry is kind creature with may_name_nothing. Any creature clicked (the AI's included) and the counter still lands on Hankyu. The shot ({T}, remove all aim counters: 2 damage to the AI) and equip work. |
+| Hankyu | ✅ pass |  |
 | Hanna's Custody | ⬜ untested |  |
 | Hanna, Ship's Navigator | ⬜ untested |  |
 | Hapless Researcher | ⬜ untested |  |
