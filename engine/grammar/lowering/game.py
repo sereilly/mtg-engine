@@ -434,7 +434,9 @@ def _lower_count_objects(node: ast.CountObjects) -> tuple[OracleInstruction, ...
 _SKIPPABLE_SEATS = frozenset({"you", "target_player", "target_opponent"})
 
 
-def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
+def _lower_skip_step(
+    node: "ast.SkipStep", event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"You skip your next draw step." (Ivory Gargoyle.)
 
     The seat is on the payload, not implied: ``Game.skip_next_step`` is keyed by
@@ -448,12 +450,27 @@ def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
     resolution which seat was named. That is the whole difference between the
     two sentences, which is why one lowering serves both.
 
+    "Whenever Shisato deals combat damage to a player, **that player** skips
+    their next untap step." (Shisato, Whispering Hunter.) The seat the firing
+    event froze, read exactly as :func:`_lower_skip_phase` reads Blinding
+    Angel's identical word one level of the turn structure up: an event that
+    froze no seat refuses, since read as the caster's seat it would skip
+    Shisato's own controller's untap step.
+
     Every other player reference the grammar can read names a set of seats
-    ("each opponent") or one an earlier event fixed, and no card in the pool
-    prints one — so it refuses by name rather than silently skipping the
-    controller's step.
+    ("each opponent"), and no card in the pool prints one — so it refuses by
+    name rather than silently skipping the controller's step.
     """
     who = getattr(node.subject, "kind", None)
+    frozen = (
+        frozen_seat_record(who, event)
+        if who in ("that_player", "defending_player") else None
+    )
+    if frozen is not None:
+        payload = {"step": node.step, "seat": frozen, "count": int(node.count)}
+        if node.this_turn:
+            payload["this_turn"] = True
+        return (OracleInstruction("skip_next_step", "", payload),)
     if who not in _SKIPPABLE_SEATS:
         raise LoweringError(
             f"no handler skips a step for {who!r}", node=node

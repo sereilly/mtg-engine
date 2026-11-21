@@ -509,7 +509,12 @@ class UntapStepMixin:
         player = self.players[player_index]
         constraints = self._untap_constraints(player_index)
 
-        if constraints["skip_all_source"] is not None:
+        # A step a one-shot skip will take (Avizoa, Shisato) offers nothing to
+        # choose in it either.
+        if (
+            constraints["skip_all_source"] is not None
+            or self.step_skip_owed("untap", player_index)
+        ):
             return None
 
         limits = constraints["limits"]
@@ -668,7 +673,18 @@ class UntapStepMixin:
         # also decides the one ordering question the rule leaves open: a Stasis
         # that phases in during this event does not retroactively skip the step
         # it arrived in.
-        if constraints["skip_all_source"] is None:
+        #
+        # "You skip your next untap step." (Avizoa; Yosei's and Shisato's
+        # "that player skips their next untap step".) CR 614.10's one-shot
+        # skip, recorded against the seat in ``Game.skip_step_counts`` and
+        # spent here — the draw step spends its own the same way. A step
+        # Stasis already skips does not spend it (CR 614.10a: it waits for the
+        # first occurrence it can skip).
+        skipped_by_record = (
+            constraints["skip_all_source"] is None
+            and self._consume_step_skip("untap", player_index)
+        )
+        if constraints["skip_all_source"] is None and not skipped_by_record:
             self.resolve_phasing_for(player_index)
         self._advance_summoning_sickness(player_index)
         # Record untapped lands at the beginning of the turn — i.e. *before* the
@@ -690,6 +706,9 @@ class UntapStepMixin:
 
         if constraints["skip_all_source"] is not None:
             self.log.append(f"{player.name} skipped untap due to {constraints['skip_all_source']}")
+            return 0
+        if skipped_by_record:
+            self.log.append(f"{player.name} skips their untap step")
             return 0
 
         # "During your next untap step, as you untap your permanents, return

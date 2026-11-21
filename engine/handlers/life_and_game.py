@@ -1155,6 +1155,16 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
         if seat is None:
             game.log.append(f"{context.card.name}: no recorded player, no skip")
             return True, "resolved"
+    elif who in _FROZEN_SKIP_SEATS:
+        # "Whenever Shisato deals combat damage to a player, **that player**
+        # skips their next untap step." The seat the damage event froze (CR
+        # 603.10), read as ``skip_next_phase`` reads Blinding Angel's. No
+        # record skips nobody's step, never the caster's.
+        recorded = (context.trigger_context or {}).get(_FROZEN_SKIP_SEATS[who])
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no skip")
+            return True, "resolved"
+        seat = recorded
     else:
         chosen = context.target
         if chosen not in game.players:

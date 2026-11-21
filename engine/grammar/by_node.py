@@ -298,7 +298,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.GainActivatedAbilitiesOf: _lower_gain_activated_abilities_of,
     ast.PayLife: _lower_pay_life,
     ast.DamageReducedByPaidMana: _lower_damage_reduced_by_paid_mana,
-    ast.SkipStep: _lower_skip_step,
     ast.SkipTurn: _lower_skip_turn,
     ast.TargetingBan: _lower_targeting_ban,
     ast.ExtraLandPlays: _lower_extra_land_plays,
@@ -506,6 +505,9 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # fired. It left the name-only table above the moment it started deciding
     # that.
     ast.SkipPhase: _lower_skip_phase,
+    # "...**that player** skips their next untap step" (Shisato): the same
+    # frozen seat one level of the turn structure down.
+    ast.SkipStep: _lower_skip_step,
     # "…**that player** chooses draw step, main phase, or combat phase. The
     # player skips each instance of the chosen step or phase this turn."
     # (Fatespinner.) The chooser is the seat the upkeep froze, so the event
