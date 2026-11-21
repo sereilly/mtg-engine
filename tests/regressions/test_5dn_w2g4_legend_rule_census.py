@@ -14,6 +14,17 @@ copies under a seat a person sits at and asks two things:
 
 Validated backwards: with the old sweep put back (keep the first, ask nobody)
 the census names every card it examined.
+
+**A card that exempts itself is asked about the board the rule applies to.**
+"If there are exactly two permanents named Brothers Yamazaki on the
+battlefield, the "legend rule" doesn't apply to them." (CHK.) Two copies of
+that card owe nothing, and that is the card working. So the census reads the
+exemption off the card's own text (``legend_rule.legend_rule_exemption``, the
+reader the rule enforces with — never a list of names), asks (a) and (b) of
+the smallest board the exemption does not cover (three Brothers), and asks of
+the exempt board that the rule reader agrees it is exempt
+(``legend_rule.exempt_from_legend_rule``) and that every copy stays with
+nothing owed.
 """
 
 from __future__ import annotations
@@ -22,6 +33,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
+from engine.legend_rule import exempt_from_legend_rule, legend_rule_exemption
 from engine.models import Permanent
 from engine.mixins import game_ending
 
@@ -55,39 +67,81 @@ def _placed(card) -> Permanent:
     return permanent
 
 
+def _exempt_counts(card) -> frozenset[int]:
+    """How many copies of *card* its own text exempts from the legend rule
+    ("exactly two permanents named <this card>"), read by the rule's own
+    reader. Empty for every card that prints no such sentence."""
+    return frozenset(
+        count
+        for line in (card.oracle_text or "").splitlines()
+        if (exemption := legend_rule_exemption(line)) is not None
+        for count, name in [exemption]
+        if name == card.name.lower()
+    )
+
+
+def _board(card, copies: int) -> tuple[Game, list[Permanent]]:
+    placed = [_placed(card) for _ in range(copies)]
+    game = Game(
+        players=[
+            PlayerState(name="P0", battlefield=list(placed)),
+            PlayerState(name="P1"),
+        ],
+        interactive_seats={0},
+    )
+    return game, placed
+
+
+def _binned_unasked(game) -> bool:
+    return any("704.5j" in str(line) for line in game.log)
+
+
 def census(cards) -> tuple[int, dict[str, str]]:
-    """``(examined, lost)``: how many cards left two copies on the battlefield
-    for the legend rule to be asked about, and each card the rule failed —
-    its name and what went wrong."""
+    """``(examined, lost)``: how many cards left their copies on the
+    battlefield for the legend rule to be asked about, and each card the rule
+    failed — its name and what went wrong.
+
+    Two copies, or — for a card that exempts a count of itself — the fewest
+    copies (two or more) the exemption does not cover."""
     examined, lost = 0, {}
     for card in cards:
-        first, second = _placed(card), _placed(card)
-        game = Game(
-            players=[
-                PlayerState(name="P0", battlefield=[first, second]),
-                PlayerState(name="P1"),
-            ],
-            interactive_seats={0},
-        )
-        binned_unasked = any("704.5j" in str(line) for line in game.log)
+        exempt = _exempt_counts(card)
+        copies = next(n for n in range(2, 2 + len(exempt) + 1) if n not in exempt)
+        game, placed = _board(card, copies)
+        binned_unasked = _binned_unasked(game)
         owed = [c for c in game.pending_choices if c.kind == "legend_rule"]
-        if not binned_unasked and not (
-            game.is_on_battlefield(first) and game.is_on_battlefield(second)
-        ):
+        if not binned_unasked and not all(game.is_on_battlefield(p) for p in placed):
             continue  # another state-based action took a copy: nothing to ask
         examined += 1
         if binned_unasked:
             lost[card.name] = "a copy left by the legend rule with nobody asked"
             continue
         ids = owed[0].data.get("candidates") if len(owed) == 1 else None
-        if ids != [first.permanent_id, second.permanent_id]:
+        if ids != [p.permanent_id for p in placed]:
             lost[card.name] = f"owed {[c.data for c in owed]}"
             continue
-        if not game.resolve_pending_choice("legend_rule", 0, permanent_id=second.permanent_id):
-            lost[card.name] = "the answer naming the second copy was refused"
+        kept = placed[-1]
+        if not game.resolve_pending_choice("legend_rule", 0, permanent_id=kept.permanent_id):
+            lost[card.name] = "the answer naming the last copy was refused"
             continue
-        if game.is_on_battlefield(first) or not game.is_on_battlefield(second):
+        if not game.is_on_battlefield(kept) or any(
+            game.is_on_battlefield(p) for p in placed[:-1]
+        ):
             lost[card.name] = "the answer is not what stayed"
+            continue
+        # The exempt board: the rule reader agrees it is exempt, and every
+        # copy stays with nothing owed. Under the old sweep a copy is binned
+        # here too, and named the way every other card is.
+        for count in sorted(exempt):
+            game, placed = _board(card, count)
+            if _binned_unasked(game):
+                lost[card.name] = "a copy left by the legend rule with nobody asked"
+            elif not exempt_from_legend_rule(game, card.name):
+                lost[card.name] = f"{count} copies are not exempt on the board"
+            elif any(c.kind == "legend_rule" for c in game.pending_choices) or not all(
+                game.is_on_battlefield(p) for p in placed
+            ):
+                lost[card.name] = f"{count} exempt copies did not all stay unasked"
     return examined, lost
 
 
