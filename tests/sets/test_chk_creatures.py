@@ -488,10 +488,11 @@ def test_w1g3_yosei_announces_a_player_then_up_to_five_of_that_players_permanent
     _w1g3_settle(game)
     assert _w1g3_tapped(game, 1) == ["Forest", "Forest", "Grizzly Bears"]
     assert _w1g3_tapped(game, 0) == []
+    assert game.skip_step_counts == {(1, "untap"): 1}
     game.start_next_turn()
     assert game.active_player_index == 1
     assert _w1g3_tapped(game, 1) == ["Forest", "Forest", "Grizzly Bears"]
-    assert any("skipped their untap step" in line for line in game.log)
+    assert game.skip_step_counts == {}
     game.start_next_turn()
     game.start_next_turn()
     assert _w1g3_tapped(game, 1) == []

@@ -38,13 +38,15 @@ def test_avizoa_skips_its_controllers_next_untap_step(set_pool):
     assert game.activate_permanent_ability(0, "Avizoa").supported
     settle(game)
     assert avizoa.effective_power == 4
+    assert game.skip_step_counts == {(0, "untap"): 1}
     game.become_tapped(avizoa)
     game.become_tapped(land)
     game.start_next_turn()  # P2's turn
-    game.start_next_turn()  # P1's: the untap step is skipped
+    assert game.skip_step_counts == {(0, "untap"): 1}
+    game.start_next_turn()  # P1's: the untap step is skipped, the record spent
     assert game.active_player_index == 0
     assert avizoa.tapped and land.tapped
-    assert any("skipped their untap step" in line for line in game.log)
+    assert game.skip_step_counts == {}
     game.start_next_turn()
     game.start_next_turn()  # the next one happens
     assert not avizoa.tapped and not land.tapped
