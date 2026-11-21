@@ -2,7 +2,8 @@
 
 The draw replacements that put cards in front of someone before — or instead
 of — the draw: revealing until a card of a kind turns up (Abundance), looking
-at the top cards and drawing one (Aladdin's Lamp), revealing the top card and
+at the top cards and drawing one (Aladdin's Lamp) or keeping one without a
+draw (Tomorrow, Azami's Familiar), revealing the top card and
 acting on it (Enduring Renewal), revealing the card and letting any other
 player pay life to bin it (Zur's Weirding), and the drawn creature card that is
 discarded unless its drawer pays life (Breathstealer's Crypt). One that waits
@@ -25,7 +26,8 @@ from ..search_filters import card_has_type
 from ..effect_ordering import source_names
 from .draws import (LAMP_DRAW, QUEUED_EXCLUDES, draw_charge_source, draws_behind,
                     queued_excludes)
-from .registry import (DRAW_LOOKING_AT_TOP, DRAW_REVEALED_AND_TAXED,
+from .registry import (DRAW_LOOKING_AT_TOP, DRAW_LOOKS_AND_KEEPS,
+                       DRAW_REVEALED_AND_TAXED,
                        DRAW_REVEALED_UNLESS_PAID, DRAW_REVEALS_TOP,
                        DRAW_REVEALS_UNTIL_KIND, ReplacementOutcome,
                        replacement_effect)
@@ -282,6 +284,107 @@ def _resolve_lamp_draw(game, choice: ReplacementChoice, option_index: int) -> in
         choice.data.get(QUEUED_EXCLUDES) or (),
     )
     return drawn
+
+
+#: Tomorrow, Azami's Familiar, both printed sentences. The constant is the whole
+#: line because the interceptor performs the whole line — the look, the card
+#: kept and the rest put on the bottom in an order the looker chooses. A claim
+#: stopping at the first sentence would admit a look that keeps nothing.
+LOOK_AND_KEEP_INSTEAD_OF_DRAW_TEXT = (
+    "if you would draw a card, look at the top three cards of your library "
+    "instead. put one of those cards into your hand and the rest on the bottom "
+    "of your library in any order"
+)
+
+#: How many cards the look turns over, read by the interceptor alone; the
+#: constant above carries the printed word.
+LOOK_AND_KEEP_COUNT = 3
+
+
+def _look_and_keep_sources(game, payload: dict) -> list:
+    """Every permanent on the **drawing player's** board whose text is this
+    replacement and that has not had its opportunity on this event (CR 614.5).
+
+    One seat's board, because the sentence says "**you**" (CR 109.5) — the
+    reading ``_reveal_top_sources`` takes of Enduring Renewal for the same
+    word. Two of them change nothing ("Having multiple Tomorrows on the
+    battlefield does nothing extra", 2005-02-01): the first consumes the draw,
+    and a consumed draw is no event for the second to replace.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for perm in game.controlled_by(seat)
+        if LOOK_AND_KEEP_INSTEAD_OF_DRAW_TEXT
+        in (perm.effective_card.oracle_text or "").lower()
+        and perm.permanent_id not in exclude
+    ]
+
+
+def _applies_look_and_keep(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _look_and_keep_sources(game, payload)
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_LOOKS_AND_KEEPS, applies=_applies_look_and_keep,
+    sources=_look_and_keep_sources,
+    label="Look at the top three cards and keep one instead of drawing",
+)
+def _look_and_keep_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Tomorrow, Azami's Familiar: "If you would draw a card, look at the top
+    three cards of your library instead. Put one of those cards into your hand
+    and the rest on the bottom of your library in any order."
+
+    The look-and-pick an Impulse resolves, armed by the draw rather than by a
+    spell: the same ``look_top_pick`` prompt (what is offered, what an answer
+    is checked against, what an unasked seat takes, and the client's picker
+    are one rule), with the rest laid on the bottom and their order asked of
+    the looker (CR 401.4, ``offer_library_bottom_order``). The prompt is
+    stamped with this seat's draw (``replacement_choices.DRAW_OF``), so the
+    draws queued behind this one park until it is answered (CR 121.2).
+
+    **Not a draw** (2005-02-01: "it won't trigger abilities that trigger when
+    cards are drawn"): the kept card is put into the hand, so nothing is added
+    to ``cards_drawn_this_turn`` and no draw is announced. Two draws are two
+    looks in turn. Fewer than three cards: the look is of what is there, one
+    kept and the rest put back. An empty library: nothing happens, and since
+    the attempt was replaced CR 704.5b has no draw to fail — "you can't lose
+    the game by being required to draw more cards than are in your library".
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    count = int(payload["count"])
+    source = min(
+        _look_and_keep_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    top_count = min(LOOK_AND_KEEP_COUNT, len(player.library))
+    if top_count <= 0:
+        game.log.append(
+            f"{player.name} has no card to look at instead of drawing "
+            f"({source.card.name})"
+        )
+    else:
+        game.log.append(
+            f"{player.name} looks at the top {top_count} card(s) of their "
+            f"library instead of drawing ({source.card.name})"
+        )
+        game.arm_pending_choice(
+            "look_top_pick", seat,
+            top_count=top_count, amount=LOOK_AND_KEEP_COUNT,
+            card_name=source.card.name, filter={}, filters=(),
+            optional=False, rest_order="any",
+            rest_destination="library_bottom", pick_destination="hand",
+            remaining=1,
+        )
+    # The draws queued behind this one are their own draws (CR 121.2) and get
+    # their own trip through the seam — this replacement again, which is what
+    # two draws under Tomorrow are. The seam parks them while the look above
+    # is owed.
+    payload["drawn"] = draws_behind(game, player, count - 1, queued_excludes(payload))
+    return ReplacementOutcome(replaced=True)
 
 
 #: Enduring Renewal, all three printed sentences. The constant is the whole
