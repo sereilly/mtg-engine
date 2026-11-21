@@ -22,7 +22,8 @@ from ..aura_grants import (AMONG_CONTROLLED_PROTECTION_COLORS,
                            CHOSEN_PROTECTION_COLOR, aura_protection_colors)
 from ..aura_attachment import auras_attached_to
 from ..keywords import (
-    EACH_OF_ITS_COLORS, EACH_OF_THE_EXILED_CARDS_CARD_TYPES, PROTECTION_GRANT_STAMPS,
+    EACH_COLOR_AMONG_PERMANENTS_YOU_CONTROL, EACH_OF_ITS_COLORS,
+    EACH_OF_THE_EXILED_CARDS_CARD_TYPES, PROTECTION_GRANT_STAMPS,
     abilities_lost_at, printed_protection_clauses, protection_flag_granted_after,
     protection_qualities_named, protection_removals,
 )
@@ -111,9 +112,21 @@ class ProtectionMixin:
             # other word is answered without touching the layers.
             held = None
             exiled_types = None
+            among = None
             member = " ".join(str(word).lower().split())
             if member == EACH_OF_ITS_COLORS:
                 held = self._effective_colors(permanent)
+            elif member == EACH_COLOR_AMONG_PERMANENTS_YOU_CONTROL:
+                # "This creature has protection from each color among
+                # permanents you control." (Empty-Shrine Kannushi.) CR
+                # 702.16i over the holder's controller's board (CR 109.5),
+                # read now through layer 5 -- the holder among them -- the
+                # Pledge of Loyalty reading below with the holder's seat.
+                seat = self.controller_index_of(permanent)
+                among = (
+                    colors_among(self, self.controlled_by(seat))
+                    if seat is not None else frozenset()
+                )
             elif member == EACH_OF_THE_EXILED_CARDS_CARD_TYPES:
                 # "…each of the exiled card's card types" (Mirror Golem): the
                 # card types of the cards *this* permanent's imprint exiled and
@@ -123,6 +136,7 @@ class ProtectionMixin:
                 exiled_types = exiled_card_types(self, permanent)
             for quality in protection_qualities_named(
                 word, holder_colors=held, exiled_card_types=exiled_types,
+                controlled_colors=among,
             ) or ():
                 _add(quality, stamp)
 
@@ -419,6 +433,13 @@ class ProtectionMixin:
                 else source.has_type(word)
                 for word in value.split()
             )
+        if kind == "typed_except":
+            # "Protection from **non-Spirit creatures**" (Harbinger of
+            # Spring): the card type, through the layers, and not the
+            # excluded creature type -- so a creature made a Spirit stops
+            # being one it is protected from.
+            card_type, excluded = value.split()
+            return source.has_type(card_type) and not source.has_type(excluded)
         return False
 
     def _card_has_quality(
@@ -478,6 +499,11 @@ class ProtectionMixin:
             # of that one line (CR 205.1).
             printed = (card.type_line or "").lower().split()
             return all(word in printed for word in value.split())
+        if kind == "typed_except":
+            # The exclusion off the printed line, for the same reason.
+            printed = (card.type_line or "").lower().split()
+            card_type, excluded = value.split()
+            return card_type in printed and excluded not in printed
         return False
 
     def _source_has_quality(

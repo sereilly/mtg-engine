@@ -199,6 +199,72 @@ def test_w1g6_fumiko_compels_only_her_opponents_creatures(set_pool):
     ok, why = game.declare_attackers(0, [], 1)
     assert ok, why
 
+
+def test_w1g6_harbinger_of_spring_is_protected_from_non_spirit_creatures(set_pool):
+    """"Protection from non-Spirit creatures" (CR 702.16a: a card type with a
+    creature type excluded). Bob's Grizzly Bears can't block it (702.16f) and
+    its combat damage to a blocking Harbinger is prevented (702.16e); Bob's
+    Gnarled Mass, a Spirit, blocks it and its damage is dealt."""
+    from tests.helpers import declare_attack as _w1g6_declare_attack
+
+    lea = set_pool("LEA")
+    bok = set_pool("BOK")
+    game, (harbinger, bears, mass) = _w1g6_table(
+        set_pool, mine=[bok["Harbinger of Spring"]],
+        theirs=[lea["Grizzly Bears"], bok["Gnarled Mass"]],
+    )
+    assert not game._can_block_attacker(bears, harbinger)
+    assert game._can_block_attacker(mass, harbinger)
+
+    game, (harbinger, bears) = _w1g6_table(
+        set_pool, mine=[bok["Harbinger of Spring"]], theirs=[lea["Grizzly Bears"]],
+    )
+    _w1g6_declare_attack(game, 1, blocks={0: 0})
+    _w1g6_drive_combat(game)
+    assert harbinger in game.controlled_by(0), game.log
+    assert bears not in game.controlled_by(1), game.log
+
+    game, (harbinger, mass) = _w1g6_table(
+        set_pool, mine=[bok["Harbinger of Spring"]], theirs=[bok["Gnarled Mass"]],
+    )
+    _w1g6_declare_attack(game, 1, blocks={0: 0})
+    _w1g6_drive_combat(game)
+    assert harbinger not in game.controlled_by(0), game.log
+
+
+def test_w1g6_empty_shrine_kannushi_is_protected_from_its_sides_colours(set_pool):
+    """"This creature has protection from each color among permanents you
+    control" (CR 702.16i over its controller's board, read now): white for
+    itself; black once Black Knight is beside it, so Terror can't target it
+    (702.16b) while Lightning Bolt can; Bob's black creature can't block it.
+    Black Knight gone, Terror can target it again."""
+    lea = set_pool("LEA")
+    bok = set_pool("BOK")
+    game, (kannushi, knight, bobs_knight) = _w1g6_table(
+        set_pool, hand=[lea["Terror"], lea["Terror"], lea["Lightning Bolt"]],
+        mine=[bok["Empty-Shrine Kannushi"], lea["Black Knight"]],
+        theirs=[lea["Black Knight"]],
+    )
+    assert {value for kind, value in game._protection_qualities(kannushi)} == {"W", "B"}
+    assert not game._can_block_attacker(bobs_knight, kannushi)
+    refused = game.cast_from_hand(
+        0, "Terror", target_permanent_ids=[kannushi.permanent_id],
+    )
+    assert not refused.supported
+    # Black Knight has protection from white; Lightning Bolt kills it.
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[knight.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert knight not in game.controlled_by(0)
+    assert {value for kind, value in game._protection_qualities(kannushi)} == {"W"}
+    assert game._can_block_attacker(bobs_knight, kannushi)
+    assert game.cast_from_hand(
+        0, "Terror", target_permanent_ids=[kannushi.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert kannushi not in game.controlled_by(0), game.log
+
 # ==== end w1g6 ======================================================
 
 
