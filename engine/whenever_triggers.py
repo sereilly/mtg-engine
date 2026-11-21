@@ -85,6 +85,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into (?:a|a player's) "
      r"graveyard from the battlefield"),
+    ("permanent_dies",
+     r"whenever (?P<dying_subject>a permanent) is put into "
+     r"(?P<dying_graveyard_owner>an opponent's|your) graveyard(?=,)"),
     ("permanent_destroyed",
      r"whenever a spell or ability (?P<destroyed_cause>an opponent) controls "
      r"destroys (?P<destroyed_subject>(?:an?|another) [^,]+)"),

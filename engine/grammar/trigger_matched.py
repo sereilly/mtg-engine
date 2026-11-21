@@ -549,6 +549,7 @@ def _parse_matched_event(
     # this front end does not carry — `engine/trigger_conditions.py`'s table supplies the condition and this
     # one supplies the effect. The word still has to be *consumed* or the
     # line fails full-token consumption and the card loses its ability.
+    grave_words_at = stream.mark()
     dying_grave = (
         # "…**to be** put into your graveyard…" — the infinitive the causation
         # clause above puts the verb into. One reading of one event, so it is a
@@ -590,6 +591,23 @@ def _parse_matched_event(
             "is", "put", "into", "a", "player", "'s", "graveyard",
             "from", "the", "battlefield"
         )
+        # "Whenever **a permanent** is put into an opponent's graveyard,
+        # …" (Patron of the Nezumi.) No "from the battlefield", and the
+        # subject is why none is needed: a permanent is an object on the
+        # battlefield (CR 110.1), so one put into a graveyard left it. Only
+        # the bare word — any noun phrase could name a card arriving from a
+        # hand or a library — and only where the condition ends at the
+        # comma, the trigger table's row's own bound.
+        or (
+            dying == ast.ObjectFilter()
+            and (
+                stream.accept_phrase(
+                    "is", "put", "into", "an", "opponent", "'s", "graveyard",
+                )
+                or stream.accept_phrase("is", "put", "into", "your", "graveyard")
+            )
+            and stream.at_punct(",")
+        )
         # CR 700.4: "dies" **means** "is put into a graveyard from the
         # battlefield". "Whenever a creature **with shadow** dies" (Dauthi
         # Ghoul) is the same event as the three spellings above with the rule's
@@ -617,7 +635,22 @@ def _parse_matched_event(
             and stream.accept_phrase("if", "it", "wasn't", "sacrificed")
         ):
             stream.reset(qualifier)
-        return ast.TriggerEvent("permanent_dies", word, subject=dying)
+        # Whose graveyard the words named, for the effect to read its owner
+        # as "that player" (``TriggerEvent.into_graveyard_of``). Read off
+        # the words just consumed rather than a flag per spelling above:
+        # every owner spelling is "your" or "an opponent 's" and nothing
+        # else here prints either word.
+        consumed = {
+            token.text for token in stream.tokens[grave_words_at:stream.pos]
+        }
+        into = (
+            "an_opponent" if "opponent" in consumed
+            else "you" if "your" in consumed
+            else None
+        )
+        return ast.TriggerEvent(
+            "permanent_dies", word, subject=dying, into_graveyard_of=into,
+        )
     stream.reset(grave_mark)
     # "Whenever a creature you control with deathtouch attacks / deals
     # damage to a planeswalker" (Hooded Blightfang): the subject leads, so

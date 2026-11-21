@@ -350,6 +350,22 @@ class AlternativeCost:
     #: the granting permanent under. False on every printed cost: a cost a card
     #: prints on itself is its own caster's by construction.
     controller_only: bool = False
+    #: The spells a granted cost is offered for, as a card filter — "…for
+    #: **Samurai** spells you cast" (Kentaro, the Smiling Cat). None is every
+    #: spell (Fist of Suns, Dream Halls). Asked by
+    #: ``Game.applicable_alternative_costs`` of the card being cast, through
+    #: the card matcher (a spell has no computed characteristics, CR 613.1).
+    spell_filter: "dict | None" = None
+    #: "You may pay **{X}** … **where X is that spell's mana value**." (Kentaro.)
+    #: A price in generic mana sized by the spell it is offered for, so the
+    #: granted cost carries no run of symbols (``mana`` is None) and
+    #: ``Game.applicable_alternative_costs`` writes the spell's own number into
+    #: ``mana`` as it offers it — every reader below that (the pricer, the
+    #: payment, the description) sees an ordinary "{3}". The X is the text's,
+    #: defined and never announced (CR 107.3c), so the cost does not "include
+    #: X" for CR 107.3b, and the spell's mana value is read off the card as it
+    #: is in hand (CR 202.3e: an {X} in its own cost is 0 there).
+    mana_is_spell_mana_value: bool = False
 
     @property
     def announces_x(self) -> bool:
@@ -360,11 +376,35 @@ class AlternativeCost:
         in a clause that is not mana at all. Both are "an alternative cost that
         includes X" (CR 107.3b), so paying either keeps the announced X — only
         an alternative cost with no X anywhere locks X to 0.
+
+        "You may exile a red card **with mana value X** from your hand rather
+        than pay this spell's mana cost" (the Betrayers of Kamigawa Shoals) has
+        it in the *card* the clause names: CR 107.3a's "alternative cost with
+        … X in it", so X is the caster's announcement and the exiled card must
+        have that mana value (:attr:`exile_from_hand_counts_x`).
         """
         return (
             "{X}" in (self.mana or "").upper()
             or self.sacrifice_count_x
             or self.exile_graveyard_count_x
+            or self.exile_from_hand_counts_x
+        )
+
+    @property
+    def exile_from_hand_counts_x(self) -> bool:
+        """Whether the card this cost exiles from hand is bounded by the
+        announced X — "a blue card **with mana value X**" (Disrupting Shoal).
+
+        The bound rides the filter as ``oracle_types.X_BOUND``, the value every
+        "with mana value X" narrowing carries, and is resolved against the
+        announcement by ``substitute_x_bounds`` wherever the hand is scanned
+        (``Game._alternative_cost_payers``): asked of the raw filter, the
+        matcher would compare a mana value against the string ``"x"``.
+        """
+        from .oracle_types import carries_x_bound
+
+        return self.exile_from_hand is not None and carries_x_bound(
+            self.exile_from_hand
         )
 
     def sacrificed_count(self, x_value: "int | None") -> int:
@@ -425,7 +465,14 @@ class AlternativeCost:
                 )
             )
         if self.exile_from_hand is not None:
-            parts.append(f"exile {_a_card_answering(self.exile_from_hand)} from your hand")
+            # "…a red card **with mana value X**" (the Shoals): the bound the
+            # card is held to is the announcement, spelled so the offer names
+            # the price the gate measures.
+            parts.append(
+                f"exile {_a_card_answering(self.exile_from_hand)}"
+                + (" with mana value X" if self.exile_from_hand_counts_x else "")
+                + " from your hand"
+            )
         if self.sacrifice_filter is not None:
             # ``board_noun``, not ``filter_head_noun``. Every card in the pool
             # that prints this clause names a *land subtype* -- Fireblast's two
@@ -727,6 +774,21 @@ _GRANTED_ALTERNATIVE_COST = re.compile(
 #: flashback." CR 118.9a, which that reader's callers already hold to one.
 _GRANTED_TO_CONTROLLER = re.compile(
     r"^you may (?P<costs>.+?) rather than pay the mana cost for spells you cast$"
+)
+
+#: "You may pay {X} rather than pay the mana cost for **Samurai** spells you
+#: cast, **where X is that spell's mana value**." (Kentaro, the Smiling Cat.)
+#: Fist of Suns' grant with the spells narrowed by a class and the price in
+#: generic mana sized by each spell (``AlternativeCost.mana_is_spell_mana_value``).
+#: Its own pattern rather than an optional tail on the one above, because the
+#: two read the price differently: that one's ``{X}`` would be an announcement
+#: (and is refused), this one's is defined by the sentence (CR 107.3c). The
+#: class phrase is delimited here and read by
+#: ``cast_restrictions.cast_spell_filter``, the reader of "a Samurai spell"
+#: every other spell-class clause goes through.
+_GRANTED_SPELL_MANA_VALUE = re.compile(
+    r"^you may pay \{x\} rather than pay the mana cost for (?P<spells>.+?) "
+    r"spells you cast, where x is that spell(?:'|’)s mana value$"
 )
 
 #: The printed word for each colour symbol, for :meth:`AlternativeCost.describe`
@@ -1292,7 +1354,31 @@ def granted_alternative_cost(oracle_text: str) -> "AlternativeCost | None":
             return AlternativeCost(
                 match.group(0), controller_only=controller_only, **fields,
             )
+        sized = _granted_spell_mana_value_cost(normalized)
+        if sized is not None:
+            return sized
     return None
+
+
+def _granted_spell_mana_value_cost(normalized: str) -> "AlternativeCost | None":
+    """Kentaro's grant (:data:`_GRANTED_SPELL_MANA_VALUE`) read off one
+    normalized line, or None — refused whole when the class phrase is one the
+    spell matcher cannot test, since an unread narrowing is the cost offered
+    for every spell."""
+    from .cast_restrictions import cast_spell_filter
+
+    match = _GRANTED_SPELL_MANA_VALUE.match(normalized)
+    if match is None:
+        return None
+    spells = cast_spell_filter(f"a {match.group('spells')} spell")
+    if not spells:
+        # None (unreadable) or {} ("a spell": the unnarrowed sentence, which
+        # this pattern's own words never print). Either way not this reading.
+        return None
+    return AlternativeCost(
+        match.group(0), controller_only=True, spell_filter=spells,
+        mana_is_spell_mana_value=True,
+    )
 
 
 def _counts_an_x(fields: dict) -> bool:
@@ -1329,6 +1415,10 @@ def unread_granted_alternative_cost_sentence(line: str) -> str | None:
             fields = _read_offer_clauses(match.group("costs"))
             if fields is None or _counts_an_x(fields):
                 return match.group(0)
+    sized = _GRANTED_SPELL_MANA_VALUE.match(normalized)
+    if sized is not None and _granted_spell_mana_value_cost(normalized) is None:
+        # Kentaro's shape with a class the spell matcher cannot read.
+        return sized.group(0)
     return None
 
 

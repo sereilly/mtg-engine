@@ -43,6 +43,9 @@ from tests.helpers import _nosick
 #: long can be named — and a near miss that cannot pay it. The three Spirits
 #: are Devouring Rage's and Devouring Greed's (CHK): an "any number of" set is
 #: probed at two, so a larger set needs a third.
+#: The Fox, Moonfolk, Rat and Snake pairs are the Betrayers of Kamigawa
+#: Patrons' offerings (CR 702.48a: "you may sacrifice a [quality]"),
+#: probed taken; the Goblin's were already Mons's Goblin Raiders.
 _BOARD = (
     "Forest", "Forest", "Island", "Swamp", "Swamp", "Swamp", "Mountain", "Plains",
     "Grizzly Bears", "Hill Giant", "Llanowar Elves",
@@ -50,6 +53,9 @@ _BOARD = (
     "Merfolk of the Pearl Trident", "Merfolk of the Pearl Trident",
     "Lantern Kami", "Lantern Kami", "Kami of Ancient Law",
     "Sol Ring", "Clockwork Beast", "Crusade",
+    "Kitsune Diviner", "Kitsune Diviner", "Soratami Cloudskater",
+    "Soratami Cloudskater", "Nezumi Cutthroat", "Nezumi Cutthroat",
+    "Orochi Sustainer", "Orochi Sustainer",
 )
 
 #: What the far seat holds: one permanent that answers each of those phrases
@@ -58,6 +64,8 @@ _BOARD = (
 _FAR_BOARD = (
     "Forest", "Swamp", "Grizzly Bears", "Mons's Goblin Raiders",
     "Merfolk of the Pearl Trident", "Lantern Kami", "Sol Ring",
+    "Kitsune Diviner", "Soratami Cloudskater", "Nezumi Cutthroat",
+    "Orochi Sustainer",
 )
 
 #: The verbs a chosen-permanent additional cost prints, with the field each

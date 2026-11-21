@@ -309,6 +309,18 @@ class CostReduction:
             self.generic + int(amount), self.colored, self.colored_only,
         )
 
+    def plus(self, other: "CostReduction") -> "CostReduction":
+        """This reduction and *other* together (CR 601.2f applies every
+        reduction) — for a reduction one cast buys on top of the board's
+        (offering's, CR 702.48c), without rebuilding the value and dropping a
+        field. ``reduce_cost`` walks the coloured tuples entry by entry, so
+        two entries of one colour are simply two reductions of it."""
+        return CostReduction(
+            self.generic + other.generic,
+            self.colored + other.colored,
+            self.colored_only + other.colored_only,
+        )
+
     def symbols(self) -> dict[str, int]:
         """Everything this takes off, as a symbol dict, for a log line or a
         price note — never for arithmetic, which is ``reduce_cost``'s."""

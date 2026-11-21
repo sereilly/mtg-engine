@@ -36,6 +36,7 @@ from .entwine import expand_entwine_lines
 from .fading import expand_fading_lines
 from .late_modules import LateModules
 from .modular import expand_modular_lines
+from .offering import expand_offering_lines
 from .soulshift import expand_soulshift_lines
 from .sunburst import expand_sunburst_lines
 from .self_reference import expand_short_self_references
@@ -220,6 +221,12 @@ def expand_ability_lines(
       from your graveyard to your hand." (``engine/soulshift.py``). From there
       it is an ordinary dies trigger over Gravedigger's graveyard return, none
       of which knows the word.
+    * an **offering** keyword line becomes the optional additional cost CR
+      702.48a's first sentence says it means — "As an additional cost to cast
+      this spell, you may sacrifice a [quality]." (``engine/offering.py``).
+      From there it is buyback's CR 601.2b offer; the reduction by the
+      sacrificed permanent's mana cost and the instant timing it buys are
+      read off the printed keyword by that module, at the cast.
     * a **sunburst** keyword line becomes the entry replacement CR 702.44a
       says it means — "If this object is entering as a creature, … it enters
       with a +1/+1 counter on it for each color of mana spent to cast it.
@@ -306,6 +313,14 @@ def expand_ability_lines(
     # ``mode_choices``. A whole keyword line in, one cost sentence out, read by
     # none of the rewrites below.
     oracle_text = expand_entwine_lines(oracle_text)
+    # CR 702.48a's, kicker's shape: "[Quality] offering" is first of all an
+    # optional additional cost — "As an additional cost to cast this spell,
+    # you may sacrifice a [quality] permanent" — so the line becomes that
+    # CR 601.2b offer (``engine/offering.py``). The reduction and the timing
+    # it buys are facts about one cast, read off the printed keyword by that
+    # module, not sentences. A whole keyword line in, one cost sentence out,
+    # read by none of the rewrites below.
+    oracle_text = expand_offering_lines(oracle_text)
 
     # Its own statement rather than another layer of the nested call below. The
     # composition is what every keyword-as-a-rewrite adds itself to, so it is

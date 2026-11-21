@@ -1256,6 +1256,9 @@ def _pick_x_value(
             )
             return game.alternative_cost_x_ceiling(
                 seat, priced, spell_graveyard_slot=slot,
+                # "…exile a red card with mana value X from your hand" (the
+                # Shoals): the copy being cast cannot pay for itself.
+                spell_hand_index=hand_index if under.zone == "hand" else None,
             ) or 0
         # CR 107.3b: "If a player is casting a spell that has an {X} in its
         # mana cost, the value of X isn't defined by the text of that spell,

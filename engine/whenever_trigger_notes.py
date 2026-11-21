@@ -67,6 +67,18 @@ rather than a fourth `dying_graveyard_owner` value, because a value the
 dispatcher would have to read as "no restriction" is a restriction
 waiting to be tested by accident.
 '''),
+    ('permanent_dies', 'permanent) is put into', r'''
+"Whenever **a permanent** is put into an opponent's graveyard, that player
+loses 1 life." (Patron of the Nezumi.) The owner row above with no "from
+the battlefield", and the subject is why it needs none: a permanent is an
+object on the battlefield (CR 110.1), so a permanent put into a graveyard
+left the battlefield — a card arriving from a hand or a library is not one.
+So the subject is the word "permanent" alone, never a noun phrase that
+could name a card, and the condition must end at the comma. After the
+rows that spell "from the battlefield", which read a line that prints it.
+The alternatives are written the other way round from the owner row's so
+each note's phrase names one row.
+'''),
     ('permanent_destroyed', 'a spell or', r'''
 "Whenever **a spell or ability an opponent controls destroys** a
 noncreature permanent you control, you may destroy target permanent that

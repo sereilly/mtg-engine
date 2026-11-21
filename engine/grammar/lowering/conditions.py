@@ -585,7 +585,24 @@ def _lower_condition(
         # "when the ability resolves") on the same channel.
         if bound_count is None:
             bound_count = unspent_mana_spec(bound)
-        if bound_count is None and not isinstance(bound, ast.Fixed):
+        # "Counter target spell if its mana value is **X**." (Disrupting
+        # Shoal.) The resolving object's own announced X (CR 107.3a: "While a
+        # spell is on the stack, any X in its mana cost … equals the announced
+        # value"), read off the resolution as every X amount is. Not under a
+        # trigger: a triggered ability announces no X of its own, and the X of
+        # whatever it is about is a different number this payload could not
+        # name.
+        bound_is_x = (
+            bound_count is None
+            and isinstance(bound, ast.Var) and bound.name == "x"
+        )
+        if bound_is_x and event is not None:
+            raise LoweringError(
+                "a characteristic gate under a trigger has no announced X to "
+                "compare against",
+                node=condition,
+            )
+        if bound_count is None and not bound_is_x and not isinstance(bound, ast.Fixed):
             raise LoweringError(
                 "a characteristic gate compares against a printed number or a "
                 "count",
@@ -641,10 +658,12 @@ def _lower_condition(
             "subject": asked,
             "characteristic": condition.characteristic,
             "op": condition.comparison.op,
-            "count": 0 if bound_count is not None else bound.value,
+            "count": 0 if bound_count is not None or bound_is_x else bound.value,
         }
         if bound_count is not None:
             payload["count_from"] = bound_count
+        if bound_is_x:
+            payload["count_is_x"] = True
         if pronoun_referent is not None:
             # Which half of the resolution context holds the target. Written
             # only by the pronoun spelling: a clause that announced its own
