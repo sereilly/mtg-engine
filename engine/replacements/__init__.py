@@ -74,8 +74,9 @@ This package was one 5,549-line module, ``replacements.py``, until the
     draws                 a draw replaced, the queue a suspended one holds, and
                           Lich's life gain drawn as cards
     opponent_library_draws
-                          a draw replaced by an exile off an opponent's
-                          library, linked with its exiler (Shared Fate)
+                          a draw replaced by an exile linked with its exiler:
+                          off an opponent's library (Shared Fate), or the
+                          drawer's own card face up (Uba Mask)
     life_gain             a life gain replaced by nothing (Sulfuric Vortex)
     revealed_draws        a draw replaced by a look at or a reveal of the top
     permanents            a permanent entering, untapping, getting +1/+1
