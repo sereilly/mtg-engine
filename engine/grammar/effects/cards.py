@@ -60,7 +60,7 @@ from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..durations import _parse_duration
-from ..phrases import accept_a_card_at_random_from_hand
+from ..phrases import _parse_for_each, accept_a_card_at_random_from_hand
 
 
 
@@ -181,6 +181,14 @@ def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
     revealed = parse_for_each_revealed_this_way(stream, parse_object_filter)
     if revealed is not None:
         return revealed
+    # "Draw a card **for each Zubera that died this turn**." (Floating-Dream
+    # Zubera; Ashen-Skin Zubera's discard.) A history of the turn, not a set
+    # any zone holds, read by the one reader of the phrase every other
+    # position already asks (``phrases._parse_for_each``) — first, for the
+    # reason above: the plain reading below would count a battlefield.
+    died = _parse_for_each(stream)
+    if died is not None:
+        return died
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
         stream.reset(mark)

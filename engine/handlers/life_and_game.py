@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from ._amounts import count_from_payload, per_recipient_amount, resolve_amount
 from ._filters import seats_matching_deed
+from ..death_tally import died_this_turn_count, is_game_death_tally
 from ._targets import (bound_permanent, damaged_end_seat, named_seat_still_a_target,
                        stack_target_controller_seat)
 from ..exiled_records import source_object
@@ -766,9 +767,11 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # tally, because the objects counted are exactly the ones no zone still
     # holds. Game-wide — `creatures_died_under_your_control_this_turn` beside it
     # is the per-seat tally, and reading one for the other is a different number
-    # every time an opponent's creature dies.
-    if per_each is not None and per_each.get("history") == "creatures_died_this_turn":
-        life_gain *= int(getattr(game, "creatures_died_this_turn", 0))
+    # every time an opponent's creature dies. "…for each **Zubera** that died
+    # this turn" (Silent-Chant Zubera) is the same tally narrowed to a creature
+    # type, through the one reader (``engine/death_tally.py``).
+    if is_game_death_tally(per_each):
+        life_gain *= died_this_turn_count(game, per_each)
     if per_each is not None and per_each.get("trigger_record") is not None:
         # "…you gain 2 life **for each 1 life you lost**" (Transcendence): the
         # firing event's loss, through the one count evaluator.

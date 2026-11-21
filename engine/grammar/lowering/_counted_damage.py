@@ -208,6 +208,20 @@ def lower_maximum_damage(
     return _payment_channel_damage(node, count)
 
 
+def lower_tally_damage(
+    node: ast.DealDamage, count: dict[str, object]
+) -> tuple[OracleInstruction, ...]:
+    """"…it deals damage to any target equal to **the number of Zubera that
+    died this turn**." (Ember-Fist Zubera.)
+
+    The turn's death tally (``_amounts.died_this_turn_count_spec``), spent by
+    the same counted-damage tail :func:`lower_maximum_damage` spends a maximum
+    on — what differs is only where the number comes from. Counted at
+    resolution (CR 608.2), so a death in response raises it.
+    """
+    return _payment_channel_damage(node, count)
+
+
 def _lower_cost_tap_damage(
     node: ast.DealDamage,
 ) -> tuple[OracleInstruction, ...]:

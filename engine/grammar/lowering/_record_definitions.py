@@ -72,7 +72,8 @@ from __future__ import annotations
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import _mentions_x, _stamp_x_from_count, tapped_this_way_record
+from ._amounts import (_mentions_x, _stamp_x_from_count,
+                       died_this_turn_count_spec, tapped_this_way_record)
 from ._common import _restrictions_beyond
 from ._cost_records import cost_count_spec, cost_record_spec
 from ._records import produced_keys
@@ -103,6 +104,15 @@ def lower_record_definition(
         return _lower_where_x_damage_dealt(node, damage, inner)
     if isinstance(node.definition, ast.CountOfDeaths):
         return _lower_where_x_deaths(node, inner, produced)
+    # "…, where X is the number of creatures **that died this turn**." The
+    # game-wide tally the "for each" spelling reads, through the floor's one
+    # reader of what that tally can count.
+    if isinstance(node.definition, ast.DiedThisTurn):
+        if not _mentions_x(inner):
+            raise LoweringError("a where-clause defined an X nothing reads", node=node)
+        return _stamp_x_from_count(
+            inner, died_this_turn_count_spec(node.definition.filter, node)
+        )
     if isinstance(node.definition, ast.CountOfDeathsThisWay):
         return _lower_where_x_this_way(node, inner, produced)
     if isinstance(node.definition, ast.CountOfTapsThisWay):

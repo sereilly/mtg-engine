@@ -563,7 +563,7 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
         # Late import: nouns depends on this module for comparisons, so the
         # cycle is broken at call time rather than import time.
         from .distinct import parse_counted_objects
-        from .where_x import accept_this_way_count
+        from .where_x import accept_died_this_turn_count, accept_this_way_count
 
         filt = parse_counted_objects(stream)
         # "equal to the number of Mountains **put into a graveyard this way**"
@@ -576,6 +576,11 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
         this_way = accept_this_way_count(stream, filt)
         if this_way is not None:
             return this_way
+        # "…equal to the number of Zubera **that died this turn**" (Ember-Fist
+        # Zubera): the turn's death tally, through the same shared reader.
+        died = accept_died_this_turn_count(stream, filt)
+        if died is not None:
+            return died
         # "…**in excess of** the number of …" (Superior Numbers), read through
         # the same helper `_parse_counted_amount` above reads it through. Two
         # productions read "the number of <noun phrase>" — this one and that one

@@ -29,7 +29,8 @@ from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
 from ._record_keys import (BOARD_LOOP_OBJECT, LOOP_BOUND_OBJECT,
                            SWEPT_CONTROLLER_SEATS, _PRODUCED_QUANTITIES,
                            _RECORDED_PERMANENTS)
-from ._amounts import count_spec, printed_count_spec
+from ._amounts import (count_spec, died_this_turn_count_spec,
+                       printed_count_spec)
 from ._common import (
     _amount_payload, _describe_targets, _restrictions_beyond,
     testable_filter_payload
@@ -502,22 +503,16 @@ def _stamp_token_count(
         # battlefield still holds. Which tally is decided by the phrase — the
         # engine keeps a nontoken one beside the game-wide one, because a token
         # dying is a real creature death and a *different* number.
-        filt = node.per_death.filter
-        leftover = _restrictions_beyond(filt, frozenset({"card_types", "nontoken"}))
-        if leftover or filt.card_types != ("creature",):
-            raise LoweringError(
-                "the death tally counts creatures and nothing narrower", node=node
-            )
-        history = (
-            "nontoken_creatures_died_this_turn" if filt.nontoken
-            else "creatures_died_this_turn"
-        )
+        # "…for each **Zubera** that died this turn" (Dripping-Tongue Zubera)
+        # is the same tally narrowed to a creature type: the floor's one
+        # reader of the phrase decides what the tally can count.
+        spec = died_this_turn_count_spec(node.per_death.filter, node)
         if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
             raise LoweringError(
                 "a per-death token count multiplies one token, not several",
                 node=node,
             )
-        payload["count"] = {"history": history}
+        payload["count"] = spec
         return payload["count"]
     if isinstance(node.per_death, ast.CountOfDeaths):
         # "…for each **nontoken** creature put into **your graveyard** from
