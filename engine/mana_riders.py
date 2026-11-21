@@ -132,7 +132,12 @@ def apply_cast_riders(game: "Game", item: "StackItem", riders) -> None:
     on its choices for the permanent it becomes, and "can't be countered" is
     written on the stack object now.
     """
-    applying = applying_riders(game, item.card, item.caster_index, riders)
+    # What the spell *is* (CR 612.1: a stack object read through its text
+    # change, ``spell_text_card``), the question "spent on an instant or
+    # sorcery spell" asks.
+    from .text_changes import spell_text_card
+
+    applying = applying_riders(game, spell_text_card(item), item.caster_index, riders)
     if not applying:
         return
     item.choices[MANA_RIDERS_SPENT] = applying
