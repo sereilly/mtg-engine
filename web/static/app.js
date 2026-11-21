@@ -3423,7 +3423,10 @@ function autoTapStateKey(state = currentState) {
 // announcement so far (mode, zone, cost already named) rides module state, so
 // the preview has to carry it too or it would be planning a different cast.
 function autoTapActionBody(pending) {
-  return carrySpliceCards(carryCastZoneAndCost(carryCastMode({ ...pending.actionBody })));
+  const body = carryCastZoneAndCost(carryCastMode({ ...pending.actionBody }));
+  // The splices the cast announces (CR 702.47) are priced too; `typeof` for
+  // the tests that lift this function alone.
+  return typeof carrySpliceCards === "function" ? carrySpliceCards(body) : body;
 }
 
 // Ask the server what it would tap for the pending action. Called from the
@@ -11525,7 +11528,7 @@ function opponentPicksRevealedText(info) {
   // already chosen earlier in the chain is out of `legal_indices`, and is
   // not "can't be chosen" — it was (`opponentPicksChosen`).
   const remaining = Math.max(1, Number(info.remaining || 1));
-  const chosen = opponentPicksChosen(info).length;
+  const chosen = typeof opponentPicksChosen === "function" ? opponentPicksChosen(info).length : 0;
   let text = `${revealer} revealed ${total === 1 ? "this" : "these"}${from ? ` ${from}` : ""}. `
     + (remaining > 1
       ? `You choose ${remaining} of them, one at a time; each one you choose goes ${goes(info.fate || "graveyard")}.`
@@ -19607,8 +19610,9 @@ function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
   // CR 702.47a: the cards to splice are revealed as the spell is announced
   // (CR 601.2b), before its targets — and the spliced texts' targets are
   // chosen with its own (CR 702.47d). Asked once per cast, here, where every
-  // hand cast's chain arrives once its modes and costs are announced.
-  if (startCastSplicePrompt(card, castAction)) return true;
+  // hand cast's chain arrives once its modes and costs are announced. Through
+  // `typeof` for the tests that lift the cascade without it.
+  if (typeof startCastSplicePrompt === "function" && startCastSplicePrompt(card, castAction)) return true;
   // The target player named beside the other targets comes first: the cards
   // are taken from that player's graveyard (Gaea's Blessing), or counted on
   // them (Reap), so the pickers below are sized by the answer. One legal seat
@@ -30608,11 +30612,13 @@ async function sendAction(actionBody) {
   // reason the single mode index rides through it.
   // …and a spliced text's target, the same way (CR 702.47d): the picker run
   // on the spliced text's spec ends here, and its body is that text's target.
-  if (captureSpliceTarget(body)) return;
+  // Through `typeof`, as `carryControllerSeat` above, for the tests that lift
+  // this function into bare node with module state of their own.
+  if (typeof captureSpliceTarget === "function" && captureSpliceTarget(body)) return;
   if (captureModeCollectionTarget(body)) return;
   carryAnnouncedSeat(body, actionBody);
   carryCastZoneAndCost(body);
-  carrySpliceCards(body, actionBody);
+  if (typeof carrySpliceCards === "function") carrySpliceCards(body, actionBody);
   // A cast that makes mana "in any combination of" (Burnt Offering) owes its
   // split with the announcement: asked here, where every cast body passes,
   // once the cost it may depend on is on the body. Written onto the caller's
