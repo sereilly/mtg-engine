@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | CHK | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| BOK *(measured)* | 165 | 288 | 70.8% | 66.7% | 50.7% | 116 |
+| BOK *(measured)* | 165 | 288 | 71.2% | 67.7% | 51.7% | 118 |
 | **All (shipped)** | **9904** | **14799** | **89.5%** | **89.0%** | **62.0%** | **7785** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -8777,6 +8777,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nefashu**
   - `Whenever this creature attacks, up to five target creatures each get -1/-1 until end of turn.`
 - **Neko-Te**
+  - `Whenever equipped creature deals damage to a creature, tap that creature. That creature doesn't untap during its controller's untap step for as long as this Equipment remains on the battlefield.`
   - `Whenever equipped creature deals damage to a player, that player loses 1 life.`
 - **Nekrataal**
   - `When this creature enters, destroy target nonartifact, nonblack creature. That creature can't be regenerated.`
@@ -9009,6 +9010,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature can't attack or block this turn.`
 - **Ogre Leadfoot**
   - `Whenever this creature becomes blocked by an artifact creature, destroy that creature.`
+- **Ogre Marauder**
+  - `Whenever this creature attacks, it gains "this creature can't be blocked" until end of turn unless defending player sacrifices a creature of their choice.`
 - **Ogre Recluse**
   - `Whenever a player casts a spell, tap this creature.`
 - **Ogre Shaman**
@@ -10902,6 +10905,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Rolling Thunder deals X damage divided as you choose among any number of targets.`
 - **Ronin Cliffrider**
   - `Whenever this creature attacks, you may have it deal 1 damage to each creature defending player controls.`
+- **Ronin Warclub**
+  - `Whenever a creature you control enters, attach this Equipment to that creature.`
 - **Rookie Mistake**
   - `Until end of turn, target creature gets +0/+2 and another target creature gets -2/-0.`
 - **Root Elemental**
