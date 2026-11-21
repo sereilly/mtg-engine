@@ -1430,6 +1430,36 @@ def untap_lock_ids(record) -> tuple[int, ...]:
     return tuple(int(held) for held in record)
 
 
+def add_untap_lock(source, key: str, held: "int | tuple[int, ...]") -> None:
+    """Add *held* to the linked lock *source* records under *key*.
+
+    **Added to, never replaced.** Each resolution of a linked untap ability
+    creates its own continuous effect (CR 611.2a), and every one of them lasts
+    as long as the same fact about the same source: Neko-Te's equipped
+    creature damaging a second creature on a later turn holds that one too,
+    and the first stays held "for as long as this Equipment remains on the
+    battlefield". Overwritten, the record released the first creature the
+    moment the second was locked — Somnophore's second hit set its first
+    victim free, wrong in its controller's opponent's favour. The tapped lock
+    accumulates for the same reason and loses nothing by it: every lock on
+    one holder ends at the one moment the holder untaps
+    (:func:`end_untap_lock` pops the whole record).
+
+    The first lock is recorded exactly as it always was (one id, or the
+    swept set as a tuple); a second makes the record the tuple
+    :func:`untap_lock_ids` already reads.
+    """
+    existing = source.metadata.get(key)
+    if existing is None:
+        source.metadata[key] = held
+        return
+    merged = untap_lock_ids(existing)
+    for permanent_id in untap_lock_ids(held):
+        if permanent_id not in merged:
+            merged += (permanent_id,)
+    source.metadata[key] = merged
+
+
 def end_untap_lock(permanent) -> "int | tuple[int, ...] | None":
     """End the lock *permanent* is holding, if any; returns what it held (one
     id, or the set a swept lock recorded — see :func:`untap_lock_ids`).
@@ -1512,7 +1542,7 @@ def _restrict_untap_while_source(
         if not held:
             game.log.append(f"{context.card.name}: nothing to hold tapped")
             return True, "resolved"
-        source.metadata[key] = held
+        add_untap_lock(source, key, held)
         names = ", ".join(
             game.permanent_by_id(permanent_id).card.name for permanent_id in held
         )
@@ -1552,7 +1582,7 @@ def _restrict_untap_while_source(
                 f"{context.card.name}: {target.card.name} is not what it names"
             )
             return True, "resolved"
-    source.metadata[key] = target.permanent_id
+    add_untap_lock(source, key, target.permanent_id)
     game.log.append(
         f"{target.card.name} won't untap while {context.card.name} {condition}"
     )

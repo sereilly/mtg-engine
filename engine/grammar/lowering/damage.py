@@ -250,7 +250,48 @@ def _lower_damage(
         )
     lowered = _with_attached_dealer(node, lowered)
     lowered = _with_foreign_dealer(node, lowered, produced, event)
+    lowered = _with_granter_dealer(node, lowered)
     return lowered
+
+
+def _with_granter_dealer(
+    node: ast.DealDamage, lowered: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"{T}, Unattach Shuriken: **Shuriken** deals 2 damage to target
+    creature." (Shuriken's quote, read on the creature it equips.)
+
+    The dealer is the permanent that granted the ability
+    (:attr:`ast.DealDamage.granter_dealer`, CR 201.5a), so ``biter`` names
+    it — ``"granter"``, beside ``"attached"`` and ``"event_subject"`` — and
+    its id rides as ``granter_id``, the one spelling that keeps two
+    same-named Equipment apart. A post-condition like
+    :func:`_with_attached_dealer`'s, for its reason: only a single plain
+    ``deal_damage`` carrying no other dealer can take the key, and any other
+    shape refuses rather than dealing the damage as the creature.
+    """
+    if node.granter_dealer is None:
+        return lowered
+    if (
+        node.source is not None
+        or len(lowered) != 1
+        or lowered[0].kind != "deal_damage"
+        or "biter" in lowered[0].payload
+    ):
+        raise LoweringError(
+            "no damage handler carries the granter as this damage's dealer",
+            node=node,
+        )
+    instruction = lowered[0]
+    return (
+        dataclasses.replace(
+            instruction,
+            payload={
+                **instruction.payload,
+                "biter": "granter",
+                "granter_id": int(node.granter_dealer),
+            },
+        ),
+    )
 
 
 #: The record an earlier step of the same resolution writes about **the one

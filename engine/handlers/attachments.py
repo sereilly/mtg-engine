@@ -140,6 +140,18 @@ def _attach_source_to_recorded(
             f"{card_name}: nothing to attach — it has left the battlefield"
         )
         return True, "resolved"
+    if host_key == "event_subject":
+        # "Whenever a creature you control enters, attach this Equipment to
+        # **that creature**." (Ronin Warclub.) The object the firing event
+        # froze by id (CR 400.7: an entering creature that has left since is
+        # a new object, and the attach finds nothing).
+        frozen = (context.trigger_context or {}).get("event_subject_permanent_id")
+        host = game.permanent_by_id(frozen) if isinstance(frozen, int) else None
+        if host is None or not game.is_on_battlefield(host):
+            game.log.append(f"{card_name}: that permanent has left the battlefield")
+            return True, "resolved"
+        attach_equipment(game, attachment, host)
+        return True, "resolved"
     host = game.permanent_by_id(one_recorded_permanent_id(context, host_key))
     if host is None or not game.is_on_battlefield(host):
         game.log.append(

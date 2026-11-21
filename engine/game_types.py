@@ -138,6 +138,14 @@ CHOICE_KEYS = (
     # and on this channel for the others': by resolution the card is one of
     # however many are in the graveyard, and only the payment knows which.
     "milled_for_cost",
+    # What a printed **unattach** cost (CR 701.3d) took off what: "{T},
+    # Unattach Shuriken: Shuriken deals 2 damage to target creature. … unless
+    # **it was unattached from a Ninja**." The Equipment it unattached (still
+    # on the battlefield, so a back-reference rather than last-known
+    # information — read by the granter-dealer damage once the Equipment has
+    # left) and the permanent it came off, which the condition asks.
+    "unattached_for_cost",
+    "unattached_from_for_cost",
     # CR 107.4b's symbols a printed mana cost actually consumed ("Note the type
     # of mana spent to pay this activation cost", Jeweled Amulet, Ice Cauldron).
     # A symbol dict, and on this channel for the three above's reason: the pool

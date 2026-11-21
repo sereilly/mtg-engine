@@ -629,6 +629,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Fractured Loyalty.) The hand-over of the permanent an Aura is attached
     # to, to the seat the firing event froze — the same family again.
     "give_control_of_attached_to_player": "control",
+    # "…That creature's controller gains control of Shuriken …" (Shuriken's
+    # quote, on the creature it equips.) The hand-over of the permanent that
+    # granted the ability (CR 201.5a) — the same family again.
+    "give_control_of_granter_to_player": "control",
     # The monitored linked durations (CR 611.2b): "for as long as you control
     # this creature and this creature remains tapped" (Willow Satyr, Rubinia
     # Soulsinger) and The Wretched's end-of-combat blocker steal. The

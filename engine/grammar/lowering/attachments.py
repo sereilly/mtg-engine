@@ -89,8 +89,51 @@ def _lower_attach_to_recorded(
     )
 
 
+def _lower_attach_to_event_subject(
+    node: ast.Attach, event: str | None, produced: frozenset[str]
+) -> "tuple[OracleInstruction, ...] | None":
+    """The attach whose host is the object the firing event froze, or None.
+
+    "Whenever a creature you control enters, **attach this Equipment to that
+    creature**." (Ronin Warclub.) CR 701.3a's keyword action with nothing
+    targeted — its 2005-02-01 ruling: "The triggered ability can attach Ronin
+    Warclub to an untargetable creature because the ability doesn't target" —
+    and the host is the one permanent the entry seam stamped
+    (``_EVENT_SUBJECT_OBJECTS``: ``event_subject_permanent_id``), the same
+    payload value ``_bound_returns`` writes for "return … attached to that
+    creature".
+
+    Gated three ways and guessing at none. The host is the bare "that <noun>"
+    with no narrowing beyond the noun's card type, so no printed restriction
+    is read and dropped; the event is one whose fire site freezes the object;
+    and no earlier step of the same effect recorded a permanent, which would
+    give the words a second candidate referent (Necromancy's reading, above).
+    The noun is not re-asked at resolution, as ``destroy_event_subject`` does
+    not re-ask it: what the move asks is CR 301.5's legality, through
+    ``equipment.attach_equipment`` — so a creature that "can't be equipped"
+    (Goblin Brawler; the second 2005-02-01 ruling) stays bare.
+    """
+    host = node.host
+    if node.chooser is not None or node.optional:
+        return None
+    if not isinstance(host, ast.TargetSpec) or host.targeted:
+        return None
+    if host.quantifier != "that" or event not in _EVENT_SUBJECT_OBJECTS:
+        return None
+    if _restrictions_beyond(host.filter, frozenset({"card_types"})):
+        return None
+    if produced & (_RECORDED_PERMANENTS | {CREATED_TOKEN}):
+        return None
+    return (
+        OracleInstruction(
+            "attach_source_to_target", "", {"host_from": "event_subject"}
+        ),
+    )
+
+
 def _lower_attach(
-    node: ast.Attach, produced: frozenset[str] = frozenset()
+    node: ast.Attach, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Attach this permanent to target creature you control." (CR 702.6a.)
 
@@ -111,6 +154,11 @@ def _lower_attach(
     this lowering takes ``produced`` at all, and why the branch is gated on one:
     with no such step in front of it, "it" is a back-reference to nothing and
     the line keeps its refusal.
+
+    Or the object a **trigger's event** froze — "Whenever a creature you
+    control enters, attach this Equipment to **that creature**" (Ronin
+    Warclub), which is why it takes the ``event`` too
+    (:func:`_lower_attach_to_event_subject`).
     """
     if (
         isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject)
@@ -138,6 +186,9 @@ def _lower_attach(
     recorded = _lower_attach_to_recorded(node, produced)
     if recorded is not None:
         return recorded
+    event_host = _lower_attach_to_event_subject(node, event, produced)
+    if event_host is not None:
+        return event_host
     if node.chooser is not None:
         return _lower_attach_to_their_choice(node, produced)
     if not isinstance(node.host, ast.TargetSpec) or not _is_target(node.host):

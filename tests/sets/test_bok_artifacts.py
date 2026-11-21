@@ -71,6 +71,484 @@ log), not instruction kinds alone.
 # ==== w1g9 ==========================================================
 # w1g9's tests go between this line and the "end w1g9" line.
 
+from engine import Game as _W1G9Game, PlayerState as _W1G9PlayerState
+from engine.models import Permanent as _W1G9Permanent
+from engine.named_counters import add_counters as _w1g9_add_counters
+from engine.named_counters import counters_on as _w1g9_counters_on
+from tests.helpers import declare_attack as _w1g9_declare_attack
+from tests.helpers import drive_combat as _w1g9_drive_combat
+from tests.helpers import settle as _w1g9_settle
+
+
+def _w1g9_card(set_pool, name):
+    for code in ("BOK", "LEA", "LGN", "CHK", "5DN", "MRD"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w1g9_table(set_pool, *, hand=(), mine=(), theirs=(), their_hand=(), interactive=()):
+    """Two seats on seat 0's first main phase, costs not enforced; *mine* /
+    *theirs* placed and not summoning sick."""
+    card = lambda name: _w1g9_card(set_pool, name)  # noqa: E731
+    game = _W1G9Game(players=[
+        _W1G9PlayerState(name="Alice", hand=[card(n) for n in hand],
+                         library=[card("Forest")] * 12),
+        _W1G9PlayerState(name="Bob", hand=[card(n) for n in their_hand],
+                         library=[card("Forest")] * 12),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _W1G9Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+            placed[seat].append(permanent)
+    game._sync_control()
+    game.start_turn(0)
+    _w1g9_settle(game)
+    return game, placed[0], placed[1]
+
+
+def _w1g9_slot(game, permanent):
+    seat = game.controller_index_of(permanent)
+    return [p.permanent_id for p in game.players[seat].battlefield].index(
+        permanent.permanent_id
+    )
+
+
+def _w1g9_activate(game, permanent, **announce):
+    seat = game.controller_index_of(permanent)
+    result = game.activate_permanent_ability(
+        seat, permanent.card.name, permanent_index=_w1g9_slot(game, permanent),
+        **announce,
+    )
+    _w1g9_settle(game)
+    return result
+
+
+def _w1g9_equip_index(permanent):
+    """The equip ability's index among the Equipment's activated abilities —
+    the CR 702.6a rewrite sits after every ability printed above it."""
+    from engine.oracle import compile_card_oracle
+
+    abilities = compile_card_oracle(permanent.card).activated_abilities
+    return next(
+        index for index, ability in enumerate(abilities)
+        if ability.instruction is not None
+        and ability.instruction.kind == "attach_source_to_target"
+    )
+
+
+def _w1g9_equip(game, equipment, creature):
+    return _w1g9_activate(
+        game, equipment, ability_index=_w1g9_equip_index(equipment),
+        target_permanent_ids=[creature.permanent_id],
+    )
+
+
+# Umezawa's Jitte: "Whenever equipped creature deals combat damage, put two
+# charge counters on Umezawa's Jitte." / "Remove a charge counter from
+# Umezawa's Jitte: Choose one — • Equipped creature gets +2/+2 until end of
+# turn. • Target creature gets -1/-1 until end of turn. • You gain 2 life."
+# The modal head names the card in full in its cost; it is rewritten into one
+# activated ability per bullet (ability indexes 0, 1, 2), the equip rewrite
+# after them.
+
+
+def test_w1g9_jitte_charges_once_per_combat_damage_step(set_pool):
+    """Blocked by two Grizzly Bears, the Craw Wurm deals combat damage to both
+    at once — one event, one trigger, two charge counters (CR 510.2). The
+    Jitte charges even though the Wurm dies in the same damage step: the
+    creature was equipped when it dealt the damage."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Umezawa's Jitte", "Craw Wurm"],
+        theirs=["Grizzly Bears", "Grizzly Bears"],
+    )
+    jitte, wurm = mine
+    assert _w1g9_equip(game, jitte, wurm).supported
+    assert jitte.metadata.get("attached_to") is wurm
+    _w1g9_declare_attack(game, 0, blocks={
+        _w1g9_slot(game, blocker): _w1g9_slot(game, wurm) for blocker in theirs
+    })
+    _w1g9_drive_combat(game)
+    assert _w1g9_counters_on(jitte, "charge") == 2
+    assert [c.name for c in game.players[1].graveyard] == ["Grizzly Bears"] * 2
+
+
+def test_w1g9_jitte_charges_in_each_damage_step_of_a_double_striker(set_pool):
+    """Double strike deals combat damage in two steps (CR 702.4b): two
+    triggers, four counters."""
+    game, mine, _ = _w1g9_table(set_pool, mine=["Umezawa's Jitte", "Ridgetop Raptor"])
+    jitte, raptor = mine
+    assert _w1g9_equip(game, jitte, raptor).supported
+    _w1g9_declare_attack(game, 0)
+    _w1g9_drive_combat(game)
+    assert game.players[1].life == 16
+    assert _w1g9_counters_on(jitte, "charge") == 4
+
+
+def test_w1g9_jitte_does_not_charge_without_combat_damage(set_pool):
+    """No combat damage dealt, no counters, and every mode is refused with
+    nothing to remove (CR 602.2b, 601.2h)."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Umezawa's Jitte", "Grizzly Bears"], theirs=["Grizzly Bears"],
+    )
+    jitte, bears = mine
+    assert _w1g9_equip(game, jitte, bears).supported
+    assert _w1g9_counters_on(jitte, "charge") == 0
+    assert not _w1g9_activate(game, jitte, ability_index=2).supported
+    assert not _w1g9_activate(game, jitte, ability_index=0).supported
+    assert game.players[0].life == 20
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+def test_w1g9_jitte_modes_each_remove_one_counter(set_pool):
+    """Unblocked, the Bears charge the Jitte with two counters; a third is put
+    on by hand. Each mode is its own activation removing one: -1/-1 on Bob's
+    Hill Giant, two life, +2/+2 on the equipped Bears — and nothing left for a
+    fourth."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Umezawa's Jitte", "Grizzly Bears"],
+        theirs=["Grizzly Bears", "Hill Giant"],
+    )
+    jitte, bears = mine
+    their_bears, giant = theirs
+    assert _w1g9_equip(game, jitte, bears).supported
+    _w1g9_declare_attack(game, 0)
+    _w1g9_drive_combat(game)
+    assert game.players[1].life == 18
+    assert _w1g9_counters_on(jitte, "charge") == 2
+    _w1g9_add_counters(jitte, "charge", 1)
+
+    assert _w1g9_activate(
+        game, jitte, ability_index=1, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert (giant.effective_power, giant.effective_toughness) == (2, 2)
+    assert _w1g9_counters_on(jitte, "charge") == 2
+    assert _w1g9_activate(game, jitte, ability_index=2).supported
+    assert game.players[0].life == 22
+    assert _w1g9_counters_on(jitte, "charge") == 1
+    assert _w1g9_activate(game, jitte, ability_index=0).supported
+    assert (bears.effective_power, bears.effective_toughness) == (4, 4)
+    assert (their_bears.effective_power, their_bears.effective_toughness) == (2, 2)
+    assert _w1g9_counters_on(jitte, "charge") == 0
+    assert not _w1g9_activate(
+        game, jitte, ability_index=1, target_permanent_ids=[their_bears.permanent_id],
+    ).supported
+    assert (their_bears.effective_power, their_bears.effective_toughness) == (2, 2)
+
+
+def test_w1g9_jitte_pump_reaches_the_last_equipped_creature_after_it_leaves(set_pool):
+    """2005-02-01 ruling: "If the Jitte leaves the battlefield after the
+    '+2/+2' mode is announced but before it resolves, the bonus is given to
+    the creature that was most recently equipped." Shattered in response,
+    the Jitte's pump still reaches the Bears (CR 608.2h)."""
+    game, mine, _ = _w1g9_table(
+        set_pool, hand=["Shatter"], mine=["Umezawa's Jitte", "Grizzly Bears"],
+    )
+    jitte, bears = mine
+    assert _w1g9_equip(game, jitte, bears).supported
+    _w1g9_add_counters(jitte, "charge", 1)
+    assert game.queue_permanent_ability(
+        0, jitte.card.name, permanent_index=_w1g9_slot(game, jitte), ability_index=0,
+    ).supported
+    assert _w1g9_counters_on(jitte, "charge") == 0
+    assert game.queue_from_hand(
+        0, "Shatter", target_permanent_ids=[jitte.permanent_id],
+    ).supported
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(jitte)
+    assert (bears.effective_power, bears.effective_toughness) == (4, 4)
+
+
+def test_w1g9_unattached_jitte_pump_does_nothing(set_pool):
+    """2005-02-01 ruling: "Choosing the 'Equipped creature gets +2/+2 until
+    end of turn' mode does nothing if the Jitte isn't equipped to a creature
+    when the ability resolves." The counter is still spent (it is the cost)."""
+    game, mine, _ = _w1g9_table(set_pool, mine=["Umezawa's Jitte", "Grizzly Bears"])
+    jitte, bears = mine
+    _w1g9_add_counters(jitte, "charge", 1)
+    _w1g9_activate(game, jitte, ability_index=0)
+    assert _w1g9_counters_on(jitte, "charge") == 0
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+# Ronin Warclub: "Equipped creature gets +2/+1." / "Whenever a creature you
+# control enters, attach this Equipment to that creature." The host is the
+# object the entry seam froze (``host_from: "event_subject"``).
+
+
+def test_w1g9_ronin_warclub_moves_onto_each_creature_that_enters_under_you(set_pool):
+    """The Warclub is on Alice's Llanowar Elves; Grizzly Bears enters and
+    the trigger moves it (CR 701.3a: the Elves are 1/1 again, the Bears
+    4/3). Bob's Bears entering does not trigger it ("you control")."""
+    game, mine, _ = _w1g9_table(
+        set_pool, hand=["Grizzly Bears"], their_hand=["Grizzly Bears"],
+        mine=["Ronin Warclub", "Llanowar Elves"],
+    )
+    club, elves = mine
+    # The Elves entered after the Warclub, so the trigger attached it already.
+    assert club.metadata.get("attached_to") is elves
+    assert (elves.effective_power, elves.effective_toughness) == (3, 2)
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    _w1g9_settle(game)
+    bears = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
+    assert club.metadata.get("attached_to") is bears
+    assert (bears.effective_power, bears.effective_toughness) == (4, 3)
+    assert (elves.effective_power, elves.effective_toughness) == (1, 1)
+
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    _w1g9_settle(game)
+    theirs = next(p for p in game.controlled_by(1) if p.card.name == "Grizzly Bears")
+    assert club.metadata.get("attached_to") is bears
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
+
+
+def test_w1g9_ronin_warclub_leaves_a_creature_that_cant_be_equipped_bare(set_pool):
+    """2005-02-01 ruling: "The triggered ability won't attach Ronin Warclub
+    to a creature that can't be equipped (such as Goblin Brawler)." It stays
+    where it was."""
+    game, mine, _ = _w1g9_table(
+        set_pool, hand=["Goblin Brawler"], mine=["Ronin Warclub", "Grizzly Bears"],
+    )
+    club, bears = mine
+    assert club.metadata.get("attached_to") is bears
+    assert game.queue_from_hand(0, "Goblin Brawler").supported
+    _w1g9_settle(game)
+    brawler = next(p for p in game.controlled_by(0) if p.card.name == "Goblin Brawler")
+    assert club.metadata.get("attached_to") is bears
+    assert (brawler.effective_power, brawler.effective_toughness) == (2, 2)
+    assert any("can't be equipped" in line for line in game.log)
+
+
+def test_w1g9_ronin_warclub_attaches_nothing_when_the_creature_left_in_response(set_pool):
+    """The trigger names the creature that entered, by id (CR 400.7). Killed
+    in response — Lightning Bolt on the Elves with the trigger on the stack —
+    there is nothing to attach to, and the Warclub stays unattached."""
+    game, mine, _ = _w1g9_table(
+        set_pool, hand=["Llanowar Elves", "Lightning Bolt"], mine=["Ronin Warclub"],
+    )
+    club = mine[0]
+    assert club.metadata.get("attached_to") is None
+    assert game.queue_from_hand(0, "Llanowar Elves").supported
+    assert game.resolve_next_object(pause_for_choices=False)
+    assert [item.ability_kind for item in game.stack] == ["triggered"]
+    elves = next(p for p in game.controlled_by(0) if p.card.name == "Llanowar Elves")
+    assert game.queue_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[elves.permanent_id],
+    ).supported
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(elves)
+    assert club.metadata.get("attached_to") is None
+    assert game.is_on_battlefield(club)
+
+# Neko-Te: "Whenever equipped creature deals damage to a creature, tap that
+# creature. That creature doesn't untap during its controller's untap step for
+# as long as this Equipment remains on the battlefield." / "Whenever equipped
+# creature deals damage to a player, that player loses 1 life."
+
+
+def test_w1g9_neko_te_taps_and_holds_the_creature_its_wearer_damaged(set_pool):
+    """Blocked by Bob's Hill Giant, the equipped Craw Wurm deals it combat
+    damage: the Giant survives (6 damage would kill it, so a War Mammoth is
+    used — 3 damage to a 3/3 kills, so the Giant blocks a Grizzly Bears), is
+    tapped, and stays tapped through Bob's untap step while Neko-Te remains.
+    Shattered, Neko-Te releases it at the next untap step (CR 611.2a)."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, hand=["Shatter"], mine=["Neko-Te", "Grizzly Bears"],
+        theirs=["Hill Giant"],
+    )
+    neko, bears = mine
+    giant = theirs[0]
+    assert _w1g9_equip(game, neko, bears).supported
+    _w1g9_declare_attack(game, 0, blocks={_w1g9_slot(game, giant): _w1g9_slot(game, bears)})
+    _w1g9_drive_combat(game)
+    assert game.is_on_battlefield(giant)
+    assert giant.tapped
+    assert "Hill Giant won't untap while Neko-Te remains on the battlefield" in game.log
+
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.active_player_index == 1 and giant.tapped
+
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.queue_from_hand(0, "Shatter", target_permanent_ids=[neko.permanent_id]).supported
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(neko)
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.active_player_index == 1 and not giant.tapped
+
+
+def test_w1g9_neko_te_holds_every_creature_it_has_locked(set_pool):
+    """Each trigger's lock is its own continuous effect (CR 611.2a), and all
+    of them last as long as Neko-Te remains: the equipped Prodigal Sorcerer
+    pings the Hill Giant and then the Grizzly Bears, and both stay tapped
+    through Bob's untap step — the second lock does not release the first."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Neko-Te", "Prodigal Sorcerer"],
+        theirs=["Hill Giant", "Grizzly Bears"],
+    )
+    neko, tim = mine
+    giant, bears = theirs
+    assert _w1g9_equip(game, neko, tim).supported
+    assert _w1g9_activate(game, tim, target_permanent_ids=[giant.permanent_id]).supported
+    tim.tapped = False
+    assert _w1g9_activate(game, tim, target_permanent_ids=[bears.permanent_id]).supported
+    assert giant.tapped and bears.tapped
+    game.start_next_turn()
+    _w1g9_settle(game)
+    assert game.active_player_index == 1
+    assert giant.tapped and bears.tapped
+
+
+def test_w1g9_neko_te_drains_the_player_its_wearer_damaged(set_pool):
+    """"That player" is the damaged player, not the Equipment's controller:
+    the unblocked equipped Bears deal Bob 2 and Neko-Te makes him lose 1 more;
+    Alice's life does not move."""
+    game, mine, _ = _w1g9_table(set_pool, mine=["Neko-Te", "Grizzly Bears"])
+    neko, bears = mine
+    assert _w1g9_equip(game, neko, bears).supported
+    _w1g9_declare_attack(game, 0)
+    _w1g9_drive_combat(game)
+    assert game.players[1].life == 17
+    assert game.players[0].life == 20
+
+
+def test_w1g9_neko_te_does_nothing_for_an_unequipped_damager(set_pool):
+    """Unattached, Neko-Te watches nobody: the Prodigal Sorcerer's ping on the
+    Giant taps nothing and drains nobody."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Neko-Te", "Prodigal Sorcerer"], theirs=["Hill Giant"],
+    )
+    _neko, tim = mine
+    giant = theirs[0]
+    assert _w1g9_activate(game, tim, target_permanent_ids=[giant.permanent_id]).supported
+    assert not giant.tapped
+    tim.tapped = False
+    assert _w1g9_activate(game, tim, target_player_index=1).supported
+    assert game.players[1].life == 19
+
+# Shuriken: 'Equipped creature has "{T}, Unattach Shuriken: Shuriken deals 2
+# damage to target creature. That creature's controller gains control of
+# Shuriken unless it was unattached from a Ninja."' The quote is folded onto
+# the creature with the Equipment's name bound to its id (CR 201.5a): the
+# Equipment is the dealer (``biter: "granter"``), the hand-over moves the
+# Equipment (``give_control_of_granter_to_player``), and the condition reads
+# what the unattach cost took it off (``unattached_from_for_cost``).
+
+
+def _w1g9_throw(game, bearer, target):
+    """Activate the creature's granted Shuriken ability at *target*."""
+    from engine.oracle import compile_card_oracle
+
+    abilities = compile_card_oracle(bearer.effective_card).activated_abilities
+    index = next(
+        i for i, ability in enumerate(abilities)
+        if "unattach" in (ability.source_line or "").lower()
+    )
+    return _w1g9_activate(
+        game, bearer, ability_index=index, target_permanent_ids=[target.permanent_id],
+    )
+
+
+def _w1g9_test_ninja(game, seat=0):
+    """A vanilla 'Creature — Human Ninja' for seat 0: every printed Ninja on
+    this base carries ninjutsu, which another group implements."""
+    from tests.helpers import _mk_card
+
+    ninja = _W1G9Permanent(card=_mk_card("W1G9 Ninja", "Creature — Human Ninja"))
+    game._put_permanent_onto_battlefield(seat, ninja, None)
+    ninja.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return ninja
+
+
+def test_w1g9_shuriken_thrown_from_a_non_ninja_changes_hands(set_pool):
+    """The equipped Grizzly Bears taps and unattaches Shuriken (CR 701.3d);
+    *Shuriken* deals the 2 damage (the log names it, CR 608.2h), and Bob, the
+    damaged Hill Giant's controller, gains control of it (CR 611.2a: untimed)."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Shuriken", "Grizzly Bears"], theirs=["Hill Giant"],
+    )
+    shuriken, bears = mine
+    giant = theirs[0]
+    assert _w1g9_equip(game, shuriken, bears).supported
+    assert _w1g9_throw(game, bears, giant).supported
+    assert "Shuriken dealt 2 damage to Hill Giant" in game.log
+    assert giant.damage_marked == 2
+    assert bears.tapped
+    assert shuriken.metadata.get("attached_to") is None
+    assert game.controller_index_of(shuriken) == 1
+    assert "Bob gains control of Shuriken" in game.log
+
+
+def test_w1g9_shuriken_thrown_from_a_ninja_stays(set_pool):
+    """Unattached from a Ninja, Shuriken deals its damage and stays with its
+    controller."""
+    game, mine, theirs = _w1g9_table(set_pool, mine=["Shuriken"], theirs=["Hill Giant"])
+    shuriken = mine[0]
+    giant = theirs[0]
+    ninja = _w1g9_test_ninja(game)
+    assert _w1g9_equip(game, shuriken, ninja).supported
+    assert _w1g9_throw(game, ninja, giant).supported
+    assert giant.damage_marked == 2
+    assert game.controller_index_of(shuriken) == 0
+    assert shuriken.metadata.get("attached_to") is None
+
+
+def test_w1g9_shuriken_deals_the_damage_as_the_equipment(set_pool):
+    """The dealer is the Equipment (CR 120.7), not the creature: Tel-Jilad
+    Chosen's protection from artifacts prevents the damage (CR 702.16e). The
+    target was legal — the ability's source is the Bears, a green creature —
+    and the hand-over still happens, as it is not conditioned on damage."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Shuriken", "Grizzly Bears"], theirs=["Tel-Jilad Chosen"],
+    )
+    shuriken, bears = mine
+    chosen = theirs[0]
+    assert _w1g9_equip(game, shuriken, bears).supported
+    assert _w1g9_throw(game, bears, chosen).supported
+    assert chosen.damage_marked == 0
+    assert game.controller_index_of(shuriken) == 1
+
+
+def test_w1g9_shuriken_destroyed_in_response_still_deals_its_damage(set_pool):
+    """CR 608.2h: the object the ability says deals the damage deals it as it
+    last existed — Shuriken, Shattered with the ability on the stack, still
+    deals 2; there is no Shuriken left for Bob to gain control of."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, hand=["Shatter"], mine=["Shuriken", "Grizzly Bears"],
+        theirs=["Hill Giant"],
+    )
+    shuriken, bears = mine
+    giant = theirs[0]
+    assert _w1g9_equip(game, shuriken, bears).supported
+    from engine.oracle import compile_card_oracle
+
+    abilities = compile_card_oracle(bears.effective_card).activated_abilities
+    index = next(
+        i for i, ability in enumerate(abilities)
+        if "unattach" in (ability.source_line or "").lower()
+    )
+    assert game.queue_permanent_ability(
+        0, "Grizzly Bears", permanent_index=_w1g9_slot(game, bears),
+        ability_index=index, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert shuriken.metadata.get("attached_to") is None
+    assert game.queue_from_hand(
+        0, "Shatter", target_permanent_ids=[shuriken.permanent_id],
+    ).supported
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(shuriken)
+    assert giant.damage_marked == 2
+    assert "Shuriken dealt 2 damage to Hill Giant" in game.log
+
 # ==== end w1g9 ======================================================
 
 

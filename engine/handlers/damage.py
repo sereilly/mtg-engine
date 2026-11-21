@@ -214,6 +214,28 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             return True, "resolved"
         source_permanent = dealer
         card = dealer.effective_card
+    elif instruction.payload.get("biter") == "granter":
+        # ``biter: "granter"`` — "{T}, Unattach Shuriken: **Shuriken** deals 2
+        # damage to target creature." (Shuriken's quote, on the creature it
+        # equips.) The dealer is the permanent that granted the ability, by
+        # the id the quote was bound with (CR 201.5a) — the Equipment, whose
+        # colours and controller the damage has (CR 120.7), not the
+        # creature's. CR 608.2h: the object as it exists, or as it most
+        # recently existed — so an Equipment destroyed with the ability on the
+        # stack still deals it, read off the unattach cost's record of what it
+        # unattached (``unattached_for_cost``) when that is the same object.
+        granter_id = instruction.payload.get("granter_id")
+        dealer = game.permanent_by_id(granter_id) if isinstance(granter_id, int) else None
+        if dealer is None:
+            choices = context.choices or {}
+            recorded = choices.get("unattached_for_cost")
+            if isinstance(recorded, Permanent) and recorded.permanent_id == granter_id:
+                dealer = recorded
+        if dealer is None:
+            game.log.append(f"{card.name}: nothing to deal the damage")
+            return True, "resolved"
+        source_permanent = dealer
+        card = dealer.effective_card
     elif (dealer_record := instruction.payload.get("biter")) is not None:
         # ``biter: "destroyed_target"`` — "Destroy target artifact. **That
         # artifact** deals damage equal to its mana value to this creature."

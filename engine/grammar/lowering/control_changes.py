@@ -38,7 +38,7 @@ from ._events import (CHOSEN_PERMANENT, CHOSEN_PLAYER, EVENT_SUBJECT_CONTROLLER,
                       _EVENT_SUBJECT_PLAYERS, _UNTAPPED_PERMANENTS,
                       names_attached_permanent)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
-from ._record_keys import LOOP_BOUND_PLAYER, UNTAPPED_THIS_WAY_OBJECTS
+from ._record_keys import DAMAGE_RECIPIENT, LOOP_BOUND_PLAYER, UNTAPPED_THIS_WAY_OBJECTS
 
 
 
@@ -518,6 +518,51 @@ def _lower_seat_gains_target_permanent(
     )
 
 
+def _lower_granter_given_away(
+    node: ast.GainControl, subject: ast.GranterRef, event: str | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"{T}, Unattach Shuriken: Shuriken deals 2 damage to target creature.
+    **That creature's controller gains control of Shuriken** …" (Shuriken's
+    quote, on the creature it equips.)
+
+    The permanent handed over is the one that granted the ability
+    (:class:`ast.GranterRef`, CR 201.5a), by the id the quote was bound with,
+    and the seat is the controller of the creature the step in front of this
+    one damaged — the ability's own chosen target. The parser hands the
+    possessive over as "that player"; with no trigger behind the sentence
+    (an activated ability's event is None) and a damage step in front of it
+    that recorded its recipient (``DAMAGE_RECIPIENT``), the one player the
+    words can name is that target's controller, which the handler reads off
+    the target as the ability resolves (CR 608.2b re-checks it; a target gone
+    by then has already countered the ability, CR 608.2b).
+
+    Untimed (CR 611.2a), offered to nobody, never tapped on loss: anything
+    else refuses, as does a seat word other than the one this reads.
+    """
+    if (
+        node.gained_by is None
+        or node.gained_by.kind not in _EVENT_GAINERS
+        or event is not None
+        or DAMAGE_RECIPIENT not in produced
+    ):
+        raise LoweringError(
+            "the granter is handed only to the controller of the creature "
+            "the step in front of it damaged",
+            node=node,
+        )
+    if node.duration != "indefinite" or node.tap_when_lost or node.offered:
+        raise LoweringError(
+            "the granter changes controllers untimed and unoffered", node=node,
+        )
+    return (
+        OracleInstruction(
+            "give_control_of_granter_to_player", "",
+            {"granter_id": int(subject.permanent_id), "who": "target_controller"},
+        ),
+    )
+
+
 def _lower_gain_control(
     node: ast.GainControl, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -554,6 +599,8 @@ def _lower_gain_control(
     through.
     """
     subject = node.subject
+    if isinstance(subject, ast.GranterRef):
+        return _lower_granter_given_away(node, subject, event, produced)
     if not isinstance(subject, ast.TargetSpec):
         raise LoweringError("the linked-control handler needs a named target", node=node)
     # "**Target opponent** gains control of this creature …" (Chaos Lord): the

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..game_types import first_target_id
 from ..oracle_types import CONTROL_EXCHANGED_PERMANENTS, LAST_TARGET_CONTROLLER
 from ..source_tapped_effects import SOURCE_UNTAPPED
 from ._filters import permanent_matches_filter
@@ -552,6 +553,48 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         game.log.append(f"{context.card.name}: control can't change")
         return True, "resolved"
     game.log.append(f"{recipient.name} gains control of {context.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("give_control_of_granter_to_player")
+def give_control_of_granter_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{T}, Unattach Shuriken: Shuriken deals 2 damage to target creature.
+    **That creature's controller gains control of Shuriken** unless it was
+    unattached from a Ninja." (Shuriken's quote, on the creature it equips.)
+
+    ``give_control_of_source_to_player``'s hand-over of a different object:
+    the permanent that granted the ability, by the id the quote was bound with
+    (CR 201.5a), rather than the ability's source. The seat is the controller
+    of the ability's chosen target creature, read as the ability resolves —
+    the one ``who`` this reads (``target_controller``); the lowering admits it
+    only behind a step that damaged that target.
+
+    One CR 613 layer-2 contribution with no lifetime (CR 611.2a), through
+    ``take_control`` with the granter as its own source, as the source's own
+    hand-over is. An Equipment that has left the battlefield goes to nobody,
+    and one already controlled by that seat stays where it is.
+    """
+    granter_id = instruction.payload.get("granter_id")
+    granter = game.permanent_by_id(granter_id) if isinstance(granter_id, int) else None
+    if granter is None or not game.is_on_battlefield(granter):
+        game.log.append(f"{context.card.name}: the permanent to hand over has left the battlefield")
+        return True, "resolved"
+    who = str(instruction.payload.get("who") or "")
+    if who != "target_controller":
+        return False, f"unsupported control recipient {who!r}"
+    target = game.permanent_by_id(first_target_id(context.target_permanent_id))
+    seat = game.controller_index_of(target) if target is not None else None
+    if seat is None:
+        game.log.append(f"{context.card.name}: no target creature names a seat")
+        return True, "resolved"
+    recipient = game.players[seat]
+    if seat == game.controller_index_of(granter):
+        game.log.append(f"{granter.card.name} is already controlled by {recipient.name}")
+        return True, "resolved"
+    if not game.take_control(granter, seat, source=granter):
+        game.log.append(f"{granter.card.name}: control can't change")
+        return True, "resolved"
+    game.log.append(f"{recipient.name} gains control of {granter.card.name}")
     return True, "resolved"
 
 
