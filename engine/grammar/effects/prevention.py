@@ -93,6 +93,26 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     # Read before the trailing duration, which is where the card prints it.
     if recipient is not None:
         recipient = accept_or_planeswalker(stream, recipient)
+    # "…dealt to **each creature and each player** this turn." (Kitsune
+    # Palliator.) CR 615.7's pool armed around every member of two sets at
+    # once — the damage side's "deals 1 damage to each creature and each
+    # player" (Pestilence) on the shield side of the event. Only a second
+    # "each" set after a first: any other conjunct is a sentence this does
+    # not read, and is left unconsumed for the line to refuse.
+    others: tuple[ast.Recipient, ...] = ()
+    if (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "each"
+    ):
+        conjunct = stream.mark()
+        if stream.accept_word("and") and stream.at_word("each"):
+            further = parse_recipient(stream)
+            if isinstance(further, ast.PlayerRef) and further.kind == "each_player":
+                others = (further,)
+            else:
+                stream.reset(conjunct)
+        else:
+            stream.reset(conjunct)
     # "…dealt to this creature **by Torrent of Lava** this turn." Whose damage
     # the shield stops — which the blanket branch below has read since
     # Al-abara's Carpet and this one never had, so those words ran off the end
@@ -125,12 +145,14 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
         return ast.PreventDamage(
             amount, to=recipient, duration=duration, dealt_by=dealt_by,
             division=division, prevented_rider=prevented_rider,
+            to_others=others,
         )
     described, larger = alternate
     return ast.PreventDamage(
         amount, to=recipient, duration=duration, dealt_by=dealt_by,
         alternate_amount=larger, alternate_subject=described,
         division=division, prevented_rider=prevented_rider,
+        to_others=others,
     )
 
 

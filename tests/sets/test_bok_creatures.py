@@ -156,4 +156,51 @@ def test_w1g5_opal_eye_prevents_the_next_1_damage_to_itself(set_pool):
     _w1g5_settle(game)
     assert opal.damage_marked == 1 and game.is_on_battlefield(opal), game.log
 
+
+@_w1g5_pytest.mark.parametrize("interactive", _W1G5_SEATS)
+def test_w1g5_kitsune_palliator_shields_every_creature_and_player_once(
+    set_pool, interactive,
+):
+    """"{T}: Prevent the next 1 damage that would be dealt to each creature
+    and each player this turn." One shield on each creature and each player
+    as it resolves: Pestilence's first activation is prevented everywhere,
+    but a creature that entered afterwards has none (ruling 2005-02-01), and
+    the second activation is dealt to everyone."""
+    bok, lea, ed2 = set_pool("BOK"), set_pool("LEA"), set_pool("2ED")
+    game = _w1g5_table(set_pool, interactive)
+    palliator = _w1g5_put(game, bok["Kitsune Palliator"])
+    bears = _w1g5_put(game, lea["Grizzly Bears"])
+    pestilence = _w1g5_put(game, ed2["Pestilence"], seat=1)
+    giant = _w1g5_put(game, lea["Hill Giant"], seat=1)
+    _w1g5_activate(game, palliator)
+    assert palliator.tapped
+    late = _w1g5_put(game, lea["Grizzly Bears"], seat=1)
+    _w1g5_activate(game, pestilence, seat=1)
+    assert [p.life for p in game.players] == [20, 20], game.log
+    assert [c.damage_marked for c in (palliator, bears, giant, late)] == [0, 0, 0, 1]
+    _w1g5_activate(game, pestilence, seat=1)
+    assert [p.life for p in game.players] == [19, 19], game.log
+    assert [c.damage_marked for c in (palliator, bears, giant)] == [1, 1, 1]
+
+
+@_w1g5_pytest.mark.parametrize("interactive", _W1G5_SEATS)
+def test_w1g5_heartless_hidetsugu_halves_each_life_total_rounded_down(
+    set_pool, interactive,
+):
+    """"{T}: Heartless Hidetsugu deals damage to each player equal to half
+    that player's life total, rounded down." Each seat's own total: 15 takes
+    7 (rounded down) and 20 takes 10; at 1 life half is 0, and a seat dealt
+    0 is dealt no damage (CR 120.8)."""
+    bok = set_pool("BOK")
+    game = _w1g5_table(set_pool, interactive)
+    hidetsugu = _w1g5_put(game, bok["Heartless Hidetsugu"])
+    game.players[1].life = 15
+    _w1g5_activate(game, hidetsugu)
+    assert [p.life for p in game.players] == [10, 8], game.log
+    assert "Heartless Hidetsugu dealt 7 damage to P1" in game.log
+    hidetsugu.tapped = False
+    game.players[0].life = 1
+    _w1g5_activate(game, hidetsugu)
+    assert [p.life for p in game.players] == [1, 4], game.log
+
 # ==== end w1g5 ======================================================

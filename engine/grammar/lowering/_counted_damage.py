@@ -883,6 +883,45 @@ def _lower_per_seat_record_damage(
     )
 
 
+def _lower_life_total_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+    """Heartless Hidetsugu: "{T}: Heartless Hidetsugu deals damage to each
+    player equal to half that player's life total, rounded down."
+
+    One number per seat — **that** player's life total, the seat the loop is
+    visiting — so it rides ``x_from_count_per_recipient`` with the named
+    count ``their_life``, which ``evaluate_count`` answers against the seat
+    it is handed (``handlers/_amounts.per_recipient_amount``). The halving is
+    the caller's (``_lower_halved_damage`` folds ``half`` into the spec).
+
+    Only the looping recipients: "that player" names the seat being damaged,
+    and a single recipient has no loop to give it one. Every seat is dealt its
+    damage at once (the ``each_player`` branch's ``deal_at_once``, CR 603.2c).
+    """
+    recipient = node.recipients[0] if len(node.recipients) == 1 else None
+    if not (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind in _LOOPED_PLAYER_RECIPIENTS
+    ):
+        raise LoweringError(
+            "a life-total damage counts the seat each loop visits", node=node
+        )
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a counted damage carries no riders yet", node=node)
+    if node.amount.base is not None:
+        raise LoweringError(
+            "a life-total damage subtracts no constant", node=node
+        )
+    return (
+        OracleInstruction(
+            "deal_damage", "",
+            {
+                "recipient": recipient.kind,
+                X_FROM_COUNT_PER_RECIPIENT: {"board_count": "their_life"},
+            },
+        ),
+    )
+
+
 def _lower_board_count_damage(
     node: ast.DealDamage, produced: frozenset[str] = frozenset()
 ) -> tuple[OracleInstruction, ...]:
@@ -891,6 +930,8 @@ def _lower_board_count_damage(
     record = _PER_SEAT_RECORD_COUNTS.get(node.amount.name)
     if record is not None:
         return _lower_per_seat_record_damage(node, record, produced)
+    if node.amount.name == "their_life":
+        return _lower_life_total_damage(node)
     found = _BOARD_COUNT_DAMAGE.get(node.amount.name)
     if found is None:
         raise LoweringError(

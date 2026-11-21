@@ -384,6 +384,21 @@ def _parse_counted_amount(
     chosen = accept_damage_dealt_by_chosen_cast(stream)
     if chosen is not None:
         return chosen
+    # "…deals damage to each player equal to half **that player's life
+    # total**, rounded down." (Heartless Hidetsugu.) The life-total count
+    # "loses half their life" reads (``BoardCount("their_life")``), printed
+    # with its noun after a possessive: whose total is the seat the clause
+    # is about — the recipient a per-player loop is visiting — which the
+    # lowering reads off the recipient, exactly as it reads "their life".
+    # Only the two possessives that name that seat; "your life total" is the
+    # controller's and is left unread.
+    life_mark = stream.mark()
+    if (
+        stream.accept_phrase("that", "player", "'s")
+        or stream.accept_word("their")
+    ) and stream.accept_phrase("life", "total"):
+        return ast.BoardCount("their_life")
+    stream.reset(life_mark)
     return parse_amount(stream, back_reference=back_reference)
 
 
