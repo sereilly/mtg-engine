@@ -290,8 +290,8 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
     """The triggered abilities a *keyword line* is, for every keyword whose
     rules text the CR defines as one.
 
-    Three today — rampage (CR 702.23a), cumulative upkeep (CR 702.24a) and
-    flanking (CR 702.25a) — and all are the rewrite ``engine/equipment.py``
+    Rampage (CR 702.23a), cumulative upkeep (CR 702.24a), flanking (CR
+    702.25a) and bushido (CR 702.45a) among them — and all are the rewrite ``engine/equipment.py``
     established for equip, one layer earlier because the grammar has no
     production for "for each creature blocking it beyond the first", for an
     escalating upkeep, or for a sentence no card outside a reminder prints.

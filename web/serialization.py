@@ -56,6 +56,10 @@ _DISPLAY_KEYWORDS = (
     # Sliver) folds in too — the badge says the creature can drag a blocker
     # in, which nothing else on the permanent shows once the reminder is gone.
     "Provoke",
+    # CR 702.45: a block trigger, line-derived like provoke so a granted one
+    # (Sensei Golden-Tail's training) folds in too. Badged bare, as Rampage
+    # is: the N is in the oracle text the preview shows.
+    "Bushido",
 )
 
 #: The implemented keywords this row deliberately does **not** badge, each with
