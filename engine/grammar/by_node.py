@@ -597,6 +597,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
+    # "…and attach this enchantment to **it**" (Necromancy) reads the
+    # records; "Whenever a creature you control enters, attach this Equipment
+    # to **that creature**" (Ronin Warclub) reads the firing event. The
+    # third table's founding row, moved here when the second arrived.
+    ast.Attach: _lower_attach,
     # "Look at **that many** cards from the top of your library" reads the
     # firing event's number (Garruk's Harbinger) or an earlier step's
     # (Plunge into Darkness: "Pay any amount of life, then …"). Moved here
@@ -696,8 +701,12 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
 #: Read after the two tables above and before the chain, and disjoint from both
 #: for their reason: a class in two tables would be dispatched by whichever was
 #: consulted first.
+#:
+#: ``ast.Attach`` itself is a row of the fourth table now: Ronin Warclub's
+#: "attach this Equipment to **that creature**" names the object a trigger's
+#: event froze, so the lowering reads the event as well as the records. The
+#: reason the rows below cite is unchanged.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
-    ast.Attach: _lower_attach,
     # "…copy an instant or sorcery card **in it**." (Reversal of Fortune.)
     # "It" is the hand a reveal of this same effect showed.
     ast.CastCopyOfRevealedCard: _lower_cast_copy_of_revealed_card,

@@ -276,6 +276,76 @@ def test_w1g9_unattached_jitte_pump_does_nothing(set_pool):
     assert _w1g9_counters_on(jitte, "charge") == 0
     assert (bears.effective_power, bears.effective_toughness) == (2, 2)
 
+# Ronin Warclub: "Equipped creature gets +2/+1." / "Whenever a creature you
+# control enters, attach this Equipment to that creature." The host is the
+# object the entry seam froze (``host_from: "event_subject"``).
+
+
+def test_w1g9_ronin_warclub_moves_onto_each_creature_that_enters_under_you(set_pool):
+    """The Warclub is on Alice's Llanowar Elves; Grizzly Bears enters and
+    the trigger moves it (CR 701.3a: the Elves are 1/1 again, the Bears
+    4/3). Bob's Bears entering does not trigger it ("you control")."""
+    game, mine, _ = _w1g9_table(
+        set_pool, hand=["Grizzly Bears"], their_hand=["Grizzly Bears"],
+        mine=["Ronin Warclub", "Llanowar Elves"],
+    )
+    club, elves = mine
+    # The Elves entered after the Warclub, so the trigger attached it already.
+    assert club.metadata.get("attached_to") is elves
+    assert (elves.effective_power, elves.effective_toughness) == (3, 2)
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    _w1g9_settle(game)
+    bears = next(p for p in game.controlled_by(0) if p.card.name == "Grizzly Bears")
+    assert club.metadata.get("attached_to") is bears
+    assert (bears.effective_power, bears.effective_toughness) == (4, 3)
+    assert (elves.effective_power, elves.effective_toughness) == (1, 1)
+
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    _w1g9_settle(game)
+    theirs = next(p for p in game.controlled_by(1) if p.card.name == "Grizzly Bears")
+    assert club.metadata.get("attached_to") is bears
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2)
+
+
+def test_w1g9_ronin_warclub_leaves_a_creature_that_cant_be_equipped_bare(set_pool):
+    """2005-02-01 ruling: "The triggered ability won't attach Ronin Warclub
+    to a creature that can't be equipped (such as Goblin Brawler)." It stays
+    where it was."""
+    game, mine, _ = _w1g9_table(
+        set_pool, hand=["Goblin Brawler"], mine=["Ronin Warclub", "Grizzly Bears"],
+    )
+    club, bears = mine
+    assert club.metadata.get("attached_to") is bears
+    assert game.queue_from_hand(0, "Goblin Brawler").supported
+    _w1g9_settle(game)
+    brawler = next(p for p in game.controlled_by(0) if p.card.name == "Goblin Brawler")
+    assert club.metadata.get("attached_to") is bears
+    assert (brawler.effective_power, brawler.effective_toughness) == (2, 2)
+    assert any("can't be equipped" in line for line in game.log)
+
+
+def test_w1g9_ronin_warclub_attaches_nothing_when_the_creature_left_in_response(set_pool):
+    """The trigger names the creature that entered, by id (CR 400.7). Killed
+    in response — Lightning Bolt on the Elves with the trigger on the stack —
+    there is nothing to attach to, and the Warclub stays unattached."""
+    game, mine, _ = _w1g9_table(
+        set_pool, hand=["Llanowar Elves", "Lightning Bolt"], mine=["Ronin Warclub"],
+    )
+    club = mine[0]
+    assert club.metadata.get("attached_to") is None
+    assert game.queue_from_hand(0, "Llanowar Elves").supported
+    assert game.resolve_next_object(pause_for_choices=False)
+    assert [item.ability_kind for item in game.stack] == ["triggered"]
+    elves = next(p for p in game.controlled_by(0) if p.card.name == "Llanowar Elves")
+    assert game.queue_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[elves.permanent_id],
+    ).supported
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(elves)
+    assert club.metadata.get("attached_to") is None
+    assert game.is_on_battlefield(club)
+
 # ==== end w1g9 ======================================================
 
 
