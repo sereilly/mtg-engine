@@ -271,7 +271,8 @@ def test_w2g1_the_splice_prompt_offers_each_card_and_greys_the_one_with_no_targe
     ]
     # Each button repeats the text it would add, never its splice line.
     assert seen["before"]["buttons"][0]["text"] == "Glacial Ray deals 2 damage to any target."
-    assert [(b["label"], b["on"]) for b in seen["after"]["buttons"]][::3] == [
+    picked_buttons = seen["after"]["buttons"]
+    assert [(picked_buttons[at]["label"], picked_buttons[at]["on"]) for at in (0, 3)] == [
         ("2. Glacial Ray — splice {1}{R}", True), ("1. Desperate Ritual — splice {1}{R}", True),
     ]
     assert seen["after"]["confirm"] == "Splice Desperate Ritual, then Glacial Ray and cast"
