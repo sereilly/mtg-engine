@@ -1325,6 +1325,22 @@ def _redirect_countered_card(
             verb=f"was countered by {card.name} and exiled",
         )
         return
+    if destination == "library_chosen_end":
+        # "…on **your choice of the top or bottom** of its owner's library."
+        # (Hinder.) The counterspell's controller picks the end (its ruling,
+        # 2020-08-07: "Hinder's controller, not necessarily the controller of
+        # the countered spell"), through the prompt Ether Well's tuck asks —
+        # the move is the answer, so the card goes to one end once, never to
+        # one and then the other.
+        chooser = (
+            game.players.index(counterer) if counterer in game.players
+            else countered.owner_index
+        )
+        game.arm_library_end_choice(
+            chooser, None, countered.owner_index, None,
+            card=countered.card, card_name=card.name,
+        )
+        return
     if destination == "hand":
         arrived = game.put_card_into_hand(owner, countered.card)
         where = "their hand"

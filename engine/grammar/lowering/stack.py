@@ -562,6 +562,10 @@ def _lower_counter_spell(
 _COUNTERED_DESTINATIONS = {
     ("library", "top"): "library_top",
     ("library", "bottom"): "library_bottom",
+    # "…on **your choice of the top or bottom** of its owner's library"
+    # (Hinder): the same library, its end asked of the counterspell's
+    # controller as the card moves (``library_end_choice``).
+    ("library", "chosen"): "library_chosen_end",
     ("hand", ""): "hand",
     # "…exile it instead of putting it into its owner's graveyard."
     # (Dissipate.) Exile is nobody's zone (CR 406.1), so it is the one

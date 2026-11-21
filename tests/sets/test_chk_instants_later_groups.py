@@ -97,6 +97,43 @@ def test_w1g7_peer_through_depths_takes_an_instant_or_sorcery(set_pool):
         ["Forest", "Grizzly Bears", "Lightning Bolt", "Craw Wurm"]
     )
 
+
+def _w1g7_hinder_a_bolt(set_pool, interactive):
+    game = _w1g7_table(
+        set_pool, hand=["Hinder"], opponent_hand=["Lightning Bolt"],
+        opponent_library=["Island", "Swamp"], interactive=interactive,
+    )
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    assert game.cast_from_hand(0, "Hinder", target_stack_index=0).supported
+    return game
+
+
+def test_w1g7_hinder_puts_the_countered_card_on_the_end_its_caster_picks(set_pool):
+    """Its ruling (2020-08-07): Hinder's controller chooses the end."""
+    for to_bottom, expected in (
+        (False, ["Lightning Bolt", "Island", "Swamp"]),
+        (True, ["Island", "Swamp", "Lightning Bolt"]),
+    ):
+        game = _w1g7_hinder_a_bolt(set_pool, interactive={0, 1})
+        asked = _w1g7_settle(game, defaults=False)
+        assert asked.kind == "library_end_choice" and asked.player_index == 0
+        assert asked.data["moved_name"] == "Lightning Bolt"
+        _w1g7_settle(game, answers={
+            "library_end_choice":
+                lambda g, c: g.confirm_library_end_choice(c.player_index, to_bottom),
+        })
+        assert _w1g7_names(game.players[1].library) == expected
+        assert game.players[1].graveyard == []
+        assert game.players[0].life == 20          # the Bolt was countered
+        assert _w1g7_names(game.players[0].graveyard) == ["Hinder"]
+
+
+def test_w1g7_hinder_at_a_seat_nobody_asks_buries_the_card(set_pool):
+    game = _w1g7_hinder_a_bolt(set_pool, interactive=())
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[1].library) == ["Island", "Swamp", "Lightning Bolt"]
+    assert game.players[0].life == 20
+
 # ==== end w1g7 ======================================================
 
 

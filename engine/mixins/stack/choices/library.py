@@ -694,7 +694,8 @@ class LibraryChoicesMixin:
     # -- Which end of a library a tuck puts its card on ----------------------
 
     def arm_library_end_choice(
-        self, player_index: int, permanent, owner_index: int, context
+        self, player_index: int, permanent, owner_index: int, context,
+        *, card=None, card_name: str = "",
     ) -> None:
         """Queue "top or bottom?" for a tuck whose card qualifies for the swap.
 
@@ -702,14 +703,23 @@ class LibraryChoicesMixin:
         object this resolution resolved: two copies of one card in a library are
         the same ``CardDefinition``, and a card is not addressable while a
         permanent still is (CR 400.7).
+
+        …or, with no permanent, the **card** of a spell a counterspell has just
+        taken off the stack (Hinder: "put that card on your choice of the top
+        or bottom of its owner's library instead of into that player's
+        graveyard"). It is in no zone until the answer puts it in one, which
+        is the one move CR 614.1's replacement describes; *card_name* is the
+        counterspell's.
         """
+        moved = permanent.card if permanent is not None else card
         self.arm_pending_choice(
             "library_end_choice", player_index,
-            card_name=context.card.name,
-            moved_name=permanent.card.name,
+            card_name=card_name or context.card.name,
+            moved_name=moved.name,
             owner_index=int(owner_index),
             owner_name=self.players[int(owner_index)].name,
             _permanent=permanent,
+            _card=None if permanent is not None else card,
             _context=context,
         )
 
@@ -728,6 +738,21 @@ class LibraryChoicesMixin:
         watcher should see.
         """
         permanent = choice.data.get("_permanent")
+        loose = choice.data.get("_card")
+        if permanent is None and loose is not None:
+            # A countered spell's card (Hinder), in no zone since the counter
+            # took it off the stack: the answer is its only move.
+            owner = self.players[int(choice.data["owner_index"])]
+            position = "bottom" if to_bottom else "top"
+            self.discard_pending_choice(choice)
+            if self.put_card_into_library(owner, loose, position=position):
+                self.log.append(
+                    f"{loose.name} was countered by "
+                    f"{choice.data.get('card_name', 'a spell')} and put on the "
+                    f"{position} of {owner.name}'s library instead of into "
+                    "their graveyard"
+                )
+            return True
         if permanent is None or not self.is_on_battlefield(permanent):
             # It left while the prompt was owed. CR 608.2b: the effect does as
             # much as it can, which here is nothing.
