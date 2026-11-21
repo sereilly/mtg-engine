@@ -47,7 +47,7 @@ from engine.oracle import compile_card_oracle, compiled_units
 from engine.shields import shields_on
 from engine.targeting import (
     activation_target_slot, derive_activation_spec,
-    usable_activated_abilities,
+    targets_mana_value_x, usable_activated_abilities,
 )
 from engine.target_roles import ROLES_TARGET_KIND
 from engine.cost_pickers import spec_is_a_cost
@@ -166,7 +166,21 @@ def _offer(game, source, index) -> dict:
 def _gate(game, source, ability, **named):
     # X = 1, so "X target lands" (Candelabra of Tawnos) admits one named land;
     # an ability with no X ignores it.
-    return game.activation_target_refusal(0, source, ability, x_value=1, **named)
+    x_value = 1
+    # "…destroy target nonblack creature **with mana value X**" (Plaguebearer,
+    # Gorilla Shaman, Hearth Kami): the X is announced with the target (CR
+    # 602.2b through 601.2b-c), so the picker offers every creature and the
+    # pair the activator names is the target with its own mana value. A
+    # mismatched X is the gate's refusal, driven in
+    # tests/regressions/test_chk_w1g3_drive_list_findings.py.
+    if targets_mana_value_x([ability.instruction]):
+        named_ids = [
+            pid for pid in named.get("target_permanent_ids") or () if isinstance(pid, int)
+        ]
+        chosen = game.permanent_by_id(named_ids[0]) if named_ids else None
+        if chosen is not None:
+            x_value = int(getattr(chosen.card, "cmc", 0) or 0)
+    return game.activation_target_refusal(0, source, ability, x_value=x_value, **named)
 
 
 def _announcement_naming(game, ability, offered, permanent) -> "list[int] | None":
