@@ -260,8 +260,9 @@ no instruction. A creature, a planeswalker and a land's static text are then
 reported unsupported naming the clause, but **an artifact, enchantment, instant
 or sorcery is supported when *any* of its lines compiles**
 (`line_classification._noncreature_line_instructions`): only its Aura and
-Equipment effect lines, a rewrite keyword's line and a spell's own effect have
-gates of their own, so any other line it drops is seen by `parse_coverage
+Equipment effect lines, a keyword line its own module reads (each rewrite
+keyword's, madness's, storm's and splice's: `oracle.py`'s `unread_*_line` gates) and a
+spell's own effect have gates of their own, so any other line it drops is seen by `parse_coverage
 --check` and `oracle_diff`, never by the support count (SET_PLAYBOOK's Known
 gaps). Coverage lives in `GRAMMAR_COVERAGE.md`.
 

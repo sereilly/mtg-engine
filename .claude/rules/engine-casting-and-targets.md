@@ -4,6 +4,7 @@ paths:
   - "engine/activation_*.py"
   - "engine/flashback.py"
   - "engine/madness.py"
+  - "engine/splice.py"
   - "engine/refusals.py"
   - "engine/cost_modifier*.py"
   - "engine/self_cost_modifiers.py"
@@ -60,6 +61,17 @@ and you can open this file directly whenever its subject is yours.
   trigger (`keyword_lines.keyword_line_triggers`), the static half is a discard
   destination (`replacements/registry.DISCARD_INTO_EXILE`), and the trigger casts the
   card during its own resolution (CR 608.2g, `madness_cast`).
+- `engine/splice.py` — splice onto Arcane (CR 702.47): **cast machinery, not
+  a line**. The cast announces `splice_cards` (each a hand card with its own
+  targets; the wire's `SpliceChoice`), each splice cost joins the total as an
+  additional cost before reductions, and the stack item carries one segment
+  per spliced card (`StackItem.spliced`: a `StackItem` never put on the stack,
+  whose card is the host with the gained text, `spliced_text_card`), so every
+  gate, stamp and CR 608.2b check asks a segment what it asks a spell
+  (`announce_splices` refuses before anything is paid). The resolver runs the
+  main text, then each segment (`spliced_steps`); a copy carries them (CR
+  707.10, `copied_segments`). The printed line compiles to nothing, so
+  `unread_splice_line` is its support gate.
 - `engine/refusals.py` — **a refused cast or activation is the actor's
   alone** (CR 733.1): `refuse(card_name, effect_kind, details)` is the only
   constructor of a refused result (a `Refusal`) and writes nothing; the four
@@ -157,7 +169,9 @@ and you can open this file directly whenever its subject is yours.
   (`target_roles.per_opponent_roles`, Blatant Thievery), and an empty
   `target_role_refs` on a cast names no target;
   "that player controls" after a seat role is a role relation
-  (`same_controller_role`, `role_seat_of`); a seat a slot cannot carry (a
+  (`same_controller_role`, `role_seat_of`) — on a trigger, a two-stage
+  announcement instead, the target player and then the objects narrowed to
+  that seat (`trigger_targets.that_player_dependent_step`, Yosei); a seat a slot cannot carry (a
   pile's owner, a count's opponent, an opponent beside a division) rides the
   seat field as `target_descriptions.ANNOUNCED_SEAT`. A narrowing known only
   at announcement (Phyrexian Splicer's chosen keyword; the creature type a
@@ -169,7 +183,9 @@ and you can open this file directly whenever its subject is yours.
   narrowing in `_enumerate_targets` (which also serves resolution, retargets and
   copies). Held by `tests/engine/test_target_requirement_census.py`.
 - `engine/stack_targets.py` — **which targets a stack object chose**
-  (`chosen_targets(item)`) and how they may change (CR 115.7). Every way an
+  (`chosen_targets(item)`, the object's own announcement; `has_targets` and the
+  change road, `change_slots`, also read each spliced segment's, CR 702.47d, a
+  slot's `ChosenTarget.splice` naming its holder) and how they may change (CR 115.7). Every way an
   object comes to have targets announces it once through
   `Game.announce_targets_chosen`; "becomes the target" triggers hang off it.
   A copy whose targets may be chosen anew is pushed unannounced and announced
@@ -177,8 +193,8 @@ and you can open this file directly whenever its subject is yours.
   becomes-the-target, "chooses targets" only where one moved, then put onto
   the stack. Every copy road offers them through one offer
   (`spell_copies.offer_new_targets`): a prompt for a seat somebody asks, the
-  measured answer for one nobody asks, slot by slot for several targets or a
-  mode (`change_slots`, CR 115.7d's `new_target_options`). A spell judged from outside its own
+  measured answer for one nobody asks, slot by slot for several targets, a
+  mode or a spliced text (`change_slots`, CR 115.7d's `new_target_options`). A spell judged from outside its own
   resolution (a retarget, a copy's new target, Grip of Chaos) is read as it
   is — its colour and text (`_enumerate_targets(stack_item=…)`,
   `object_colors.judging_targets_of`) — and a spell's one target may be

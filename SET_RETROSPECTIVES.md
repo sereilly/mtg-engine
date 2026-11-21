@@ -2158,3 +2158,99 @@ showing the census's 165. One client fix (a land under Fist of Suns had
 opened a payment prompt); measured and left, the auto-tap reading no
 Pentad Prism counters and overpaying beside Dawn's Reflection, and
 Condescend's scry logged before its counter settled.
+
+### CHK — 2026-11-21
+
+*The Kamigawa block's first set: 291 cards, 282 new, 57.4% on arrival and
+eighteen of those carrying a sentence nothing claimed or a hollow part
+(splice dropped on thirteen), so 142 to do; one new layout, flip cards (CR
+710), and three keywords, bushido, soulshift and splice onto Arcane.* The
+ingest's `--ingest` run (499 tests in 227 files) named ten reds in nine
+files, one a review fixed on the base (the self-reference ratchet naming
+Zo-Zu and Shimatsu), each other in its owner's brief before the fan-out;
+the full pass beside the wave (1h29m at `-n 3`) found the same ten — the
+yield of ten. Wave 1's nine groups landed 135 with no hook: flip cards as
+morph's substitution, the top half everywhere and the bottom half the
+flipped permanent's card (W1G1; Bushi Tenderfoot's "a creature dealt damage
+by this creature this turn dies" had been read as its own death), bushido
+as rampage's twin with Takeno's per-point lord and Pale Curtain's would-die
+exile (W1G2), soulshift as a rewrite onto Gravedigger's return, the
+Zubera's death tally by creature type, Iname's any-number return and
+Yosei's two-stage announcement (W1G3), the Spirit-or-Arcane cast trigger,
+Sideswipe's "change any targets" and Gohei (W1G4), splice as cast
+machinery with Candles' Glow's counted pool and the variable-sacrifice
+Arcane spells (W1G5), the Myojin's cast-only divinity counter, Shimatsu,
+Eight-and-a-Half-Tails and Night Dealings (W1G6), the Deceivers' look,
+Hinder's chosen end, Gifts Ungiven's different names and Mindblaze (W1G7),
+the damage-history exile (Frostwielder, Kumano), Masako's tapped blockers,
+Tide of War, Kiki-Jiki's "except it has haste" and Reverse the Sands (W1G8),
+the legendary lands' CR 106.6 mana riders, Forbidden Orchard's targeted tap
+trigger on the stack, Konda's Banner, Godo's first attack and Tenza's
+paragraph (W1G9). Seven cards were declined with their parts named, and
+wave 2's four took them: W2G3 Hankyu (a quote naming its granter),
+Kusari-Gama, Shell of the Last Kappa (a cast out of another seat's exile),
+Reweave and splice's retarget and copy leftovers; W2G4 Uba Mask (Shared
+Fate's shape with a turn window), Struggle for Sanity and Swirl the Mists'
+board-wide text change, which ships with CR 601.2c's targeting read off the
+printed text, accepted for the promotion; W2G1 the client in a browser (the
+flip ribbon and viewer, the splice multi-select, Gifts' chain, an X that
+follows its target, and Masako's missing server half in
+`legal_blocker_assignments`); W2G2 the AI. Shipped cards fixed beside them:
+Avizoa's untap-step skip, never spent on any road (fixed by two groups);
+Hearth Kami, Gorilla Shaman and Plaguebearer destroying anything for any X;
+Jugan dividing its counters among the creatures dying with it; Cut the
+Tethers bouncing itself; Crushing Pain's picker dropping "dealt damage this
+turn"; Forbidden Crypt and Yawgmoth's Agenda not exiled when destroyed
+alone; Tenza's flat +1/+1 dropped by a later "as long as"; `pump_self`
+writing onto a departed source; the AI recasting Petals of Insight every
+turn; and in the client every spliced `optional_pay` quoting the host's
+text and a column prompt overflowing its box.
+
+*What the integration learned.* Three shared shapes went to one group each
+(Kenzo's bushido, Thief of Hope's soulshift, Reweave's splice), and the
+integrator wrote each whole-card test at the merge completing it. Nine
+links, conflicts at five, all unions but one: W1G3 and W1G8 had both made
+the untap step spend a skip record, the conflict held the two arms, and
+W1G3's consumption line merged clean above it — keeping W1G8's side alone
+would have spent two records a skip. The wave-1 close gate read three reds
+no meeting named (a web source scan over splice's serializer, the sacrifice
+census meeting the flip faces), and its rehearsal routed twenty catalog
+reds: the flip faces in board-building censuses (an entry-seam reset had
+turned every placed bottom half back into its top half, so the unit-board
+censuses had read the top half twice), Yosei's two stages, Forbidden
+Orchard's stack road and Godo's added combat in a web census, the Brothers'
+legend exemption, Uyo's return cost, ten effect-label rows. Six follow-ups,
+each one commit on the chain tip, and the integrator's label link were
+staged as aliases and met once, and the fixes were sent to the four
+running wave-2 groups with the tip's name; none re-fixed one. The label
+link had claimed a promoted census green before its run was read (amended
+before anything merged it). The briefs carried three wrong neighbouring CR
+numbers and one rule backwards (CR 707.2), each corrected by the group it
+misled, and refusal sites named the wrong frame on most cards. W2G4's report
+that an `@file` list runs its named files as the quick pass did not
+reproduce. Memory: 21–25 GB free throughout, no death. Toolkit:
+`write_briefs.py` read the origin trap's tuples as JSON (Azusa), the wave-2
+template carried another set's memory line, and `tests_for_diff --why`
+crashed on a whole-file measured target.
+
+*Edits in place:* "two fixes of one bug" reads the losing branch's whole
+function; Phase 4 step 6 (a layout meets the board-building censuses after
+the face-blind one) and Phase 2's two layout precedents and splice; a link
+editing `web/` runs `tests/ui` whole; the integrator's commit claims what
+was read; a CR citation read for its claim; a refusal site's layer over
+its frame; Phase 1's eighth ingest; the memory reading. CLAUDE.md's
+noncreature gates; the rule files: the argument-keyword sentence (bushido
+listed, splice admitted by its reader), soulshift among the rewrites,
+splice as cast machinery, spliced targets and a trigger's two-stage "that
+player", the flip card's faces, card and wire, the targeted tap trigger,
+mana riders, Swirl's writer, Konda's Banner, tapped blockers and the
+one-shot step skip, an X that follows its target, Shell's cast out of an
+owner's exile; the `run-magic` table's `flipped`. *Known gaps:*
+**drained** none (every entry re-probed; Darksteel's redirect entry now
+names Yamabushi's exile on the same `then`, read, not driven); **rewritten**
+the toolkit entry, with this set's wishes; **added** Swirl the Mists' CR
+601.2c targeting, accepted for the promotion, and Champions of Kamigawa's
+engine and client leftovers. ROADMAP: the next set is Betrayers of
+Kamigawa; idioms 45 and 46; the keyword reading at 33; flip cards beside
+split cards in the structural gap.
+<!-- chk integrator: W2G2, the promotion gate, Phase 5 -->

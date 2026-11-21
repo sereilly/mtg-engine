@@ -5,6 +5,7 @@ LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
 USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/APC/ODY/TOR/JUD/ONS/LGN/SCG/8ED/MRD/
 DST/5DN/M21, all shipped and all supported — to the full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
+<!-- chk integrator: promotion -->
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
 records thirteen sets in the release line with zero new cards, and seven are
@@ -1245,7 +1246,12 @@ one card prints this") reads as a work item long after it stopped being true.
     Sanctimony, Price of Glory, Savage Firecat) resolve at the tap, not on
     the stack (CR 603.3; Manabarbs' ruling of 2009-10-01). Overabundance and
     Winter's Night are *not* in that list - they are triggered mana abilities
-    whole (CR 605.1b). Parts: split the loop in `_land_tapped_for_mana`
+    whole (CR 605.1b). A tap trigger that requires a target already takes
+    the other road since Champions of Kamigawa: Forbidden Orchard's is
+    enqueued from that loop (`mana_abilities.requires_a_target`, CR
+    605.5a) and, inside a cast's payment, held by `deferring_triggers` until
+    the spell is on the stack — the deferral the loop's own comment still
+    calls missing. Parts: split the loop in `_land_tapped_for_mana`
     (adders inline, the rest enqueued with the event's subject frozen -
     Sanctimony and Price of Glory read the controller at resolution today);
     `@effect_handler`s for `return_tapped_land_to_hand` and
@@ -1558,10 +1564,13 @@ before citing it.**
    everything matching in an any-number search, `default_sacrifice_pick`'s
    "keep the one whose death loses the game for last, then the ability's own
    source (`paying_for=`), then take the smallest",
-   "take gifts, pay tolls, make no trades" for a free offer, and the *largest*
-   alternative of a printed mana "or" (no mana burn, so more of the same is
-   never worse). A card that should choose otherwise needs a valuation, not a
-   branch.
+   "take gifts, pay tolls, make no trades" for a free offer — save one made to
+   its own controller whose decline branch is nothing but cards to hand and
+   yields more (`ai_offer_answers.offer_declines_into_more_cards`: Petals of
+   Insight, taken by rule, was recast every turn to bottom three cards) — and
+   the *largest* alternative of a printed mana "or" (no mana burn, so more of
+   the same is never worse). A card that should choose otherwise needs a
+   valuation, not a branch.
 9. **A picker's enumeration is a hint; the engine re-checks the answer.** A
    client offering a whole library or hand would otherwise turn "a creature card
    with mana value 6 or greater" into Demonic Tutor (round 11), or an
@@ -1897,6 +1906,33 @@ before citing it.**
     reader knows a record exists. The activation's `mana_spent_for_cost` read
     the pool alone until W2G2 measured it the same way, and Jeweled Amulet
     and Ice Cauldron, paid from a restricted bucket, had noted no mana.
+45. **A status that changes what a permanent is substitutes its card; it is
+    not a flag beside it.** Morph's face-down blank (CR 708) set the
+    arrangement and flip cards (CR 710) reused it: the loaded card *is* the
+    top half in every zone (CR 710.2), and a flipped permanent's `card` is
+    its bottom half (`flip_cards.flipped_face`, carrying `face_of`), so some
+    1,700 `.card.name` reads and every zone seam are right with nothing to
+    convert, and `faces.whole_card` puts the top half back on every road off
+    the battlefield. A flag read by the layer fold would have been right for
+    the CR 613 accessors and wrong for every other reader. The status itself
+    still rides beside the substitution (`FLIPPED`): status is not copied, so
+    a copy copies the unflipped card, modified by the copy's own status (CR
+    707.3), and a returning object forgets it (CR 110.5b). That mark is the question "was this
+    flipped here?", and asking "does it wear a bottom half?" in its place
+    turned every census-placed bottom half back into its top (Champions of
+    Kamigawa's fu1).
+46. **A keyword that acts on another spell while it is cast is cast
+    machinery, not a line.** Splice (CR 702.47) does nothing where it is
+    printed: the cast announces `splice_cards`, and the stack item carries
+    one segment per spliced card (`StackItem.spliced`, each a `StackItem`
+    never put on the stack, whose card is the host with the gained text), so
+    every question the engine asks of a spell's announcement — the cast
+    gates, the id stamp, CR 608.2b, a blanked slot, a retarget
+    (`ChosenTarget.splice`), a copy's new targets — is asked of a segment by
+    the method that asks it of the spell. And a keyword no line carries out
+    needs a support gate of its own (`splice.unread_splice_line`): an
+    instant is supported when any line compiles, and the thirteen splice
+    cards arrived supported with the keyword dropped.
 
 ---
 
@@ -1913,6 +1949,29 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
+Run on 2026-11-21, with Champions of Kamigawa promoting, it answers
+**Betrayers of Kamigawa** (BOK, 2005-02-04, 165 cards, 159 new by the
+release line's count — re-measure against this pool), the earliest
+unshipped set by release date once FBB, SUM and 4BB are passed over as
+every answer has; nothing of it is ingested or read yet, its reprint
+sources included. It is the block's second set, so flip cards, bushido,
+soulshift and splice will ship before it (a block's second set inherits its
+first set's keyword work, SET_PLAYBOOK Phase 1 step 5 — its mechanics, not
+its templates). **Champions of Kamigawa arrived at
+57.4%** — 167 of 291 read supported, but 18 of those carried a sentence
+nothing claimed or a hollow part (splice dropped on thirteen, Long-Forgotten
+Gohei, Night Dealings, Orochi Hatchery, Sift Through Sands, Swirl the
+Mists), so the work list was 142; 282 of its cards were new to this pool.
+It brought a layout, flip cards (CR 710, ten cards), built as morph's
+substitution (idiom 45), and three keywords: bushido (CR 702.45, rampage's
+twin, in the registry because a card grants it), soulshift (CR 702.46, a
+rewrite onto Gravedigger's return) and splice onto Arcane (CR 702.47, cast
+machinery with a gate of its own, idiom 46). Nine wave-1 groups landed 135
+with no hook and declined the other seven with their parts named; wave 2's
+four took those seven in two groups — Swirl the Mists ships with its
+targeting read off the printed text (CR 601.2c, SET_PLAYBOOK's Known gaps) —
+beside the client in a browser and the AI pile.
+<!-- chk integrator: promotion -->
 Run on 2026-11-12, with Fifth Dawn promoting, it answers **Champions of
 Kamigawa** (CHK, 2004-10-01, 291 cards, 283 new by the release line's count
 — re-measure against this pool), the earliest unshipped set by release
@@ -2083,7 +2142,7 @@ Mirage that debt stayed invisible until the promotion because `parse_coverage`
 gates on the shipped half alone.
 
 **Read the keyword census against three tables, not one.** The registry diff
-(`vocabulary.IMPLEMENTED_KEYWORDS`, 32 words) misreads in both directions: a
+(`vocabulary.IMPLEMENTED_KEYWORDS`, 33 words) misreads in both directions: a
 keyword implemented as the ability CR 702 says it *is* — cumulative upkeep,
 buyback, equip — reads as missing, and `keyword_lines.UNSUPPORTED_KEYWORDS` outranks
 the registry entirely, so a word there costs every card printing it whatever
@@ -2103,15 +2162,21 @@ is the difference between "it looks immune" and "it is".
 
 **Two structural gaps bound everything after Innistrad**, and the first is a
 hard wall. `card_loader.REQUIRED_FIELDS` demands a top-level `mana_cost`, which
-a transform card does not have, so a double-faced card raises `ValueError` on
-*load*; `_load_faces` populates `CardDefinition.faces` and the only reader is
-`commander.py`'s colour-identity derivation — the compiler has never seen a
-second face. That is CR 709/710/712/714/715/720, 45 rules, none implemented;
-it already costs Origins 5 cards and M19 one. Second, keyword abilities stand at
-**32** of CR 702's 194 in the registry (re-read 2026-11-12), with buyback,
+a transform card does not have, so a double-faced card (CR 712) raises
+`ValueError` on *load*. Two multi-face layouts ship, and they are the
+precedents for the rest: split cards (CR 709, since Invasion: each half its
+own card, `engine/faces.py`) and flip cards (CR 710, since Champions of
+Kamigawa: the top half everywhere and a flipped permanent's card its bottom
+half, `engine/flip_cards.py`; idiom 45). Double-faced, Saga, adventurer and
+omen cards (CR 712, 714, 715, 720) are none of them implemented, and the
+first already costs Origins 5 cards and M19 one. Second, keyword abilities stand at
+**33** of CR 702's 194 in the registry (re-read 2026-11-21: bushido, CR
+702.45, joined it as rampage's twin because a card grants it), with buyback,
 cumulative upkeep, equip, cycling (CR 702.29), echo (CR 702.30), fading,
-kicker (CR 702.33), flashback (CR 702.34), affinity, entwine, modular and
-now **sunburst (CR 702.44)** implemented below it.
+kicker (CR 702.33), flashback (CR 702.34), affinity, entwine, modular,
+sunburst and now **soulshift (CR 702.46)** implemented below it as rewrites
+or triggers, and **splice (CR 702.47)** read by its own module as cast
+machinery (`engine/splice.py`, idiom 46).
 **Read that number with the registry's actual question in mind**, which two USG
 groups had to work out independently because this line does not say it:
 `IMPLEMENTED_KEYWORDS` admits a keyword being *granted* or *named* ("gains
@@ -2120,10 +2185,11 @@ absent from it by design — by the time any reader sees the card, the word is
 gone and the ability it means is in its place. `test_keyword_registry`'s
 bare-keyword-card guard is what forces the choice: listing cycling would mean
 either failing that guard or admitting a costless cycling that charges nothing.
-So "32 in the registry" undercounts what the engine implements and always has;
-the honest reading is 32 granted-or-named, plus the keyword lines rewritten
-before any reader sees them (eleven in `line_rewrites.expand_ability_lines`)
-and those compiled to triggers (`keyword_lines.keyword_line_triggers`).
+So "33 in the registry" undercounts what the engine implements and always has;
+the honest reading is 33 granted-or-named, plus the keyword lines rewritten
+before any reader sees them (twelve in `line_rewrites.expand_ability_lines`),
+those compiled to triggers (`keyword_lines.keyword_line_triggers`) and those
+the cast path reads (splice).
 Alternative costs (CR 118.9) were the third gap and
 are closed: `engine/alternative_costs.py` reads the "rather than pay this
 spell's mana cost" template, the client offers optional and repeated costs
@@ -2174,6 +2240,7 @@ a wave is five parallel worktree groups integrated serially.
 | MRD | 291 | 72.5% (211 read supported; 27 of them hollow: entwine, affinity, imprint) | 2 waves (twelve groups landed 103 of 107 with no hook; then nine: Mindslaver, Liar's Pendulum and Shared Fate, Second Sunrise and the graveyard's arrival seam, the wave-close census reds, the client, two engine piles, the AI pile, the rehearsal's inventories) + 4 follow-ups (the seam's Tempest Efreet red a full gate found, the client's second round, the rehearsal's second batch, the promotion's full-pass census reds) |
 | DST | 165 | 65.5% (108 read supported; 6 of them hollow) | 2 waves (nine groups landed all 63 with no hook and no decline; then three: the client in a browser, the AI pile with the promotion's last red, the engine pile with the whenever table's notes) + 2 follow-ups (the rehearsal's census reds, both in the censuses) |
 | 5DN | 165 | 69.1% (114 read supported; 8 of them dropping a line, 6 of those sunburst) | 2 waves (seven groups landed all 60 with no hook and no decline, and found a 61st supported while doing nothing; then four: that card with the engine pile, the client in a browser, the AI pile, the legend rule end to end) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds, each one commit on the chain tip) |
+| CHK | 291 | 57.4% (167 read supported; 18 of them carrying unclaimed or hollow text, 13 of those splice dropped; 282 new to the pool) | 2 waves (nine groups landed 135 of the 142 with no hook, flip cards and three keywords among them; then four: the last seven cards in two groups, the client in a browser, the AI pile) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds: one commit each from six wave-1 groups on the chain tip, and the integrator's label rows) <!-- chk integrator: promotion --> |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2188,6 +2255,7 @@ hooks added across 335 cards — and around twenty already-shipped cards found
 mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
+<!-- chk integrator: promotion -->
 **Where the pool stands** (regenerate rather than trust these; read
 2026-11-12 for Fifth Dawn's promotion — the membership with the set read as
 shipped, `MTG_PROMOTE=5DN`; the grammar and hook numbers off the promotion
