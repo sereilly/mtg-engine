@@ -279,6 +279,23 @@ def _action_is_takeable(
     # battlefield* is asked: a choice drawn from anywhere else is not a price
     # this player pays, and answering False for it would withdraw an offer the
     # card makes.
+    if instruction.kind == "put_revealed_cards_on_bottom":
+        # "Look at the top three cards of your library. You may put **those
+        # cards** on the bottom of your library in any order. If you do,
+        # return Petals of Insight to its owner's hand. Otherwise, draw three
+        # cards." Over an empty library the look found nothing, and putting
+        # nothing on the bottom is not an option CR 608.2d offers (its own
+        # example: "A player who controls no creatures can't choose the
+        # sacrifice option"): the offer is withdrawn, so the rider does not
+        # return the card and the "otherwise" stands. One card or two looked
+        # at is an offer like any other.
+        if instruction.payload.get("looked_at"):
+            return bool(player.library)
+        if context is None:
+            return True
+        from .reveal import REVEALED_UNTIL_CARDS
+
+        return bool(context.results.get(REVEALED_UNTIL_CARDS))
     if instruction.kind == "sacrifice_permanents_totalling":
         # "…unless you sacrifice any number of creatures with **total power 12
         # or greater**" (Phyrexian Dreadnought). A board that cannot reach the

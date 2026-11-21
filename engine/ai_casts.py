@@ -52,6 +52,7 @@ from .ai_rehearsal import deliberating
 from .ai_entwine import entwined_cast
 from .ai_splice import spliced_cast
 from .ai_valuation import (
+    OFFER_ADDS,
     OFFER_ALTERS,
     OFFER_ENTWINES,
     OFFER_KICKS,
@@ -372,6 +373,13 @@ def _times_worth_taking(
         # Burst hit a second target — and a seat that cannot spare the price
         # simply casts the spell unkicked: the announcements run down to `{}`,
         # so declining here is never a card left in hand.
+        if offer.buys == OFFER_ADDS and getattr(offer.price, "sacrifice_any_number", False):
+            # "You may sacrifice any number of Spirits" counted by the effect
+            # (Devouring Rage, Devouring Greed): taken, and how many — none
+            # included, which is the offer declined — is weighed where the
+            # cast is built (`ai_sacrifice_victims.cast_naming_its_sacrifices`,
+            # the cheapest to lose first, each set rehearsed).
+            return 1
         if offer.buys not in (OFFER_RETURNS_SPELL, OFFER_KICKS):
             return 0
         return 1 if _buyback_price_is_worth_paying(

@@ -520,6 +520,17 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         "exile_cards_from_graveyard", "gain_control_of_target",
         "source_bites_target", "steal_target_linked_to_source",
         "untap_target_permanent",
+        # Junkyo Bell (CHK), read at its promotion rehearsal (W2G2): "At the
+        # beginning of your upkeep, you may have target creature you control
+        # get +X/+X until end of turn, where X is the number of creatures you
+        # control. If you do, sacrifice that creature at the beginning of the
+        # next end step." Targeted, so the empty cases are the two rules above:
+        # no creature of its controller's and the trigger is removed as it is
+        # put on the stack (CR 603.3d), its target gone and it is removed at
+        # resolution (CR 608.2b), the delayed sacrifice never armed. A seat
+        # nobody asks declines it (driven): a creature given up at the end
+        # step for a pump that ends with the turn.
+        "pump_target_creature_until_eot",
         # Dawn of the Dead (TOR), read at its promotion rehearsal: "At the
         # beginning of your upkeep, you may return target creature card from
         # your graveyard to the battlefield. That creature gains haste until
@@ -600,6 +611,17 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         "return_creature_from_graveyard_to_hand", "sacrifice_attached_permanent",
         "sacrifice_matching_permanent", "sacrifice_permanents_totalling",
         "sacrifice_self",
+        # Petals of Insight (CHK), read at its promotion rehearsal (W2G2):
+        # "Look at the top three cards of your library. You may put those
+        # cards on the bottom of your library in any order. If you do, return
+        # Petals of Insight to its owner's hand. Otherwise, draw three cards."
+        # Over an empty library the look found nothing, and putting nothing
+        # on the bottom is not an option (CR 608.2d's own example: no
+        # creature, no sacrifice option), so the offer is withdrawn and the
+        # "otherwise" stands; one or two cards looked at are put back and the
+        # card returns. A revealed-until pile (Goblin Machinist's) the same
+        # way, off the record the run wrote.
+        "put_revealed_cards_on_bottom",
         # Tainted Pact (ODY), read at its promotion: "Exile the top card of
         # your library. **You may put that card into your hand** unless it has
         # the same name as another card exiled this way. Repeat this process
