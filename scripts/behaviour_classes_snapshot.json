@@ -35,9 +35,11 @@
     "Horned Turtle",
     "Hurloon Minotaur",
     "Ironroot Treefolk",
+    "Isamaru, Hound of Konda",
     "Jasmine Boreal",
     "Jedit Ojanen",
     "Jerrard of the Closed Fist",
+    "Kami of Old Stone",
     "Kasimir the Lone Wolf",
     "Keepers of the Faith",
     "Knight Errant",
@@ -50,12 +52,14 @@
     "Moss Monster",
     "Norwood Ranger",
     "Onakke Ogre",
+    "Order of the Sacred Bell",
     "Panther Warriors",
     "Pearled Unicorn",
     "Python",
     "Raging Bull",
     "Redwood Treefolk",
     "Regal Unicorn",
+    "River Kaijin",
     "Savannah Lions",
     "Scaled Wurm",
     "Scarwood Goblins",
@@ -76,6 +80,7 @@
     "Vizzerdrix",
     "Vodalian Soldiers",
     "Walking Corpse",
+    "Wandering Ones",
     "Water Elemental",
     "Wild Jhovall",
     "Wishcoin Crab",
@@ -93,6 +98,7 @@
     "Fighting Drake",
     "Flying Men",
     "Gaea's Skyfolk",
+    "Lantern Kami",
     "Leonin Skyhunter",
     "Misshapen Fiend",
     "Phantom Monster",
@@ -126,6 +132,21 @@
     "Windreaper Falcon"
   ],
   [
+    "Argothian Swine",
+    "Crash of Rhinos",
+    "Defiant Elf",
+    "Fangren Hunter",
+    "Giant Warthog",
+    "Goliath Beetle",
+    "Iron Tusk Elephant",
+    "Jhovall Rider",
+    "Moorish Cavalry",
+    "Moss Kami",
+    "Pygmy Razorback",
+    "War Mammoth",
+    "Wild Elephant"
+  ],
+  [
     "Anaconda",
     "Anurid Murkdiver",
     "Bog Raiders",
@@ -138,20 +159,6 @@
     "Plague Beetle",
     "Pygmy Allosaurus",
     "Warthog"
-  ],
-  [
-    "Argothian Swine",
-    "Crash of Rhinos",
-    "Defiant Elf",
-    "Fangren Hunter",
-    "Giant Warthog",
-    "Goliath Beetle",
-    "Iron Tusk Elephant",
-    "Jhovall Rider",
-    "Moorish Cavalry",
-    "Pygmy Razorback",
-    "War Mammoth",
-    "Wild Elephant"
   ],
   [
     "Death Speakers",
@@ -205,6 +212,15 @@
     "Wall of Ice",
     "Wall of Stone",
     "Wall of Wood"
+  ],
+  [
+    "Cat Warriors",
+    "Heartwood Treefolk",
+    "Jukai Messenger",
+    "Leaf Dancer",
+    "Rushwood Dryad",
+    "Shanodin Dryads",
+    "Slinking Serpent"
   ],
   [
     "Clergy en-Vec",
@@ -273,12 +289,12 @@
     "Rib Cage Spider"
   ],
   [
-    "Cat Warriors",
-    "Heartwood Treefolk",
-    "Leaf Dancer",
-    "Rushwood Dryad",
-    "Shanodin Dryads",
-    "Slinking Serpent"
+    "Canyon Wildcat",
+    "Dwarven Grunt",
+    "Goblin Spelunkers",
+    "Mountain Goat",
+    "Rock Badger",
+    "Sokenzan Bruiser"
   ],
   [
     "Divine Transformation",
@@ -361,13 +377,6 @@
     "Disciple of Malice"
   ],
   [
-    "Canyon Wildcat",
-    "Dwarven Grunt",
-    "Goblin Spelunkers",
-    "Mountain Goat",
-    "Rock Badger"
-  ],
-  [
     "Circle of Protection: Black",
     "Circle of Protection: Blue",
     "Circle of Protection: Green",
@@ -415,6 +424,13 @@
     "Granite Gargoyle",
     "Hellkite Punisher",
     "Shivan Dragon"
+  ],
+  [
+    "Fyndhorn Elves",
+    "Llanowar Elves",
+    "Orochi Sustainer",
+    "Skyshroud Troopers",
+    "Wirewood Elf"
   ],
   [
     "Goblin Chariot",
@@ -494,6 +510,12 @@
     "Heavy Ballista"
   ],
   [
+    "Deadly Insect",
+    "Elvish Lookout",
+    "Humble Budoka",
+    "Pincher Beetles"
+  ],
+  [
     "Deathlace",
     "Lifelace",
     "Purelace",
@@ -510,12 +532,6 @@
     "Giant Growth",
     "Might of Oaks",
     "Titanic Growth"
-  ],
-  [
-    "Fyndhorn Elves",
-    "Llanowar Elves",
-    "Skyshroud Troopers",
-    "Wirewood Elf"
   ],
   [
     "Laccolith Grunt",
@@ -605,9 +621,9 @@
     "Thalakos Sentry"
   ],
   [
-    "Deadly Insect",
-    "Elvish Lookout",
-    "Pincher Beetles"
+    "Devoted Retainer",
+    "Nezumi Ronin",
+    "Samurai Enforcers"
   ],
   [
     "El-Hajj\u00e2j",
@@ -633,6 +649,16 @@
     "Gorilla Chieftain",
     "Skyshroud Troll",
     "Tel-Jilad Exile"
+  ],
+  [
+    "Grasp of Darkness",
+    "Pull Under",
+    "Shrink"
+  ],
+  [
+    "Hold the Line",
+    "Piety",
+    "Rally"
   ],
   [
     "Kavu Climber",
@@ -775,6 +801,10 @@
     "Heat of Battle"
   ],
   [
+    "Bind",
+    "Squelch"
+  ],
+  [
     "Black Knight",
     "White Knight"
   ],
@@ -831,6 +861,10 @@
     "Thrull Retainer"
   ],
   [
+    "Carrion Beetles",
+    "Rag Dealer"
+  ],
+  [
     "Cat Burglar",
     "Vodalian Hypnotist"
   ],
@@ -851,12 +885,24 @@
     "Stalking Tiger"
   ],
   [
+    "Cinder Marsh",
+    "Lantern-Lit Graveyard"
+  ],
+  [
     "Civic Guildmage",
     "Sunscape Apprentice"
   ],
   [
     "Clay Statue",
     "Diabolic Machine"
+  ],
+  [
+    "Cleanfall",
+    "Tranquility"
+  ],
+  [
+    "Cloudcrest Lake",
+    "Thalakos Lowlands"
   ],
   [
     "Coalition Honor Guard",
@@ -873,6 +919,10 @@
   [
     "Crimson Acolyte",
     "Obsidian Acolyte"
+  ],
+  [
+    "Cultivate",
+    "Kodama's Reach"
   ],
   [
     "Dand\u00e2n",
@@ -917,6 +967,10 @@
   [
     "Demonic Tutor",
     "Diabolic Tutor"
+  ],
+  [
+    "Demystify",
+    "Quiet Purity"
   ],
   [
     "Desert Twister",
@@ -1047,6 +1101,10 @@
     "Sandskin"
   ],
   [
+    "Ghostly Prison",
+    "Propaganda"
+  ],
+  [
     "Giant Trap Door Spider",
     "Hunting Kavu"
   ],
@@ -1075,10 +1133,6 @@
     "Mogg Raider"
   ],
   [
-    "Grasp of Darkness",
-    "Shrink"
-  ],
-  [
     "Grid Monitor",
     "Steel Golem"
   ],
@@ -1101,6 +1155,10 @@
   [
     "Hawkeater Moth",
     "Zephid"
+  ],
+  [
+    "Heartbeat of Spring",
+    "Mana Flare"
   ],
   [
     "Hell Swarm",
@@ -1157,6 +1215,10 @@
   [
     "Juz\u00e1m Djinn",
     "Nettletooth Djinn"
+  ],
+  [
+    "Kashi-Tribe Warriors",
+    "Orochi Ranger"
   ],
   [
     "Kjeldoran Dead",
@@ -1223,12 +1285,20 @@
     "Teremko Griffin"
   ],
   [
+    "Mind Rot",
+    "Waking Nightmare"
+  ],
+  [
     "Mistform Dreamer",
     "Mistform Skyreaver"
   ],
   [
     "Mogg Fanatic",
     "Shock Troops"
+  ],
+  [
+    "Mogg Hollows",
+    "Pinecrest Ridge"
   ],
   [
     "Mountain",
@@ -1279,6 +1349,10 @@
     "Stromgald Cabal"
   ],
   [
+    "Panic Attack",
+    "Unearthly Blizzard"
+  ],
+  [
     "Parasitic Bond",
     "Wanderlust"
   ],
@@ -1301,10 +1375,6 @@
   [
     "Phyrexian Defiler",
     "Phyrexian Denouncer"
-  ],
-  [
-    "Piety",
-    "Rally"
   ],
   [
     "Pilgrim of Justice",
@@ -1349,6 +1419,10 @@
   [
     "Rock Basilisk",
     "Thicket Basilisk"
+  ],
+  [
+    "Rootwater Depths",
+    "Waterveil Cavern"
   ],
   [
     "Sage Owl",
@@ -1405,6 +1479,10 @@
   [
     "Towering Baloth",
     "Treespring Lorian"
+  ],
+  [
+    "Tranquil Garden",
+    "Vec Townships"
   ],
   [
     "Treetop Rangers",

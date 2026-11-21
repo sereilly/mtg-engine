@@ -502,6 +502,13 @@
   ]
  },
  {
+  "card": "Bloodthirsty Ogre",
+  "clause": "target creature gets -x/-x until end of turn, where x is the number of devotion counters on this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Blossoming Wreath",
   "clause": "you gain life equal to the number of creature cards in your graveyard",
   "ignored": [
@@ -601,8 +608,29 @@
   ]
  },
  {
+  "card": "Brutal Deceiver",
+  "clause": "reveal the top card of your library. if it's a land card, this creature gets +1/+0 and gains first strike until end of turn",
+  "ignored": [
+   "card,"
+  ]
+ },
+ {
   "card": "Call of the Wild",
   "clause": "reveal the top card of your library. if it's a creature card, put it onto the battlefield. otherwise, put it into your graveyard",
+  "ignored": [
+   "card,"
+  ]
+ },
+ {
+  "card": "Call to Glory",
+  "clause": "untap all creatures you control. samurai creatures you control get +1/+1 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Callous Deceiver",
+  "clause": "reveal the top card of your library. if it's a land card, this creature gets +1/+0 and gains flying until end of turn",
   "ignored": [
    "card,"
   ]
@@ -736,6 +764,13 @@
   ]
  },
  {
+  "card": "Cleanfall",
+  "clause": "destroy all enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Cleanse",
   "clause": "destroy all black creatures",
   "ignored": [
@@ -820,6 +855,13 @@
   "clause": "destroy target artifact, enchantment, or land",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Cruel Deceiver",
+  "clause": "reveal the top card of your library. if it's a land card, this creature gains \"whenever this creature deals damage to a creature, destroy that creature\" until end of turn",
+  "ignored": [
+   "card,"
   ]
  },
  {
@@ -1221,6 +1263,13 @@
   ]
  },
  {
+  "card": "Earthshaker",
+  "clause": "this creature deals 2 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Eater of the Dead",
   "clause": "if this creature is tapped, exile target creature card from a graveyard and untap this creature",
   "ignored": [
@@ -1469,6 +1518,13 @@
   ]
  },
  {
+  "card": "Feral Deceiver",
+  "clause": "reveal the top card of your library. if it's a land card, this creature gets +2/+2 and gains trample until end of turn",
+  "ignored": [
+   "card,"
+  ]
+ },
+ {
   "card": "Festering Wound",
   "clause": "this aura deals x damage to that player, where x is the number of infection counters on this aura",
   "ignored": [
@@ -1587,6 +1643,13 @@
   "clause": "target player shuffles up to three target cards from their graveyard into their library",
   "ignored": [
    "target"
+  ]
+ },
+ {
+  "card": "Gale Force",
+  "clause": "gale force deals 5 damage to each creature with flying",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -1724,6 +1787,13 @@
   ]
  },
  {
+  "card": "Godo, Bandit Warlord",
+  "clause": "untap it and all samurai you control. after this phase, there is an additional combat phase",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Gorilla War Cry",
   "clause": "all creatures gain menace until end of turn",
   "ignored": [
@@ -1827,6 +1897,13 @@
   "clause": "put all enchantments on top of their owners' libraries",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Harsh Deceiver",
+  "clause": "reveal the top card of your library. if it's a land card, untap this creature and it gets +1/+1 until end of turn",
+  "ignored": [
+   "card,"
   ]
  },
  {
@@ -1974,6 +2051,13 @@
   "clause": "if this permanent is an enchantment, it becomes a 3/2 elk beast creature",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Hideous Laughter",
+  "clause": "all creatures get -2/-2 until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2253,6 +2337,20 @@
   ]
  },
  {
+  "card": "Jugan, the Rising Star",
+  "clause": "you may distribute five +1/+1 counters among any number of target creatures",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
+  "card": "Junkyo Bell",
+  "clause": "you may have target creature you control get +x/+x until end of turn, where x is the number of creatures you control. if you do, sacrifice that creature at the beginning of the next end step",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
   "card": "Kaervek's Hex",
   "clause": "kaervek's hex deals 1 damage to each nonblack creature and an additional 1 damage to each green creature",
   "ignored": [
@@ -2265,6 +2363,20 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{w}{w}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Kashi-Tribe Reaver",
+  "clause": "tap that creature and it doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
+  ]
+ },
+ {
+  "card": "Kashi-Tribe Warriors",
+  "clause": "tap that creature and it doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
   ]
  },
  {
@@ -2311,6 +2423,13 @@
   ]
  },
  {
+  "card": "Kitsune Mystic",
+  "clause": "if this creature is enchanted by two or more auras, flip it",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Kjeldoran Frostbeast",
   "clause": "destroy all creatures blocking or blocked by this creature",
   "ignored": [
@@ -2328,6 +2447,13 @@
  {
   "card": "Knight of Valor",
   "clause": "each creature without flanking blocking this creature gets -1/-1 until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Kodama of the South Tree",
+  "clause": "each other creature you control gets +1/+1 and gains trample until end of turn",
   "ignored": [
    "each"
   ]
@@ -2644,6 +2770,13 @@
   ]
  },
  {
+  "card": "Matsu-Tribe Decoy",
+  "clause": "tap that creature and it doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
+  ]
+ },
+ {
   "card": "Meltdown",
   "clause": "destroy each artifact with mana value x or less",
   "ignored": [
@@ -2787,6 +2920,13 @@
   ]
  },
  {
+  "card": "Moonring Mirror",
+  "clause": "you may exile all cards from your hand face down. if you do, put all other cards you own exiled with this artifact into your hand",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Mudhole",
   "clause": "target player exiles all land cards from their graveyard",
   "ignored": [
@@ -2817,6 +2957,20 @@
  {
   "card": "Mutilate",
   "clause": "all creatures get -1/-1 until end of turn for each swamp you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Myojin of Cleansing Fire",
+  "clause": "destroy all other creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Myojin of Infinite Rage",
+  "clause": "destroy all lands",
   "ignored": [
    "all"
   ]
@@ -2855,6 +3009,14 @@
   "clause": "each player draws a card for each creature card in their graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Nature's Will",
+  "clause": "tap all lands that player controls and untap all lands you control",
+  "ignored": [
+   "all",
+   "all"
   ]
  },
  {
@@ -2965,6 +3127,13 @@
   ]
  },
  {
+  "card": "Oathkeeper, Takeno's Daisho",
+  "clause": "return that card to the battlefield under your control if it's a samurai card",
+  "ignored": [
+   "card"
+  ]
+ },
+ {
   "card": "Obliterate",
   "clause": "destroy all artifacts, creatures, and lands. they can't be regenerated",
   "ignored": [
@@ -3071,6 +3240,20 @@
   ]
  },
  {
+  "card": "Orochi Hatchery",
+  "clause": "create a 1/1 green snake creature token for each charge counter on this artifact",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
+  "card": "Orochi Ranger",
+  "clause": "tap that creature and it doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
+  ]
+ },
+ {
   "card": "Outbreak",
   "clause": "choose a creature type. all creatures of that type get -1/-1 until end of turn",
   "ignored": [
@@ -3096,6 +3279,13 @@
   "clause": "that player reveals the top card of their library. if that card is a land card, destroy that creature. otherwise, it gets +3/+3 until end of turn",
   "ignored": [
    "card,"
+  ]
+ },
+ {
+  "card": "Part the Veil",
+  "clause": "return all creatures you control to their owner's hand",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -3159,6 +3349,13 @@
   "clause": "create an x/x black phyrexian minion creature token, where x is the life paid as this artifact entered",
   "ignored": [
    "artifact"
+  ]
+ },
+ {
+  "card": "Pious Kitsune",
+  "clause": "put a devotion counter on this creature. then if a creature named eight-and-a-half-tails is on the battlefield, you gain 1 life for each devotion counter on this creature",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -3336,6 +3533,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{w}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Rag Dealer",
+  "clause": "exile up to three target cards from a single graveyard",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -3690,6 +3894,13 @@
   ]
  },
  {
+  "card": "Ryusei, the Falling Star",
+  "clause": "it deals 5 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Sacred Boon",
   "clause": "prevent the next 3 damage that would be dealt to target creature this turn. at the beginning of the next end step, put a +0/+1 counter on that creature for each 1 damage prevented this way",
   "ignored": [
@@ -3820,6 +4031,13 @@
   "clause": "exile all serf tokens",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Sensei Golden-Tail",
+  "clause": "put a training counter on target creature. that creature gains bushido 1 and becomes a samurai in addition to its other creature types",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -5000,6 +5218,13 @@
   "clause": "all creatures lose flying until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Wicked Akuba",
+  "clause": "target player dealt damage by this creature this turn loses 1 life",
+  "ignored": [
+   "creature"
   ]
  },
  {
