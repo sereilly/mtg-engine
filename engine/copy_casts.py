@@ -50,6 +50,16 @@ exile that holds it — its owner's, which need not be the caster's
 to exist afterwards and the spell is not one (it resolves to its owner's
 graveyard). The prompt, its answer and the AI's default are the copy offer's:
 one question ("cast this card from exile for free?") either way.
+
+**…and on a card in a graveyard, paid for** (:data:`FROM_GRAVEYARD_OF`):
+"Whenever a creature an opponent controls dies, you may cast target instant
+card from your graveyard. If that spell would be put into a graveyard, exile
+it instead." (Toshiro Umezawa; Chandra, Flame's Catalyst's −2.) With no stated
+duration the sentence is a cast during the resolution (CR 608.2g), not a
+lasting permission: the card itself, out of the caster's graveyard, its mana
+cost **paid** (Toshiro's 2005-02-01 ruling) under a permission carrying the
+exile rider (``exile_instead``), which the cast path stamps on the spell. The
+one offer here that is not free; the same prompt, answer and AI default.
 """
 
 from __future__ import annotations
