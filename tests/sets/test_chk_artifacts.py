@@ -209,4 +209,30 @@ def test_w1g9_oathkeeper_returns_a_samurai_and_takes_its_bearer_with_it(set_pool
     assert [c.name for c in alice.exile] == ["Kitsune Blademaster"]
     assert not list(game.controlled_by(0))
 
+
+def test_w1g9_tatsumasa_comes_back_when_its_dragon_dies_and_not_otherwise(set_pool):
+    """"{6}, Exile Tatsumasa: Create a 5/5 blue Dragon Spirit creature token
+    with flying. Return Tatsumasa to the battlefield under its owner's control
+    when that token dies." A delayed trigger watching the token (CR 603.7):
+    the token destroyed, Tatsumasa returns from exile; the token bounced, it
+    left without dying, and Tatsumasa stays exiled."""
+    for removal, returns in (("Terror", True), ("Unsummon", False)):
+        game, mine, _theirs = _w1g9_table(set_pool, hand=[removal], mine=["Tatsumasa, the Dragon's Fang"])
+        alice = game.players[0]
+        assert _w1g9_activate(game, mine[0], ability_index=0).supported
+        assert [c.name for c in alice.exile] == ["Tatsumasa, the Dragon's Fang"]
+        [dragon] = list(game.controlled_by(0))
+        assert dragon.card.name == "Dragon Spirit Token"
+        assert _w1g9_pt(dragon) == (5, 5) and game._has_keyword(dragon, "flying")
+        assert game._effective_colors(dragon) == {"U"}
+        assert game.cast_from_hand(
+            0, removal, target_permanent_ids=[dragon.permanent_id],
+        ).supported
+        _w1g9_settle(game)
+        names = [p.card.name for p in game.controlled_by(0)]
+        if returns:
+            assert names == ["Tatsumasa, the Dragon's Fang"] and alice.exile == []
+        else:
+            assert names == [] and [c.name for c in alice.exile] == ["Tatsumasa, the Dragon's Fang"]
+
 # ==== end w1g9 ======================================================

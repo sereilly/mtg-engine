@@ -503,6 +503,16 @@ then refusing the effect. The empty named group is this table's marker
 idiom: present in the groupdict exactly when this row matched, carrying
 no text of its own to re-read.
 '''),
+    ('creature_attacks', 'first_attack_each_turn', r'''
+"Whenever Godo attacks **for the first time each turn**, untap it and all
+Samurai you control. After this phase, there is an additional combat
+phase." (Godo, Bandit Warlord.) The same event again, narrowed by the
+attacker's own history: the declare-attackers step counts each creature's
+declarations this turn (``attacks_this_turn``, swept at cleanup) and
+`_fire_creature_attacks_triggers` lets the marker through only on the
+first — so the extra combat Godo makes does not make another. Above the
+bare row for "alone"'s reason: its words are a strict prefix of these.
+'''),
     ('creature_blocks', 'blocks (?P<blocked_subject>(?:an?|another) [^,]+)', r'''
 "…blocks **a creature with flying**" (Snarespinner) narrows the source's
 own block trigger by what it blocked. Before the bare form, which is its

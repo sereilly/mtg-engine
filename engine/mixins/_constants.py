@@ -20,7 +20,7 @@ from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..next_damage import NEXT_DAMAGE_KEYS
 from ..target_immunity import SHROUD_WAIVED_FOR_SEATS
-from ..turn_state import ATTACKED_SEATS_THIS_TURN_KEY
+from ..turn_state import ATTACKED_SEATS_THIS_TURN_KEY, ATTACKS_THIS_TURN
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
@@ -111,6 +111,9 @@ _EOT_METADATA_KEYS = (
     # them (`attacked_on_seat_turn`) is deliberately *not* here, because the
     # question it answers reaches back a whole turn.
     ATTACKED_SEATS_THIS_TURN_KEY,
+    # How many times it was declared as an attacker this turn (Godo, Bandit
+    # Warlord's "for the first time each turn"), swept with the mark above.
+    ATTACKS_THIS_TURN,
     # "…except for creatures that **couldn't attack**." (Season of the Witch.)
     # Stamped as the declare-attackers step begins (CR 508.1), swept here with
     # its twin above: the two are one turn's record read together, and a stamp

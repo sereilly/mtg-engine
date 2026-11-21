@@ -121,6 +121,14 @@ def attacked_this_turn(permanent) -> bool:
 #: Swept at cleanup with ``attacked_this_turn``, whose window this shares.
 ATTACKED_SEATS_THIS_TURN_KEY = "attacked_seats_this_turn"
 
+#: How many times a permanent has been declared as an attacker this turn (CR
+#: 508.1) — "Whenever Godo attacks **for the first time each turn**" (Godo,
+#: Bandit Warlord) is the declaration that makes it 1. Written by the
+#: declare-attackers step beside ``attacked_this_turn`` and swept with it at
+#: cleanup (``mixins/_constants._EOT_METADATA_KEYS``); a permanent that leaves
+#: and returns is a new object with no count (CR 400.7).
+ATTACKS_THIS_TURN = "attacks_this_turn"
+
 
 def record_attacked_seat(permanent, seat: int | None) -> None:
     """Stamp that *permanent* was declared attacking *seat* this turn.
