@@ -642,6 +642,14 @@ def accept_counter_removal_price(stream: TokenStream) -> "ast.RemoveCounter | No
     up, a *target* is not a price (CR 601.2b's cost against CR 601.2c's
     target), and "remove all" or "any number of" is a quantity the offer's
     "can you?" does not ask — each refuses rather than being read as this.
+
+    …or off **a permanent the payer controls and chooses**: "At the beginning
+    of your upkeep, sacrifice Chisei **unless you remove a counter from a
+    permanent you control**." (Chisei, Heart of Oceans.) Still the payer's own
+    resource — "you control" is required, so a counter on somebody else's
+    permanent stays refused — picked as the price is paid (the lowering's
+    ``choose_permanent``, asked only of what holds such a counter, so a seat
+    with none is not offered the price and the sacrifice stands).
     """
     mark = stream.mark()
     try:
@@ -653,7 +661,10 @@ def accept_counter_removal_price(stream: TokenStream) -> "ast.RemoveCounter | No
         removal is None
         or not isinstance(subject, ast.TargetSpec)
         or subject.targeted
-        or not subject.filter.is_source
+        or not (
+            subject.filter.is_source
+            or (subject.quantifier == "a" and subject.filter.controller == "you")
+        )
         or removal.count != ast.Fixed(1)
     ):
         stream.reset(mark)

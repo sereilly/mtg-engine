@@ -29,7 +29,7 @@ from ._common import (
     _amount_payload, _describe_targets, _is_source, testable_filter_payload
 )
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
-from ._events import _EVENT_SUBJECT_OBJECTS
+from ._events import CHOSEN_PERMANENT, _EVENT_SUBJECT_OBJECTS
 
 #: The player counters this engine has a store for. CR 122.1 lets a counter have
 #: any name, and a player carries exactly one kind here
@@ -140,6 +140,50 @@ def _lower_remove_counter(
                 node=node,
             )
         return (OracleInstruction("remove_counter_from_target", "", chosen),)
+    # "…unless you remove a counter from **a permanent you control**."
+    # (Chisei, Heart of Oceans.) The same removal off an object the remover
+    # *picks* rather than announces: no target (CR 115.1), chosen as the
+    # removal is carried out, from the remover's own board ("you control" is
+    # required — a pick from anybody's would be a different sentence). The pick
+    # is the ``choose_permanent`` every "a creature you control" placement
+    # makes, offered only what holds a counter of the kind (``with_named_
+    # counter``; any kind for "a counter", Power Conduit's picker), so a seat
+    # with none has nothing to take — the toll's gate withdraws the offer and
+    # its penalty stands. The kind, where the pick holds several, is asked by
+    # the handler as it is for a target (CR 608.2d).
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and not node.subject.targeted
+        and node.subject.quantifier == "a"
+        and node.subject.filter.controller == "you"
+    ):
+        if _amount_payload(node.count) != 1:
+            raise LoweringError(
+                "the chosen-object removal takes one counter at a time",
+                node=node,
+            )
+        # "You control" is the pick's own scope (``controlled_by``), so the
+        # key leaves the filter the prompt enumerates with — the arrangement
+        # every "a creature you control" pick has.
+        described = testable_filter_payload(
+            node.subject.filter, refusal="the chosen-object removal",
+            node=node, require_narrowing=False,
+        )
+        described.pop("controller", None)
+        described["with_named_counter"] = node.counter
+        noun = described.get("type_filter") or "permanent"
+        return (
+            OracleInstruction("choose_permanent", "", {
+                "result_key": CHOSEN_PERMANENT,
+                "chooser": "you",
+                "controlled_by": "chooser",
+                "filter": described,
+                "prompt": f"Choose a {noun} you control to remove a counter from.",
+            }),
+            OracleInstruction("remove_counter_from_target", "", {
+                "counter": node.counter, "permanents_from": CHOSEN_PERMANENT,
+            }),
+        )
     if node.counter == ANY_COUNTER_KIND and not (
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "all"

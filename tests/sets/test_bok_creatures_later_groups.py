@@ -252,6 +252,77 @@ def test_w1g8_the_ai_announces_a_removal_x_and_never_one_it_cannot_pay(set_pool)
         assert action.target_permanent_ids == [bears.permanent_id]
 
 
+def _w1g8_upkeep(game, seat=0):
+    game.active_player_index = seat
+    game.begin_turn_bookkeeping(seat)
+    game.resolve_untap_step(seat)
+    game.resolve_upkeep(seat)
+
+
+def test_w1g8_chisei_is_sacrificed_unless_a_counter_comes_off_your_permanent(set_pool):
+    """"At the beginning of your upkeep, sacrifice Chisei unless you remove a
+    counter from a permanent you control." With no counter on anything its
+    controller controls the price cannot be paid and Chisei goes (the
+    opponent's ki counters are no resource of theirs); with one, the counter
+    comes off and Chisei stays."""
+    from engine.named_counters import add_counters, counters_on
+
+    bok = set_pool("BOK")
+    game, (chisei, theirs) = _w1g8_table(
+        [bok["Chisei, Heart of Oceans"]], [bok["Petalmane Baku"]],
+    )
+    add_counters(theirs, "ki", 2)
+    _w1g8_upkeep(game)
+    _w1g8_settle(game)
+    assert not any(p is chisei for p in game.players[0].battlefield)
+    assert chisei.card in game.players[0].graveyard
+    assert counters_on(theirs, "ki") == 2
+
+    game, (chisei, baku, theirs) = _w1g8_table(
+        [bok["Chisei, Heart of Oceans"], bok["Petalmane Baku"]], [bok["Petalmane Baku"]],
+    )
+    add_counters(baku, "ki", 2)
+    add_counters(theirs, "ki", 2)
+    _w1g8_upkeep(game)
+    _w1g8_settle(game)
+    assert any(p is chisei for p in game.players[0].battlefield)
+    assert (counters_on(baku, "ki"), counters_on(theirs, "ki")) == (1, 2)
+    assert "Chisei, Heart of Oceans removed a ki counter from Petalmane Baku" in game.log
+
+
+def test_w1g8_chisei_asks_a_person_whether_and_from_which_permanent(set_pool):
+    """The interactive seat is offered the price (``optional_pay``) and, taking
+    it, picks the permanent (``permanent_choice``) among its own that hold a
+    counter — here the Baku Altar, not the Baku. Declining sacrifices Chisei."""
+    from engine.named_counters import add_counters, counters_on
+
+    bok = set_pool("BOK")
+    for take in (True, False):
+        game, (chisei, baku, altar, bare) = _w1g8_table([
+            bok["Chisei, Heart of Oceans"], bok["Petalmane Baku"],
+            bok["Baku Altar"], bok["Skullmane Baku"],
+        ], [])
+        add_counters(baku, "ki", 2)
+        add_counters(altar, "ki", 1)
+        game.interactive_seats = {0}
+        _w1g8_upkeep(game)
+        owed = _w1g8_settle(game, defaults=False)
+        assert owed is not None and owed.kind == "optional_pay"
+        game.confirm_optional_pay(0, accept=take)
+        if not take:
+            _w1g8_settle(game)
+            assert not any(p is chisei for p in game.players[0].battlefield)
+            continue
+        owed = _w1g8_settle(game, defaults=False)
+        assert owed is not None and owed.kind == "permanent_choice"
+        offered = {p.permanent_id for p in game.live_permanent_choices(owed)}
+        assert offered == {baku.permanent_id, altar.permanent_id}, "only what holds a counter"
+        assert game.confirm_permanent_choice(0, altar.permanent_id)
+        _w1g8_settle(game)
+        assert any(p is chisei for p in game.players[0].battlefield)
+        assert (counters_on(baku, "ki"), counters_on(altar, "ki")) == (2, 0)
+
+
 def test_w1g8_the_kept_sentence_names_the_pool_it_keeps():
     """"…**you** don't lose this mana" after "that player adds", or "**they**"
     after a bare "Add", names a pool the mana did not go into: refused, never
