@@ -154,6 +154,16 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     legend naming itself as the subject of its own trigger, as Phage does,
     and "Bladewing" is not a word the game uses to describe objects, so the
     expansion is right to write the whole name.
+
+    Champions of Kamigawa added two, both legends with no comma in the name
+    (CR 201.5c's shortened name is the first word): Zo-Zu the Punisher's
+    trigger reads "Zo-Zu deals 2 damage to that land's controller", and
+    Shimatsu the Bloodcloaked's entry reads "As Shimatsu enters, sacrifice
+    any number of permanents. Shimatsu enters with that many +1/+1 counters
+    on it." Each is the legend naming itself, and neither "Zo-Zu" nor
+    "Shimatsu" is a word the game uses to describe objects, so the expansion
+    is right to write the whole name. (Its comma-named legends — Godo,
+    Kumano, Iname, Hikari — are read by the comma rule.)
     """
     changed = {
         card.name
@@ -182,4 +192,6 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Arcanis the Omnipotent",
         "Phage the Untouchable",
         "Bladewing the Risen",
+        "Zo-Zu the Punisher",
+        "Shimatsu the Bloodcloaked",
     }
