@@ -41,6 +41,8 @@ log), not instruction kinds alone.
 # ==== w1g4 ==========================================================
 # w1g4's tests go between this line and the "end w1g4" line.
 
+import pytest as _w1g4_pytest
+
 from engine import Game as _w1g4_Game
 from engine import PlayerState as _w1g4_PlayerState
 from engine.aura_attachment import attach_aura as _w1g4_attach_aura
@@ -187,6 +189,263 @@ def test_w1g4_kumanos_blessing_reads_its_host_as_the_creature_dies(set_pool):
         _w1g4_settle(game)
     assert _w1g4_names(game.players[1].exile) == ["Wall of Stone"], game.log
     assert _w1g4_names(game.players[1].graveyard) == ["Grizzly Bears"]
+
+
+# --- The Genju cycle --------------------------------------------------------
+# "Enchant <land>" / "{2}: Enchanted <land> becomes a … Spirit creature until
+# end of turn. It's still a land." / "When enchanted <land> is put into a
+# graveyard, you may return this card from your graveyard to your hand."
+
+def _w1g4_genju_on(set_pool, genju, land, *, hand=(), theirs=(), interactive=()):
+    """Seat 0 with *genju* cast onto its own *land*; returns the game, the
+    land and the Aura permanent."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, [genju, *hand], mine=[land], theirs=theirs, interactive=interactive,
+    )
+    host = mine[0]
+    result = game.cast_from_hand(
+        0, genju, target_player_index=0, target_permanent_ids=[host.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g4_settle(game)
+    aura = next(p for p in game.controlled_by(0) if p.card.name == genju)
+    assert aura.metadata.get("attached_to") is host
+    return game, host, aura
+
+
+def _w1g4_animate(game, genju):
+    result = game.activate_permanent_ability(0, genju)
+    assert result.supported, result.details
+    _w1g4_settle(game)
+
+
+def _w1g4_end_turn(game, seat=0):
+    game.resolve_end_step(seat)
+    game.resolve_cleanup_step(seat)
+    _w1g4_settle(game)
+
+
+def test_w1g4_genju_of_the_cedars_enchants_only_a_forest(set_pool):
+    """"Enchant Forest" (CR 303.4a): the cast gate refuses a Plains."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, ["Genju of the Cedars"], mine=["Plains", "Forest"],
+    )
+    plains, forest = mine
+    refused = game.cast_from_hand(
+        0, "Genju of the Cedars", target_player_index=0,
+        target_permanent_ids=[plains.permanent_id],
+    )
+    assert not refused.supported
+    result = game.cast_from_hand(
+        0, "Genju of the Cedars", target_player_index=0,
+        target_permanent_ids=[forest.permanent_id],
+    )
+    assert result.supported, result.details
+
+
+def test_w1g4_genju_of_the_cedars_animates_its_forest_until_end_of_turn(set_pool):
+    """{2}: the Forest becomes a 4/4 green Spirit creature that is still a
+    Forest land, fights, and is a land again after cleanup."""
+    game, forest, _aura = _w1g4_genju_on(
+        set_pool, "Genju of the Cedars", "Forest", theirs=["Grizzly Bears"],
+    )
+    assert not forest.is_creature
+    _w1g4_animate(game, "Genju of the Cedars")
+    assert forest.is_creature
+    assert (forest.effective_power, forest.effective_toughness) == (4, 4)
+    for word in ("spirit", "land", "forest"):
+        assert forest.has_type(word), word
+    from engine.handlers._filters import permanent_effective_colors
+
+    assert permanent_effective_colors(forest) == {"G"}
+    from tests.helpers import declare_attack, drive_combat
+
+    declare_attack(game, 0, blocks={0: 0})
+    drive_combat(game)
+    assert _w1g4_names(game.players[1].graveyard) == ["Grizzly Bears"], game.log
+    assert game.is_on_battlefield(forest)
+    _w1g4_end_turn(game)
+    assert not forest.is_creature
+    assert forest.has_type("land") and not forest.has_type("spirit")
+
+
+def test_w1g4_genju_reactivated_resets_its_size_but_keeps_a_pump(set_pool):
+    """The 2009-10-01 ruling: activating it again "will override any effects
+    that set its power and/or toughness to a specific number. However, any
+    effect that raises or lowers power and/or toughness (such as … Giant
+    Growth …) will continue to apply." 4/4, Giant Growth 7/7, again 7/7."""
+    game, forest, _aura = _w1g4_genju_on(
+        set_pool, "Genju of the Cedars", "Forest", hand=["Giant Growth"],
+    )
+    _w1g4_animate(game, "Genju of the Cedars")
+    growth = game.cast_from_hand(
+        0, "Giant Growth", target_player_index=0,
+        target_permanent_ids=[forest.permanent_id],
+    )
+    assert growth.supported, growth.details
+    _w1g4_settle(game)
+    assert (forest.effective_power, forest.effective_toughness) == (7, 7)
+    _w1g4_animate(game, "Genju of the Cedars")
+    assert (forest.effective_power, forest.effective_toughness) == (7, 7), game.log
+
+
+def test_w1g4_genju_animation_outlives_the_aura_destroyed_in_response(set_pool):
+    """The ability exists apart from its source (CR 113.7a): the Genju
+    destroyed with its activation on the stack still animates the Forest it
+    last enchanted (CR 608.2h)."""
+    game, forest, aura = _w1g4_genju_on(
+        set_pool, "Genju of the Cedars", "Forest", hand=["Disenchant"],
+    )
+    result = game.queue_permanent_ability(0, "Genju of the Cedars")
+    assert result.supported, result.details
+    assert game.stack
+    disenchant = game.cast_from_hand(
+        0, "Disenchant", target_player_index=0, target_permanent_ids=[aura.permanent_id],
+    )
+    assert disenchant.supported, disenchant.details
+    _w1g4_settle(game)
+    assert not game.is_on_battlefield(aura)
+    assert forest.is_creature and forest.effective_power == 4, game.log
+
+
+def test_w1g4_an_animated_land_played_this_turn_cannot_attack(set_pool):
+    """The 2008-08-01 ruling: a noncreature permanent turned into a creature
+    can attack only if its controller has controlled it continuously since
+    the start of their most recent turn (CR 302.6)."""
+    game, forest, _aura = _w1g4_genju_on(set_pool, "Genju of the Cedars", "Forest")
+    forest.metadata["summoning_sickness_turn"] = game.turn
+    _w1g4_animate(game, "Genju of the Cedars")
+    assert forest.is_creature
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, _why = game.declare_attackers(
+        0, [game.battlefield_index_of(forest)], defending_player_index=1,
+    )
+    assert not ok
+
+
+@_w1g4_pytest.mark.parametrize("decline", [False, True])
+def test_w1g4_genju_returns_to_hand_when_its_forest_is_destroyed(set_pool, decline):
+    """Stone Rain on the enchanted Forest: the Genju looks back at the land's
+    departure (CR 603.10a), CR 704.5m puts it in the graveyard, and its
+    ability — functioning on the battlefield, CR 113.6m's Aura exception —
+    returns it from there. A person at the seat is asked, and may decline."""
+    game, forest, _aura = _w1g4_genju_on(
+        set_pool, "Genju of the Cedars", "Forest", hand=["Stone Rain"],
+        interactive=(0,),
+    )
+    rain = game.cast_from_hand(
+        0, "Stone Rain", target_player_index=0, target_permanent_ids=[forest.permanent_id],
+    )
+    assert rain.supported, rain.details
+    asked = []
+
+    def may(game, choice):
+        asked.append(choice.kind)
+        game.confirm_optional_pay(choice.player_index, accept=not decline)
+
+    _w1g4_settle(game, answers={"optional_pay": may}, defaults=False)
+    assert asked == ["optional_pay"], game.log
+    hand = _w1g4_names(game.players[0].hand)
+    graveyard = _w1g4_names(game.players[0].graveyard)
+    if decline:
+        assert hand == [] and "Genju of the Cedars" in graveyard
+    else:
+        assert hand == ["Genju of the Cedars"], game.log
+        assert "Genju of the Cedars" not in graveyard
+
+
+def test_w1g4_genju_destroyed_first_does_not_return_later(set_pool):
+    """The Genju destroyed on its own goes to the graveyard and stays: when
+    the Forest dies later, nothing is attached to it to see it go."""
+    game, forest, aura = _w1g4_genju_on(
+        set_pool, "Genju of the Cedars", "Forest", hand=["Disenchant", "Stone Rain"],
+    )
+    for spell, victim in (("Disenchant", aura), ("Stone Rain", forest)):
+        result = game.cast_from_hand(
+            0, spell, target_player_index=0, target_permanent_ids=[victim.permanent_id],
+        )
+        assert result.supported, result.details
+        _w1g4_settle(game)
+    assert "Genju of the Cedars" in _w1g4_names(game.players[0].graveyard)
+    assert _w1g4_names(game.players[0].hand) == []
+
+
+def test_w1g4_genju_returns_when_its_animated_land_dies_in_combat(set_pool):
+    """Genju of the Spires' 6/1 Mountain blocked by a Bear dies in combat: the
+    Mountain is put into the graveyard and the Genju comes back to hand."""
+    game, mountain, _aura = _w1g4_genju_on(
+        set_pool, "Genju of the Spires", "Mountain", theirs=["Grizzly Bears"],
+    )
+    _w1g4_animate(game, "Genju of the Spires")
+    assert (mountain.effective_power, mountain.effective_toughness) == (6, 1)
+    from tests.helpers import declare_attack, drive_combat
+
+    declare_attack(game, 0, blocks={0: 0})
+    drive_combat(game)
+    assert not game.is_on_battlefield(mountain)
+    assert "Mountain" in _w1g4_names(game.players[0].graveyard)
+    assert _w1g4_names(game.players[0].hand) == ["Genju of the Spires"], game.log
+
+
+def test_w1g4_genju_of_the_realm_makes_a_legendary_trampler(set_pool):
+    """"…becomes a legendary 8/12 Spirit creature with trample": CR 205.4a's
+    supertype on the animation's layer-4 record, gone with it at cleanup."""
+    game, land, _aura = _w1g4_genju_on(set_pool, "Genju of the Realm", "Plains")
+    _w1g4_animate(game, "Genju of the Realm")
+    assert (land.effective_power, land.effective_toughness) == (8, 12)
+    assert land.has_supertype("legendary")
+    assert game._has_keyword(land, "trample")
+    assert land.has_type("spirit") and land.has_type("plains")
+    _w1g4_end_turn(game)
+    assert not land.has_supertype("legendary") and not land.is_creature
+
+
+def test_w1g4_genju_of_the_falls_flies(set_pool):
+    game, island, _aura = _w1g4_genju_on(set_pool, "Genju of the Falls", "Island")
+    _w1g4_animate(game, "Genju of the Falls")
+    assert (island.effective_power, island.effective_toughness) == (3, 2)
+    assert game._has_keyword(island, "flying")
+    from engine.handlers._filters import permanent_effective_colors
+
+    assert permanent_effective_colors(island) == {"U"}
+
+
+def test_w1g4_genju_of_the_fens_grants_its_quoted_pump(set_pool):
+    """"…a 2/2 black Spirit creature with "{B}: This creature gets +1/+1
+    until end of turn."": the Swamp's own ability, activated by its
+    controller, and gone with the body at cleanup."""
+    game, swamp, _aura = _w1g4_genju_on(set_pool, "Genju of the Fens", "Swamp")
+    _w1g4_animate(game, "Genju of the Fens")
+    assert (swamp.effective_power, swamp.effective_toughness) == (2, 2)
+    pumped = game.activate_permanent_ability(
+        0, "Swamp", permanent_index=game.battlefield_index_of(swamp),
+        ability_index=len(_w1g4_compile(swamp.effective_card).activated_abilities) - 1,
+    )
+    assert pumped.supported, pumped.details
+    _w1g4_settle(game)
+    assert (swamp.effective_power, swamp.effective_toughness) == (3, 3), game.log
+    _w1g4_end_turn(game)
+    assert not swamp.is_creature
+    assert all(
+        "this creature gets +1/+1" not in ability.source_line.lower()
+        for ability in _w1g4_compile(swamp.effective_card).activated_abilities
+    )
+
+
+def test_w1g4_genju_of_the_fields_gains_life_once_per_activation(set_pool):
+    """The 2005-08-01 ruling: "When activated multiple times, it will have the
+    triggered ability multiple times … you'll gain six life" for three. Two
+    activations, 2 combat damage, 4 life."""
+    game, plains, _aura = _w1g4_genju_on(set_pool, "Genju of the Fields", "Plains")
+    _w1g4_animate(game, "Genju of the Fields")
+    _w1g4_animate(game, "Genju of the Fields")
+    assert (plains.effective_power, plains.effective_toughness) == (2, 5)
+    from tests.helpers import declare_attack, drive_combat
+
+    declare_attack(game, 0)
+    drive_combat(game)
+    assert game.players[1].life == 18, game.log
+    assert game.players[0].life == 24, game.log
 
 # ==== end w1g4 ======================================================
 
