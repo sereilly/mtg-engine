@@ -100,11 +100,26 @@ def _action_look_top_pick_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no look choice pending")
     if req.seat != pending.player_index:
         raise HTTPException(status_code=400, detail="not your choice")
+    # A missing index is the chooser **taking nothing**, which only a pick the
+    # card makes optional permits ("you may reveal a creature card from among
+    # them", Commune with Nature; Ancestral Knowledge's "exile any number of
+    # them"). The resolver reads that permission (``_resolve_look_top_pick``),
+    # so the decline is passed through rather than refused here — this said
+    # "hand_index is required" to every decline, and with no creature in the
+    # top five Commune with Nature had no answer a person could send.
     if req.hand_index is None:
-        raise HTTPException(status_code=400, detail="hand_index (looked-at card index) is required")
+        if not session.game.confirm_look_top_pick(req.seat, None):
+            raise HTTPException(
+                status_code=400,
+                detail="this pick must take one of the cards — it is not optional",
+            )
+        return
     ok = session.game.confirm_look_top_pick(req.seat, req.hand_index)
     if not ok:
-        raise HTTPException(status_code=400, detail="invalid card index")
+        raise HTTPException(
+            status_code=400,
+            detail="that card can't be taken by this pick — choose a highlighted card",
+        )
 
 @action_handler("name_and_strip_confirm")
 def _action_name_and_strip_confirm(session, req, seat_type):

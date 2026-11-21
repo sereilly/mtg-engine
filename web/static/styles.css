@@ -3001,6 +3001,12 @@ pre {
   font-size: 0.9rem;
 }
 
+/* A refused answer, said inside the dialog that is still waiting for one (the
+   look-at-the-top pick): the action hint sits behind the overlay. */
+.modal-refusal-note {
+  color: #e16d70;
+}
+
 .modal-search-row input {
   width: 100%;
   box-sizing: border-box;

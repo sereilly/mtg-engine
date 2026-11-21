@@ -293,6 +293,17 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
         "pick_destination": choice.data.get("pick_destination", "hand"),
         "rest_destination": choice.data.get("rest_destination", "library_bottom"),
         "remaining": int(choice.data.get("remaining", 1)),
+        # Which looked-at cards the printed phrase lets the pick take, through
+        # the engine's own reader (``live_look_top_candidates``, the rule an
+        # answer is checked against), and whether taking **nothing** is an
+        # answer ("you may reveal a creature card from among them", Commune
+        # with Nature; Ancestral Knowledge's "any number"). Neither was sent:
+        # the browser offered every card, a land clicked was refused with the
+        # modal already gone, and five noncreature cards on top left no answer
+        # at all (CHK Phase 5). Only the owing seat is sent this prompt
+        # (``prompts.visible_choices``), and it is looking at these cards.
+        "legal_indices": ctx.game.live_look_top_candidates(choice),
+        "optional": bool(choice.data.get("optional")),
     }
 
 

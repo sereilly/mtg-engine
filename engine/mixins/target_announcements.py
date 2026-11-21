@@ -34,7 +34,8 @@ from ..events import emit
 from ..oracle import compile_card_oracle
 from ..per_color_targets import ONE_TARGET_PER_COLOR, record_per_color_assignment
 from ..stack_targets import (
-    TARGETS_CHANGED_SILENTLY_FOR, TARGETS_CHOSEN_ITEM, chosen_targets, has_targets, source_name,
+    TARGETS_CHANGED_SILENTLY_FOR, TARGETS_CHOSEN_ITEM, announcements, chosen_targets, has_targets,
+    source_name,
 )
 from ..targeting import (
     _PLAYER_TARGET_SPEC_KINDS, announces_a_target, graveyard_target_spec,
@@ -843,6 +844,17 @@ class TargetAnnouncementsMixin:
         # nothing "becomes the target" of it — whatever it carries is its
         # entry trigger's, announced when that trigger is put on the stack.
         if self.spell_targets_nothing(item):
+            return
+        # …and an **activated ability that targets nothing** is not targeted
+        # whatever its fields hold either (CR 115.1c: only "target
+        # [something]" targets). The activate action carries the target
+        # fields for every ability, so a stray permanent named beside "{T}:
+        # Put an aim counter on Hankyu" was announced as targeted, and Horobi,
+        # Death's Wail destroyed it (CHK Phase 5).
+        # ``stack_targets.announcements`` is the reader of what the
+        # object chose — ``()`` is its definite "nothing" — so "becomes the
+        # target" and "chooses targets" (``announce_targets_chosen``) agree.
+        if item.ability_kind == "activated" and announcements(item) == ():
             return
         with self._announcing(item):
             self._announce_targeting_now(item)

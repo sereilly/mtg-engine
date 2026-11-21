@@ -740,5 +740,15 @@ def _from_instruction(instruction) -> dict | None:
     # so tapping a land under either enchantment put no counter on it.
     if instruction.payload.get("on_event_subject"):
         return None
+    # **…and so does one acting on the permanent that granted the ability.**
+    # "{T}: Put an aim counter on **Hankyu**" (Hankyu's quote on the creature
+    # it equips): ``on_granter_id`` is the id ``bind_granter`` wrote for the
+    # Equipment's name (CR 201.5a), and the counter goes on that one object —
+    # no word of the line says "target". Read as ``add_named_counter_to_target``'s
+    # kind row, the ability asked for a creature, the browser opened a picker
+    # for it, and the creature clicked was announced as a target nobody
+    # chose: Horobi, Death's Wail destroyed it (CHK Phase 5).
+    if instruction.payload.get("on_granter_id") is not None:
+        return None
     by_kind = _KIND_TO_SPEC.get(instruction.kind)
     return dict(by_kind) if by_kind is not None else None

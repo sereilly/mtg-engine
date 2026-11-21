@@ -13119,6 +13119,74 @@ function renderSearchDestinationModal(info) {
 
 // See the Truth's pick: the looked-at top cards; clicking one keeps it and
 // bottoms the rest, so there is no separate confirm step.
+//
+// What the pick may take is the server's (`legal_indices`, the engine's
+// `live_look_top_candidates`), and so is whether it may take nothing
+// (`optional`). Commune with Nature offered every card and no way out: a land
+// clicked was refused with the dialog already hidden, so the game sat
+// "awaiting a choice" with nothing on screen, and five noncreature cards on
+// top had no answer at all (CHK Phase 5). The dialog now marks the cards the
+// pick cannot take, offers "take nothing" where the card says "you may", and
+// stays up until the server has accepted an answer — a refusal is said inside
+// it. `lookTopPickRefusal` is that sentence, kept for the pick it was about.
+let lookTopPickInFlight = false;
+let lookTopPickRefusal = null; // { key, message }
+
+function lookTopPickKey(info) {
+  if (!info) return null;
+  return JSON.stringify([
+    info.card_name, info.pile_seat, info.remaining,
+    (info.cards || []).map((card) => card && card.name),
+  ]);
+}
+
+// The cards the pick may take, as a set of positions. A payload without the
+// field (an older server) offers every card, as the dialog always did.
+function lookTopPickLegal(info) {
+  const cards = (info && info.cards) || [];
+  if (!info || !Array.isArray(info.legal_indices)) return new Set(cards.map((_, idx) => idx));
+  return new Set(info.legal_indices.map(Number));
+}
+
+// The "take nothing" button's words, by where the pick sends a card:
+// Ancestral Knowledge exiles "any number of them", so its way out is to stop.
+function lookTopPickDeclineLabel(info) {
+  const dest = (info && info.pick_destination) || "hand";
+  if (dest === "exile") return "Exile no more";
+  if (dest === "hand") return "Take nothing";
+  return "Choose nothing";
+}
+
+function setLookTopPickNote(message) {
+  const note = document.getElementById("lookTopPickNote");
+  if (!note) return;
+  note.textContent = message || "";
+  note.classList.toggle("hidden", !message);
+}
+
+// Send one answer to the pick — a card's position, or `null` to take nothing —
+// keeping the dialog up until the server accepts it.
+async function answerLookTopPick(info, handIndex) {
+  if (lookTopPickInFlight) return;
+  lookTopPickInFlight = true;
+  const key = lookTopPickKey(info);
+  lookTopPickRefusal = null;
+  setLookTopPickNote("");
+  const body = { seat, action: "look_top_pick_confirm" };
+  if (handIndex !== null && handIndex !== undefined) body.hand_index = handIndex;
+  try {
+    await sendAction(body);
+  } catch (e) {
+    // Said inside the dialog, which is still up, and not in the action hint:
+    // the hint sits behind the overlay and outlived the accepted answer that
+    // followed, still saying the refusal over the board.
+    lookTopPickRefusal = { key, message: e.message };
+    setLookTopPickNote(e.message);
+  } finally {
+    lookTopPickInFlight = false;
+  }
+}
+
 function getLookTopPickInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.look_top_pick;
@@ -13132,9 +13200,13 @@ function renderLookTopPickModal(info) {
   if (!modal) return;
   if (!info) {
     modal.classList.add("hidden");
+    lookTopPickRefusal = null;
+    setLookTopPickNote("");
     return;
   }
   modal.classList.remove("hidden");
+  const legal = lookTopPickLegal(info);
+  const optional = Boolean(info.optional);
   const subtitle = document.getElementById("lookTopPickSubtitle");
   if (subtitle) {
     // What the pick *is* comes with it (`pick_destination`,
@@ -13177,11 +13249,31 @@ function renderLookTopPickModal(info) {
       : remaining > 1
       ? ` After your last pick, the ${restCount === 1 ? "other card goes" : `other ${restCount} cards go`} ${rest}.`
       : ` The ${restCount === 1 ? "other card goes" : "rest go"} ${rest}.`;
+    // Which cards may be taken, and whether none may: said in the sentence,
+    // because a dimmed card alone does not say why it was refused.
+    const takeable = (info.cards || []).filter((_, idx) => legal.has(idx)).length;
+    const decline = lookTopPickDeclineLabel(info);
+    let choiceClause;
+    if (takeable === 0) {
+      choiceClause = optional
+        ? `None of them can be taken — choose "${decline}".`
+        : "None of them can be taken.";
+    } else {
+      choiceClause =
+        `Click ${takeable < total ? "a highlighted card" : "a card"} to ${pick}` +
+        // "Exile any number of them" (Ancestral Knowledge) owes none of its
+        // picks, so they are a ceiling, not a count.
+        (remaining > 1 ? (optional ? ` (up to ${remaining})` : ` (${remaining} picks to make)`) : "") +
+        (optional ? `, or choose "${decline}".` : ".");
+    }
+    // Nothing to take: there is no "rest", every card goes where the rest do.
+    const leftover = takeable === 0 && total > 0
+      ? ` ${total === 1 ? "It goes" : `All ${total} go`} ${rest}.`
+      : restClause;
     subtitle.textContent =
       `${info.card_name}: looking at the top ${total === 1 ? "card" : `${total} cards`} of ${whose} library. ` +
-      `Click a card to ${pick}` +
-      (remaining > 1 ? ` (${remaining} picks to make).` : ".") +
-      restClause;
+      choiceClause +
+      leftover;
   }
   const grid = document.getElementById("lookTopPickGrid");
   if (grid) {
@@ -13190,16 +13282,41 @@ function renderLookTopPickModal(info) {
         const inner = card.image_uri
           ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
           : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
-        return `<div class="library-card-choice" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+        const cls = legal.has(idx) ? "library-card-choice" : "library-card-choice illegal";
+        return `<div class="${cls}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
       })
       .join("");
     grid.querySelectorAll(".library-card-choice").forEach((el) => {
       el.addEventListener("click", async () => {
-        modal.classList.add("hidden");
-        await sendAction({ seat, action: "look_top_pick_confirm", hand_index: Number(el.dataset.idx) });
+        const idx = Number(el.dataset.idx);
+        if (!legal.has(idx)) {
+          const message = `${info.card_name || "This pick"} can't take that card.`;
+          lookTopPickRefusal = { key: lookTopPickKey(info), message };
+          setLookTopPickNote(message);
+          return;
+        }
+        await answerLookTopPick(getLookTopPickInfo() || info, idx);
       });
     });
   }
+  // "You may …" (Commune with Nature, Garruk's Harbinger, Peer Through
+  // Depths; Ancestral Knowledge's "any number"): taking nothing is an answer,
+  // offered only where the card printed it. The footer is hidden, not just the
+  // button, so every pick that must take a card looks as it did.
+  const declineBtn = document.getElementById("lookTopPickDecline");
+  const footer = document.getElementById("lookTopPickFooter");
+  if (declineBtn && footer) {
+    footer.classList.toggle("hidden", !optional);
+    declineBtn.textContent = lookTopPickDeclineLabel(info);
+    declineBtn.onclick = optional
+      ? () => answerLookTopPick(getLookTopPickInfo() || info, null)
+      : null;
+  }
+  // A refusal stays said while the pick it was about is still open, and goes
+  // with it: the next pick of a chain (Ancestral Knowledge) starts clean.
+  const key = lookTopPickKey(info);
+  if (lookTopPickRefusal && lookTopPickRefusal.key !== key) lookTopPickRefusal = null;
+  setLookTopPickNote(lookTopPickRefusal ? lookTopPickRefusal.message : "");
 }
 
 // What the revealed-hand pick says above the cards. "Revealed their hand" is
