@@ -28,7 +28,8 @@ from .lexer import NUMBER, PT, WORD
 from .cost_records import (accept_counters_removed_for_cost,
                            accept_cost_channel_possessive,
                            accept_cost_characteristic_of)
-from .records import accept_damage_dealt_by_chosen_cast
+from .records import (accept_damage_dealt_by_chosen_cast,
+                      accept_recorded_card_mana_value)
 from .readers import (accept_counter_kind, accept_granter_reference,
                       accept_source_reference)
 from .stream import TokenStream
@@ -641,6 +642,16 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     possessive = accept_cost_channel_possessive(stream)
     if possessive is not None:
         return possessive
+
+    # "…then draw cards equal to **the milled card's mana value**." (Heed the
+    # Mists.) The same possessive over what an earlier *instruction* of this
+    # effect recorded — the where-clause front end's reading of Infernal
+    # Genesis, through its one reader (``records``), so the two spellings of
+    # one quantity cannot name different records. The lowering demands the
+    # producer.
+    recorded = accept_recorded_card_mana_value(stream)
+    if recorded is not None:
+        return recorded
 
     # "…equal to **the amount of mana they paid this way**." (Liege of the
     # Hollows.) A back-reference to a payment an earlier step of this same

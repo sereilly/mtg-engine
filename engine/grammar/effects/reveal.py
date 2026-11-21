@@ -400,7 +400,12 @@ def _accept_counted_reveal_sorting_by_filter(
     except GrammarError:
         stream.reset(mark)
         return None
-    if not isinstance(count, ast.Fixed) or count.value < 1:
+    # "Reveal the top **X** cards of your library. Put all creature cards
+    # revealed this way into your hand and the rest on the bottom of your
+    # library in any order." (Enshrined Memories.) The spell's announced X
+    # (CR 107.3a) sizes the pile; the handler resolves it off the cast.
+    fixed = isinstance(count, ast.Fixed) and count.value >= 1
+    if not (fixed or count == ast.Var("x")):
         stream.reset(mark)
         return None
     if not stream.accept_phrase("cards", "of", "your", "library"):

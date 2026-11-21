@@ -314,9 +314,12 @@ def _lower_reveal_top_sorting_by_filter(
     # leaves where it is, on top of the library: neither the match zone nor
     # "the rest". The sort asks ``permanent_cards`` of every match.
     count = _amount_payload(node.count)
-    if not isinstance(count, int) or count <= 0:
+    # "Reveal the top **X** cards …" (Enshrined Memories): the cast's X, which
+    # the handler resolves (``resolve_amount``). X = 0 reveals nothing.
+    if count != "x" and (not isinstance(count, int) or count <= 0):
         raise LoweringError(
-            "the revealed pile is a fixed number of cards", node=node
+            "the revealed pile is a fixed number of cards or the spell's X",
+            node=node,
         )
     # "**Each player** reveals the top five cards of **their** library."
     # (Clear the Land.) Whose pile, and the only value beside the absent one:
