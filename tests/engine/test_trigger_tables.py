@@ -62,6 +62,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "when enchanted creature dies, this aura deals damage equal to that "
         "creature's toughness to the creature's controller.",
     ),
+    # The Genju cycle: the row above for a host of any type (CR 700.4).
+    "attached_permanent_dies": (
+        "when enchanted forest is put into a graveyard, you may return this "
+        "card from your graveyard to your hand.",
+    ),
     "creature_dies": "whenever a creature dies",
     # Necropotence and Megrim. CR 701.9a's discard, watched from the
     # battlefield — a different question from the discarded card's own ability
