@@ -1084,6 +1084,16 @@ which claimed it: matched there the clause was left unread and the
 enchantment drew a card off every spell an opponent cast, which is the
 silent widening this table is ordered longest-first to prevent.
 '''),
+    ('opponent_casts_spell', 'opponent casts a (?P<cast_subtype>', r'''
+"Whenever an opponent casts a **Spirit or Arcane** spell, Ishi-Ishi deals
+2 damage to that player." (Ishi-Ishi, Akki Crackshot.) The player-scoped
+subtype row below, on the opponent-scoped kind: the same `cast_subtype`
+key split on " or " by the one reader
+(``cast_event_filters._cast_narrowing_admits``), which the opponent filter
+already asks. After the multicolored and colour rows, whose words the
+lookahead keeps out of every member here; above the bare row, which is its
+strict prefix and would strand the subtype words.
+'''),
     ('your_spell_countered', "a spell you've", r'''
 "Whenever a spell you've cast is countered" (Multani's Presence).
 CR 701.6a's cancel rather than CR 701.5's cast — the announcement is made

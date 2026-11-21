@@ -508,18 +508,53 @@ def _parse_cast_event(
         # tag. Every member is held to the vocabulary: "a green or white
         # spell" is a colour union, and a word read here as a subtype the
         # spell can never have is a trigger that compiles and never fires.
-        subtype_words = CREATURE_TYPES | SPELL_TYPES
-        if article == "a" and word in subtype_words:
-            stream.advance()
-            subtypes = [word]
-            while stream.at_word("or") and stream.peek_word(1) in subtype_words:
-                stream.advance()
-                subtypes.append(str(stream.peek_word()))
-                stream.advance()
-            if stream.accept_word("spell"):
+        if article == "a" and narrowed is None:
+            subtypes = _accept_subtype_union(stream)
+            if subtypes:
                 return ast.TriggerEvent(
                     "you_cast_spell", trigger_word,
-                    subject=ast.ObjectFilter(subtypes=tuple(subtypes)),
+                    subject=ast.ObjectFilter(subtypes=subtypes),
                 )
     stream.reset(mark)
+    # "Whenever **an opponent** casts a Spirit or Arcane spell, Ishi-Ishi
+    # deals 2 damage to that player." (Ishi-Ishi, Akki Crackshot.) The same
+    # subtype union on the opponent-scoped kind, which
+    # `engine/whenever_triggers.py` carries in the same `cast_subtype` key
+    # and the opponent filter asks of the same helper. Only the two scopes
+    # printed: a player-scoped subtype row goes in with the card that prints
+    # it, for the chosen colour's reason above.
+    if stream.accept_phrase("an", "opponent", "casts", "a"):
+        subtypes = _accept_subtype_union(stream)
+        if subtypes:
+            return ast.TriggerEvent(
+                "opponent_casts_spell", trigger_word,
+                subject=ast.ObjectFilter(subtypes=subtypes),
+            )
+    stream.reset(mark)
     return None
+
+
+def _accept_subtype_union(stream: TokenStream) -> tuple[str, ...]:
+    """``<subtype> [or <subtype>]* spell`` — the subtypes, or () with the
+    cursor where it started.
+
+    Every member is held to the vocabulary (creature types and spell types,
+    CR 205.3m / 205.3k): "a green or white spell" is a colour union, and a
+    word read here as a subtype the spell can never have is a trigger that
+    compiles and never fires.
+    """
+    mark = stream.mark()
+    subtype_words = CREATURE_TYPES | SPELL_TYPES
+    word = stream.peek_word()
+    if word not in subtype_words:
+        return ()
+    stream.advance()
+    subtypes = [str(word)]
+    while stream.at_word("or") and stream.peek_word(1) in subtype_words:
+        stream.advance()
+        subtypes.append(str(stream.peek_word()))
+        stream.advance()
+    if not stream.accept_word("spell"):
+        stream.reset(mark)
+        return ()
+    return tuple(subtypes)

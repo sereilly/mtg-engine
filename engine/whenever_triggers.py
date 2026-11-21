@@ -442,6 +442,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("opponent_casts_spell",
      r"whenever an opponent casts a spell that targets "
      r"(?P<targets_you_or_your_creature>)you or a creature you control"),
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a (?P<cast_subtype>(?!(?:white|blue|black|red|green) )[a-z][a-z-]+"
+     r"(?: or (?!(?:white|blue|black|red|green) )[a-z][a-z-]+)*) spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     ("your_spell_countered",        r"whenever a spell you've cast is countered"),
     ("you_cast_spell",
