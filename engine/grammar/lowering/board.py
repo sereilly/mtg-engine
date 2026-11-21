@@ -38,7 +38,7 @@ anything but a sacrifice or a regeneration.
 import dataclasses
 
 from ...oracle_types import (BUFFED_THIS_WAY_PERMANENTS, DESTROY_CHOSEN,
-                             KEEP_FATES,
+                             KEEP_FATES, LAST_TARGET_CONTROLLER,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from ...subject_filters import object_only_filter
@@ -626,6 +626,30 @@ def _lower_sacrifice(
             # only one there is, and here the event is not what the sentence is
             # about.
             payload["who"] = "controller"
+        elif (
+            node.player.kind == "controller" and event is None
+            and LAST_TARGET_CONTROLLER in produced
+        ):
+            # "Destroy target land. If that land was legendary, **its
+            # controller** sacrifices another land of their choice." (Feast of
+            # Worms.) On a line no event fired, the possessive names the
+            # object an earlier step of this resolution acted on, whose seat
+            # that step froze as it removed it (CR 608.2h,
+            # ``oracle_types.LAST_TARGET_CONTROLLER``) — the reading Starke of
+            # Rath's "that permanent's controller gains control" already gets.
+            payload["who"] = LAST_TARGET_CONTROLLER
+            # …and "**another** land" is other than *that* land, which an
+            # indestructible one survives the destroy as: excluding the
+            # spell's source (it has none) would offer the target as its own
+            # sacrifice. The destroy's own record names it, so a step that
+            # recorded one must be in front.
+            if payload.pop("exclude_self", None):
+                if "destroyed_target" not in produced:
+                    raise LoweringError(
+                        "'another' with nothing in this effect that destroyed "
+                        "the permanent it excludes", node=node,
+                    )
+                payload["exclude_destroyed_target"] = True
         elif node.player.kind == "controller":
             # "When enchanted creature leaves the battlefield, **its
             # controller** sacrifices a creature of their choice." (Funeral
