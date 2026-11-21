@@ -69,12 +69,15 @@ def _parse_look_pick_tail(
 ) -> ast.Statement:
     """"You may reveal a <filter> card from among them and put it into your
     hand. Put the rest on the bottom of your library in a random order."
+    (Garruk's Harbinger; "…in any order", Commune with Nature and Peer Through
+    Depths.)
 
     Both sentences, because they describe one looked-at pile: "them" is what the
     look turned up and "the rest" is exactly what is left after the pick. Every
     word of the second is required — "in a random order" is a stated shuffle and
-    "in any order" leaves the cards as they lay, and a card that said one while
-    the engine did the other would differ only in a place no test looks.
+    "in any order" is the looker's to arrange (CR 401.4), and a card that said
+    one while the engine did the other would differ only in a place no test
+    looks.
     """
     if not already_split and not stream.accept_punct("."):
         raise stream.error("expected the reveal sentence after the look")

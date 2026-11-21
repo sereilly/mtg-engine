@@ -1058,7 +1058,8 @@ LIBRARY_END_CHOICE_SPEC = ChoiceSpec(
     # the sentence, so nothing behind it reads the record — which is the whole
     # of what that field claims. ``blocked_detail`` is what makes the game wait
     # (CR 608.2), and the permanent is still on the battlefield until the answer
-    # arrives, which is why no action may run in between.
+    # arrives (a countered spell's card, Hinder's, is in no zone until then),
+    # which is why no action may run in between.
     # A non-interactive seat never queues it: the resolution has to finish, and
     # the stated default is taken where the effect stands.
     default_at_arm=True,

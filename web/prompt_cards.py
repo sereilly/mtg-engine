@@ -170,6 +170,13 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         # find") until the answer is one the resolver will take, instead of
         # sending an under-find to be refused whole.
         payload["min_picks"] = ctx.game._search_floor(choice)
+        # "…up to four cards **with different names**" (Gifts Ungiven): a
+        # relation across the picks that ``legal_indices`` cannot say — each
+        # Lightning Bolt is legal and two of them together are not — so it
+        # rides beside it for the dialog to refuse a second card of a name
+        # already picked; the engine refuses such an answer whole either way.
+        if (choice.data.get("restrictions") or {}).get("distinct_names"):
+            payload["distinct_names"] = True
     # "a land card **of each basic land type**" (Gaea's Balance); "a creature
     # card, a land card, and a noncreature, nonland card" (Guided Passage). One
     # find per printed description. `legal_indices` is the union of them, which
