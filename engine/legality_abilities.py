@@ -27,6 +27,7 @@ from .handlers._amounts import evaluate_count
 from .models import CardDefinition
 from .divided_damage import divided_entry
 from .oracle import compile_card_oracle
+from .oracle_types import announcing_x
 from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
 from .target_requirements import (
     announcement_refusal,
@@ -626,6 +627,30 @@ class AbilityTargetsMixin:
         return None
 
     def activation_target_refusal(
+        self, controller_index: int, source_permanent, ability, *,
+        target_player_index=None, target_permanent_index=None,
+        target_permanent_ids=None, target_stack_item=None,
+        target_role_refs=None, x_value=None, chosen_keyword=None,
+    ) -> str | None:
+        """CR 602.2b/601.2c, judged against the X the activation announced:
+        "{X}, {T}: Target creature with power **X** or less ..." (Minamo
+        Sightbender) and "Remove X ki counters ...: Return target creature
+        with mana value **X** or less ..." (Quillmane Baku) announce X before
+        the target (CR 601.2b precedes 601.2c), so every enumeration under
+        this gate reads the bound with it (``oracle_types.announcing_x``).
+        The question itself is :meth:`_activation_target_refusal`'s."""
+        with announcing_x(x_value):
+            return self._activation_target_refusal(
+                controller_index, source_permanent, ability,
+                target_player_index=target_player_index,
+                target_permanent_index=target_permanent_index,
+                target_permanent_ids=target_permanent_ids,
+                target_stack_item=target_stack_item,
+                target_role_refs=target_role_refs, x_value=x_value,
+                chosen_keyword=chosen_keyword,
+            )
+
+    def _activation_target_refusal(
         self, controller_index: int, source_permanent, ability, *,
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, target_stack_item=None,

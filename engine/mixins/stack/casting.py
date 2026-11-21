@@ -53,6 +53,7 @@ from ...target_keywords import (ANTE, GRAVEYARD, announced_slot,
 from ...game_types import as_target_slots, SimulationResult
 from ...models import CardDefinition
 from ...oracle import compile_card_oracle
+from ...oracle_types import announcing_x
 from ...targeting import graveyard_target_spec, derive_cast_spec
 from .cast_additional_costs import _taken_offers
 from .cast_announcement import _mode_announcements
@@ -970,22 +971,26 @@ class SpellCastingMixin:
         # needed there and one reading of `target_stack_index` is what keeps
         # the tax and the validation talking about the same object.
 
-        # CR 601.2c, once per announced mode: the target gates.
-        mode_refusal = self._mode_target_refusal(
-            card=card, caster_index=caster_index, chosen_modes=chosen_modes,
-            classification=classification, divided_targets=divided_targets,
-            from_zone=from_zone, mode_index=mode_index,
-            no_target_answers_x=no_target_answers_x,
-            optional_paid=optional_paid, role_seats=role_seats,
-            role_graveyard_stamps=role_graveyard_stamps,
-            target_permanent_ids=target_permanent_ids,
-            target_permanent_index=target_permanent_index,
-            target_player_index=target_player_index,
-            target_stack_item=target_stack_item, x_value=x_value,
-            # CR 601.2b's type, under which CR 601.2c's targets were chosen
-            # (Aphetto Dredging); None for every cast that announces none.
-            chosen_creature_type=chosen_type_word,
-        )
+        # CR 601.2c, once per announced mode: the target gates -- judged
+        # against the X announced at CR 601.2b ("return target creature card
+        # with mana value **X** or less", Stir the Grave), which every
+        # enumeration under them reads (``oracle_types.announcing_x``).
+        with announcing_x(x_value):
+            mode_refusal = self._mode_target_refusal(
+                card=card, caster_index=caster_index, chosen_modes=chosen_modes,
+                classification=classification, divided_targets=divided_targets,
+                from_zone=from_zone, mode_index=mode_index,
+                no_target_answers_x=no_target_answers_x,
+                optional_paid=optional_paid, role_seats=role_seats,
+                role_graveyard_stamps=role_graveyard_stamps,
+                target_permanent_ids=target_permanent_ids,
+                target_permanent_index=target_permanent_index,
+                target_player_index=target_player_index,
+                target_stack_item=target_stack_item, x_value=x_value,
+                # CR 601.2b's type, under which CR 601.2c's targets were chosen
+                # (Aphetto Dredging); None for every cast that announces none.
+                chosen_creature_type=chosen_type_word,
+            )
         if mode_refusal is not None:
             return mode_refusal
 

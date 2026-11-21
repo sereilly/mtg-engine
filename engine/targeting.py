@@ -285,6 +285,41 @@ def targets_mana_value_x(instructions) -> bool:
     return False
 
 
+def target_x_bound(instructions) -> dict | None:
+    """``{"stat", "op"}`` when these instructions' target is bounded by the X
+    announced beside it — "target creature with power **X** or less" (Minamo
+    Sightbender: ``power``), "…with mana value **X** or less" (Quillmane
+    Baku, and a graveyard card's: Stir the Grave) — else None.
+
+    The picker lists every candidate without the bound (it enumerates before
+    X exists, ``oracle_types.announced_x_bounds``) and the gates refuse a
+    target the announced X does not admit, so the web layer says which
+    statistic X bounds and how (``web/offers.mark_mana_value_x``), and the
+    client offers each target only for the X values that admit it. Read off
+    the compiled program, recursing through wrappers as
+    :func:`targets_mana_value_x` does.
+    """
+    from .oracle_types import X_BOUND
+
+    for instruction in instructions:
+        payload = instruction.payload
+        targets = payload.get("targets")
+        described = (targets.get("filter") or {}) if isinstance(targets, dict) else {}
+        for stat in ("power", "toughness", "mana_value"):
+            bound = described.get(stat)
+            if isinstance(bound, dict) and bound.get("value") == X_BOUND:
+                return {"stat": stat, "op": bound.get("op")}
+        bound = payload.get("graveyard_mana_value")
+        if isinstance(bound, dict) and bound.get("value") == X_BOUND:
+            return {"stat": "mana_value", "op": bound.get("op")}
+        nested = _nested_steps(instruction)
+        if nested:
+            found = target_x_bound(nested)
+            if found is not None:
+                return found
+    return None
+
+
 def mana_value_for_x(obj) -> int:
     """The mana value a "target … with mana value X" holds X to, of a
     permanent or a stack object (its card's): what the activation gate

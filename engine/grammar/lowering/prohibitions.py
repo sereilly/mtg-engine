@@ -287,7 +287,16 @@ def _lower_cant_be(
         if several:
             _describe_several_targets(payload, node.subject)
         else:
-            _describe_targets(payload, node.subject)
+            # "Target creature with power **X** or less can't be blocked
+            # this turn." (Minamo Sightbender.) The handler re-tests the
+            # whole noun phrase at resolution with the dispatcher's X, the
+            # activation gate and CR 608.2b's re-check judge it with the
+            # announced X (``oracle_types.announcing_x``), and the picker
+            # strips it -- so an X bound is honoured wherever an X is
+            # announced: an activated ability or a spell, never a trigger.
+            _describe_targets(
+                payload, node.subject, announced_x_bound=event is None,
+            )
         return (OracleInstruction("grant_unblockable_to_target", "", payload),)
 
     raise LoweringError(f"no handler for a {node.action!r} restriction", node=node)

@@ -37,7 +37,7 @@ from engine.oracle_types import x_spend_colors_from_text
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.text_changes import TEXT_CHANGE_MODE_KINDS, current_text_card, words_written
 from engine.splice import splice_candidates, spliced_text_card
-from engine.targeting import mana_value_for_x, targets_mana_value_x
+from engine.targeting import mana_value_for_x, target_x_bound, targets_mana_value_x
 
 
 def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
@@ -737,6 +737,42 @@ def splice_offers(game: Game, seat: int, card, hand_index: int | None) -> list |
     return offered or None
 
 
+def _mark_x_bound(game: Game, spec: dict, bound: dict) -> None:
+    """"Target creature with power **X** or less" (Minamo Sightbender), "…with
+    mana value **X** or less" (Quillmane Baku, Stir the Grave): say on *spec*
+    which statistic the announced X bounds and how (``x_bound``: ``{stat,
+    op}``), and give each target that statistic as ``x_bound_value`` — its
+    power or toughness now (layer 7), or its mana value. The list is every
+    candidate (the picker enumerates before X exists); the gates refuse a
+    target the X does not admit, so the client offers a target only where
+    ``x_bound_value`` *op* X holds, re-filtering as the X changes."""
+    spec["x_bound"] = dict(bound)
+    stat = bound.get("stat")
+    for entry in spec.get("valid_targets") or ():
+        if not isinstance(entry, dict):
+            continue
+        value = None
+        if entry.get("kind") == "permanent":
+            seat, index = entry.get("seat"), entry.get("index")
+            if isinstance(seat, int) and isinstance(index, int) and 0 <= seat < len(game.players):
+                target = game.permanent_at(seat, index)
+                if target is not None:
+                    value = (
+                        target.effective_power if stat == "power"
+                        else target.effective_toughness if stat == "toughness"
+                        else mana_value_for_x(target)
+                    )
+        elif entry.get("kind") == "graveyard":
+            seat = entry.get("seat")
+            index = entry.get("index", entry.get("graveyard_index"))
+            if isinstance(seat, int) and 0 <= seat < len(game.players):
+                pile = game.players[seat].graveyard
+                if isinstance(index, int) and 0 <= index < len(pile):
+                    value = int(pile[index].cmc or 0)
+        if value is not None:
+            entry["x_bound_value"] = int(value)
+
+
 def mark_mana_value_x(game: Game, spec: dict | None, instructions) -> dict | None:
     """Say on *spec* that its target's mana value is the X announced beside
     it — "Destroy target artifact with mana value X" (Hearth Kami, Gorilla
@@ -753,7 +789,11 @@ def mark_mana_value_x(game: Game, spec: dict | None, instructions) -> dict | Non
     """
     if not isinstance(spec, dict) or not instructions:
         return spec
-    if not targets_mana_value_x([each for each in instructions if each is not None]):
+    present = [each for each in instructions if each is not None]
+    bound = target_x_bound(present)
+    if bound is not None:
+        _mark_x_bound(game, spec, bound)
+    if not targets_mana_value_x(present):
         return spec
     spec["x_is_target_mana_value"] = True
     stack_top_first = list(reversed(game.stack))

@@ -265,6 +265,100 @@ def test_w1g6_empty_shrine_kannushi_is_protected_from_its_sides_colours(set_pool
     _w1g6_settle(game)
     assert kannushi not in game.controlled_by(0), game.log
 
+
+def test_w1g6_minamo_sightbender_reads_the_announced_x(set_pool):
+    """"{X}, {T}: Target creature with power X or less can't be blocked this
+    turn." X is announced before the target (CR 601.2b/602.2b): X=2 cannot
+    name Hill Giant (power 3) and the refusal pays nothing; it names Grizzly
+    Bears, which Bob's Wall of Stone then cannot block."""
+    from tests.helpers import declare_attack as _w1g6_declare_attack
+
+    lea = set_pool("LEA")
+    game, (minamo, bears, giant, wall) = _w1g6_table(
+        set_pool, mine=[set_pool("BOK")["Minamo Sightbender"], lea["Grizzly Bears"],
+                        lea["Hill Giant"]],
+        theirs=[lea["Wall of Stone"]],
+    )
+    refused = game.activate_permanent_ability(
+        0, "Minamo Sightbender", x_value=2, target_permanent_ids=[giant.permanent_id],
+    )
+    assert not refused.supported and not minamo.tapped
+    assert game.activate_permanent_ability(
+        0, "Minamo Sightbender", x_value=2, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert minamo.tapped
+    assert not game._can_block_attacker(wall, bears)
+    assert game._can_block_attacker(wall, giant)
+
+
+def test_w1g6_minamo_sightbender_target_grown_past_x_is_illegal(set_pool):
+    """The bound is re-asked with the announced X as the ability resolves
+    (CR 608.2b): Giant Growth on the Bears in response makes it a 5/5, the
+    ability is removed from the stack, and the Bears can still be blocked."""
+    lea = set_pool("LEA")
+    game, (minamo, bears, wall) = _w1g6_table(
+        set_pool, hand=[lea["Giant Growth"]],
+        mine=[set_pool("BOK")["Minamo Sightbender"], lea["Grizzly Bears"]],
+        theirs=[lea["Wall of Stone"]],
+    )
+    assert game.queue_permanent_ability(
+        0, "Minamo Sightbender", x_value=2, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert game.queue_from_hand(
+        0, "Giant Growth", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert bears.effective_power == 5
+    assert any("608.2b" in line for line in game.log), game.log
+    assert game._can_block_attacker(wall, bears)
+
+
+def test_w1g6_quillmane_baku_bounces_up_to_the_counters_removed(set_pool):
+    """"{1}, {T}, Remove X ki counters from this creature: Return target
+    creature with mana value X or less to its owner's hand." With three ki
+    counters: X=2 cannot name Hill Giant (mana value 4); it bounces Bob's
+    Grizzly Bears and leaves one counter. X=4 is more counters than it has."""
+    from engine.named_counters import add_counters as _w1g6_add
+    from engine.named_counters import counters_on as _w1g6_on
+
+    lea = set_pool("LEA")
+    game, (baku, bears, giant) = _w1g6_table(
+        set_pool, mine=[set_pool("BOK")["Quillmane Baku"]],
+        theirs=[lea["Grizzly Bears"], lea["Hill Giant"]],
+    )
+    _w1g6_add(baku, "ki", 3)
+    assert not game.activate_permanent_ability(
+        0, "Quillmane Baku", x_value=4, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert not game.activate_permanent_ability(
+        0, "Quillmane Baku", x_value=2, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert _w1g6_on(baku, "ki") == 3 and not baku.tapped
+    assert game.activate_permanent_ability(
+        0, "Quillmane Baku", x_value=2, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert [card.name for card in game.players[1].hand] == ["Grizzly Bears"]
+    assert giant in game.controlled_by(1)
+    assert _w1g6_on(baku, "ki") == 1 and baku.tapped
+
+
+def test_w1g6_quillmane_baku_collects_ki_from_spirit_spells(set_pool):
+    """"Whenever you cast a Spirit or Arcane spell, you may put a ki counter
+    on this creature": casting Gnarled Mass (a Spirit) offers it."""
+    from engine.named_counters import counters_on as _w1g6_on
+
+    bok = set_pool("BOK")
+    game, (baku,) = _w1g6_table(
+        set_pool, hand=[bok["Gnarled Mass"]], mine=[bok["Quillmane Baku"]],
+    )
+    assert game.queue_from_hand(0, "Gnarled Mass").supported
+    _w1g6_settle(game, answers={
+        "optional_pay": lambda g, c: g.confirm_optional_pay(0, accept=True),
+    })
+    assert _w1g6_on(baku, "ki") == 1, game.log
+
 # ==== end w1g6 ======================================================
 
 

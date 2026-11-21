@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 
 from ...announced_creature_type import GRAVEYARD_ANNOUNCED_CREATURE_TYPE
-from ...oracle_types import DISCARDED_INTO_GRAVEYARD, OracleInstruction
+from ...oracle_types import DISCARDED_INTO_GRAVEYARD, X_BOUND, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import CREATURE_TYPES, PERMANENT_CARD_TYPES
@@ -77,7 +77,9 @@ def _lower_reanimate_enchanted_card(
     return (OracleInstruction("reanimate_creature", "", {}),)
 
 
-def _graveyard_bounds(filt: ast.ObjectFilter, node) -> dict[str, object]:
+def _graveyard_bounds(
+    filt: ast.ObjectFilter, node, *, announced_x: bool = False,
+) -> dict[str, object]:
     """The two narrowings a targeted graveyard return reads beyond the noun's
     types, colours and subtypes: a printed **mana value** bound ("with mana
     value 3 or less", Unearth; "1 or less", Leonin Squire) and a type the card
@@ -95,11 +97,25 @@ def _graveyard_bounds(filt: ast.ObjectFilter, node) -> dict[str, object]:
     graveyard has one (an {X} counts 0 there, CR 202.3e — Auriok Salvagers'
     2020-08-07 ruling), which is what makes the bound answerable off the
     battlefield at all.
+
+    *announced_x* is the caller's claim that the ability carrying the
+    return announces an X before its targets -- a spell (CR 601.2b) or an
+    activated ability (CR 602.2b) -- so "with mana value **X** or less"
+    (Stir the Grave) rides as ``X_BOUND``: the cast and activation gates
+    judge it with the announced number (``oracle_types.announcing_x``),
+    the picker strips it, and the dispatcher substitutes it for the
+    handler's own ``graveyard_card_matches``. A triggered ability
+    announces no X, so there it still refuses.
     """
     bounds: dict[str, object] = {}
     if filt.mana_value is not None:
         bound = filt.mana_value.value
-        if not isinstance(bound, ast.Fixed):
+        if announced_x and isinstance(bound, ast.Var) and bound.name == "x":
+            bounds["graveyard_mana_value"] = {
+                "op": filt.mana_value.op, "value": X_BOUND,
+            }
+            bound = None
+        elif not isinstance(bound, ast.Fixed):
             # An X-valued bound is a number nobody knows until the cast is
             # announced, and the picker enumerates before that. It refuses
             # rather than being dropped, which would return a card of any cost.
@@ -107,9 +123,10 @@ def _graveyard_bounds(filt: ast.ObjectFilter, node) -> dict[str, object]:
                 "a graveyard return reads a printed mana value, not an X",
                 node=node,
             )
-        bounds["graveyard_mana_value"] = {
-            "op": filt.mana_value.op, "value": bound.value,
-        }
+        if bound is not None:
+            bounds["graveyard_mana_value"] = {
+                "op": filt.mana_value.op, "value": bound.value,
+            }
     if filt.excluded_types:
         bounds["graveyard_excluded_types"] = list(filt.excluded_types)
     return bounds
@@ -1022,7 +1039,7 @@ def _lower_return_to_zone(
             ):
                 raise LoweringError("this handler returns cards to your own hand", node=node)
             to_hand = _graveyard_to_hand_payload(filt)
-            to_hand.update(_graveyard_bounds(filt, node))
+            to_hand.update(_graveyard_bounds(filt, node, announced_x=event is None))
             if any_graveyard:
                 to_hand["any_graveyard"] = True
             if subject_names_another(subject):
@@ -1129,7 +1146,7 @@ def _lower_return_to_zone(
             # "…**with mana value 3 or less**" (Unearth) and "**noncreature**
             # artifact card" (Salvaging Station), through the one writer the
             # graveyard-to-hand return shares (:func:`_graveyard_bounds`).
-            payload.update(_graveyard_bounds(filt, node))
+            payload.update(_graveyard_bounds(filt, node, announced_x=event is None))
             # Emitted only when the card prints something other than "creature",
             # so every reanimation written before this keeps a byte-identical
             # payload and no behaviour signature moves. The handler, the picker
@@ -1263,7 +1280,13 @@ def _lower_return_to_zone(
             # already defaults to.
             return (OracleInstruction("bounce_target_creature", "", {}),)
         payload: dict[str, object] = {"filter": bounce_filter}
-        _describe_targets(payload, subject)
+        # "...Return target creature with mana value **X** or less to its
+        # owner's hand." (Quillmane Baku, X the ki counters removed.) The
+        # handler's predicate asks the filter after the dispatcher's
+        # substitution, and the gates judge the description with the
+        # announced X (``oracle_types.announcing_x``) -- so the bound is
+        # honoured wherever an X is announced, never on a trigger.
+        _describe_targets(payload, subject, announced_x_bound=event is None)
         return (OracleInstruction("bounce_target_creature", "", payload),)
 
     raise LoweringError("no handler for this zone change", node=node)

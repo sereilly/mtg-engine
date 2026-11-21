@@ -32,7 +32,8 @@ from ...game_types import (OracleExecutionContext, OracleStateMachine,
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition
 from ...oracle import OracleInstruction, compile_card_oracle
-from ...oracle_types import SPELL_RETURNED_TO_HAND, SPELL_SHUFFLED_INTO_LIBRARY
+from ...oracle_types import (SPELL_RETURNED_TO_HAND, SPELL_SHUFFLED_INTO_LIBRARY,
+                             announcing_x)
 from ...modal_triggers import modal_trigger_modes
 from ...resumption import run_resumable
 from ...splice import spliced_steps
@@ -923,7 +924,12 @@ class StackResolutionMixin:
         # sentences printed after the targeted one carried on regardless.
         # The gate is `legality_resolution.illegal_targets_refusal` — the sibling of the
         # announcement gate, so the same identities decide both ends.
-        illegal = self.illegal_targets_refusal(item)
+        # Judged against the X the object announced (CR 601.2b): "target
+        # creature with power **X** or less" is re-asked with that number
+        # (``oracle_types.announcing_x``), so a creature pumped past it in
+        # response is an illegal target.
+        with announcing_x(item.x_value):
+            illegal = self.illegal_targets_refusal(item)
         if illegal is None:
             # ...and the same rule for the one restriction that is not about a
             # target still *existing* but about it still *answering what the
@@ -972,7 +978,8 @@ class StackResolutionMixin:
         # as the departed target it already knows how to leave alone, and none
         # of them has to re-ask whether a permanent it found can still be
         # *targeted* (which none of them did).
-        self.blank_illegal_resolution_targets(item)
+        with announcing_x(item.x_value):
+            self.blank_illegal_resolution_targets(item)
         # …and what is left is found where it now is. A permanent that changed
         # controller while this object waited is still its target where its
         # description says so (CR 608.2b judges the description, and most say

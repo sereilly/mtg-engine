@@ -23,6 +23,7 @@ from .handlers._filters import (creature_floor_holds, excluded_graveyard_slot,
                                 permanent_matches_filter, seat_did,
                                 state_holds)
 from .models import CardDefinition, Permanent
+from .oracle_types import OracleInstruction, announced_x_bounds
 from .cast_restrictions import timing_fixed_seat
 from .faces import whole_card
 from .player_statics import seat_has_player_keyword
@@ -133,6 +134,12 @@ class TargetEnumerationMixin:
                     optional_cost_payments=optional_cost_payments,
                     mode_index=mode_index,
                 )
+        # "Return target creature card with mana value **X** or less from
+        # your graveyard" (Stir the Grave). A bound the announcement
+        # supplies (CR 601.2b), resolved to the X a gate put in force
+        # (``oracle_types.announcing_x``) and stripped where none is -- the
+        # picker's hint, which the gates re-ask with the number.
+        spec = announced_x_bounds(spec)
         kind = spec["kind"]
         if kind in ("none", "modal"):
             return []
@@ -574,6 +581,16 @@ class TargetEnumerationMixin:
         resolution naming one player.
         """
         instruction = _targeting_step(instruction) or instruction
+        # "Target creature with power **X** or less" (Minamo Sightbender),
+        # "...with mana value **X** or less" (Quillmane Baku): the ability's
+        # own description, with the X a gate put in force, stripped where
+        # none is (``oracle_types.announced_x_bounds``), so every arm below
+        # reads an integer.
+        bounded = announced_x_bounds(instruction.payload)
+        if bounded is not instruction.payload:
+            instruction = OracleInstruction(
+                instruction.kind, instruction.value, bounded,
+            )
         if instruction.kind == "destroy_target_permanent":
             # Every seat this gate can be given, because ``subject_matches``
             # refuses a seat-relative narrowing it cannot answer and a refusal
