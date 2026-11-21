@@ -50,6 +50,8 @@ def enter_tapped_static_for(normalized_line: str) -> dict | None:
     # modules, so a module-level import here would close a cycle.
     from .grammar.phrases import parse_subject_filter
 
+    from .grammar import ast
+
     filt = parse_subject_filter(match.group("subject"), plural=True)
     if filt is None:
         return None
@@ -58,7 +60,14 @@ def enter_tapped_static_for(normalized_line: str) -> dict | None:
     # permanent's own entry state, already read by engine/enter_effects.py.
     # Claiming it here would apply it twice and, worse, would let this table
     # shadow a phrase whose implementation lives somewhere else.
-    if filt.is_source or not payload:
+    if filt.is_source:
+        return None
+    # An empty payload is every permanent to ``subject_matches``, so it is
+    # admitted only for the phrase that *says* every permanent: "**Permanents**
+    # enter tapped." (Orb of Dreams) — the one noun phrase that parses to the
+    # unnarrowed filter. "Cards" and "spells" also carry no payload key and
+    # name a different zone; read here they would tap every permanent.
+    if not payload and filt != ast.ObjectFilter():
         return None
     if untestable_filter_keys(payload):
         return None
@@ -70,10 +79,14 @@ def enter_tapped_static_for(normalized_line: str) -> dict | None:
     # ``controller`` key asks about the type alone, which is what the sentence
     # says, and the observer the caller passes is then read by nothing.
     #
-    # Including, per CR 614.12, the source itself where the phrase names its own
-    # type — a replacement modifying how a permanent enters may come from the
-    # object that is entering. No printed card does both today; the reading is
-    # stated rather than guarded so a card that does gets the rule's answer.
+    # **Never the source itself**, though its own type is in the set: CR 614.12
+    # lets a replacement that modifies how a permanent enters come from that
+    # permanent only "if they affect only that permanent (as opposed to a
+    # general subset of permanents that includes it)", and its example is Orb
+    # of Dreams entering untapped. Enforced where the board is asked
+    # (``PermanentStateMixin._enters_tapped_by_a_static``). This comment read
+    # the rule the other way round ("including the source itself") until Orb
+    # of Dreams printed the case.
     return payload
 
 
