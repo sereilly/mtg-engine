@@ -174,6 +174,11 @@ def test_every_card_that_chooses_a_card_name_has_a_place_to_look():
     assert readers["Wood Sage"] == "library"
     assert readers["Cursed Scroll"] == "hand"
     assert readers["Cabal Therapy"] == "the target's hand"
+    # Champions of Kamigawa (W1G7): the target's library read whole — by a
+    # strip of three zones (Cranial Extraction) and by a reveal and a count
+    # (Mindblaze) — so the target's graveyard is the evidence, as for Predict.
+    assert readers["Cranial Extraction"] == "the target's library"
+    assert readers["Mindblaze"] == "the target's library"
     assert "nowhere" not in readers.values(), readers
 
 

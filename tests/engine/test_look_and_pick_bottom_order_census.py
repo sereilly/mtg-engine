@@ -82,12 +82,29 @@ def bottoming_looks():
     return found
 
 
+def _library_type_line(instruction) -> str:
+    """A type line every card of the census library answers the pick with.
+
+    "You may reveal **a creature card** from among them" (Commune with
+    Nature) and "…**an instant or sorcery card**" (Peer Through Depths) are
+    picks the resolver refuses for a card the phrase does not name, so the
+    library is made of cards it does — the first type the first printed
+    alternative asks for — and the first card stays a legal answer. Unfiltered
+    picks keep the artifacts they always had."""
+    filters = instruction.payload.get("filters") or ()
+    wanted = (filters[0] or {}).get("type_filter") if filters else None
+    if isinstance(wanted, (list, tuple)):
+        wanted = wanted[0] if wanted else None
+    return str(wanted).capitalize() if wanted else "Artifact"
+
+
 def _look(card, instruction, *, interactive: bool):
     """Run *instruction* for seat 0 over an eight-card library and answer the
     look with its first card. Returns ``(game, looked, picks, library names
     before)``, or None when the handler armed no look at all."""
     names = [f"L{i}" for i in range(1, 9)]
-    library = [_mk_card(name=name, type_line="Artifact") for name in names]
+    type_line = _library_type_line(instruction)
+    library = [_mk_card(name=name, type_line=type_line) for name in names]
     game = Game(players=[PlayerState(name="P0", library=library), PlayerState(name="P1")])
     game.interactive_seats = {0} if interactive else set()
     context = OracleExecutionContext(

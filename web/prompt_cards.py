@@ -663,6 +663,12 @@ def _opponent_picks_revealed(ctx: PromptContext, choices: list) -> dict:
         # handed over ("held") — so the client's sentence says so rather than
         # "from the top of their library" for every printing.
         "from_zone": str(choice.data.get("from_zone", "library")),
+        # "Target opponent chooses **two** of those cards." (Gifts Ungiven.)
+        # How many picks are still owed, this one included: the engine asks a
+        # chain of one-card answers, re-armed after each with the slot taken
+        # out of ``legal_indices``, so the client answers one index at a time
+        # either way and may say "1 of 2".
+        "remaining": int(choice.data.get("remaining", 1) or 1),
     }
 
 
@@ -1243,7 +1249,10 @@ def _library_end_choice(ctx: PromptContext, choices: list) -> dict:
 
     The permanent is still on the battlefield while this is owed — the move is
     what the answer performs — so the card being moved is named rather than
-    pointed at by a zone position that does not exist yet.
+    pointed at by a zone position that does not exist yet. Hinder ("put that
+    card on your choice of the top or bottom of its owner's library") asks the
+    same question of a countered spell's card, which is in no zone until the
+    answer: the same fields, ``card_name`` the counterspell's.
     """
     choice = choices[0]
     return {
