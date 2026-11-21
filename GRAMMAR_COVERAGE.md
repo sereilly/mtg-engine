@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | CHK | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| BOK *(measured)* | 165 | 288 | 67.7% | 60.8% | 45.5% | 107 |
+| BOK *(measured)* | 165 | 288 | 70.5% | 65.6% | 49.7% | 113 |
 | **All (shipped)** | **9904** | **14799** | **89.5%** | **89.0%** | **62.0%** | **7785** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -72,7 +72,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1055 | 539 | expected a subject |  |
+| 1048 | 532 | expected a subject |  |
 | 206 | 107 | unrecognized effect verb |  |
 | 158 | 85 | unconsumed text |  |
 | 90 | 70 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -80,13 +80,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 33 | 33 | unrecognized activation cost |  |
 | 26 | 20 | expected 'unless defending player controls' |  |
 | 23 | 17 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 8 | 2 | no lowering for RawEffect |  |
+| 7 | 1 | no lowering for RawEffect |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 5 | an Aura's continuous grant is derived by engine/auras.py |  |
-| 5 | 5 | an animation names the source, one target or a described set |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 2 | expected 'top' |  |
@@ -97,6 +96,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -5130,6 +5130,24 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if this creature is in your graveyard, you may pay {2}{G}. If you do, return target creature card from your graveyard to your hand.`
 - **Genesis Chamber**
   - `Whenever a nontoken creature enters, if this artifact is untapped, that creature's controller creates a 1/1 colorless Myr artifact creature token.`
+- **Genju of the Cedars**
+  - `{2}: Enchanted Forest becomes a 4/4 green Spirit creature until end of turn. It's still a land.`
+  - `When enchanted Forest is put into a graveyard, you may return this card from your graveyard to your hand.`
+- **Genju of the Falls**
+  - `{2}: Enchanted Island becomes a 3/2 blue Spirit creature with flying until end of turn. It's still a land.`
+  - `When enchanted Island is put into a graveyard, you may return this card from your graveyard to your hand.`
+- **Genju of the Fens**
+  - `{2}: Until end of turn, enchanted Swamp becomes a 2/2 black Spirit creature with "{B}: This creature gets +1/+1 until end of turn." It's still a land.`
+  - `When enchanted Swamp is put into a graveyard, you may return this card from your graveyard to your hand.`
+- **Genju of the Fields**
+  - `{2}: Until end of turn, enchanted Plains becomes a 2/5 white Spirit creature with "Whenever this creature deals damage, its controller gains that much life." It's still a land.`
+  - `When enchanted Plains is put into a graveyard, you may return this card from your graveyard to your hand.`
+- **Genju of the Realm**
+  - `{2}: Enchanted land becomes a legendary 8/12 Spirit creature with trample until end of turn. It's still a land.`
+  - `When enchanted land is put into a graveyard, you may return Genju of the Realm from your graveyard to your hand.`
+- **Genju of the Spires**
+  - `{2}: Enchanted Mountain becomes a 6/1 red Spirit creature until end of turn. It's still a land.`
+  - `When enchanted Mountain is put into a graveyard, you may return this card from your graveyard to your hand.`
 - **Geothermal Crevice**
   - `{T}: Add {R}.`
   - `{T}, Sacrifice this land: Add {B}{G}.`
