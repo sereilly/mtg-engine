@@ -326,6 +326,13 @@ class ChangeTarget:
     #: and Reflecting Mirror say "target spell", and an ability on the stack is
     #: not one.
     also_ability: bool = False
+    #: "You may change **any targets** of target Arcane spell." (Sideswipe.)
+    #: CR 115.7c: CR 115.7a's change with any number of the spell's targets
+    #: moved — each to another legal target or left where it is — rather than
+    #: its one target or all of them. No count on the spell is printed, so the
+    #: subject carries none, and none of the three restrictions above can be:
+    #: they are questions about a single target.
+    any_targets: bool = False
 
 
 @dataclass(frozen=True)

@@ -453,7 +453,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever you cast a non(?P<cast_excluded_color>white|blue|black|red|green) spell"),
     ("you_cast_spell",
      r"whenever you cast a (?P<color_word>white|blue|black|red|green) spell"),
-    ("you_cast_spell",              r"whenever you cast a (?P<cast_subtype>[a-z][a-z-]+) spell"),
+    ("you_cast_spell",
+     r"whenever you cast a (?P<cast_subtype>(?!(?:white|blue|black|red|green) )[a-z][a-z-]+"
+     r"(?: or (?!(?:white|blue|black|red|green) )[a-z][a-z-]+)*) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     ("you_play_card",               r"whenever you play a card"),
     ("enchantment_cast",            r"whenever you cast an enchantment spell"),

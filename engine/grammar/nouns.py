@@ -799,6 +799,28 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             following = stream.peek_word()
             if following is not None and _singular(following) in CARD_TYPES:
                 continue
+            # "Counter target **Spirit or Arcane spell**." (Hisoka's Defiance.)
+            # A subtype union with the head noun "spell": an object on the
+            # stack that is a Spirit (a creature type, CR 205.3m) or Arcane (a
+            # spell type, CR 205.3k). Carried in `any_classes`, the field
+            # "instant **or Aura** spell" already fills one axis over — the
+            # union every counter, picker and stack enumeration already tests
+            # against a spell's subtypes — with the zone recorded, so a
+            # lowering that resolves battlefield objects refuses it as it does
+            # "target instant or sorcery spell". A conjunction ("Goblin Wizard
+            # spell") prints nowhere and stays refused: `any_classes` is a
+            # union and would widen it.
+            if (
+                following in ("spell", "spells")
+                and d.subtype_match != "all"
+                and not d.is_card
+            ):
+                stream.advance()
+                d.any_classes = tuple(("subtype", name) for name in d.subtypes)
+                d.subtypes = []
+                d.zone = "stack"
+                d.saw_head = True
+                break
             # "a **Goblin permanent** card" (Goblin Wizard). A *generic* head
             # noun after a subtype, read by looping back to the branch that
             # already knows how to read one rather than by a second copy of it
@@ -809,8 +831,9 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # names an object on the stack, and the branch below records that as
             # ``zone`` only for a *type* union — reaching it from here would read
             # a spell as a battlefield permanent, which is the widening this
-            # detour has to be narrow to avoid. It keeps refusing until a card
-            # prints one.
+            # detour has to be narrow to avoid. A subtype followed by "spell"
+            # never gets here: Hisoka's Defiance printed one, and the branch
+            # above reads it into `any_classes` with the zone recorded.
             if following is not None and _singular(following) in ("permanent", "card"):
                 continue
             # "a **Caribou token**" (Caribou Range's sacrifice cost). CR 111.1's

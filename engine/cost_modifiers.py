@@ -324,6 +324,14 @@ def _matches(
 
         if modifier.creature_type not in creature_types(game, card, seat):
             return False
+    # "**Arcane** spells you cast …" (Long-Forgotten Gohei). CR 205.3k's spell
+    # type, asked of every subtype the spell has — the creature-type reader
+    # above narrows to CR 205.3m's list and would never hold "arcane".
+    if modifier.spell_type is not None:
+        from .object_creature_types import object_creature_types
+
+        if modifier.spell_type not in object_creature_types(game, card, seat):
+            return False
     # "…with mana value 6 or greater" (Krosan Drover), on the stack (CR 202.3e).
     if modifier.mana_value is not None:
         from .handlers._filters import _comparison_holds
@@ -431,6 +439,7 @@ def _names_a_permanent(modifier: CostModifier) -> bool:
         or modifier.keyword
         or modifier.alternative_subjects
         or modifier.creature_type
+        or modifier.spell_type
         or modifier.mana_value
         or modifier.shares_creature_type_with_source
     )

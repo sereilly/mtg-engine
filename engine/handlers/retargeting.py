@@ -748,3 +748,190 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
     # this handler does, which is ``engine/resumption.py``'s other half.
     run_resumable(game, [*range(len(slots)), None], step)
     return True, "resolved"
+
+
+# ---------------------------------------------------------------------------
+# CR 115.7c / 115.7d — any number of an object's targets, each kept or moved
+# ---------------------------------------------------------------------------
+
+
+def ask_new_targets_by_slot(
+    game: Game, context: OracleExecutionContext, seat: int, slots, *,
+    card_name: str, which: str, keep_name: str, result_key: str, finish,
+) -> None:
+    """Ask an interactive *seat* where each of an object's *slots* goes — one
+    ``retarget_choice`` per slot with somewhere to go, "keep" first on every
+    one and its default (``default_keeps``) — then hand the answers to
+    *finish*: one entry per slot, the new target or None for one kept.
+
+    CR 115.7d's arithmetic, which CR 115.7c's "change any targets" shares:
+    each slot is offered against the answers already given
+    (``stack_targets.new_target_options``), so two slots of one "target" never
+    end on one object, and a slot whose object an earlier answer took is
+    offered no "keep" (``may_keep_target`` — the exchange CR 115.7e allows).
+    Two callers: a copy's new targets (CR 707.10c,
+    ``spell_copies._ask_copy_new_targets``), where this loop was written, and
+    Sideswipe's change of an Arcane spell's targets
+    (:func:`change_any_spell_targets`). *which* names the object in the
+    prompt, *keep_name* is the keep answer's label, *result_key* the
+    scratchpad slot the prompt answers into.
+
+    A loop of one step per slot and a last one that hands over the answers,
+    each prompt suspending the resolution until it is answered
+    (``engine/resumption.py``): **the last thing its caller does**.
+    """
+    from ..stack_targets import may_keep_target, new_target_options, target_label
+
+    picks: list = [None] * len(slots)
+    asked: dict = {}
+
+    def absorb() -> None:
+        # The answer to the slot before this step, exactly once. "Keep", or
+        # every candidate gone by the answer (CR 115.7a's unchanged target),
+        # leaves that slot where it was.
+        if result_key not in context.results:
+            return
+        answer = context.results.pop(result_key)
+        position = asked.pop("position", None)
+        target = answer.get("_target") if isinstance(answer, dict) else None
+        if position is not None and target is not None:
+            picks[position] = target
+
+    def step(position) -> None:
+        absorb()
+        if position is None:
+            finish(picks)
+            return
+        options = new_target_options(slots, picks, position)
+        if not options:
+            return
+        keeps = may_keep_target(slots, picks, position)
+        if not keeps and len(options) == 1:
+            # An earlier slot took what this one names, and one object is
+            # left for it: a choice with one answer is not a question.
+            picks[position] = options[0]
+            return
+        current = target_label(game, slots[position].current)
+        place = "" if len(slots) == 1 else f": target {position + 1} of {len(slots)}"
+        asked["position"] = position
+        game.arm_retarget_choice(
+            seat,
+            card_name=card_name,
+            prompt=(
+                f"Choose a new target for {which}{place} (now {current}), or keep it."
+                if keeps else
+                f"Choose a new target for {which}{place} (now {current}: "
+                "another target of it now names that)."
+            ),
+            result_key=result_key,
+            options=(
+                [{"kind": "keep", "name": keep_name}] if keeps else []
+            ) + [_target_option(game, option) for option in options],
+            context=context,
+            # Taken by default (a test's drain, an abandoned seat), the offer is
+            # declined, as ``copy_spell_target``'s is — where it may be.
+            default_keeps=keeps,
+        )
+
+    run_resumable(game, [*range(len(slots)), None], step)
+
+
+#: Scratchpad key each of Sideswipe's slot prompts answers into, in turn.
+_ANY_TARGET_PICK = "any_target_change_pick"
+
+
+@effect_handler("change_any_spell_targets")
+def change_any_spell_targets(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may change any targets of target Arcane spell." (Sideswipe —
+    CR 115.7c.)
+
+    The spell is this effect's own target (CR 601.2c), re-asked now (CR
+    608.2b): still on the stack and still the class the noun phrase names.
+    CR 115.7c is CR 115.7a "except that any number of those targets may be
+    changed", so each target is either kept or moved to another legal target
+    for its slot, and only the final set is judged (CR 115.7e) — the slot
+    arithmetic ``stack_targets.new_target_options`` does for a copy's new
+    targets, read through ``change_slots`` (the list the spell's own picker
+    reads). Changing none of them is one answer, which is what the printed
+    "you may" is (``control_flow._offered_target_change`` folds it in).
+
+    A **non-interactive** seat takes the measured answer slot by slot
+    (``ai_prompts.choose_copy_new_targets``, which rehearses each move
+    against keeping and is not about copies beyond its name); an interactive
+    one is asked per slot (:func:`ask_new_targets_by_slot`). Whatever moved is
+    written together (``apply_target_change``) and announced as a player
+    choosing targets (CR 603.2's "becomes the target").
+    """
+    from ..stack_targets import (apply_target_change, change_slots,
+                                 new_target_options, target_label)
+
+    card_name = getattr(context.card, "name", "")
+    item = context.stack_target
+    if item is None or not any(waiting is item for waiting in game.stack):
+        game.log.append(
+            f"{card_name}: the spell whose targets it would change is no longer on the stack"
+        )
+        return True, "resolved"
+    any_classes = instruction.payload.get("any_classes")
+    if any_classes:
+        from .stack import _spell_is_one_of_classes
+
+        if not _spell_is_one_of_classes(
+            spell_text_card(item), [tuple(entry) for entry in any_classes],
+            game=game, seat=item.caster_index,
+        ):
+            game.log.append(
+                f"{card_name}: {item.card.name} is no longer "
+                f"{' or '.join(str(entry[1]) for entry in any_classes)}"
+            )
+            return True, "resolved"
+    subject = item.card.name
+    unchanged = f"{card_name}: {subject}'s targets remain unchanged"
+    who = instruction.payload.get("chooser", "you")
+    if who == "you":
+        chooser = game.seat_index(context.caster)
+    else:
+        from .control_flow import _offered_seats
+
+        seats = _offered_seats(game, who, context)
+        if not seats:
+            game.log.append(unchanged)
+            return True, "resolved"
+        chooser = seats[0]
+    slots = change_slots(game, item)
+    if isinstance(slots, str):
+        game.log.append(f"{unchanged} ({slots})")
+        return True, "resolved"
+    if not any(new_target_options(slots, [], position) for position in range(len(slots))):
+        game.log.append(f"{unchanged} (it has no other legal targets)")
+        return True, "resolved"
+    chooser_name = game.players[chooser].name
+
+    def finish(picks) -> None:
+        changed = [(slot, pick) for slot, pick in zip(slots, picks) if pick is not None]
+        if not changed:
+            game.log.append(f"{card_name}: {chooser_name} left {subject}'s targets as they were")
+            return
+        before = ", ".join(target_label(game, slot.current) for slot, _ in changed)
+        if not apply_target_change(
+            game, item, [slot for slot, _ in changed], [pick for _, pick in changed],
+        ):
+            game.log.append(unchanged)
+            return
+        after = ", ".join(target_label(game, pick) for _, pick in changed)
+        game.log.append(
+            f"{card_name}: {chooser_name} changed {subject}'s "
+            f"target{'s' if len(changed) > 1 else ''} from {before} to {after}"
+        )
+        game.announce_targets_chosen(item, chooser=chooser, newly_targeted=True)
+
+    if not game.asks_a_person(chooser):
+        from ..ai_prompts import choose_copy_new_targets
+
+        finish(choose_copy_new_targets(game, chooser, item, slots))
+        return True, "resolved"
+    ask_new_targets_by_slot(
+        game, context, chooser, slots, card_name=card_name, which=subject,
+        keep_name="Keep its target", result_key=_ANY_TARGET_PICK, finish=finish,
+    )
+    return True, "resolved"

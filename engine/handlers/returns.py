@@ -1311,9 +1311,17 @@ def return_bound_permanent_to_hand(game: Game, instruction: OracleInstruction, c
     A permanent already gone is returned by nothing, which is CR 608.2b doing as
     much as it can rather than a failure.
     """
-    victim = game.permanent_by_id(
-        (context.trigger_context or {}).get("bound_permanent_id")
-    )
+    # "For each Spirit, return **it** to its owner's hand unless that player
+    # pays {3}." (Cut the Tethers.) Inside a board loop the object is the one
+    # the iteration is on (``for_each``'s ``iteration_target``), named by the
+    # lowering rather than guessed here, so a delayed bounce never reads a loop.
+    if instruction.payload.get("loop_object"):
+        iterated = context.iteration_target
+        victim = iterated if getattr(iterated, "permanent_id", None) is not None else None
+    else:
+        victim = game.permanent_by_id(
+            (context.trigger_context or {}).get("bound_permanent_id")
+        )
     if victim is None or not game.is_on_battlefield(victim):
         game.log.append(f"{context.card.name}: the permanent it named is gone")
         return True, "resolved"

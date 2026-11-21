@@ -215,6 +215,16 @@ class CostModifier:
     #: One subject only, for ``face_down``'s reason: the adjective is printed
     #: once and ``alternative_subjects`` carries no slot for it.
     creature_type: str | None = None
+    #: "**Arcane** spells you cast cost {1} less to cast." (Long-Forgotten
+    #: Gohei.) A spell type in the same slot (CR 205.3k): the taxed spell must
+    #: have that subtype, read through ``object_creature_types
+    #: .object_creature_types`` — every subtype the spell has, where
+    #: ``creature_type`` above narrows to CR 205.3m's list and would never find
+    #: "arcane". Its own field rather than a wider ``creature_type``, because
+    #: the readers that ask "which creature type?" (the Warchiefs' relation,
+    #: the face-down blank's CR 708.2a) must not be handed a spell type.
+    #: One subject only, for the same reason.
+    spell_type: str | None = None
     #: "Creature spells you cast **with mana value 6 or greater** cost {2} less
     #: to cast." (Krosan Drover.) An ``{op, value}`` bound in the shape every
     #: other mana-value narrowing in the engine rides (``_comparison_holds``),
@@ -918,13 +928,14 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         return None
     if pips and reduces and not colored_only:
         return None
-    from .grammar.vocabulary import CREATURE_TYPES
+    from .grammar.vocabulary import CREATURE_TYPES, SPELL_TYPES
 
     subjects: list[tuple[str | None, tuple[str, ...]]] = []
     singular = False
     chosen_type = False
     face_down = False
     creature_type: str | None = None
+    spell_type: str | None = None
     also_types: tuple[str, ...] = ()
     for printed in _SUBJECT_SPLIT.split(match.group("subjects")):
         read = _SPELL_SUBJECT.match(printed.strip())
@@ -945,9 +956,15 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
             # CR 205.3m's list and nothing else: a word the slot read that the
             # vocabulary does not hold ("legendary", "kicked") is a narrowing
             # nothing here can test, and dropping it is every spell discounted.
-            if printed_type.replace("’", "'") not in CREATURE_TYPES:
+            # …or CR 205.3k's: "Arcane spells" (Long-Forgotten Gohei), carried
+            # as ``spell_type`` — see that field.
+            word = printed_type.replace("’", "'")
+            if word in CREATURE_TYPES:
+                creature_type = word
+            elif word in SPELL_TYPES:
+                spell_type = word
+            else:
                 return None
-            creature_type = printed_type.replace("’", "'")
         printed_colour = read.group("colour") or ""
         subjects.append(
             (
@@ -995,7 +1012,9 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
     # "Goblin spells …" (the Warchiefs): one subject for the same reason, and
     # never beside "face-down" — a face-down spell has no creature type
     # (CR 708.2a), so the pair names nothing.
-    if creature_type is not None and (len(subjects) > 1 or face_down):
+    if (creature_type is not None or spell_type is not None) and (
+        len(subjects) > 1 or face_down
+    ):
         return None
     # "Artifact creature spells …": one subject, for the same reason.
     if also_types and len(subjects) > 1:
@@ -1037,6 +1056,7 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
         chosen_creature_type=chosen_type,
         face_down=face_down,
         creature_type=creature_type,
+        spell_type=spell_type,
         mana_value=mana_value,
         shares_creature_type_with_source=shares,
         colored_only=colored_only,

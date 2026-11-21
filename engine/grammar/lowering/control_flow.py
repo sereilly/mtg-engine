@@ -671,6 +671,14 @@ def _may_divide_among_defenders_static(
 #: choice, so it refuses.
 _TARGET_CHANGE_CHOOSERS = frozenset({"you", "revealed_greatest_mana_value"})
 
+#: The instructions that make the whole change of targets themselves, asking as
+#: they resolve — the only ones an offer may fold into (see below): Psychic
+#: Battle's change of the firing event's object, and Sideswipe's "change any
+#: targets of target Arcane spell" (CR 115.7c).
+_OFFERED_TARGET_CHANGES = frozenset({
+    "change_event_object_targets", "change_any_spell_targets",
+})
+
 
 def _offered_target_change(
     node: ast.May, action: tuple[OracleInstruction, ...],
@@ -712,7 +720,7 @@ def _offered_target_change(
             f"no handler seats {node.actor.kind!r} to change another object's targets",
             node=node,
         )
-    if len(action) != 1 or action[0].kind != "change_event_object_targets":
+    if len(action) != 1 or action[0].kind not in _OFFERED_TARGET_CHANGES:
         raise LoweringError("an offered change of targets is one instruction", node=node)
     return (
         OracleInstruction(
@@ -1064,7 +1072,12 @@ def _lower_may(
         raise LoweringError(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
-    if isinstance(node.action, ast.ChangeEventTargets):
+    if isinstance(node.action, ast.ChangeEventTargets) or (
+        # "You may change **any targets** of target Arcane spell." (Sideswipe,
+        # CR 115.7c.) The same fold, for the same reason: the spell whose
+        # targets may change is about to resolve.
+        isinstance(node.action, ast.ChangeTarget) and node.action.any_targets
+    ):
         return _offered_target_change(node, action)
     actor = resolved_actor
     payload: dict[str, object] = {"actor": actor}

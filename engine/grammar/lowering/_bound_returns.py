@@ -42,7 +42,7 @@ from ...oracle_types import CHOSEN_TARGET_GRAVEYARD_SLOTS
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._events import _EVENT_SUBJECT_OBJECTS
-from ._record_keys import _PERMANENTS_MADE_BY_THIS_EFFECT
+from ._record_keys import BOARD_LOOP_OBJECT, _PERMANENTS_MADE_BY_THIS_EFFECT
 from ._described_returns import lower_described_return
 from ._events import CHOSEN_PERMANENT as _ATTACH_HOST_KEY
 from ._common import (
@@ -297,6 +297,47 @@ def lower_untargeted_return(
     over, and the tail call at the bottom is what keeps that a *file* boundary
     rather than a change of contract: one call, one order, one answer.
     """
+    # "For each Spirit, **return it** to its owner's hand unless that player
+    # pays {3}." (Cut the Tethers.) Inside a loop over what the board holds the
+    # bare pronoun names the object the iteration is on (``for_each`` binds it
+    # as ``iteration_target``) — the innermost binder, ``bound_permanent``'s
+    # rule — and not the ability's source, which is where the self-return
+    # below would otherwise send it: the spell went back to its owner's hand
+    # and every Spirit stayed. Asked first for that reason. Only the plain
+    # bounce to its owner's hand, the one sentence printed; anything else
+    # about the move is a rider this reading does not carry.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and subject.filter.is_source
+        and BOARD_LOOP_OBJECT in produced
+    ):
+        unread = [
+            name for name in (
+                "entering_tapped", "entering_counters", "exile_on_leave",
+                "under_control_of", "repetitions", "actor", "attached_to",
+                "losing_subtypes", "losing_abilities", "gaining_abilities",
+                "also_stack", "bound_card_from",
+            )
+            if getattr(node, name, None)
+        ]
+        if (
+            unread or node.from_zone is not None or node.to.name != "hand"
+            or node.to.owner is None or node.to.owner.kind != "owner"
+        ):
+            raise LoweringError(
+                "a loop's object returns to its owner's hand and nowhere else",
+                node=node,
+            )
+        if _restrictions_beyond(subject.filter, frozenset({"is_source"})):
+            raise LoweringError(
+                "the loop-object bounce honours no further narrowing", node=node
+            )
+        return (
+            OracleInstruction(
+                "return_bound_permanent_to_hand", "", {"loop_object": True}
+            ),
+        )
     # "…**return the chosen cards to the battlefield tapped**." (Victimize.)
     # The cards an earlier sentence of this same spell *announced* (CR 601.2c),
     # not a set anything picks now — which is why nothing here is described:

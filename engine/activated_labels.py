@@ -153,6 +153,12 @@ ACTIVATED_LABELS: dict[str, str] = {
     # (Doubling Cube.) A mana ability (its 2004-12-01 ruling), labelled as one.
     "double_unspent_mana": "activated_mana",
     "counter_top_stack_spell": "spell_pattern",
+    # "{2}, Return two lands you control to their owner's hand: Copy target
+    # instant or sorcery spell. You may choose new targets for the copy."
+    # (Uyo, Silent Prophet.) A copy of a spell (CR 707.10), the activated twin
+    # of the triggered row's `triggered_copy` — not the `counterspells`
+    # category the kind shares with the counters for its stack picker.
+    "copy_top_stack_spell": "activated_copy",
     "create_token": "activated_token",
     "deal_damage": "activated_damage",
     "deal_damage_and_opponent_choice": "activated_damage",

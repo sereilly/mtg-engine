@@ -1134,6 +1134,17 @@ words kept it from shipping silent. The negation is its own key rather
 than a "non" prefix on `color_word`: that key is looked up in the colour
 table, where "nonred" names nothing and admits every spell.
 '''),
+    ('you_cast_spell', '(?P<cast_subtype>', r'''
+"Whenever you cast a **Spirit or Arcane** spell" (the Champions of
+Kamigawa Spirits). The Dog row widened to a union of subtypes, one key
+rather than a second row: the words are split on " or " by the one reader
+(``cast_event_filters._cast_narrowing_admits``) and any of them answers,
+asked of the spell's subtypes on both axes at once -- Spirit is a creature
+type (CR 205.3m), Arcane a spell type (CR 205.3k). A colour word is kept
+out of every member by the lookahead: "you cast a green or white spell"
+is a colour union no row on this scope carries, and read here it would be
+a trigger narrowed to subtypes no spell has.
+'''),
     ('you_play_card', 'you play a', r'''
 "When **you play a card**, sacrifice this artifact." (Juju Bubble.)
 CR 701.18b: to play a card is to play it as a land **or** cast it as a

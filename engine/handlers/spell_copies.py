@@ -254,67 +254,19 @@ def _ask_copy_new_targets(
     (``new_target_options``), so two slots of one "target" never end on one
     object; a slot whose object an earlier answer took is offered no "keep"
     (``may_keep_target`` — the exchange CR 115.7e allows)."""
-    from ..stack_targets import may_keep_target, new_target_options, target_label
-    from .retargeting import _target_option
+    from .retargeting import ask_new_targets_by_slot
 
-    picks: list = [None] * len(slots)
-    asked: dict = {}
     name = copy.card.name
     which = (
         f"copy {copy_number} of {copy_count} of {name}"
         if copy_count is not None and copy_number is not None and copy_count > 1
         else f"the copy of {name}"
     )
-
-    def absorb() -> None:
-        # The answer to the slot before this step, exactly once. "Keep", or
-        # every candidate gone by the answer (CR 115.7a's unchanged target),
-        # leaves that slot where it was.
-        if _COPY_SLOT_PICK not in context.results:
-            return
-        answer = context.results.pop(_COPY_SLOT_PICK)
-        position = asked.pop("position", None)
-        target = answer.get("_target") if isinstance(answer, dict) else None
-        if position is not None and target is not None:
-            picks[position] = target
-
-    def step(position) -> None:
-        absorb()
-        if position is None:
-            _write_copy_new_targets(game, copy, slots, picks, seat)
-            return
-        options = new_target_options(slots, picks, position)
-        if not options:
-            return
-        keeps = may_keep_target(slots, picks, position)
-        if not keeps and len(options) == 1:
-            # An earlier slot took what this one names, and one object is
-            # left for it: a choice with one answer is not a question.
-            picks[position] = options[0]
-            return
-        current = target_label(game, slots[position].current)
-        place = "" if len(slots) == 1 else f": target {position + 1} of {len(slots)}"
-        asked["position"] = position
-        game.arm_retarget_choice(
-            seat,
-            card_name=name,
-            prompt=(
-                f"Choose a new target for {which}{place} (now {current}), or keep it."
-                if keeps else
-                f"Choose a new target for {which}{place} (now {current}: "
-                "another target of it now names that)."
-            ),
-            result_key=_COPY_SLOT_PICK,
-            options=(
-                [{"kind": "keep", "name": "Keep the original's target"}] if keeps else []
-            ) + [_target_option(game, option) for option in options],
-            context=context,
-            # Taken by default (a test's drain, an abandoned seat), the offer is
-            # declined, as ``copy_spell_target``'s is — where it may be.
-            default_keeps=keeps,
-        )
-
-    run_resumable(game, [*range(len(slots)), None], step)
+    ask_new_targets_by_slot(
+        game, context, seat, slots, card_name=name, which=which,
+        keep_name="Keep the original's target", result_key=_COPY_SLOT_PICK,
+        finish=lambda picks: _write_copy_new_targets(game, copy, slots, picks, seat),
+    )
 
 
 def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
