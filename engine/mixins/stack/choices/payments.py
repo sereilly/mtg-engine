@@ -23,6 +23,24 @@ from ....mana_could_produce import ability_colors_on_offer
 _late = LateModules(__package__.split(".", 1)[0])
 
 
+def _open_pool(player) -> dict[str, int]:
+    """What an effect-collected payment may draw on out of *player*'s pool: the
+    open pool plus mana kept until end of turn (``restricted_mana``'s kept
+    rows, the one bucket a payment with no purpose may spend — Sakura-Tribe
+    Springcaller's {G} pays a Force Spike's tax as any {G} would). The pool
+    itself, unmerged, when nothing is kept, so every plan drawn before kept
+    mana existed reads the same object."""
+    from ....restricted_mana import spendable_restricted_mana
+
+    kept = spendable_restricted_mana(player, None)
+    if not any(kept.values()):
+        return player.mana_pool
+    merged = dict(player.mana_pool)
+    for symbol, amount in kept.items():
+        merged[symbol] = merged.get(symbol, 0) + amount
+    return merged
+
+
 class PaymentChoicesMixin:
     # -- Power Sink's "unless its controller pays {X}" ----------------------
 
@@ -109,9 +127,11 @@ class PaymentChoicesMixin:
 
         if isinstance(player, int):
             player = self.players[player]
+        if pool is None:
+            pool = _open_pool(player)
         with payment_units_in_force(plan_over_land_units(self)):
             return plan_payment(
-                player.mana_pool if pool is None else pool,
+                pool,
                 self.payment_lands(player) if lands is None else lands,
                 cost, produces=self._land_payment_colors, payer=player,
             )
@@ -530,10 +550,14 @@ class PaymentChoicesMixin:
                 if spend is not None:
                     spend(plan)
                 else:
+                    # The open pool first and mana kept until end of turn
+                    # last (``restricted_mana.take_from_pool``), the units
+                    # ``_open_pool`` offered the plan.
+                    from ....restricted_mana import take_from_pool
+
                     for symbol, amount in plan.from_pool.items():
-                        player.mana_pool[symbol] = (
-                            int(player.mana_pool.get(symbol, 0)) - amount
-                        )
+                        if amount:
+                            take_from_pool(player, None, symbol, amount)
                 return True
             land = plan.tapped[0]
             wanted = plan.tapped_for[0] if plan.tapped_for else None

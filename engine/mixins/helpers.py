@@ -44,6 +44,7 @@ from ..phasing_locks import (PHASED_OUT_UNTIL_SOURCE_LEAVES,
                              taps_as_it_phases_in, waits_for_its_source)
 from ..source_tapped_effects import (break_pending_durations,
                                      end_effects_while_tapped)
+from ..restricted_mana import is_kept_key
 from ..unspent_mana import seats_keeping_unspent_mana
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 from ..color_changes import spell_color_change
@@ -216,7 +217,7 @@ class GameHelpersMixin:
         self._expire_tagged_effects(self._make_expiry_tag("end_phase", phase, step))
         if phase == "combat" and step == "end_of_combat":
             self._expire_tagged_effects("end_of_combat")
-        self.clear_mana_pools()
+        self.clear_mana_pools(ending_step=step)
 
     def _normalize_mana_color(self, mana_color: str | None) -> str | None:
         if mana_color is None:
@@ -226,19 +227,29 @@ class GameHelpersMixin:
             raise ValueError(f"Invalid mana color: {mana_color}")
         return color
 
-    def clear_mana_pools(self) -> None:
+    def clear_mana_pools(self, ending_step: str | None = None) -> None:
         """CR 500.5's turn-based action: each pool empties as a step or phase
         ends — unless a permanent on the board says this player doesn't lose
         unspent mana then (Upwelling, ``engine/unspent_mana.py``), asked as
         each step ends so mana kept while it was out empties at the first end
-        after it leaves (ruling 2009-10-01)."""
+        after it leaves (ruling 2009-10-01).
+
+        **Mana kept until end of turn stays** ("Until end of turn, you don't
+        lose this mana as steps and phases end", Sakura-Tribe Springcaller):
+        its bucket (``restricted_mana.is_kept_key``) survives every step's end
+        but the cleanup step's (*ending_step*), because CR 514.2 ends "until
+        end of turn" effects as that step begins — by the time it ends the
+        units are plain mana, and they empty with the rest."""
         kept = seats_keeping_unspent_mana(self)
+        keeps_kept_buckets = ending_step != "cleanup"
         for seat, player in enumerate(self.players):
             if seat in kept:
                 continue
             for symbol in _MANA_SYMBOLS:
                 player.mana_pool[symbol] = 0
-            for bucket in player.restricted_mana.values():
+            for key, bucket in player.restricted_mana.items():
+                if keeps_kept_buckets and is_kept_key(key):
+                    continue
                 bucket.clear()
 
     def _recompute_continuous_effects(self) -> None:

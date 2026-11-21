@@ -112,7 +112,7 @@ class UpkeepPaymentMixin:
         (a watcher answering the first land by tapping the rest). It is said
         in the log rather than left to read as paid.
         """
-        from ..restricted_mana import debit_restricted_mana, spendable_restricted_mana
+        from ..restricted_mana import take_from_pool
 
         plan = self._upkeep_payment_plan(player, mana, purpose)
         if plan is None:
@@ -122,14 +122,11 @@ class UpkeepPaymentMixin:
             )
 
         def spend(final) -> None:
-            restricted = spendable_restricted_mana(player, purpose)
+            # The payer's order (``restricted_mana.take_from_pool``): an
+            # admitting restricted bucket, then the pool, then kept mana.
             for symbol, amount in final.from_pool.items():
-                from_restricted = min(amount, restricted.get(symbol, 0))
-                if from_restricted:
-                    debit_restricted_mana(player, purpose, symbol, from_restricted)
-                player.mana_pool[symbol] = (
-                    int(player.mana_pool.get(symbol, 0)) - (amount - from_restricted)
-                )
+                if amount:
+                    take_from_pool(player, purpose, symbol, amount)
 
         # The planned lands are tapped **for mana** (CR 605.3a) through the one
         # payer every effect-collected cost shares (``_pay_planned_cost``), and

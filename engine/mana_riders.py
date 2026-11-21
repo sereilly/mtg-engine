@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .restricted_mana import is_rider_key
+from .restricted_mana import is_kept_key, is_rider_key
 
 if TYPE_CHECKING:
     from .game import Game
@@ -77,6 +77,10 @@ def spend_note(key, restricted: str) -> str:
     every other key, or "" for unrestricted mana."""
     if not key:
         return ""
+    if is_kept_key(key):
+        # Not a restriction at all: the mana pays for anything, and what the
+        # sentence changed is when it empties (``restricted_mana``'s kept row).
+        return " (kept until end of turn)"
     if not is_rider_key(key):
         return restricted
     types, effect = _RIDERS.get(str(key), ((), ""))

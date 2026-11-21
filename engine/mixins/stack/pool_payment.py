@@ -470,8 +470,7 @@ class PoolPaymentMixin:
         rest of the cost afterwards and a remainder the pool cannot pay must
         leave the caster exactly where they stood (CR 601.2e).
         """
-        from ...restricted_mana import (debit_restricted_mana,
-                                        spendable_restricted_mana)
+        from ...restricted_mana import take_from_pool
 
         if not colors:
             return lambda: None
@@ -485,14 +484,10 @@ class PoolPaymentMixin:
                 buckets[key].clear()
                 buckets[key].update(bucket)
 
-        restricted = dict(spendable_restricted_mana(caster, purpose))
         for symbol in colors:
-            if restricted.get(symbol, 0) > 0:
-                debit_restricted_mana(caster, purpose, symbol, 1)
-                restricted[symbol] -= 1
-            elif caster.mana_pool.get(symbol, 0) > 0:
-                caster.mana_pool[symbol] = caster.mana_pool[symbol] - 1
-            else:
+            # The payer's order (``restricted_mana.take_from_pool``): an
+            # admitting restricted bucket, then the pool, then kept mana.
+            if take_from_pool(caster, purpose, symbol, 1):
                 give_back()
                 return None
         return give_back  # _set_aside_one_of_each
@@ -567,8 +562,12 @@ class PoolPaymentMixin:
 
     def _pay_mana_cost_directly(
         self, player: PlayerState, required: dict[str, int], *, purpose=None,
-        wants=None,
+        wants=None, merged: bool = False,
     ) -> bool:
+        # *merged*: the buckets are already in the pool (the call below, over
+        # the merge) — a payment with no purpose is offered the kept buckets
+        # too (``restricted_mana.restriction_admits``), so "no purpose" can no
+        # longer be what stops a second merge.
         # "Spend this mana only to…" (CR 106.6): a restricted bucket joins the
         # pool only for a payment its own restriction admits, and whatever the
         # payment consumes is attributed to the restricted bucket first (its
@@ -579,10 +578,10 @@ class PoolPaymentMixin:
         # upkeep cost. It used to be the card being cast, which made every
         # restriction a claim about a *spell* and left the other two payment
         # paths unable to spend restricted mana at all.
-        from ...restricted_mana import (debit_restricted_mana,
-                                        spendable_restricted_mana)
+        from ...restricted_mana import (spendable_restricted_mana,
+                                        take_from_pool)
 
-        restricted = spendable_restricted_mana(player, purpose)
+        restricted = {} if merged else spendable_restricted_mana(player, purpose)
         if restricted and any(restricted.values()):
             snapshot = dict(player.mana_pool)
             player.mana_pool = {
@@ -592,16 +591,22 @@ class PoolPaymentMixin:
             if not self._pay_mana_cost_directly(
                 player, required,
                 wants=self._floating_mana_wants(player, purpose),
+                merged=True,
             ):
                 player.mana_pool = snapshot
                 return False
-            for sym in ("W", "U", "B", "R", "G", "C"):
-                spent = snapshot.get(sym, 0) + restricted.get(sym, 0) - player.mana_pool.get(sym, 0)
-                from_restricted = min(spent, restricted.get(sym, 0))
-                if from_restricted:
-                    debit_restricted_mana(player, purpose, sym, from_restricted)
-                snapshot[sym] = snapshot.get(sym, 0) - (spent - from_restricted)
+            spent = {
+                sym: snapshot.get(sym, 0) + restricted.get(sym, 0)
+                - player.mana_pool.get(sym, 0)
+                for sym in ("W", "U", "B", "R", "G", "C")
+            }
             player.mana_pool = snapshot
+            # Who paid each unit is settled in the payer's order
+            # (``restricted_mana.take_from_pool``): a restricted bucket first,
+            # the pool next, mana kept until end of turn last.
+            for sym, amount in spent.items():
+                if amount:
+                    take_from_pool(player, purpose, sym, amount)
             return True
         pool = player.mana_pool
 

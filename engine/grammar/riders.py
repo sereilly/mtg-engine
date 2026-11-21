@@ -205,7 +205,7 @@ def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     enforces it, and mana spent more freely than the card allows is the
     direction that drift goes.
     """
-    from ..restricted_mana import mana_restriction_for
+    from ..restricted_mana import mana_clause_onto
 
     last = steps[-1] if steps else None
     # "At the beginning of your upkeep, **you may** add {C}{C}. This mana can't
@@ -249,12 +249,23 @@ def _attach_spend_only(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         and not inside_where_x
     ):
         return False
+    produced = (
+        last.action if inside_may else last.statement if inside_where_x else last
+    )
+    if produced.spend_only is not None:
+        # A second clause about the same mana would overwrite the first, and a
+        # bucket carries one key: refused rather than one of them dropped.
+        return False
     mark = stream.mark()
     start = stream.pos
     while not stream.exhausted and not stream.at_punct(".", ";"):
         stream.advance()
     sentence = stream.text_between(start, stream.pos)
-    restriction = mana_restriction_for(sentence)
+    # "…**you** don't lose this mana" is about the pool the mana went into
+    # (``restricted_mana.mana_clause_onto``): a bare "Add …" is the
+    # controller's ("that player adds …" reads its own trailing sentences,
+    # ``effects/mana._parse_player_adds_mana``).
+    restriction = mana_clause_onto(sentence, "you")
     if restriction is None:
         stream.reset(mark)
         return False

@@ -528,6 +528,12 @@ RESTRICTED_MANA_WORDS = {
         "If this mana is spent on an instant or sorcery spell, that spell can't be countered."
     ),
     "rider_haste_creature": "If this mana is spent on a creature spell, it gains haste.",
+    # Mana kept until end of turn (``restricted_mana``'s kept row, Betrayers of
+    # Kamigawa's Snake Shamans): spendable on anything, so the words say when
+    # it empties rather than what it may pay for.
+    "kept_until_end_of_turn": (
+        "Until end of turn, you don't lose this mana as steps and phases end."
+    ),
 }
 
 
