@@ -817,9 +817,10 @@ def _lower_put_onto_battlefield(
         # "all" is every card the phrase names with nothing to decide. Carried
         # as its own key rather than as a very large count, so the handler
         # cannot be asked how many "all" is on a hand it has not seen yet.
-        if target.quantifier not in ("up_to", "all") or not filt.is_card:
+        if target.quantifier not in ("up_to", "any_number", "all") or not filt.is_card:
             raise LoweringError(
-                "the from-hand handler reads 'up to N … cards' or 'all … cards'",
+                "the from-hand handler reads 'up to N … cards', 'any number of "
+                "… cards' or 'all … cards'",
                 node=node,
             )
         # Anything the phrase printed beyond its card type has to survive into
@@ -831,7 +832,7 @@ def _lower_put_onto_battlefield(
             raise LoweringError(
                 "the from-hand sweep cannot test that card phrase", node=node
             )
-        if target.quantifier == "up_to":
+        if target.quantifier in ("up_to", "any_number"):
             # "…then put **up to seven** permanent cards from your hand onto
             # the battlefield." (Ugin, the Spirit Dragon's −10.) A pick, then a
             # put — Tempting Wurm's two steps with one seat and a ceiling: the
@@ -841,6 +842,12 @@ def _lower_put_onto_battlefield(
             # owner, an Aura among them attached as it enters to something
             # already there (CR 303.4f). The fused sweep this used to lower to
             # took the first seven eligible cards and asked nobody.
+            #
+            # "Put **any number of** creature cards from your hand onto the
+            # battlefield." (Myojin of Life's Web.) The same two steps with no
+            # ceiling at all: the pick's ``any_number`` (Tempting Wurm's, one
+            # seat) lets it stop anywhere, nought included, and the most is
+            # every eligible card in the hand.
             if not isinstance(target.count, int) or target.count_from_x:
                 raise LoweringError(
                     "the chosen put from hand reads a printed ceiling", node=node
@@ -863,16 +870,14 @@ def _lower_put_onto_battlefield(
             described = {
                 "type_filter": list(filt.card_types or _PERMANENT_CARD_TYPES),
             }
+            pick: dict[str, object] = (
+                {"card_filter": described, "any_number": True}
+                if target.quantifier == "any_number"
+                else {"card_filter": described, "count": target.count, "up_to": True}
+            )
+            pick["result_key"] = "chosen_hand_cards"
             return (
-                OracleInstruction(
-                    "choose_cards_in_hand", "",
-                    {
-                        "card_filter": described,
-                        "count": target.count,
-                        "up_to": True,
-                        "result_key": "chosen_hand_cards",
-                    },
-                ),
+                OracleInstruction("choose_cards_in_hand", "", pick),
                 OracleInstruction(
                     "put_chosen_hand_cards_onto_battlefield", "",
                     {"cards_from": "chosen_hand_cards", "card_filter": described},

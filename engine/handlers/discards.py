@@ -812,7 +812,8 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
     effect must not hit.
     """
     caster = context.caster
-    if instruction.payload.get("who") == "each_player":
+    who = instruction.payload.get("who")
+    if who in ("each_player", "each_opponent"):
         # "**Each player** discards their hand…" (Windfall, Ill-Gotten Gains.)
         # Every living seat in CR 101.4's order, which is the order every other
         # each-player loop in this engine walks — nothing here is a decision,
@@ -833,10 +834,18 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
         # discards already write: the sentence behind this one asks for "the
         # greatest number of cards **a player** discarded this way", and a
         # single number would be whichever hand the loop emptied last.
+        #
+        # "**Each opponent** discards their hand." (Myojin of Night's Reach.)
+        # The same loop with the effect's controller left out: CR 800.4a's
+        # living seats, less the one an opponent is counted against.
         total = len(game.players)
         active = game.active_player_index or 0
+        controller = game.seat_index(caster) if caster is not None else None
         seats = sorted(
-            (i for i, p in enumerate(game.players) if not p.lost),
+            (
+                i for i, p in enumerate(game.players)
+                if not p.lost and not (who == "each_opponent" and i == controller)
+            ),
             key=lambda i: ((i - active) % total, i),
         )
         by_seat = context.results.setdefault(DISCARDED_BY_SEAT, {})

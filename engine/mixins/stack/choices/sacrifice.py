@@ -1074,6 +1074,7 @@ class SacrificeChoicesMixin:
         up_to: bool = False,
         count_onto=None,
         batch: dict | None = None,
+        counters_onto: str | None = None,
     ) -> None:
         """Force a player to sacrifice ``count`` permanents matching the filter
         payload ``filter``. A human seat is prompted to choose which; AI /
@@ -1112,6 +1113,11 @@ class SacrificeChoicesMixin:
         where the sacrifice happens because nothing downstream can recover it —
         the permanents are gone, and are different objects (CR 400.7).
 
+        ``counters_onto`` is a counter kind ``count_onto`` enters with **one of
+        per permanent given up** ("Shimatsu enters with that many +1/+1
+        counters on it"): placed where the count is recorded, before the
+        permanent the answer was waiting on enters (CR 614.12a).
+
         *batch* is also a loop's hold (:meth:`sacrificing_together_through`),
         handed in by the body's sacrifice: this repetition's answer is held
         with the others'."""
@@ -1135,6 +1141,7 @@ class SacrificeChoicesMixin:
                 # the two readings the merged prompt happened to keep.
                 and bool(queued.data.get("up_to")) == bool(up_to)
                 and queued.data.get("_count_onto") is count_onto
+                and queued.data.get("_counters_onto") == counters_onto
             ):
                 queued.data["count"] += count
             else:
@@ -1146,6 +1153,8 @@ class SacrificeChoicesMixin:
                 )
             return
         extra = {"_batch": batch} if batch is not None else {}
+        if counters_onto is not None:
+            extra["_counters_onto"] = counters_onto
         self.arm_pending_choice(
             "sacrifice", player_index,
             count=count, filter=filter, exclude=exclude, reason=reason,
@@ -1364,11 +1373,15 @@ class SacrificeChoicesMixin:
             went = [perm for perm in live if any(perm is g for g in gone)]
             for perm in went:
                 self.log.append(f"{player.name} sacrificed {perm.card.name} ({data['reason']})")
-            self._record_sacrifice_count(data.get("_count_onto"), len(went), totals)
+            self._record_sacrifice_count(
+                data.get("_count_onto"), len(went), totals,
+                counters_onto=data.get("_counters_onto"),
+            )
         return gone
 
     def _record_sacrifice_count(
-        self, count_onto, given_up: int, totals: tuple[int, int] = (0, 0)
+        self, count_onto, given_up: int, totals: tuple[int, int] = (0, 0),
+        *, counters_onto: str | None = None,
     ) -> None:
         """Stamp what was sacrificed onto the permanent that asked for it
         (CR 604.3's "…sacrificed as it entered").
@@ -1382,12 +1395,20 @@ class SacrificeChoicesMixin:
         *totals* arrives already summed, and it has to: by the time this runs
         the creatures are cards in a graveyard and have no power or toughness at
         all (CR 613.1), so the numbers are CR 608.2g's last known information,
-        read at the removal site."""
+        read at the removal site.
+
+        *counters_onto* is the fourth record, Shimatsu the Bloodcloaked's
+        "enters with **that many** +1/+1 counters on it": one counter of that
+        kind per permanent given up, placed through the one placement seam
+        (so a CR 614 counter replacement applies, CR 614.1c) on the permanent
+        still waiting to enter."""
         if count_onto is None:
             return
         count_onto.metadata["sacrificed_as_entered"] = int(given_up)
         count_onto.metadata["sacrificed_total_power"] = int(totals[0])
         count_onto.metadata["sacrificed_total_toughness"] = int(totals[1])
+        if counters_onto is not None and given_up > 0:
+            self.place_pt_counters(count_onto, counters_onto, int(given_up))
         self._refresh_dynamic_creatures()
 
     def pending_sacrifice_state(self) -> dict | None:
@@ -1510,7 +1531,8 @@ class SacrificeChoicesMixin:
             self.log.append(f"{player.name} sacrificed {name} ({reason})")
         self.discard_pending_choice(choice)
         self._record_sacrifice_count(
-            data.get("_count_onto"), len(chosen), (total_power, total_toughness)
+            data.get("_count_onto"), len(chosen), (total_power, total_toughness),
+            counters_onto=data.get("_counters_onto"),
         )
         self.check_state_based_actions()
         return True

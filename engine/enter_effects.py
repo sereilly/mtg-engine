@@ -572,6 +572,51 @@ def enters_with_named_counter(line: str, card_name: str | None = None) -> tuple[
     return None if count is None else (count, match.group("counter"))
 
 
+#: "Myojin of Cleansing Fire enters with a divinity counter on it **if you
+#: cast it from your hand**." (The five Champions of Kamigawa Myojin.)
+#: :data:`ENTERS_WITH_NAMED_COUNTER`'s sentence under a condition on how the
+#: permanent got there: an entry replacement (CR 614.1c) that applies only to
+#: a permanent spell cast from that zone. The answer is the stamp the one entry
+#: road that *is* a cast leaves on the permanent before it enters
+#: (``permanent_spell_resolution``'s ``cast_from_zone``) -- the stamp Hypnox's
+#: "When this creature enters, if you cast it from your hand" reads -- so a
+#: Myojin reanimated, blinked or put onto the battlefield from a hand by an
+#: effect enters with nothing, and one cast from a command zone neither (the
+#: Myojin's 2013-07-01 ruling).
+#:
+#: Its own pattern beside the unconditional one rather than an optional tail
+#: on it: the unconditional reader's answer is placed on every road, and a tail
+#: it could swallow would be a condition placed unconditionally. The zone is a
+#: capture so another zone is data, but only "hand" is admitted -- the one zone
+#: a card prints here.
+ENTERS_WITH_NAMED_COUNTER_IF_CAST = re.compile(
+    r"^this [a-z]+ enters with (?P<count>a|an|[a-z]+) "
+    r"(?P<counter>[a-z]+) counters? on it if you cast it from your "
+    r"(?P<zone>hand)$"
+)
+
+
+def enters_with_named_counter_if_cast(
+    line: str, card_name: str | None = None
+) -> tuple[int, str, str] | None:
+    """``(count, counter word, zone)`` for the cast-conditioned named-counter
+    entry, or None.
+
+    Read by the entry state (which places the counters only on a permanent
+    stamped as cast from *zone*) and by the support gate, so what is placed and
+    what is claimed cannot drift. A number word the table does not know refuses
+    the line, for :func:`enters_with_named_counter`'s reason.
+    """
+    match = ENTERS_WITH_NAMED_COUNTER_IF_CAST.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    printed = match.group("count")
+    count = 1 if printed in ("a", "an") else NUMBER_WORDS.get(printed)
+    if count is None:
+        return None
+    return count, match.group("counter"), match.group("zone")
+
+
 #: The **X** form of the named-counter sentence above: "This enchantment enters
 #: with **X ice** counters on it." (Iceberg.) Its own pattern for the reason
 #: `ENTERS_WITH_X_PT_COUNTERS` is its own pattern one screen up: the count is
@@ -625,11 +670,37 @@ def enters_with_x_named_counters(
 #: **totalled** rather than merely counted, so `_record_sacrifice_totals` knows
 #: to stamp the sums. `engine/characteristic_defining.py` reads the same printed
 #: sentence for the CDA it produces.
+#:
+#: The other trailing sentence is Shimatsu the Bloodcloaked's: "As Shimatsu
+#: enters, sacrifice any number of permanents. Shimatsu enters with **that many
+#: +1/+1 counters** on it." The same cost buying counters instead of a
+#: defined size -- one more CR 614.1c replacement of the same entry, so one
+#: more optional group on the same pattern for the reason above; the counter
+#: kind is a capture checked against the kinds the engine places
+#: (:func:`sacrifice_on_enter_counter_kind`).
 SACRIFICE_ANY_NUMBER_ON_ENTER = re.compile(
     r"^as this [a-z]+ enters, sacrifice any number of (?P<phrase>.+?)"
-    r"(?P<defines_pt>\. this [a-z]+'s power becomes the total power of those "
-    r"[a-z]+ and its toughness becomes their total toughness)?$"
+    r"(?:(?P<defines_pt>\. this [a-z]+'s power becomes the total power of those "
+    r"[a-z]+ and its toughness becomes their total toughness)"
+    r"|\. this [a-z]+ enters with that many "
+    r"(?P<counters>\+1/\+1|\+1/\+0|\+0/\+1|-1/-1) counters on it)?$"
 )
+
+
+def sacrifice_on_enter_counter_kind(line: str, card_name: str | None = None) -> str | None:
+    """The counter kind the entry sacrifice buys one of per permanent given
+    up ("…enters with **that many +1/+1** counters on it", Shimatsu the
+    Bloodcloaked), or None.
+
+    Read by the entry state, which hands it to the sacrifice prompt so the
+    answer places the counters where it counts what went
+    (``_record_sacrifice_count``) -- the creature has not survived a
+    state-based check as a 0/0 in between, because the entry waits on the
+    answer (CR 614.12a) -- and by the support gate through
+    :func:`sacrifice_any_number_on_enter`.
+    """
+    match = SACRIFICE_ANY_NUMBER_ON_ENTER.match(_self_normalized(line, card_name))
+    return None if match is None else match.group("counters")
 
 
 def sacrifice_on_enter_defines_pt(line: str, card_name: str | None = None) -> bool:
@@ -1356,6 +1427,11 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         # counters because that is the half whose *shape* was read; nothing
         # dispatches on it.
         return "enters with named counters"
+    # "…enters with a divinity counter on it if you cast it from your hand"
+    # (the Myojin): the same placement under the cast stamp, by the same mixin
+    # loop.
+    if enters_with_named_counter_if_cast(normalized) is not None:
+        return "enters with named counters if cast"
     if enters_with_pt_counters(normalized) is not None:
         return "enters with P/T counters"
     # "If this creature was kicked, it enters with …" (CR 702.33d under
@@ -1503,6 +1579,8 @@ __all__ = [
     "KICKED_ENTRY_SIZED_BY_X",
     "kicked_entry",
     "enters_with_named_counter",
+    "ENTERS_WITH_NAMED_COUNTER_IF_CAST",
+    "enters_with_named_counter_if_cast",
     "ENTERS_WITH_X_PT_COUNTERS",
     "enters_with_x_pt_counters",
     "ENTERS_WITH_X_NAMED_COUNTERS",
@@ -1523,6 +1601,7 @@ __all__ = [
     "pay_any_life_on_enter",
     "SACRIFICE_ANY_NUMBER_ON_ENTER",
     "sacrifice_any_number_on_enter",
+    "sacrifice_on_enter_counter_kind",
     "SACRIFICE_ALL_ON_ENTER",
     "sacrifice_all_on_enter",
     "SPEND_ANY_COLOR",
