@@ -380,6 +380,46 @@ def end_until_eot_text_changes(perm: Permanent) -> bool:
     return True
 
 
+#: The record key naming the permanent whose **static ability** wrote a text
+#: change (Swirl the Mists, ``engine/global_text_changes.py``) — what tells a
+#: record a writer keeps in step with the board from a one-shot one, which is
+#: only ever appended and dropped by its duration.
+SOURCE_KEY = "source_id"
+
+
+def sync_sourced_text_changes(holder, wanted: "list[dict]") -> bool:
+    """Make *holder*'s static-ability records (those carrying
+    :data:`SOURCE_KEY`) exactly *wanted*, leaving every one-shot record where
+    it is. *holder* is a permanent or a spell on the stack; an ability on the
+    stack is left alone (CR 113.3: not a spell — its text is its source's).
+    True if anything changed.
+
+    The write API's half for a board-wide writer: removal is still dropping a
+    contribution — a source that left is a record no longer wanted — and
+    nothing remembers a delta."""
+    if getattr(holder, "is_ability", False):
+        return False
+    metadata = getattr(holder, "metadata", None)
+    if isinstance(metadata, dict):
+        held = list(metadata.get(TEXT_CHANGE_EFFECTS) or ())
+    else:
+        held = list(getattr(holder, "text_change_effects", None) or ())
+    if [record for record in held if record.get(SOURCE_KEY) is not None] == wanted:
+        return False
+    kept = [record for record in held if record.get(SOURCE_KEY) is None]
+    kept.extend(dict(record) for record in wanted)
+    if isinstance(metadata, dict):
+        if kept:
+            metadata[TEXT_CHANGE_EFFECTS] = kept
+        else:
+            # Popped rather than left empty, so the fold's fast path
+            # (``models.fold_channel_set``) goes back to skipping it.
+            metadata.pop(TEXT_CHANGE_EFFECTS, None)
+    else:
+        holder.text_change_effects = kept
+    return True
+
+
 def has_text_changes(perm: Permanent) -> bool:
     """Whether any text-changing effect applies to *perm*.
 
@@ -827,6 +867,7 @@ __all__ = [
     "face_up_text_card",
     "change_land_word", "changed_words", "creature_type_plural",
     "creature_types_written", "current_text_card", "has_text_changes",
-    "one_pass", "spell_text_card", "spell_text_changes", "spell_text_of",
+    "one_pass", "SOURCE_KEY", "spell_text_card", "spell_text_changes",
+    "spell_text_of", "sync_sourced_text_changes",
     "TEXT_CHANGE_MODE_KINDS", "text_changes", "text_seen_by", "words_written",
 ]
