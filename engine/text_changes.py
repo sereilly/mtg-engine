@@ -338,10 +338,12 @@ def change_creature_word(
 def text_changes(perm: Permanent) -> tuple[dict, ...]:
     """The recorded text changes, oldest first (CR 613.7).
 
-    Recorded order is timestamp order: a text change is only ever appended, and
-    ends only where the card printed a duration — which until Whim of Volrath no
-    card in the pool did. :func:`apply_text_changes` sorts anyway, because it is
-    the fold and the fold is where the order has to be right.
+    Recorded order is timestamp order for every one-shot change: it is only
+    ever appended, and ends only where the card printed a duration. A
+    board-wide change (``engine/global_text_changes.py``) carries its source's
+    older timestamp and may be written after one, so :func:`apply_text_changes`
+    and :func:`_changes_of` sort — the fold is where the order has to be
+    right.
     """
     return tuple(perm.metadata.get(TEXT_CHANGE_EFFECTS) or ())
 

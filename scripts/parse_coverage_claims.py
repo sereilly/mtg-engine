@@ -452,7 +452,9 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # Fate.) The look and the play over the permanent's linked record, each
     # scoped to the seat that exiled the card: derived off the board by
     # `linked_exile.face_down_exiled_cards` and `cast_permissions
-    # .permission_for`. Its own channel, asking the reader both ask.
+    # .permission_for`. Its own channel, asking the reader both ask. Uba
+    # Mask's "…from among cards they exiled with this artifact this turn" is
+    # the same permission with a window (`exiler_grants.exiler_play_scope`).
     ("exiler_grants.py (exilers look at and play their cards)",
      exiler_play_line),
     # "All instances of color words in the text of spells and permanents are
