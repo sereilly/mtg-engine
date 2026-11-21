@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**18 unclaimed sentence(s) across 18 supported card(s).**
+**17 unclaimed sentence(s) across 17 supported card(s).**
 
 - **Blessed Breath**
   - `splice onto arcane {w}`
@@ -43,8 +43,6 @@ anything anyone did, and every ingest would arrive red.
   - `splice onto arcane {g}`
 - **Lifted by Clouds**
   - `splice onto arcane {1}{u}`
-- **Long-Forgotten Gohei**
-  - `arcane spells you cast cost {1} less to cast`
 - **Night Dealings**
   - `whenever a source you control deals damage to another player, put that many theft counters on this enchantment`
 - **Orochi Hatchery**

@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 440 | 66.6% | 63.2% | 43.6% | 165 |
+| CHK *(measured)* | 291 | 440 | 71.4% | 68.0% | 48.2% | 184 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,9 +71,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1038 | 542 | expected a subject |  |
-| 210 | 112 | unrecognized effect verb |  |
-| 153 | 82 | unconsumed text |  |
+| 1019 | 523 | expected a subject |  |
+| 209 | 111 | unrecognized effect verb |  |
+| 152 | 81 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -3756,6 +3756,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Earthquake deals X damage to each creature without flying and each player.`
   - `Earthquake deals X damage to each creature without flying and each player.`
   - `Earthquake deals X damage to each creature without flying and each player.`
+- **Earthshaker**
+  - `Whenever you cast a Spirit or Arcane spell, this creature deals 2 damage to each creature without flying.`
 - **Eastern Paladin**
   - `{B}{B}, {T}: Destroy target green creature.`
   - `{B}{B}, {T}: Destroy target green creature.`
@@ -5569,6 +5571,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Guardian Idol**
   - `{T}: Add {C}.`
   - `{2}: This artifact becomes a 2/2 Golem artifact creature until end of turn.`
+- **Guardian of Solitude**
+  - `Whenever you cast a Spirit or Arcane spell, target creature gains flying until end of turn.`
 - **Guerrilla Tactics**
   - `Guerrilla Tactics deals 2 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, it deals 4 damage to any target.`
@@ -5891,12 +5895,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, whenever a player taps an Island for mana, that player adds an additional {U}.`
 - **Highway Robber**
   - `When this creature enters, target opponent loses 2 life and you gain 2 life.`
+- **Hikari, Twilight Guardian**
+  - `Whenever you cast a Spirit or Arcane spell, you may exile Hikari. If you do, return it to the battlefield under its owner's control at the beginning of the next end step.`
 - **Hindering Touch**
   - `Counter target spell unless its controller pays {2}.`
 - **Hint of Insanity**
   - `Target player reveals their hand. That player discards all nonland cards with the same name as another card in their hand.`
 - **Hired Giant**
   - `When this creature enters, each other player may search their library for a land card and put that card onto the battlefield. Then each player who searched their library this way shuffles.`
+- **Hisoka's Defiance**
+  - `Counter target Spirit or Arcane spell.`
 - **Hisoka's Guard**
   - `{1}{U}, {T}: Target creature you control other than this creature has shroud for as long as this creature remains tapped. (It can't be the target of spells or abilities.)`
 - **Historian of Zhalfir**
@@ -5983,6 +5991,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Untap two target creatures. Each of them gets +1/+1 until end of turn.`
 - **Hopping Automaton**
   - `{0}: This creature gets -1/-1 and gains flying until end of turn.`
+- **Horizon Seed**
+  - `Whenever you cast a Spirit or Arcane spell, regenerate target creature.`
 - **Horn of Deafening**
   - `{2}, {T}: Prevent all combat damage that would be dealt by target creature this turn.`
 - **Horn of Greed**
@@ -6307,6 +6317,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: Add {B}. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
 - **Innocence Kami**
   - `{W}, {T}: Tap target creature.`
+  - `Whenever you cast a Spirit or Arcane spell, untap this creature.`
 - **Innocent Blood**
   - `Each player sacrifices a creature of their choice.`
 - **Inquisition**
@@ -6465,6 +6476,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you cast a spell, return this creature to its owner's hand.`
 - **Jacques le Vert**
   - `Green creatures you control get +0/+2.`
+- **Jade Idol**
+  - `Whenever you cast a Spirit or Arcane spell, this artifact becomes a 4/4 Spirit artifact creature until end of turn.`
 - **Jade Statue**
   - `{2}: This artifact becomes a 3/6 Golem artifact creature until end of combat. Activate only during combat.`
   - `{2}: This artifact becomes a 3/6 Golem artifact creature until end of combat. Activate only during combat.`
@@ -6660,8 +6673,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Kamahl deals 3 damage to any target.`
 - **Kami of Ancient Law**
   - `Sacrifice this creature: Destroy target enchantment.`
+- **Kami of Fire's Roar**
+  - `Whenever you cast a Spirit or Arcane spell, target creature can't block this turn.`
 - **Kami of Twisted Reflection**
   - `Sacrifice this creature: Return target creature you control to its owner's hand.`
+- **Kami of the Hunt**
+  - `Whenever you cast a Spirit or Arcane spell, this creature gets +1/+1 until end of turn.`
+- **Kami of the Painted Road**
+  - `Whenever you cast a Spirit or Arcane spell, this creature gains protection from the color of your choice until end of turn.`
+- **Kami of the Waning Moon**
+  - `Whenever you cast a Spirit or Arcane spell, target creature gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
 - **Kangee, Aerie Keeper**
   - `When Kangee enters, if it was kicked, put X feather counters on it.`
 - **Karakas**
@@ -6884,6 +6905,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Other Kobold creatures you control have first strike.`
 - **Kobold Taskmaster**
   - `Other Kobold creatures you control get +1/+0.`
+- **Kodama of the South Tree**
+  - `Whenever you cast a Spirit or Arcane spell, each other creature you control gets +1/+1 and gains trample until end of turn.`
 - **Kodama's Might**
   - `Target creature gets +2/+2 until end of turn.`
 - **Kodama's Reach**
@@ -8833,6 +8856,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Oracle's Attendants**
   - `{T}: All damage that would be dealt to target creature this turn by a source of your choice is dealt to this creature instead.`
   - `{T}: All damage that would be dealt to target creature this turn by a source of your choice is dealt to this creature instead.`
+- **Orbweaver Kumo**
+  - `Whenever you cast a Spirit or Arcane spell, this creature gains forestwalk until end of turn. (It can't be blocked as long as defending player controls a Forest.)`
 - **Orc General**
   - `{T}, Sacrifice another Orc or Goblin: Other Orc creatures get +1/+1 until end of turn.`
 - **Orcish Artillery**
@@ -8912,6 +8937,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}: This creature gets +1/+0 until end of turn.`
 - **Ordered Migration**
   - `Domain — Create a 1/1 blue Bird creature token with flying for each basic land type among lands you control.`
+- **Ore Gorger**
+  - `Whenever you cast a Spirit or Arcane spell, you may destroy target nonbasic land.`
 - **Organ Grinder**
   - `{T}, Exile three cards from your graveyard: Target player loses 3 life.`
 - **Orgg**
@@ -11517,6 +11544,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sickening Dreams deals X damage to each creature and each player.`
 - **Sidar Jabari**
   - `Whenever Sidar Jabari attacks, tap target creature defending player controls.`
+- **Sideswipe**
+  - `You may change any targets of target Arcane spell.`
 - **Siege Striker**
   - `Whenever this creature attacks, you may tap any number of untapped creatures you control. This creature gets +1/+1 until end of turn for each creature tapped this way.`
 - **Siege-Gang Commander**
@@ -11580,6 +11609,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target land.`
   - `Destroy target land.`
   - `Destroy target land.`
+- **Sire of the Storm**
+  - `Whenever you cast a Spirit or Arcane spell, you may draw a card.`
 - **Siren's Call**
   - `Creatures the active player controls attack this turn if able.`
   - `Creatures the active player controls attack this turn if able.`
@@ -11835,6 +11866,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an Island is tapped for mana, its controller may add an additional {U}. If that Island is snow, its controller may add an additional {U}{U} instead. Spend this mana only to pay cumulative upkeep costs.`
 - **Snuff Out**
   - `Destroy target nonblack creature. It can't be regenerated.`
+- **Soilshaper**
+  - `Whenever you cast a Spirit or Arcane spell, target land becomes a 3/3 creature until end of turn. It's still a land.`
 - **Sol Grail**
   - `{T}: Add one mana of the chosen color.`
 - **Sol Ring**
@@ -11999,6 +12032,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return two target creature cards from your graveyard to your hand unless any player pays {X}.`
 - **Soul Warden**
   - `Whenever another creature enters, you gain 1 life.`
+- **Soul of Magma**
+  - `Whenever you cast a Spirit or Arcane spell, this creature deals 1 damage to target creature.`
 - **Soulcatcher**
   - `Whenever a creature with flying dies, put a +1/+1 counter on this creature.`
 - **Soulcatchers' Aerie**
@@ -12929,6 +12964,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Telim'Tor's Edict**
   - `Exile target permanent you own or control.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Teller of Tales**
+  - `Whenever you cast a Spirit or Arcane spell, you may tap or untap target creature.`
 - **Temper**
   - `Prevent the next X damage that would be dealt to target creature this turn. For each 1 damage prevented this way, put a +1/+1 counter on that creature.`
 - **Tempered Veteran**
@@ -13108,6 +13145,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
 - **Thicket Elemental**
   - `When this creature enters, if it was kicked, you may reveal cards from the top of your library until you reveal a creature card. If you do, put that card onto the battlefield and shuffle all other cards revealed this way into your library.`
+- **Thief of Hope**
+  - `Whenever you cast a Spirit or Arcane spell, target opponent loses 1 life and you gain 1 life.`
 - **Thieves' Auction**
   - `Exile all nontoken permanents. Starting with you, each player chooses one of the exiled cards and puts it onto the battlefield tapped under their control. Repeat this process until all cards exiled this way have been chosen.`
   - `Exile all nontoken permanents. Starting with you, each player chooses one of the exiled cards and puts it onto the battlefield tapped under their control. Repeat this process until all cards exiled this way have been chosen.`
