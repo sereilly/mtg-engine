@@ -2439,6 +2439,34 @@ h2.targeting-valid {
   font-size: 0.8rem;
 }
 
+/* "Splice onto <name>?" (CR 702.47): each candidate's button carries its
+   printed text under its name and splice cost. The click is the button's
+   (the prompt reads `data-mode-choice` off the element clicked), so nothing
+   inside it takes the pointer. */
+.splice-choice-btn * {
+  pointer-events: none;
+}
+
+.splice-offer-text {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.76rem;
+  opacity: 0.78;
+  text-align: left;
+  white-space: normal;
+}
+
+/* The cards spliced onto a spell, in the viewer (the stack item's `spliced`). */
+.preview-spliced {
+  display: inline-block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 4px 6px;
+  border-left: 3px solid #e0a040;
+  background: rgba(224, 160, 64, 0.08);
+}
+
 .empty-preview {
   border-style: dashed;
 }

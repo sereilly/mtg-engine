@@ -5199,11 +5199,13 @@ class BattlefieldCanvas {
       if (i === this.hoveredStackIndex) continue;
       const v = this.stackVisuals[i];
       this._drawFloatingCard(ctx, v.item?.card, v.cx, v.cy, v.scale, 1, i === this.stackHeldIndex);
+      this._drawSplicedBadge(ctx, v);
       this._drawStackTargetableGlow(ctx, v, i);
     }
     const hoveredVisual = this.hoveredStackIndex != null ? this.stackVisuals[this.hoveredStackIndex] : null;
     if (hoveredVisual) {
       this._drawFloatingCard(ctx, hoveredVisual.item?.card, hoveredVisual.cx, hoveredVisual.cy, hoveredVisual.scale, 1, true);
+      this._drawSplicedBadge(ctx, hoveredVisual);
       this._drawStackTargetableGlow(ctx, hoveredVisual, this.hoveredStackIndex);
     }
 
@@ -5293,6 +5295,18 @@ class BattlefieldCanvas {
       const lift = labelVisual === top ? 42 / this.zoom : 16 / this.zoom;
       this._drawStackBadge(ctx, top.cx, top.cy - h / 2 - lift, `Waiting for ${waiting.name}…`, "rgba(255, 215, 106, 0.95)");
     }
+  }
+
+  // CR 702.47: the cards spliced onto a spell (the stack item's `spliced`,
+  // revealed and so public), named on a pill across the card's lower edge —
+  // the spell on the stack is the host's card alone, and the texts it gained
+  // would otherwise show only in the hover preview.
+  _drawSplicedBadge(ctx, v) {
+    const spliced = Array.isArray(v?.item?.spliced) ? v.item.spliced : [];
+    if (!spliced.length) return;
+    const h = BF_CARD_H * v.scale;
+    const names = spliced.map((entry) => entry?.name).filter(Boolean).join(" + ");
+    this._drawStackBadge(ctx, v.cx, v.cy + h / 2 - 14 / this.zoom, `+ Spliced: ${names}`, "rgba(240, 190, 100, 0.98)");
   }
 
   // Small dark pill with centered text, used for the stack-cascade badges.

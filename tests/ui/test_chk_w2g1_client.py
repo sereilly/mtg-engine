@@ -21,7 +21,7 @@ from engine.flip_cards import flip_permanent
 from engine.models import Permanent
 from web.app import app
 
-from tests.helpers import run_app_js, seat_plays_first
+from tests.helpers import run_app_js, seat_plays_first, settle
 
 client = TestClient(app)
 
@@ -154,3 +154,302 @@ def test_w2g1_a_card_with_one_half_has_no_flip_viewer(set_pool):
         scripts=("battlefield-canvas.js", "app.js"),
     )
     assert seen == [None, None, False]
+
+
+# ---------------------------------------------------------------------------
+# Splice onto Arcane (CR 702.47): the cast-time choice, its targets, the stack
+# ---------------------------------------------------------------------------
+
+#: What the splice functions reach for that touches the page, as stubs.
+_W2G1_SPLICE_PRELUDE = """
+var seat = 0;
+var currentState = null;
+var pendingModalChoice = null;
+var pendingSpliceCollection = null;
+var pendingCastSplice = null;
+var pendingCastFromZone = null;
+var hints = [];
+var opened = [];
+var continued = [];
+const _CAST_ACTIONS = new Set(["cast", "debug_cast_free", "debug_cast_free_opponent"]);
+function renderActivationPrompt() {}
+function updateActionHint(text) { hints.push(text); }
+function escapeHtml(value) { return String(value ?? ""); }
+function renderSymbolsInline(value) { return String(value ?? ""); }
+function normalizeCardName(card) { return typeof card === "string" ? card : (card && card.name) || ""; }
+function getCurrentPlayerState(state) { return state && state.players ? state.players[seat] : null; }
+function findPermanentInState(state, pid) {
+  for (const [s, player] of (state.players || []).entries()) {
+    const at = (player.battlefield || []).findIndex((c) => c && c.id === pid);
+    if (at >= 0) return { seat: s, index: at, card: player.battlefield[at] };
+  }
+  return null;
+}
+function permanentIdAt(s, i) {
+  const c = currentState && currentState.players && currentState.players[s]
+    && currentState.players[s].battlefield[i];
+  return c && Number.isInteger(c.id) ? c.id : null;
+}
+// The ordinary picker: opened for a spliced text's spec that names a target,
+// as the real cascade is; the spell's own targets are the cast going on.
+function startCastTargetCascade(card) {
+  const spec = card.target_spec || {};
+  if (card.spliced_from && spec.kind && spec.kind !== "none") {
+    opened.push([card.name, card.spliced_from, spec.kind]);
+    return true;
+  }
+  return false;
+}
+function continueCastAfterCost(card, castAction) { continued.push([card.name, castAction]); }
+"""
+
+
+def _w2g1_splice_board(set_pool, *, creatures: bool = True):
+    sid, game = _w2g1_session()
+    game.players[0].hand = [
+        _w2g1_card(set_pool, name)
+        for name in ("Reach Through Mists", "Glacial Ray", "Kodama's Might",
+                     "Soulless Revival", "Desperate Ritual")
+    ]
+    game.players[0].graveyard = [_w2g1_card(set_pool, "Grizzly Bears"),
+                                 _w2g1_card(set_pool, "Shock")]
+    bears = _w2g1_place(game, 1, _w2g1_card(set_pool, "Grizzly Bears")) if creatures else None
+    game._recompute_continuous_effects()
+    return sid, game, bears
+
+
+def test_w2g1_the_splice_prompt_offers_each_card_and_greys_the_one_with_no_target(set_pool):
+    """"Splice onto Reach Through Mists?" lists every card the server offers,
+    in hand order; with no creature anywhere Kodama's Might has nothing to
+    target (CR 702.47b) and is greyed, read off its spec; the order picked is
+    the order the texts happen, and the confirm says so — or casts the spell
+    alone when nothing is picked. A zone cast, a cast whose question is
+    answered and a card nothing may be spliced onto are not asked."""
+    sid, game, _ = _w2g1_splice_board(set_pool, creatures=False)
+    state = _w2g1_state(sid)
+    host = state["players"][0]["hand"][0]
+    assert [o["name"] for o in host["splice_offers"]] == [
+        "Glacial Ray", "Kodama's Might", "Soulless Revival", "Desperate Ritual",
+    ]
+    seen = run_app_js(
+        ["castSpliceOffers", "spliceOfferRefusal", "startCastSplicePrompt", "spliceOfferCard",
+         "spliceChoiceView", "toggleSpliceChoice"],
+        """
+        currentState = INPUT.state;
+        const host = INPUT.state.players[0].hand[0];
+        const opened = startCastSplicePrompt(host, "cast");
+        const before = spliceChoiceView(pendingModalChoice);
+        toggleSpliceChoice(1);      // Kodama's Might: refused, nothing picked
+        toggleSpliceChoice(3);      // Desperate Ritual first
+        toggleSpliceChoice(0);      // then Glacial Ray
+        const after = spliceChoiceView(pendingModalChoice);
+        pendingModalChoice = null;
+        pendingCastFromZone = "graveyard";
+        const zone = startCastSplicePrompt(host, "cast");
+        pendingCastFromZone = null;
+        pendingCastSplice = {cardName: host.name, cards: []};
+        const again = startCastSplicePrompt(host, "cast");
+        pendingCastSplice = null;
+        const plain = startCastSplicePrompt({name: "Shock", target_spec: {kind: "any"}}, "cast");
+        return {opened, before, after, zone, again, plain, hints};
+        """,
+        {"state": state},
+        prelude=_W2G1_SPLICE_PRELUDE,
+    )
+    assert seen["opened"] is True
+    assert seen["before"]["title"] == "Splice onto Reach Through Mists?"
+    assert seen["before"]["confirm"] == "Cast Reach Through Mists without splicing"
+    assert [(b["label"], b["disabled"]) for b in seen["before"]["buttons"]] == [
+        ("Glacial Ray — splice {1}{R}", False),
+        ("Kodama's Might — splice {G} (no legal target)", True),
+        ("Soulless Revival — splice {1}{B}", False),
+        ("Desperate Ritual — splice {1}{R}", False),
+    ]
+    # Each button repeats the text it would add, never its splice line.
+    assert seen["before"]["buttons"][0]["text"] == "Glacial Ray deals 2 damage to any target."
+    assert [(b["label"], b["on"]) for b in seen["after"]["buttons"]][::3] == [
+        ("2. Glacial Ray — splice {1}{R}", True), ("1. Desperate Ritual — splice {1}{R}", True),
+    ]
+    assert seen["after"]["confirm"] == "Splice Desperate Ritual, then Glacial Ray and cast"
+    assert any(
+        "can't be spliced onto Reach Through Mists: no legal target" in hint for hint in seen["hints"]
+    )
+    assert (seen["zone"], seen["again"], seen["plain"]) == (False, False, False)
+
+
+def test_w2g1_the_spliced_texts_targets_are_collected_then_the_spell_goes_on(set_pool):
+    """The confirm walks the picked cards in order: a text that targets
+    nothing (Desperate Ritual) is recorded at once, one that does opens the
+    picker on its own spec, and the body that picker sends is captured as its
+    target rather than sent. Past the last, the announcement is kept and the
+    spell's own cast goes on — a tick later, after the last picker's `.then`."""
+    sid, game, bears = _w2g1_splice_board(set_pool)
+    state = _w2g1_state(sid)
+    seen = run_app_js(
+        ["castSpliceOffers", "spliceOfferRefusal", "startCastSplicePrompt", "spliceOfferCard",
+         "toggleSpliceChoice", "confirmSpliceChoice", "spliceTargetCard",
+         "promptNextSpliceTarget", "finishSpliceCollection", "spliceEntryFromBody",
+         "captureSpliceTarget"],
+        """
+        currentState = INPUT.state;
+        const host = INPUT.state.players[0].hand[0];
+        startCastSplicePrompt(host, "cast");
+        toggleSpliceChoice(3);   // Desperate Ritual: no target
+        toggleSpliceChoice(0);   // Glacial Ray: any target
+        toggleSpliceChoice(2);   // Soulless Revival: a graveyard card
+        confirmSpliceChoice();
+        const afterConfirm = {opened: opened.slice(), cursor: pendingSpliceCollection.cursor};
+        const tap = captureSpliceTarget({action: "tap", permanent_id: 1});
+        const ray = captureSpliceTarget({seat: 0, action: "cast", card_name: host.name,
+          target_seat: 1, permanent_index: 0, target_permanent_id: INPUT.bears});
+        const revival = captureSpliceTarget({seat: 0, action: "cast", card_name: host.name,
+          target_seat: 0, target_permanent_indices: [0]});
+        const atFinish = {done: pendingSpliceCollection.done, cast: pendingCastSplice,
+                          continued: continued.slice()};
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return {afterConfirm, tap, ray, revival, atFinish, opened,
+                continued, collection: pendingSpliceCollection, cast: pendingCastSplice};
+        """,
+        {"state": state, "bears": bears.permanent_id},
+        prelude=_W2G1_SPLICE_PRELUDE,
+    )
+    assert seen["afterConfirm"] == {
+        "opened": [["Reach Through Mists", "Glacial Ray", "any"]], "cursor": 1,
+    }
+    assert (seen["tap"], seen["ray"], seen["revival"]) == (False, True, True)
+    expected = [
+        {"hand_index": 4},
+        {"hand_index": 1, "target_seat": 1, "permanent_id": bears.permanent_id},
+        {"hand_index": 3, "target_seat": 0, "graveyard_indices": [0]},
+    ]
+    assert seen["atFinish"] == {
+        "done": True, "continued": [],
+        "cast": {"cardName": "Reach Through Mists", "cards": expected},
+    }
+    assert seen["opened"][1] == ["Reach Through Mists", "Soulless Revival", "graveyard_creature"]
+    assert seen["continued"] == [["Reach Through Mists", "cast"]]
+    assert seen["collection"] is None and seen["cast"]["cards"] == expected
+
+
+def test_w2g1_the_announcement_the_client_builds_is_the_cast_the_server_performs(set_pool):
+    """`carrySpliceCards` puts the collected `splice_cards` on the spell's cast
+    body (and the caller's, for an auto-tap retry) and on nothing else; that
+    body, sent as the client sends it, performs every gained text in order:
+    Desperate Ritual's mana, Glacial Ray's 2 damage to the Bears, Soulless
+    Revival's return — the spliced cards still in hand (CR 702.47a)."""
+    sid, game, bears = _w2g1_splice_board(set_pool)
+    game.enforce_mana_costs = False
+    cards = [
+        {"hand_index": 4},
+        {"hand_index": 1, "target_seat": 1, "permanent_id": bears.permanent_id},
+        {"hand_index": 3, "target_seat": 0, "graveyard_indices": [0]},
+    ]
+    built = run_app_js(
+        ["carrySpliceCards"],
+        """
+        pendingCastSplice = {cardName: "Reach Through Mists", cards: INPUT.cards};
+        const actionBody = {seat: 0, action: "cast", card_name: "Reach Through Mists", target_seat: 1};
+        const body = carrySpliceCards({...actionBody}, actionBody);
+        return {
+          body, actionBody,
+          other: carrySpliceCards({action: "cast", card_name: "Glacial Ray"}),
+          activate: carrySpliceCards({action: "activate", card_name: "Reach Through Mists"}),
+        };
+        """,
+        {"cards": cards},
+        prelude=_W2G1_SPLICE_PRELUDE,
+    )
+    assert built["body"]["splice_cards"] == cards
+    assert built["actionBody"]["splice_cards"] == cards
+    assert "splice_cards" not in built["other"] and "splice_cards" not in built["activate"]
+
+    sent = client.post(f"/api/sessions/{sid}/action", json=built["body"])
+    assert sent.status_code == 200, sent.text
+    settle(game)
+    hand = [c.name for c in game.players[0].hand]
+    assert "Grizzly Bears" in hand, game.log[-8:]
+    assert {"Glacial Ray", "Soulless Revival", "Desperate Ritual"} <= set(hand)
+    assert bears not in game.players[1].battlefield, game.log[-8:]
+    assert game.players[0].mana_pool["R"] >= 3, game.players[0].mana_pool
+
+
+def test_w2g1_the_stack_shows_what_was_spliced_onto_a_spell(set_pool):
+    """The stack item's `spliced` reaches the hover preview — each card's
+    name, the text it added and its targets by name — in the order the texts
+    happen; a spell with nothing spliced adds nothing."""
+    sid, game, bears = _w2g1_splice_board(set_pool)
+    game.enforce_mana_costs = False
+    game.queue_from_hand(0, "Reach Through Mists", splice_cards=[
+        {"hand_index": 2, "target_permanent_ids": [bears.permanent_id]},
+        {"hand_index": 1, "target_player_index": 1},
+    ])
+    state = _w2g1_state(sid)
+    item = state["stack"][0]
+    assert [entry["name"] for entry in item["spliced"]] == ["Kodama's Might", "Glacial Ray"]
+    sections = run_app_js(
+        ["stackItemPreviewCard", "stackTargetLabel", "splicedPreviewSections"],
+        """
+        currentState = INPUT.state;
+        return [splicedPreviewSections(stackItemPreviewCard(INPUT.item)),
+                splicedPreviewSections(stackItemPreviewCard({card: {name: "Shock"}, spliced: []}))];
+        """,
+        {"state": state, "item": item},
+        prelude=_W2G1_SPLICE_PRELUDE,
+    )
+    assert len(sections[0]) == 2 and sections[1] == []
+    assert "1. Spliced: <b>Kodama's Might</b>" in sections[0][0]
+    assert "→ Grizzly Bears" in sections[0][0]
+    assert "2. Spliced: <b>Glacial Ray</b>" in sections[0][1]
+    assert "→ " + state["players"][1]["name"] in sections[0][1]
+
+
+# ---------------------------------------------------------------------------
+# Masako the Humorless: a tapped creature declared as a blocker
+# ---------------------------------------------------------------------------
+
+
+def test_w2g1_a_tapped_creature_masako_lets_block_is_offered_and_declarable(set_pool):
+    """CR 509.1a waived by Masako: the server's `legal_blocker_assignments`
+    pairs the tapped Craw Wurm with the attacker (it asked `blocker.tapped`
+    where every other gate asks `_tapped_out_of_blocking`, so the client was
+    sent no pairing to draw), the permanent says `can_block_while_tapped`, and
+    the client's drag gate (`blockAssignmentRejectionReason`) accepts the
+    pairing. Without Masako the same tapped Wurm is refused by both."""
+    sid, game = _w2g1_session()
+    masako = _w2g1_place(game, 0, _w2g1_card(set_pool, "Masako the Humorless"))
+    wurm = _w2g1_place(game, 0, _w2g1_card(set_pool, "Craw Wurm"))
+    wurm.tapped = True
+    _w2g1_place(game, 1, _w2g1_card(set_pool, "Hill Giant"))
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(1, [0], defending_player_index=0)
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers"
+    wurm_slot = game.players[0].battlefield.index(wurm)
+
+    def asked():
+        state = _w2g1_state(sid)
+        verdict = run_app_js(
+            ["getCombatState", "getValidBlockerAssignments", "isCombatStep",
+             "blockAssignmentRejectionReason"],
+            "return blockAssignmentRejectionReason(INPUT.state, INPUT.blocker, 0);",
+            {"state": state, "blocker": game.players[0].battlefield.index(wurm)},
+            prelude="var seat = 0; var currentState = null; var combatBlockerDraft = {};"
+            " function iDeclareBlocks() { return true; }",
+        )
+        pairs = {
+            (pair["blocker_index"], pair["attacker_index"])
+            for pair in state["combat"]["legal_blocker_assignments"]
+        }
+        entry = _w2g1_on_board(state, 0, wurm.permanent_id)
+        return pairs, entry["can_block_while_tapped"], verdict
+
+    pairs, may, verdict = asked()
+    assert (wurm_slot, 0) in pairs and may is True and verdict == ""
+
+    game.players[0].battlefield.remove(masako)
+    game._sync_control()
+    pairs, may, verdict = asked()
+    assert not any(blocker == game.players[0].battlefield.index(wurm) for blocker, _ in pairs)
+    assert may is False and verdict == "Craw Wurm is tapped and can't block."

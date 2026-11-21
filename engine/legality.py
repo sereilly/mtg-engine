@@ -1145,7 +1145,9 @@ class LegalityMixin:
     def legal_blocker_assignments(self, defender_index: int) -> list[dict[str, int]]:
         """Every legal ``{"blocker_index", "attacker_index"}`` pair for the
         defending player, mirroring ``declare_blockers`` acceptance (creature,
-        untapped, ``_can_block_attacker``, and Raging River pile restrictions)."""
+        untapped or let block as though it were — Masako the Humorless,
+        ``_tapped_out_of_blocking`` — ``_can_block_attacker``, and Raging
+        River pile restrictions)."""
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return []
         if defender_index not in self.combat_defending_players():
@@ -1159,7 +1161,9 @@ class LegalityMixin:
         pairs: list[dict[str, int]] = []
         for blocker_idx, blocker in enumerate(defender.battlefield):
             # is_creature so animated lands (Kormus Bell, Living Lands) may block.
-            if not blocker.is_creature or blocker.tapped:
+            # CR 509.1a's untapped requirement asked the way `declare_blockers`
+            # asks it: a tapped creature Masako lets block is offered too.
+            if not blocker.is_creature or self._tapped_out_of_blocking(blocker):
                 continue
             # CR 802.4a: this defender can only block attackers aimed at them.
             for attacker_idx, defending_idx in self.combat_attackers.items():
