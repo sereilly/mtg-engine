@@ -906,4 +906,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # player discards, so the bucket `discard_controller_cards` files under;
     # the triggered table's word for the same event is `triggered_discard`.
     "discard_hand": "activated_discard",
+    # --- Betrayers of Kamigawa -------------------------------------------
+    # Azamuki, Treachery Incarnate (Cunning Bandit flipped): "Remove a ki
+    # counter from Azamuki: Gain control of target creature until end of
+    # turn." The triggered table's `triggered_control` row in the activated
+    # position; the activated word for taking a permanent is
+    # `gain_control_of_target`'s `activated_steal`, one duration over.
+    "gain_control_until_eot": "activated_steal",
 }
