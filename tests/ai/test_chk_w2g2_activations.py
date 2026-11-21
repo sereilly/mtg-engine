@@ -92,3 +92,85 @@ def test_ball_lightning_attacks_into_a_blocker_that_beats_it(set_pool):
     _w2g2_to_declare_attackers(game)
 
     assert choose_attackers(game, 0) == [0]
+
+
+def test_wicked_akuba_drains_in_the_main_phase_after_its_attack(set_pool):
+    """Wicked Akuba's "{B}: Target player dealt damage by this creature this
+    turn loses 1 life" opens only once it has hit — and the attack that hits
+    taps it. The main-phase chooser passed every tapped permanent over whole,
+    so the ability was never activated; only its {T} abilities are out of
+    reach (CR 602.5a)."""
+    from engine.ai_actions import activation_announcement
+    from engine.ai_payment import tap_planned_lands
+    from tests.helpers import declare_attack, drive_combat
+
+    chk = set_pool("CHK")
+    akuba = Permanent(card=chk["Wicked Akuba"])
+    swamps = [Permanent(card=chk["Swamp"]) for _ in range(2)]
+    game = _w2g2_board([akuba, *swamps])
+    game.enforce_mana_costs = True
+    declare_attack(game, 0)
+    drive_combat(game)
+    assert game.current_turn_phase == "postcombat_main"
+    assert akuba.tapped and game.players[1].life == 18
+
+    action = choose_activation_action(game, 0)
+
+    assert action is not None and action.permanent_name == "Wicked Akuba"
+    assert action.target_player_index == 1
+    tap_planned_lands(game, 0, action)
+    result = game.activate_permanent_ability(
+        0, action.permanent_name, **activation_announcement(action),
+    )
+    assert result.supported, result.details
+    settle(game)
+    assert game.players[1].life == 17
+
+
+def _w2g2_hisoka_board(set_pool, hand):
+    lea, chk = set_pool("LEA"), set_pool("CHK")
+    cards = {**lea, **chk}
+    hisoka = Permanent(card=chk["Hisoka, Minamo Sensei"])
+    islands = [Permanent(card=chk["Island"]) for _ in range(3)]
+    game = _w2g2_board([hisoka, *islands], hand=[cards[name] for name in hand])
+    game.players[1].hand.append(lea["Hill Giant"])
+    game.enforce_mana_costs = True
+    game.active_player_index = 1
+    game.players[1].mana_pool["R"] = 4
+    result = game.queue_from_hand(1, "Hill Giant")
+    assert result.supported, result.details
+    return game
+
+
+def test_hisoka_discards_the_card_of_the_spells_mana_value(set_pool):
+    """"{2}{U}, Discard a card: Counter target spell if it has the same mana
+    value as the discarded card." Answering a Hill Giant (4) with a Gray Ogre
+    (3) and a Hill Giant in hand, the seat discards its own Giant and the
+    spell is countered; the Ogre stays."""
+    from engine.ai_actions import activation_announcement
+    from engine.ai_payment import tap_planned_lands
+    from engine.ai_policy import choose_instant_speed_activation
+
+    game = _w2g2_hisoka_board(set_pool, ["Gray Ogre", "Hill Giant"])
+
+    action = choose_instant_speed_activation(game, 0)
+
+    assert action is not None and action.permanent_name == "Hisoka, Minamo Sensei"
+    assert game.players[0].hand[action.cost_hand_index].name == "Hill Giant"
+    tap_planned_lands(game, 0, action)
+    result = game.queue_permanent_ability(
+        0, action.permanent_name, **activation_announcement(action),
+    )
+    assert result.supported, result.details
+    settle(game)
+    assert [card.name for card in game.players[0].hand] == ["Gray Ogre"]
+    assert "Hill Giant" in [card.name for card in game.players[1].graveyard]
+    assert "Hill Giant" not in [p.card.name for p in game.players[1].battlefield]
+
+
+def test_hisoka_holds_its_hand_with_no_card_of_that_mana_value(set_pool):
+    from engine.ai_policy import choose_instant_speed_activation
+
+    game = _w2g2_hisoka_board(set_pool, ["Gray Ogre"])
+    action = choose_instant_speed_activation(game, 0)
+    assert action is None or action.permanent_name != "Hisoka, Minamo Sensei"
