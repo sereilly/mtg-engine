@@ -758,7 +758,11 @@ def report(rows: list[dict], args) -> None:
         if args.why and row["reason"] == "measured":
             for node in row["targets"]:
                 line, why = row["why"][node]
-                print(f"{'':>28}::{node.split('::', 1)[1]}  (line {line}: {why})")
+                # A measured target is a node id, or a whole file when every
+                # test in it walks the set (no "::" — W2G3 and W2G4's
+                # `--why` crashed on Kamigawa's splice wire file).
+                _, sep, test = node.partition("::")
+                print(f"{'':>28}{'::' + test if sep else '(whole file)'}  (line {line}: {why})")
     tests = sum(len(row["targets"]) for row in rows if row["reason"] == "measured")
     workers = max(args.workers, 1)
     line = (
