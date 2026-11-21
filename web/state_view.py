@@ -57,6 +57,7 @@ from engine.activation_zones import GRAVEYARD, HAND, ability_functions_from
 from engine.cost_pickers import spec_is_a_cost
 from engine.subject_filters import subject_matches
 from engine.cycling import expand_cycling_line
+from engine.ninjutsu import expand_ninjutsu_line
 from engine.mixins.stack.card_activation import (hand_activation_cost,
                                                  hand_cost_refusal)
 from engine.oracle import compile_card_oracle
@@ -696,7 +697,10 @@ def _printed_ability_line(card, ability) -> str:
     """
     wanted = (ability.source_line or "").strip()
     for line in (card.oracle_text or "").split("\n"):
-        if (expand_cycling_line(line) or line).strip() == wanted:
+        # …and ninjutsu's CR 702.49a sentence, the other keyword a hand
+        # ability is printed as ("Ninjutsu {1}{U}").
+        expanded = expand_cycling_line(line) or expand_ninjutsu_line(line) or line
+        if expanded.strip() == wanted:
             return line.strip()
     return wanted
 

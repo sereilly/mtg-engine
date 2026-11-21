@@ -6,8 +6,8 @@ start from — the compiler, ``engine/legality.py``,
 reading a different card; :func:`expand_card_lines` is that rule made cheap
 for a reader holding the card. Most rewrites are the rules' own. A keyword the
 CR defines *as* an ability becomes that ability's sentence (equip, cycling,
-buyback, kicker, echo, fading, flashback, affinity — each read in the
-keyword's own module); a modal activated head becomes one ability per bullet; two trigger
+buyback, kicker, echo, fading, flashback, affinity, ninjutsu — each read in
+the keyword's own module); a modal activated head becomes one ability per bullet; two trigger
 conditions joined by "and" become two triggers; a static-then-trigger
 paragraph becomes two lines; "The same is true for ..." becomes one line per
 quality; and an ability-word paragraph saying "...instead" is joined onto the
