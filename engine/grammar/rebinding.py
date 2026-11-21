@@ -434,7 +434,67 @@ def rebind_pronoun_to_event_subject(
     subject = event.subject
     if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
         return statement
-    return _rebound(statement, subject)
+    return _rebound_past_exiled_source(statement, subject)
+
+
+def _exiles_source(statement) -> bool:
+    """Whether *statement* exiles the ability's own source by its printed name
+    ("you may exile **Hikari**", "exile **this creature**")."""
+    spec = getattr(statement, "subject", None)
+    return (
+        isinstance(statement, ast.Exile)
+        and isinstance(spec, ast.TargetSpec)
+        and spec.quantifier == "this"
+        and spec.filter.is_source
+    )
+
+
+def _rebound_past_exiled_source(node, subject: ast.ObjectFilter):
+    """:func:`_rebound`, except where a sentence has just exiled the source.
+
+    "Whenever you cast a Spirit or Arcane spell, you may exile **Hikari**. If
+    you do, return **it** to the battlefield … at the beginning of the next end
+    step." (Hikari, Twilight Guardian.) The pronoun's antecedent is the nearest
+    noun phrase before it — the rule :func:`intervening_if_names_source`
+    states for an "if" clause — and here that is the printed self-reference
+    the exile named, not the spell the trigger was about. Rebound to the event
+    subject, the delayed return would bring back a *spell* and Hikari would
+    stay in exile for ever.
+
+    So the branch behind such an exile (a ``May``'s "if you do", a
+    ``Sequence``'s later steps) keeps the pronoun as the source, while
+    everything in front of it — the exile itself, a declined branch, an
+    earlier step — is rebound as before. Only an **exile** of the source:
+    "this creature deals 1 damage to **it**" names the source as the
+    *dealer* in the pronoun's own clause, and the pronoun there is the event
+    subject.
+    """
+    if isinstance(node, ast.May) and _exiles_source(node.action):
+        return replace(
+            node,
+            cost=None if node.cost is None else _rebound(node.cost, subject),
+            action=_rebound(node.action, subject),
+            otherwise=(
+                None if node.otherwise is None
+                else _rebound(node.otherwise, subject)
+            ),
+            reflexive=(
+                None if node.reflexive is None
+                else _rebound(node.reflexive, subject)
+            ),
+        )
+    if isinstance(node, ast.Sequence):
+        steps = []
+        exiled = False
+        for step in node.steps:
+            steps.append(
+                step if exiled else _rebound_past_exiled_source(step, subject)
+            )
+            exiled = exiled or _exiles_source(step)
+        if all(a is b for a, b in zip(steps, node.steps)):
+            return node
+        return replace(node, steps=tuple(steps))
+    return _rebound(node, subject)
 
 
 def bind_counter_pronoun_to_condition(condition, statement: ast.Statement) -> ast.Statement:

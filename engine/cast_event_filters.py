@@ -350,11 +350,21 @@ def _cast_narrowing_admits(
     # a Dog spell and not a Bear one (CR 205.1a, 613.1). This read the printed
     # line, so Rin and Seri made nothing for a spell its caster's Conspiracy
     # had made a Dog.
+    #
+    # "…a **Spirit or Arcane** spell" (the Champions of Kamigawa Spirits): the
+    # same key over a printed union, any member answering. The reader answers
+    # a noncreature card's printed subtypes whole, so Arcane (a spell type,
+    # CR 205.3k) is asked of the same set as Spirit (a creature type,
+    # CR 205.3m) and a Tribal Spirit instant is a Spirit spell.
     cast_subtype = trig.condition.payload.get("cast_subtype")
     if cast_subtype:
         from .object_creature_types import card_creature_types
 
-        if cast_subtype.lower() not in card_creature_types(game, card, caster):
+        subtypes = card_creature_types(game, card, caster)
+        if not any(
+            word.strip() in subtypes
+            for word in cast_subtype.lower().split(" or ")
+        ):
             return False
     # "…a creature spell **with mana value 6 or greater**" (Kurgadon); "…a
     # spell **with mana value 3 or less**" (Pyrostatic Pillar). CR 202.3e: on

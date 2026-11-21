@@ -542,9 +542,25 @@ def _lower_granted_keywords(
     # board, tested by the one subject matcher. The branch used to admit only
     # the two widths, which left every other typed sweep at "unsupported
     # keyword-grant subject" for a grant the handler already performs.
+    #
+    # "**Each other creature you control** gets +1/+1 and gains trample until
+    # end of turn." (Kodama of the South Tree.) The singular spelling of the
+    # same sweep: "each" over an untargeted noun phrase names the set "all"
+    # names, and the P/T half of that very sentence already lowers it to
+    # ``buff_creatures_global`` — refused here, the card's two halves would
+    # reach two different sets. A combat relation to the source ("each
+    # creature blocking or blocked by this creature", Spitting Slug) is left
+    # to its own arm below: it is not a board this handler walks.
     if (
         isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "all"
+        and (
+            node.subject.quantifier == "all"
+            or (
+                node.subject.quantifier == "each"
+                and not node.subject.targeted
+                and not node.subject.filter.in_combat_with_source
+            )
+        )
         and node.subject.filter.controller in ("you", None)
         # The handler resolves the board once, at resolution (CR 611.2c), so a
         # duration it can end is the only requirement — which `_grant_duration`

@@ -30,7 +30,7 @@ from .nouns import parse_object_filter
 from .phrases import _accept_self_reference
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
-                         IMPLEMENTED_KEYWORDS, ORDINAL_WORDS)
+                         IMPLEMENTED_KEYWORDS, ORDINAL_WORDS, SPELL_TYPES)
 from .trigger_tables import _CAST_TYPE_FILTERS, _CAST_TYPE_UNIONS
 
 
@@ -495,12 +495,31 @@ def _parse_cast_event(
         # literal list, and *after* the type words above so a card type
         # keeps its own narrowing — "creature" is both a type word and, in
         # no set, a subtype, but the ordering is what guarantees it.
-        if article == "a" and word in CREATURE_TYPES:
+        #
+        # "…you cast a **Spirit or Arcane** spell" (the Champions of Kamigawa
+        # Spirits, eighteen cards). The same narrowing over a **union** of
+        # subtypes on two axes: Spirit is a creature type (CR 205.3m) and
+        # Arcane a spell type (CR 205.3k), and a spell answers when it has
+        # either — a Spirit creature spell, an Arcane instant, a Tribal
+        # Spirit instant. One subtype set, because the cast filter asks every
+        # word of it of the spell's subtypes through the one reader
+        # (``object_creature_types.card_creature_types``, which answers a
+        # noncreature card's printed subtypes whole), so the two axes need no
+        # tag. Every member is held to the vocabulary: "a green or white
+        # spell" is a colour union, and a word read here as a subtype the
+        # spell can never have is a trigger that compiles and never fires.
+        subtype_words = CREATURE_TYPES | SPELL_TYPES
+        if article == "a" and word in subtype_words:
             stream.advance()
+            subtypes = [word]
+            while stream.at_word("or") and stream.peek_word(1) in subtype_words:
+                stream.advance()
+                subtypes.append(str(stream.peek_word()))
+                stream.advance()
             if stream.accept_word("spell"):
                 return ast.TriggerEvent(
                     "you_cast_spell", trigger_word,
-                    subject=ast.ObjectFilter(subtypes=(word,)),
+                    subject=ast.ObjectFilter(subtypes=tuple(subtypes)),
                 )
     stream.reset(mark)
     return None

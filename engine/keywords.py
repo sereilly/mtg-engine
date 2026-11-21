@@ -316,6 +316,17 @@ def protection_quality(word: str) -> tuple[str, str] | None:
         return ("subtype", word)
     if singular in CREATURE_TYPES:
         return ("subtype", singular)
+    # "Protection from Spirits and from **Arcane**" (Kitsune Riftwalker). A
+    # spell type (CR 205.3k), printed singular because it names no creature:
+    # the subtype family already asks a spell's printed line for its words
+    # (``_card_has_quality``) and a permanent's ``has_type`` — which answers no
+    # for every permanent, since an Arcane object is an instant or a sorcery
+    # and is never one. So an Arcane spell can't target the holder or damage
+    # it (CR 702.16b/e), and nothing on the battlefield is shut out by it.
+    from .grammar.vocabulary import SPELL_TYPES
+
+    if word in SPELL_TYPES:
+        return ("subtype", word)
     return None
 
 

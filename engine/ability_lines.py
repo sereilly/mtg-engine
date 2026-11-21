@@ -88,6 +88,17 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
         # front end over: a production that claims a line takes it from the
         # table, and a table that claims a line takes it from this one.
         return None
+    if _DELAYED_CAST_THIS_TURN_RE.match(normalize_creature_line(line)) and (
+        _parse_delayed_attack_trigger(line, card_name) is not None
+    ):
+        # "Whenever you cast a creature spell **this turn**, draw a card."
+        # (Glimpse of Nature.) The table's `you_cast_spell` row reads the
+        # first six words as a condition, but the stated duration makes the
+        # line a delayed triggered ability the *resolution* creates (CR
+        # 603.7b) — read whole by `_parse_delayed_attack_trigger`, the reader
+        # a spell's own line consults — and not an ability of the card, which
+        # an instant or sorcery could never use from the stack anyway.
+        return None
 
     # Strip leading colon/comma that sometimes follows the condition clause
     remainder = remainder.lstrip(": ")
@@ -532,6 +543,16 @@ _DELAYED_CAST_UNTIL_RE = re.compile(
     r"(?P<effect>.+)$"
 )
 
+# "Whenever you cast a creature spell **this turn**, draw a card." (Glimpse of
+# Nature.) The same delayed trigger with its stated duration (CR 603.7b) printed
+# after the event instead of in front of it — the spelling `_DELAYED_ATTACK_RE`
+# reads for the combat events. One instruction, the one the row above builds:
+# both words name the turn, so nothing downstream can tell them apart.
+_DELAYED_CAST_THIS_TURN_RE = re.compile(
+    r"^whenever you cast (?P<cast_subject>an? .+? spell) this turn, "
+    r"(?P<effect>.+)$"
+)
+
 
 #: Which delayed-trigger event each printed phrase names. A phrase whose event
 #: has no fire site has nowhere to be announced, so the clause refuses rather
@@ -565,7 +586,10 @@ def _parse_delayed_attack_trigger(
     effect fails to parse, so the card refuses rather than arming a trigger
     that fires into nothing."""
     normalized = normalize_creature_line(effect_clause)
-    cast = _DELAYED_CAST_UNTIL_RE.match(normalized)
+    cast = (
+        _DELAYED_CAST_UNTIL_RE.match(normalized)
+        or _DELAYED_CAST_THIS_TURN_RE.match(normalized)
+    )
     if cast is not None:
         from .grammar import subject_filter_payload
         from .subject_filters import card_only_filter
