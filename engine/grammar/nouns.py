@@ -831,8 +831,9 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # names an object on the stack, and the branch below records that as
             # ``zone`` only for a *type* union — reaching it from here would read
             # a spell as a battlefield permanent, which is the widening this
-            # detour has to be narrow to avoid. It keeps refusing until a card
-            # prints one.
+            # detour has to be narrow to avoid. A subtype followed by "spell"
+            # never gets here: Hisoka's Defiance printed one, and the branch
+            # above reads it into `any_classes` with the zone recorded.
             if following is not None and _singular(following) in ("permanent", "card"):
                 continue
             # "a **Caribou token**" (Caribou Range's sacrifice cost). CR 111.1's
