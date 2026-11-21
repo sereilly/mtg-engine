@@ -949,6 +949,16 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             costs.append(ast.MillCost(milled))
             stream.accept_punct(",")
             continue
+        if stream.accept_phrase("reveal", "this", "card", "from", "your", "hand"):
+            # "…, **Reveal this card from your hand**, Return an unblocked
+            # attacking creature you control to its owner's hand: …" —
+            # ninjutsu's rules text (CR 702.49a, ``engine/ninjutsu.py``). The
+            # card stays in the hand, revealed (CR 702.49b): nothing is
+            # chosen and nothing moves, and the hand it names is the zone the
+            # ability functions from (CR 113.6j).
+            costs.append(ast.RevealSelfFromHandCost())
+            stream.accept_punct(",")
+            continue
         if stream.at_word("discard"):
             stream.advance()
             if stream.accept_phrase("the", "last", "card", "you", "drew", "this", "turn"):

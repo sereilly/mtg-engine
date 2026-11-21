@@ -279,6 +279,13 @@ CHOICE_KEYS = (
     # ruling) and asked again at resolution — ``per_color_targets.
     # PER_COLOR_ASSIGNMENT`` names the key and holds its writer and reader.
     "per_color_assignment",
+    # What the creature a ninjutsu cost returned was attacking —
+    # ``{"seat", "planeswalker_id"}`` — read off its slot as the cost is paid,
+    # before it leaves combat (CR 506.4), and read back by the entry it
+    # decides (CR 702.49c). ``attacking_entry.ENTERS_ATTACKING`` names the key;
+    # ``Game.activate_from_hand`` writes it and
+    # ``handlers/hand.put_source_card_from_hand_onto_battlefield`` reads it.
+    "enters_attacking",
 )
 
 

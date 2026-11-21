@@ -6,8 +6,8 @@ start from — the compiler, ``engine/legality.py``,
 reading a different card; :func:`expand_card_lines` is that rule made cheap
 for a reader holding the card. Most rewrites are the rules' own. A keyword the
 CR defines *as* an ability becomes that ability's sentence (equip, cycling,
-buyback, kicker, echo, fading, flashback, affinity — each read in the
-keyword's own module); a modal activated head becomes one ability per bullet; two trigger
+buyback, kicker, echo, fading, flashback, affinity, ninjutsu — each read in
+the keyword's own module); a modal activated head becomes one ability per bullet; two trigger
 conditions joined by "and" become two triggers; a static-then-trigger
 paragraph becomes two lines; "The same is true for ..." becomes one line per
 quality; and an ability-word paragraph saying "...instead" is joined onto the
@@ -36,6 +36,7 @@ from .entwine import expand_entwine_lines
 from .fading import expand_fading_lines
 from .late_modules import LateModules
 from .modular import expand_modular_lines
+from .ninjutsu import expand_ninjutsu_lines
 from .offering import expand_offering_lines
 from .soulshift import expand_soulshift_lines
 from .sunburst import expand_sunburst_lines
@@ -247,6 +248,14 @@ def expand_ability_lines(
       printed text through the same rewrite, so the claim and the price are
       one sentence. A line it cannot write is left as printed and refused by
       the compiler's ``unread_affinity_line`` gate.
+    * a **ninjutsu** keyword line becomes the activated ability CR 702.49a
+      says it means — "[Cost], Reveal this card from your hand, Return an
+      unblocked attacking creature you control to its owner's hand: Put this
+      card onto the battlefield from your hand tapped and attacking."
+      (``engine/ninjutsu.py``). From there the reveal is CR 113.6j's hand
+      cost, the return a chosen cost and the entry an attacking one, none of
+      which knows the word; a line it cannot write is refused by
+      ``unread_ninjutsu_line``.
 
     * an **ability-word paragraph that says "…instead"** becomes the last
       sentence of the paragraph above it
@@ -353,6 +362,14 @@ def expand_ability_lines(
     # self-reduction ``self_cost_modifiers`` already charges and claims, which
     # reads the printed text through the same rewrite.
     oracle_text = expand_affinity_lines(oracle_text)
+    # CR 702.49a's, for cycling's reason and with its freedom of order: a whole
+    # ninjutsu keyword line in, the rule's own activated ability out ("[Cost],
+    # Reveal this card from your hand, Return an unblocked attacking creature
+    # you control to its owner's hand: Put this card onto the battlefield from
+    # your hand tapped and attacking."), read by none of the rewrites around it
+    # (``engine/ninjutsu.py``). From there the reveal is CR 113.6j's hand cost
+    # and the return a chosen cost, neither of which knows the word.
+    oracle_text = expand_ninjutsu_lines(oracle_text)
     # A distributive list of conditional grants written out one sentence per
     # grant (Tribal Golem). Its own statement for cycling's reason; it reads
     # only a line no other rewrite produces or consumes.

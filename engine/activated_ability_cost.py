@@ -475,6 +475,15 @@ class ActivatedAbilityCost:
     #: the source (or :attr:`remove_counter_filter`'s pick). Last for
     #: ``mill_cards``' stated reason.
     remove_counter_granter_id: int | None = None
+    #: "…, **Reveal this card from your hand**, Return an unblocked attacking
+    #: creature you control to its owner's hand: …" — ninjutsu's rules text
+    #: (CR 702.49a, ``engine/ninjutsu.py``). The card stays where it is,
+    #: revealed until the ability leaves the stack (CR 702.49b), so it is
+    #: neither ``discard_self`` nor ``exile_self``; and a card on the
+    #: battlefield is in no hand, which makes the ability a hand ability
+    #: (CR 113.6j, ``engine/activation_zones.py``). Never unpayable while the
+    #: card is in its owner's hand. Last for ``mill_cards``' stated reason.
+    reveal_self_from_hand: bool = False
 
     @property
     def is_loyalty(self) -> bool:

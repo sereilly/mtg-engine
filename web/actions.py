@@ -911,6 +911,12 @@ def _action_activate_hand(session, req, seat_type):
             card_name,
             ability_index=req.ability_index if req.ability_index is not None else 0,
             hand_index=hand_index,
+            # "…, Return an unblocked attacking creature you control to its
+            # owner's hand: …" (ninjutsu, CR 702.49a): which attacker goes
+            # home is the payer's (CR 601.2b), named by id as every chosen
+            # cost on the battlefield road is — the hand entry's
+            # ``cost_spec`` describes the choice.
+            cost_permanent_ids=req.cost_permanent_ids,
         )
 
     if req.auto_tap:

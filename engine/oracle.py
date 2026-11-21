@@ -67,6 +67,7 @@ from .flashback import (FLASHBACK_CLAIM, flashback_x_unannounced,
                         unread_flashback_line)
 from .fading import unread_fading_line
 from .modular import unread_modular_line
+from .ninjutsu import unread_ninjutsu_line
 from .soulshift import unread_soulshift_line
 from .offering import unread_offering_line
 from .sunburst import unread_sunburst_line
@@ -564,6 +565,19 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented affinity: {unread_affinity}",
+            normalized_text,
+        )
+    # …and a **ninjutsu** line the CR 702.49a rewrite could not read
+    # (``engine/ninjutsu.py``) — commander ninjutsu, which no card here prints.
+    # Cycling's reason: a creature's unread line is refused anyway, but a
+    # noncreature printing one would report supported off its other lines
+    # with the keyword dropped.
+    unread_ninjutsu = unread_ninjutsu_line(oracle_text)
+    if unread_ninjutsu is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented ninjutsu ability: {unread_ninjutsu}",
             normalized_text,
         )
 

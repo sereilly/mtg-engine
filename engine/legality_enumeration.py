@@ -962,8 +962,13 @@ class TargetEnumerationMixin:
         A permanent that is no creature answers every state "no" (it cannot be
         in combat) and every keyword through layer 6, so asking them of one is
         the same question the creature branch asks."""
-        # Forcefield: only unblocked attacking creatures are legal choices.
-        if spec.get("unblocked_attacker") and not (perm.attacking and not perm.blocked):
+        # Forcefield, Mirror Strike: only unblocked attacking creatures are
+        # legal choices — and no creature is unblocked before blockers are
+        # declared (CR 509.1h), the clock ``subject_matches`` reads too.
+        if spec.get("unblocked_attacker") and not (
+            perm.attacking and not perm.blocked
+            and self.blockers_have_been_declared()
+        ):
             return False
         # Singing Tree: only currently-attacking creatures are legal choices.
         if spec.get("attacking_only") and not perm.attacking:

@@ -289,6 +289,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Eureka.) The chosen-card twin of the sweep above: same zone change, one
     # card, and the seat picks which.
     "put_chosen_card_from_hand_onto_battlefield": "zones",
+    # "Put **this card** onto the battlefield from your hand tapped and
+    # attacking." (Ninjutsu's rules text, CR 702.49a.) The source card twin
+    # of the pick above: the same zone change, nothing chosen.
+    "put_source_card_from_hand_onto_battlefield": "zones",
     "reveal_top_to_hand_or_bottom": "zones",
     # The bare reveal (Track Down). Same category as the template above: both
     # look at the top of a library, and what differs is what the card's other

@@ -1280,4 +1280,9 @@ def parse_activated_ability_cost(
         remove_counter_granter_id=(
             _counter_removal_granter_id(cost_lower) if remove_counter else None
         ),
+        # "Reveal this card from your hand" — ninjutsu's (CR 702.49a). The
+        # grammar's ``RevealSelfFromHandCost``, read off the same segment.
+        reveal_self_from_hand=bool(
+            re.search(r"\breveal this card from your hand\b", cost_lower)
+        ),
     )

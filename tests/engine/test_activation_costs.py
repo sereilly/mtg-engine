@@ -131,6 +131,14 @@ def test_every_admitted_cost_clause_is_charged(pool):
                         unpaid.append(
                             f"{card.name}: its own return to hand is not charged"
                         )
+                # "Reveal this card from your hand" (ninjutsu, CR 702.49a):
+                # charged as the flag that keeps the card in the hand and
+                # makes the ability a hand ability (CR 113.6j).
+                if isinstance(cost, ast.RevealSelfFromHandCost):
+                    if not charged.reveal_self_from_hand:
+                        unpaid.append(
+                            f"{card.name}: its own reveal from hand is not charged"
+                        )
             # "Sacrifice a creature **and a Swamp**" (Viscerid Drone) parses to
             # two `SacrificeCost` nodes, and the charger carries them in two
             # fields. Paired up *before* the loop so the comparison is

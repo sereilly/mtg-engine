@@ -57,7 +57,9 @@ from engine.activation_zones import GRAVEYARD, HAND, ability_functions_from
 from engine.cost_pickers import spec_is_a_cost
 from engine.subject_filters import subject_matches
 from engine.cycling import expand_cycling_line
-from engine.mixins.stack.card_activation import hand_activation_cost
+from engine.ninjutsu import expand_ninjutsu_line
+from engine.mixins.stack.card_activation import (hand_activation_cost,
+                                                 hand_cost_refusal)
 from engine.oracle import compile_card_oracle
 from engine.mana_payment import mana_cost_label
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
@@ -695,7 +697,10 @@ def _printed_ability_line(card, ability) -> str:
     """
     wanted = (ability.source_line or "").strip()
     for line in (card.oracle_text or "").split("\n"):
-        if (expand_cycling_line(line) or line).strip() == wanted:
+        # …and ninjutsu's CR 702.49a sentence, the other keyword a hand
+        # ability is printed as ("Ninjutsu {1}{U}").
+        expanded = expand_cycling_line(line) or expand_ninjutsu_line(line) or line
+        if expanded.strip() == wanted:
             return line.strip()
     return wanted
 
@@ -754,8 +759,23 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
             prohibited = activation_prohibition(game, player_index, card, ability)
             if prohibited is not None:
                 payable = False
+            # CR 601.2h: the cost beside the mana, as the activation asks it
+            # (``hand_cost_refusal``) — ninjutsu's "Return an unblocked
+            # attacking creature you control" has nothing to return before
+            # blockers are declared, and a button the click would refuse is
+            # the Roots class.
+            unpayable = hand_cost_refusal(game, player_index, card, ability)
+            if unpayable is not None:
+                payable = False
+            # The choice the cost asks for (CR 601.2b), as the battlefield
+            # road describes it (``cost_pickers``): "return_cost" with the
+            # narrowing, answered with ``cost_permanent_ids`` on
+            # ``activate_hand``. None for a cost that chooses nothing.
+            spec = derive_activation_spec(ability) or {}
             entries.append({
                 "prohibited": prohibited.details if prohibited is not None else None,
+                "unpayable": unpayable,
+                "cost_spec": spec if spec_is_a_cost(spec) else None,
                 "hand_index": hand_index,
                 "ability_index": ability_index,
                 "name": card.name,

@@ -129,6 +129,21 @@ def _lower_look_at_hand(
         if node.random_card:
             payload["random_card"] = True
         return (OracleInstruction("look_at_target_hand", "", payload),)
+    if node.player.kind == "that_player":
+        # "Whenever this creature deals combat damage to a player, look at
+        # **that player's** hand." (Walker of Secret Ways.) The seat the
+        # damage froze (CR 603.10) — the reading ``discard_hand``'s
+        # ``damaged_player`` takes for the same two words — admitted only under
+        # an event that recorded one, for the defending player's reason above.
+        if event not in _DAMAGED_PLAYER_EVENTS:
+            raise LoweringError(
+                '"that player" names a seat this event did not record',
+                node=node,
+            )
+        payload = {"who": "damaged_player"}
+        if node.random_card:
+            payload["random_card"] = True
+        return (OracleInstruction("look_at_target_hand", "", payload),)
     if node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler for looking at {node.player.kind!r}'s hand", node=node

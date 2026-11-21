@@ -88,12 +88,16 @@ def holds_a_hand_ability(game: Game, player_index: int) -> bool:
     mana its board can pay — the cheap question asked before the dear one at
     instant speed, by `ai_priority.act_at_priority`, as
     ``ai_policy.holds_an_ability_it_could_activate`` is for the battlefield."""
-    from .mixins.stack.card_activation import hand_activation_cost
+    from .mixins.stack.card_activation import hand_activation_cost, hand_cost_refusal
 
     player = game.players[player_index]
     for card in player.hand:
         from_hand = usable_activated_abilities(compile_card_oracle(card), zone=HAND)
         if not from_hand or from_hand[0].instruction is None:
+            continue
+        # The cost beside the mana, as the activation asks it: ninjutsu's
+        # return has nothing to return outside a combat's blocks.
+        if hand_cost_refusal(game, player_index, card, from_hand[0]) is not None:
             continue
         if not game.enforce_mana_costs:
             return True
@@ -174,6 +178,10 @@ def _choose_hand_activation_action(
             or cost.discard_cards
             or cost.pay_life
             or cost.exile_top_of_library
+            # Ninjutsu's "Return an unblocked attacking creature you control
+            # to its owner's hand" (CR 702.49a): a creature traded for the
+            # card, mid-combat — a policy of its own, not this one's.
+            or cost.return_to_hand_count
         ):
             continue
 

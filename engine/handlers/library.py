@@ -326,6 +326,18 @@ def look_at_target_hand(game: Game, instruction: OracleInstruction, context: Ora
             # nobody recorded is not a hand to show.
             return True, "resolved"
         target = game.players[seat]
+    elif instruction.payload.get("who") == "damaged_player":
+        # "…look at **that player's** hand." (Walker of Secret Ways.) The
+        # seat the damage event froze (CR 603.10), read where every "that
+        # player" is answered; with none recorded there is no hand to show,
+        # never the viewer's own.
+        from ._targets import frozen_that_player_seat
+
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            game.log.append(f"{card.name}: no recorded player, no look")
+            return True, "resolved"
+        target = game.players[seat]
     # Record the reveal so the UI can show the viewer the actual cards in the
     # target player's hand (Glasses of Urza). The viewer is the ability's
     # controller; the target is the player whose hand is looked at.
