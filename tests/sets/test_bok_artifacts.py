@@ -132,6 +132,53 @@ def test_w1g7_orb_of_dreams_taps_tokens(set_pool):
     soldiers = _w1g7_named(game, "Soldier Token")
     assert len(soldiers) == 2 and all(perm.tapped for perm in soldiers)
 
+
+def test_w1g7_mirror_gallery_switches_the_legend_rule_off_while_it_stays(set_pool):
+    """The "legend rule" doesn't apply. Two Ishi-Ishi under one controller stay
+    while the Gallery is on the battlefield, with nothing asked; the first
+    state-based check after it leaves applies the rule again (its 2005-02-01
+    ruling), and a seat nobody asks keeps one."""
+    bok = set_pool("BOK")
+    game = _w1g7_table(set_pool)
+    gallery = _w1g7_put(game, bok["Mirror Gallery"])
+    first = _w1g7_put(game, bok["Ishi-Ishi, Akki Crackshot"])
+    second = _w1g7_put(game, bok["Ishi-Ishi, Akki Crackshot"])
+    game.check_state_based_actions()
+    _w1g7_settle(game)
+    assert game.is_on_battlefield(first) and game.is_on_battlefield(second)
+    assert not any("704.5j" in line for line in game.log)
+    game.remove_from_battlefield(gallery)
+    game._permanent_to_graveyard(game.players[0], gallery)
+    game.check_state_based_actions()
+    _w1g7_settle(game)
+    assert len(_w1g7_named(game, "Ishi-Ishi, Akki Crackshot")) == 1
+    assert "Ishi-Ishi, Akki Crackshot put into graveyard (704.5j: legend rule)" in game.log
+
+
+def test_w1g7_mirror_gallery_withdraws_and_restores_a_persons_legend_rule_prompt(set_pool):
+    """At a seat a person sits at the rule asks which to keep (CR 704.5j). A
+    Gallery arriving while that prompt is owed drops it — the group is no
+    group while the rule doesn't apply — and nothing leaves; when the Gallery
+    goes the prompt is armed again and the answer is what stays."""
+    bok = set_pool("BOK")
+    game = _w1g7_table(set_pool, interactive=(0,))
+    first = _w1g7_put(game, bok["Ishi-Ishi, Akki Crackshot"])
+    second = _w1g7_put(game, bok["Ishi-Ishi, Akki Crackshot"])
+    game.check_state_based_actions()
+    owed = [c for c in game.pending_choices if c.kind == "legend_rule"]
+    assert len(owed) == 1
+    assert owed[0].data["candidates"] == [first.permanent_id, second.permanent_id]
+    gallery = _w1g7_put(game, bok["Mirror Gallery"])
+    game.check_state_based_actions()
+    assert not [c for c in game.pending_choices if c.kind == "legend_rule"]
+    assert game.is_on_battlefield(first) and game.is_on_battlefield(second)
+    game.remove_from_battlefield(gallery)
+    game._permanent_to_graveyard(game.players[0], gallery)
+    game.check_state_based_actions()
+    assert [c.kind for c in game.pending_choices] == ["legend_rule"]
+    assert game.resolve_pending_choice("legend_rule", 0, permanent_id=second.permanent_id)
+    assert game.is_on_battlefield(second) and not game.is_on_battlefield(first)
+
 # ==== end w1g7 ======================================================
 
 
