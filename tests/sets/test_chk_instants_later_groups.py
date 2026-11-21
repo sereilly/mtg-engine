@@ -128,6 +128,38 @@ def test_w1g7_hinder_puts_the_countered_card_on_the_end_its_caster_picks(set_poo
         assert _w1g7_names(game.players[0].graveyard) == ["Hinder"]
 
 
+def _w1g7_sift_after(set_pool, casts):
+    game = _w1g7_table(
+        set_pool, hand=[*casts, "Sift Through Sands", "Lightning Bolt"],
+        library=["Forest", "Island", "The Unspeakable", "Swamp", "Mountain",
+                 "Plains", "Island", "Forest"],
+    )
+    for name in casts:
+        assert game.cast_from_hand(0, name).supported
+        _w1g7_settle(game)
+    assert game.cast_from_hand(0, "Sift Through Sands").supported
+    _w1g7_settle(game)
+    return game
+
+
+def test_w1g7_sift_through_sands_finds_the_unspeakable_after_both_spells(set_pool):
+    game = _w1g7_sift_after(set_pool, ["Peer Through Depths", "Reach Through Mists"])
+    assert [p.card.name for p in game.all_permanents()] == ["The Unspeakable"]
+    assert "The Unspeakable" not in _w1g7_names(game.players[0].library)
+
+
+def test_w1g7_sift_through_sands_needs_both_names_cast_this_turn(set_pool):
+    """Either spell alone answers one half of the record and not the other:
+    the draw and the discard happen, the search does not."""
+    for casts in ([], ["Peer Through Depths"], ["Reach Through Mists"]):
+        game = _w1g7_sift_after(set_pool, casts)
+        assert list(game.all_permanents()) == [], casts
+        assert "The Unspeakable" in _w1g7_names(game.players[0].library) + _w1g7_names(
+            game.players[0].hand
+        ) + _w1g7_names(game.players[0].graveyard), casts
+        assert any("drew 2 card(s)" in line for line in game.log)
+
+
 def test_w1g7_hinder_at_a_seat_nobody_asks_buries_the_card(set_pool):
     game = _w1g7_hinder_a_bolt(set_pool, interactive=())
     _w1g7_settle(game)
