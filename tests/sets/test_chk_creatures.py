@@ -443,6 +443,115 @@ def test_w1g3_iname_may_be_exiled_with_no_target_named(set_pool):
     assert game.players[0].hand == []
     assert _w1g3_names(game.players[0].exile) == ["Iname, Life Aspect"]
 
+
+def _w1g3_yosei_table(set_pool, *, interactive=()):
+    pool = set_pool("CHK")
+    lea = set_pool("LEA")
+    theirs = [lea["Hill Giant"], lea["Grizzly Bears"], lea["Forest"], lea["Forest"],
+              lea["Mountain"], lea["Island"], lea["Swamp"]]
+    return _w1g3_table(
+        mine=[pool["Yosei, the Morning Star"], lea["Grizzly Bears"]], theirs=theirs,
+        hand=[pool["Rend Spirit"]], interactive=interactive,
+    )
+
+
+def _w1g3_kill(game, name, spell="Rend Spirit"):
+    victim = _w1g3_on_field(game, 0, name)
+    assert game.cast_from_hand(0, spell, target_permanent_ids=[victim.permanent_id]).supported
+
+
+def _w1g3_tapped(game, seat):
+    return sorted(p.card.name for p in game.controlled_by(seat) if p.tapped)
+
+
+def test_w1g3_yosei_announces_a_player_then_up_to_five_of_that_players_permanents(set_pool):
+    """"When Yosei dies, target player skips their next untap step. Tap up to
+    five target permanents that player controls." Both targets are chosen as
+    the trigger goes on the stack (CR 603.3d): an interactive seat is asked
+    for the player (and must name one), then offered only that player's
+    permanents, up to five; the ones named are tapped and that player's next
+    untap step is skipped, so they stay tapped through it."""
+    game = _w1g3_yosei_table(set_pool, interactive=(0,))
+    _w1g3_kill(game, "Yosei, the Morning Star")
+    asked = _w1g3_settle(game, defaults=False)
+    assert asked is not None and asked.kind == "trigger_target", game.log[-6:]
+    assert {t["kind"] for t in asked.data["targets"]} == {"player"}
+    assert not asked.data.get("up_to")
+    assert game.confirm_trigger_target(0, seat=1)
+    asked = _w1g3_settle(game, defaults=False)
+    assert asked is not None and asked.kind == "trigger_target", game.log[-6:]
+    offered = asked.data["targets"]
+    assert {t["seat"] for t in offered} == {1} and len(offered) == 7
+    assert asked.data.get("max_targets") == 5 and asked.data.get("up_to")
+    named = [t["permanent_id"] for t in offered if t["name"] in ("Grizzly Bears", "Forest")]
+    assert game.confirm_trigger_target(0, permanent_ids=named)
+    _w1g3_settle(game)
+    assert _w1g3_tapped(game, 1) == ["Forest", "Forest", "Grizzly Bears"]
+    assert _w1g3_tapped(game, 0) == []
+    game.start_next_turn()
+    assert game.active_player_index == 1
+    assert _w1g3_tapped(game, 1) == ["Forest", "Forest", "Grizzly Bears"]
+    assert any("skipped their untap step" in line for line in game.log)
+    game.start_next_turn()
+    game.start_next_turn()
+    assert _w1g3_tapped(game, 1) == []
+
+
+def test_w1g3_yosei_at_a_default_seat_taps_five_of_the_opponents_permanents(set_pool):
+    game = _w1g3_yosei_table(set_pool)
+    _w1g3_kill(game, "Yosei, the Morning Star")
+    _w1g3_settle(game)
+    assert len(_w1g3_tapped(game, 1)) == 5
+    assert _w1g3_tapped(game, 0) == []
+    tapped = _w1g3_tapped(game, 1)
+    game.start_next_turn()
+    assert _w1g3_tapped(game, 1) == tapped
+
+
+def test_w1g3_yosei_taps_even_when_its_player_becomes_an_illegal_target(set_pool):
+    """Yosei's 2017-11-17 ruling: "If the player becomes an illegal target,
+    the target permanents are tapped, but the player doesn't skip their untap
+    step." Ivory Mask gives that player shroud before the ability resolves."""
+    game = _w1g3_yosei_table(set_pool, interactive=(0,))
+    _w1g3_kill(game, "Yosei, the Morning Star")
+    asked = _w1g3_settle(game, defaults=False)
+    assert game.confirm_trigger_target(0, seat=1)
+    asked = _w1g3_settle(game, defaults=False)
+    named = [t["permanent_id"] for t in asked.data["targets"] if t["name"] == "Hill Giant"]
+    assert game.confirm_trigger_target(0, permanent_ids=named)
+    mask = _w1g3_Permanent(card=set_pool("MMQ")["Ivory Mask"])
+    game._put_permanent_onto_battlefield(1, mask, None)
+    game._sync_control()
+    _w1g3_settle(game)
+    assert _w1g3_tapped(game, 1) == ["Hill Giant"]
+    game.start_next_turn()
+    assert _w1g3_tapped(game, 1) == []
+
+
+def test_w1g3_two_yosei_deaths_skip_two_untap_steps(set_pool):
+    """The 2017-11-17 ruling: "If more than one effect instructs a player to
+    skip their next untap step, such as if Yosei dies more than once in a
+    turn, that player skips that many untap steps.\""""
+    pool = set_pool("CHK")
+    game = _w1g3_yosei_table(set_pool)
+    _w1g3_kill(game, "Yosei, the Morning Star")
+    _w1g3_settle(game)
+    second = _w1g3_nosick(_w1g3_Permanent(card=pool["Yosei, the Morning Star"]))
+    game._put_permanent_onto_battlefield(0, second, None)
+    game._sync_control()
+    game.players[0].hand.append(pool["Rend Spirit"])
+    _w1g3_kill(game, "Yosei, the Morning Star")
+    _w1g3_settle(game)
+    tapped = _w1g3_tapped(game, 1)
+    assert len(tapped) == 5
+    game.start_next_turn()  # B's first untap step: skipped
+    game.start_next_turn()
+    game.start_next_turn()  # B's second untap step: skipped
+    assert _w1g3_tapped(game, 1) == tapped
+    game.start_next_turn()
+    game.start_next_turn()  # B's third untap step happens
+    assert _w1g3_tapped(game, 1) == []
+
 # ==== end w1g3 ======================================================
 
 

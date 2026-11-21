@@ -657,6 +657,17 @@ class UntapStepMixin:
         # AI simulator need no untap-step code of their own.
         self.arm_untap_type_choices(player_index)
         constraints = self._untap_constraints(player_index)
+        # "…target player **skips their next untap step**." (Yosei, the
+        # Morning Star; Avizoa's "you skip your next untap step"; Shisato.)
+        # CR 614.10: a replacement of the step with nothing, spent here as the
+        # draw step spends its own (``draw_step``'s ``_consume_step_skip``),
+        # because every road into the untap step - the headless turn, the
+        # simulator's and the web's - calls this and nothing before it read
+        # the record: ``skip_next_step("untap")`` was written and never
+        # consumed, so no player ever skipped one. The turn still began
+        # (summoning sickness, the turn-start records below); the step does
+        # not happen (CR 500.11), so neither does its phasing (CR 702.26m).
+        skipped_step = self._consume_step_skip(step, player_index)
         # CR 702.26a's phasing event: before the active player untaps anything,
         # this player's phased-in permanents *with phasing* phase out and their
         # phased-out ones phase in, simultaneously.
@@ -668,7 +679,7 @@ class UntapStepMixin:
         # also decides the one ordering question the rule leaves open: a Stasis
         # that phases in during this event does not retroactively skip the step
         # it arrived in.
-        if constraints["skip_all_source"] is None:
+        if constraints["skip_all_source"] is None and not skipped_step:
             self.resolve_phasing_for(player_index)
         self._advance_summoning_sickness(player_index)
         # Record untapped lands at the beginning of the turn — i.e. *before* the
@@ -690,6 +701,9 @@ class UntapStepMixin:
 
         if constraints["skip_all_source"] is not None:
             self.log.append(f"{player.name} skipped untap due to {constraints['skip_all_source']}")
+            return 0
+        if skipped_step:
+            self.log.append(f"{player.name} skipped their untap step")
             return 0
 
         # "During your next untap step, as you untap your permanents, return

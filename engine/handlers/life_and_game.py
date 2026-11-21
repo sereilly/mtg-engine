@@ -12,7 +12,7 @@ from ..exiled_records import source_object
 from ..game_result_bans import player_cant_win
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
-from ..oracle_types import (COUNTERED_ABILITY_SOURCE,
+from ..oracle_types import (ANNOUNCED_PLAYER_ILLEGAL, COUNTERED_ABILITY_SOURCE,
                             COUNTERED_SPELL_CONTROLLER, COUNTERS_REMOVED,
                             LAST_TARGET_CONTROLLER, LAST_TARGET_OWNER,
                             LIFE_LOST_THIS_WAY,
@@ -1162,6 +1162,16 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
         chosen = context.target
         if chosen not in game.players:
             return False, f"no player was chosen for {who!r}"
+        # "When Yosei dies, target player skips their next untap step. Tap up
+        # to five target permanents that player controls." A player who has
+        # become an illegal target is not affected while the legal permanents
+        # still are (CR 608.2b; the card's 2017-11-17 ruling) — the record the
+        # resolution's blanking wrote (``oracle_types.ANNOUNCED_PLAYER_ILLEGAL``).
+        if (context.choices or {}).get(ANNOUNCED_PLAYER_ILLEGAL):
+            game.log.append(
+                f"{chosen.name} is no longer a legal target; no {step} step is skipped"
+            )
+            return True, "resolved"
         seat = game.players.index(chosen)
     every_instance = bool(instruction.payload.get("every_instance"))
     # "…you skip your draw step **this turn**." (Elfhame Sanctuary.) The

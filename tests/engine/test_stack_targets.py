@@ -797,6 +797,16 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # With one there, the picker offers it and the default returns two
     # (tests/sets/test_lgn_creatures_later_groups.py, W1G6's section).
     "Celestial Gatekeeper#0",
+    # Champions of Kamigawa, W1G3. "…return **any number of** target Spirit
+    # cards from your graveyard to your hand" (Iname, Life Aspect): the
+    # Gatekeeper's shape with no ceiling — this board's graveyards hold no
+    # Spirit card and the trigger is enqueued with Iname still on the
+    # battlefield, so zero (CR 601.2c, the card's own 2004-12-01 ruling: "You
+    # can exile the card even if you choose no targets") is all it can name.
+    # Driven through a real death (tests/sets/test_chk_creatures.py, W1G3's
+    # section) the prompt offers every Spirit card in the pile, Iname
+    # included, and the named ones return.
+    "Iname, Life Aspect#0",
     # Legions, W1G6. "…put target creature card from **that player's**
     # graveyard onto the battlefield under your control" (Scion of
     # Darkness): Zombie Cannibal's pile, which only the damage event names.
