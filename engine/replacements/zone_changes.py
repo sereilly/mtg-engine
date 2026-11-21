@@ -185,7 +185,7 @@ def _applies_dealt_damage_exile(game, payload: dict) -> bool:
     "would_die", EXILE_INSTEAD_OF_DYING_DEALT_DAMAGE,
     applies=_applies_dealt_damage_exile,
     sources=_dealt_damage_exilers,
-    label="Exile it instead of putting it into a graveyard",
+    label="Exile the creature it damaged this turn instead of putting it into a graveyard",
 )
 def _exile_instead_of_dying_dealt_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Frostwielder: "If a creature dealt damage by this creature this turn
