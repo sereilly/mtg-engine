@@ -553,9 +553,15 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
     # sentence: CR 701.24 randomises the library once, and two statements would
     # do it twice with the hand's cards already down among the graveyard's.
     with_graveyard = False
+    with_permanents = False
     conjunct = stream.mark()
     if stream.accept_phrase(whose, "hand", "and", "graveyard"):
         with_graveyard = True
+    elif _accept_hand_graveyard_and_owned_permanents(stream, whose):
+        # "…their hand, graveyard, **and all permanents they own** into their
+        # library" (Sway of the Stars): the third pile of the same one
+        # shuffle (``ast.ShuffleHandIntoLibrary.with_permanents``).
+        with_graveyard = with_permanents = True
     else:
         stream.reset(conjunct)
         if not stream.accept_phrase(whose, "hand"):
@@ -598,7 +604,33 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
     return ast.ShuffleHandIntoLibrary(
         player, then_draw=then_draw, then_draw_count=then_draw_count,
         count=count, any_number=any_number, with_graveyard=with_graveyard,
+        with_permanents=with_permanents,
     )
+
+
+def _accept_hand_graveyard_and_owned_permanents(
+    stream: TokenStream, whose: str
+) -> bool:
+    """``<whose> hand, graveyard, and all permanents <they|you> own`` — True,
+    consumed; or False with the cursor where it was. (Sway of the Stars.)
+
+    "Own", never "control": CR 108.3's owner is whose library a card goes to
+    (CR 400.3), and the printed verb says the same — a stolen permanent goes
+    home. The owner pronoun is held to the possessive in front of it ("their …
+    they own", "your … you own"), so the pile and its owner are one seat.
+    """
+    mark = stream.mark()
+    owner = "they" if whose == "their" else "you"
+    if (
+        stream.accept_phrase(whose, "hand")
+        and stream.accept_punct(",")
+        and stream.accept_word("graveyard")
+        and stream.accept_punct(",")
+        and stream.accept_phrase("and", "all", "permanents", owner, "own")
+    ):
+        return True
+    stream.reset(mark)
+    return False
 
 
 def _parse_shuffle_library(stream: TokenStream) -> ast.Statement | None:

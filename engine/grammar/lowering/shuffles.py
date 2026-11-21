@@ -233,6 +233,17 @@ def _lower_shuffle_hand_into_library(
             f"no handler shuffles {node.whose.kind!r}'s hand into their library",
             node=node,
         )
+    if node.with_permanents and (
+        node.whose.kind != "each_player" or node.count is not None
+        or node.any_number or node.then_draw
+    ):
+        # The one printing (Sway of the Stars) is each player's whole hand,
+        # graveyard and owned permanents with a printed draw behind; any other
+        # pairing is a sentence nobody has read.
+        raise LoweringError(
+            "a shuffle of owned permanents is each player's whole table",
+            node=node,
+        )
     if node.any_number:
         # "Shuffle **any number of** cards from your hand into your library,
         # then draw that many cards." (Credit Voucher.) The counted branch below
@@ -315,6 +326,10 @@ def _lower_shuffle_hand_into_library(
                 # flag on the same instruction rather than a second one for the
                 # reason the node records: CR 701.24a shuffles the library once.
                 "with_graveyard": node.with_graveyard,
+                # "…their hand, graveyard, **and all permanents they own**
+                # into their library" (Sway of the Stars). Emitted only when
+                # printed, so every other shuffle's payload is unchanged.
+                **({"with_permanents": True} if node.with_permanents else {}),
             },
         ),
     )

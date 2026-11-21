@@ -205,4 +205,56 @@ def test_w1g10_psychic_spear_with_no_spirit_or_arcane_discards_nothing(set_pool)
     _w1g10_settle(game)
     assert [card.name for card in bob.graveyard] == ["Bile Urchin"]
 
+
+def test_w1g10_sway_of_the_stars_resets_the_whole_table(set_pool):
+    """Sway of the Stars: "Each player shuffles their hand, graveyard, and all
+    permanents they own into their library, then draws seven cards. Each
+    player's life total becomes 7." Alice has stolen Bob's Hill Giant with
+    Control Magic: the Giant goes to Bob's library (CR 400.3, its owner's), the
+    Aura and her Bears to hers; her token ceases to exist (2005-02-01). The
+    Sway is on the stack and is not shuffled in (2013-07-01): it ends in her
+    graveyard alone. Both players draw seven; Alice gains to 7, Bob loses to 7
+    (CR 119.5)."""
+    from engine.models import Permanent as _Permanent
+    from engine.tokens import make_token_card
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g10_table(
+        set_pool,
+        hand=[bok["Sway of the Stars"], lea["Control Magic"], lea["Island"]],
+        library=[lea["Forest"]] * 10,
+        graveyard=[lea["Lightning Bolt"]],
+        opponent_hand=[lea["Dark Ritual"]],
+        opponent_graveyard=[lea["Shivan Dragon"]],
+        opponent_library=[lea["Swamp"]] * 10,
+    )
+    alice, bob = game.players
+    bears = _Permanent(card=lea["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, bears, None)
+    token = _Permanent(card=make_token_card("Soldier Token", 1, 1, "Creature — Soldier"))
+    game._put_permanent_onto_battlefield(0, token, None)
+    giant = _Permanent(card=lea["Hill Giant"])
+    game._put_permanent_onto_battlefield(1, giant, None)
+    game._sync_control()
+    assert game.cast_from_hand(
+        0, "Control Magic", target_permanent_ids=[giant.permanent_id]
+    ).supported
+    _w1g10_settle(game)
+    assert game.controller_index_of(giant) == 0
+    alice.life, bob.life = 3, 20
+    assert game.cast_from_hand(0, "Sway of the Stars").supported
+    _w1g10_settle(game)
+    assert list(game.all_permanents()) == []
+    assert [card.name for card in alice.graveyard] == ["Sway of the Stars"]
+    assert bob.graveyard == []
+    assert len(alice.hand) == 7 and len(bob.hand) == 7
+    alice_cards = sorted(card.name for card in alice.hand + alice.library)
+    assert alice_cards == sorted(
+        ["Forest"] * 10 + ["Control Magic", "Island", "Lightning Bolt", "Grizzly Bears"]
+    )
+    bob_cards = sorted(card.name for card in bob.hand + bob.library)
+    assert bob_cards == sorted(["Swamp"] * 10 + ["Dark Ritual", "Shivan Dragon", "Hill Giant"])
+    assert (alice.life, bob.life) == (7, 7)
+    assert not any("Soldier Token" in card.name for card in alice.hand + alice.library)
+
 # ==== end w1g10 ======================================================
