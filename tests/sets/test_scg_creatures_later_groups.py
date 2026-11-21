@@ -1436,9 +1436,19 @@ def test_w2g5_skirk_volcanists_targets_are_targets_when_it_resolves(set_pool):
 
 
 def test_w2g5_the_ai_leaves_skirk_volcanist_down_where_nothing_dies(set_pool):
-    """The other half of the weighing: a lone Serra Angel survives 3, so two
-    Mountains buy nothing and the face-down creature stays as it is."""
-    game, volcanist, _placed = _w2g5_volcanist_table(set_pool, ("Serra Angel",), mountains=3)
+    """The other half of the weighing: a lone Colossus of Sardia survives 3,
+    and the 3/1 turned up cannot trade with what is left of it, so two
+    Mountains buy nothing and the face-down creature stays as it is.
+
+    A lone Serra Angel was this board until CHK W2G2, when the attack began
+    reading the fight as the blocks do (``ai_declarations._attack_block_score``,
+    damage marked included): three damage on the Angel leaves it a 4/1 for the
+    turn, the turned-up Volcanist attacks into it, and the defender's own block
+    policy trades the Angel for it — a turn-up the rehearsal rightly prices
+    (+2.0), so that board no longer shows "nothing dies"."""
+    game, volcanist, _placed = _w2g5_volcanist_table(
+        set_pool, ("Colossus of Sardia",), mountains=3,
+    )
     assert _w2g5_choose_special_action(game, 0) is None
 
 
