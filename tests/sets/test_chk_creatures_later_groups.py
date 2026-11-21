@@ -183,6 +183,47 @@ def test_w1g7_hisoka_does_not_counter_a_spell_of_another_mana_value(set_pool):
     assert [c.name for c in game.players[0].graveyard] == ["Grizzly Bears"]
 
 
+def test_w1g7_rag_dealer_announces_three_cards_of_a_single_graveyard(set_pool):
+    """"{2}{B}, {T}: Exile up to three target cards from a single graveyard."
+    The cards are targets, named as the ability is activated (CR 602.2b,
+    601.2c) in one pile, and CR 608.2b judges each one: a card gone in
+    response is not made up for."""
+    from engine.stack_targets import chosen_targets
+
+    game, (dealer,) = _w1g7_table(set_pool, mine=["Rag Dealer"], interactive={0, 1})
+    lea = set_pool("LEA")
+    game.players[0].graveyard.extend([lea["Forest"], lea["Grizzly Bears"]])
+    game.players[1].graveyard.extend(
+        [lea["Swamp"], lea["Hill Giant"], lea["Terror"], lea["Island"]]
+    )
+    spec = game.activation_target_spec(0, 0, ability_index=0)
+    assert spec["single_graveyard"] and spec["max_targets"] == 3
+    assert {t["seat"] for t in spec["valid_targets"]} == {0, 1}
+    # Unnamed pile, a fourth slot: refused, nothing paid.
+    assert not game.queue_permanent_ability(
+        0, "Rag Dealer", ability_index=0, target_permanent_index=[0, 1],
+    ).supported
+    assert not game.queue_permanent_ability(
+        0, "Rag Dealer", ability_index=0, target_player_index=1,
+        target_permanent_index=[0, 1, 2, 3],
+    ).supported
+    assert not dealer.tapped
+    assert game.queue_permanent_ability(
+        0, "Rag Dealer", ability_index=0, target_player_index=1,
+        target_permanent_index=[1, 2, 3],
+    ).supported
+    assert [t.stamp.card.name for t in chosen_targets(game, game.stack[-1])] == [
+        "Hill Giant", "Terror", "Island",
+    ]
+    victim = game.players[1]
+    victim.exile.append(victim.graveyard.pop(1))       # Hill Giant, in response
+    _w1g7_settle(game)
+    assert [c.name for c in victim.graveyard] == ["Swamp"]
+    assert sorted(c.name for c in victim.exile) == ["Hill Giant", "Island", "Terror"]
+    assert [c.name for c in game.players[0].graveyard] == ["Forest", "Grizzly Bears"]
+    assert dealer.tapped
+
+
 def test_w1g7_hisoka_reads_an_x_spells_mana_value_on_the_stack(set_pool):
     """CR 202.3e: Fireball cast for X=3 has mana value 4 on the stack."""
     game, wurm = _w1g7_hisoka_against(
