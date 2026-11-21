@@ -47,6 +47,15 @@ from ..static_bonuses import conditional_static_holds
 
 
 class BlockLegalityMixin:
+    def _tapped_out_of_blocking(self, blocker: Permanent) -> bool:
+        """CR 509.1a's untapped requirement asked of a would-be blocker: it
+        is tapped and nothing lets it block as though it were untapped
+        (Masako the Humorless, ``engine/tapped_blockers.py``). Every blocker
+        gate asks this in place of ``blocker.tapped``."""
+        from ..tapped_blockers import tapped_out_of_blocking
+
+        return tapped_out_of_blocking(self, blocker)
+
     def _max_blocks_for(self, blocker: Permanent) -> int:
         """How many attackers this creature may block at once (CR 509.1b). Normally
         1; each "can block an additional creature" grant (Two-Headed Giant of

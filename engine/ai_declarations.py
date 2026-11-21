@@ -246,7 +246,9 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         perm
         for perm in game.controlled_by(opponent)
         # What can block is what is a creature now (CR 509.1a, CR 613 layer 4).
-        if perm.is_creature and not perm.tapped
+        # Masako's "can block as though they were untapped" through the gate's
+        # own question.
+        if perm.is_creature and not game._tapped_out_of_blocking(perm)
     ]
     if not opponent_blockers:
         return _obeying_declaration(
@@ -641,7 +643,9 @@ def choose_combat_blockers(
         for idx, blocker in enumerate(defender.battlefield)
         # A creature now (CR 509.1a through CR 613 layer 4): an animated land
         # blocks, an Aura that was a creature card does not.
-        if blocker.is_creature and not blocker.tapped
+        # and untapped, or able to block as though it were (Masako): the
+        # declaration gate's own question.
+        if blocker.is_creature and not game._tapped_out_of_blocking(blocker)
     ]
     if not available_blockers:
         return {}

@@ -481,6 +481,14 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # (Two-Headed Giant of Foriys, or Blaze of Glory's "block any number"),
         # so the UI lets the player assign it to several attackers.
         "can_block_multiple": game._is_creature(perm) and game._max_blocks_for(perm) > 1,
+        # True when this creature is tapped and may still block (Masako the
+        # Humorless: "Tapped creatures you control can block as though they
+        # were untapped", CR 509.1a waived), so the UI offers it as a blocker
+        # rather than refusing it for being tapped.
+        "can_block_while_tapped": (
+            bool(perm.tapped) and game._is_creature(perm)
+            and not game._tapped_out_of_blocking(perm)
+        ),
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
         "art_crop": art_crop,

@@ -367,6 +367,93 @@ def test_w1g8_horobi_sees_an_abilitys_target_and_ignores_a_players(set_pool):
     assert any("every target is illegal" in line for line in game.log)
 
 
+# --- Masako the Humorless -----------------------------------------------------
+# "Tapped creatures you control can block as though they were untapped." CR
+# 509.1a's untapped requirement waived for its controller's creatures, and
+# nothing else (the 2004-12-01 ruling: "only if they could otherwise block").
+
+
+def _w1g8_to_blocks(game):
+    game._set_phase_and_step("combat", "declare_attackers")
+    attackers = [
+        slot for slot, perm in enumerate(game.players[0].battlefield)
+        if perm.is_creature
+    ]
+    ok, why = game.declare_attackers(0, attackers, defending_player_index=1)
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.current_step == "declare_blockers", game.current_step
+
+
+def _w1g8_slot(game, seat, permanent):
+    return next(
+        slot for slot, perm in enumerate(game.players[seat].battlefield)
+        if perm is permanent
+    )
+
+
+def test_w1g8_masako_lets_a_tapped_creature_block(set_pool):
+    masako = set_pool("CHK")["Masako the Humorless"]
+    giant = set_pool("LEA")["Hill Giant"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    game, (hill,), (_, wurm) = _w1g8_table([giant], [masako, craw])
+    wurm.tapped = True
+    _w1g8_to_blocks(game)
+    ok, why = game.declare_blockers(1, {_w1g8_slot(game, 1, wurm): 0})
+    assert ok, why
+    _w1g8_drive_combat(game)
+    assert not game.is_on_battlefield(hill)
+    assert game.players[1].life == 20
+    # Blocking does not untap it.
+    assert wurm.tapped and wurm.damage_marked == 3
+
+
+def test_w1g8_without_masako_a_tapped_creature_cannot_block(set_pool):
+    giant = set_pool("LEA")["Hill Giant"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, _, (wurm, bear) = _w1g8_table([giant], [craw, bears])
+    wurm.tapped = True
+    _w1g8_to_blocks(game)
+    ok, why = game.declare_blockers(1, {_w1g8_slot(game, 1, wurm): 0})
+    assert not ok and "is tapped" in why
+
+
+def test_w1g8_masako_waives_nothing_but_the_untapped_requirement(set_pool):
+    """Its controller's creatures only, and a tapped creature still can't
+    block what it otherwise couldn't (a flier)."""
+    masako = set_pool("CHK")["Masako the Humorless"]
+    roc = set_pool("LEA")["Mahamoti Djinn"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    game, _, (_, wurm) = _w1g8_table([roc], [masako, craw])
+    wurm.tapped = True
+    _w1g8_to_blocks(game)
+    ok, _why = game.declare_blockers(1, {_w1g8_slot(game, 1, wurm): 0})
+    assert not ok
+
+    # An opponent's Masako lends nothing.
+    giant = set_pool("LEA")["Hill Giant"]
+    game, _, (wurm2,) = _w1g8_table([giant, masako], [craw])
+    wurm2.tapped = True
+    _w1g8_to_blocks(game)
+    ok, why = game.declare_blockers(1, {_w1g8_slot(game, 1, wurm2): 0})
+    assert not ok and "is tapped" in why
+
+
+def test_w1g8_the_ai_blocks_with_a_tapped_creature_under_masako(set_pool):
+    from engine.ai_declarations import choose_combat_blockers
+
+    masako = set_pool("CHK")["Masako the Humorless"]
+    giant = set_pool("LEA")["Hill Giant"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    game, _, (sage, wurm) = _w1g8_table([giant], [masako, craw])
+    sage.tapped = True
+    wurm.tapped = True
+    _w1g8_to_blocks(game)
+    blocks = choose_combat_blockers(game, 1)
+    assert _w1g8_slot(game, 1, wurm) in blocks, blocks
+
+
 def test_w1g8_the_dealt_damage_exile_reads_only_a_line_about_itself():
     """The subject is the card itself — "this creature" or its own name (CR
     201.5, the legend's short name included) — never another card's."""

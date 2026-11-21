@@ -175,7 +175,8 @@ def can_be_blocked(game: "Game", attacker: "Permanent") -> bool:
     sets it off is the defender's to make."""
     seat = game.controller_index_of(attacker)
     return any(
-        other.is_creature and not other.tapped and game._can_block_attacker(other, attacker)
+        other.is_creature and not game._tapped_out_of_blocking(other)
+        and game._can_block_attacker(other, attacker)
         for opponent in game.opponents_of(seat)
         for other in game.controlled_by(opponent)
     )

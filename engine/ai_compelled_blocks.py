@@ -232,7 +232,8 @@ def _ganged_on(game: "Game", attacker: "Permanent", blocker: "Permanent") -> boo
     seat = game.controller_index_of(blocker)
     gang = [blocker] + [
         other for other in game.controlled_by(seat)
-        if other is not blocker and other.is_creature and not other.tapped
+        if other is not blocker and other.is_creature
+        and not game._tapped_out_of_blocking(other)
         and game._can_block_attacker(other, attacker)
     ]
     if len(gang) < 2:

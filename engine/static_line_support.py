@@ -550,6 +550,13 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # `global_play_timing` row) through the reader asked here.
     if global_play_timing_line(normalized) is not None:
         return True
+    # "Tapped creatures you control can block as though they were untapped."
+    # (Masako the Humorless.) CR 509.1a waived at every blocker gate
+    # (``engine/tapped_blockers.py``), through the reader asked here.
+    from .tapped_blockers import tapped_blockers_line
+
+    if tapped_blockers_line(normalized):
+        return True
     # "Spells with the chosen name can't be cast." (Meddling Mage.) The same
     # CR 601.3 prohibition keyed on a name the permanent recorded as it entered,
     # enforced off the board at every cast — no instruction, and a *creature*

@@ -111,7 +111,7 @@ class DeclareBlockersStepMixin:
             resolved_blockers[blocker_idx] = blocker
             if not blocker.is_creature:
                 return False, "only creatures can block"
-            if blocker.tapped:
+            if self._tapped_out_of_blocking(blocker):
                 return False, f"{blocker.effective_card.name} is tapped"
             if len(set(attacker_indices)) > self._max_blocks_for(blocker):
                 return False, f"{blocker.effective_card.name} cannot block that many creatures"
@@ -395,7 +395,7 @@ class DeclareBlockersStepMixin:
             blocker = defender.battlefield[blocker_idx]
             if not blocker.is_creature:
                 return False, "only creatures can be put into piles"
-            if blocker.tapped:
+            if self._tapped_out_of_blocking(blocker):
                 return False, f"{blocker.effective_card.name} is tapped"
             if any(p < 0 or p >= len(pile_lists) for p in distinct):
                 return False, f"pile numbers must be between 0 and {len(pile_lists) - 1}"
@@ -421,7 +421,7 @@ class DeclareBlockersStepMixin:
 
         candidates = [
             idx for idx, perm in enumerate(defender.battlefield)
-            if perm.is_creature and not perm.tapped
+            if perm.is_creature and not self._tapped_out_of_blocking(perm)
         ]
         random.shuffle(candidates)
         piles: list[list[int]] = [[] for _ in attackers]
