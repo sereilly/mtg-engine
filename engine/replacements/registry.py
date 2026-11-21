@@ -227,6 +227,16 @@ EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
 EXILE_INSTEAD_OF_LEAVING = 10  # Dreams of the Dead
 RETURN_TO_HAND_INSTEAD_OF_DYING = 20  # Firestorm Phoenix
 LIBRARY_TOP_INSTEAD_OF_DYING = 30  # Gravebane Zombie
+#: "If a permanent would be put into a graveyard, exile it instead." (Samurai
+#: of the Pale Curtain.) Every permanent's road to a graveyard, tokens included,
+#: so a ``would_die`` effect rather than a ``put_into_graveyard`` one (a token's
+#: card is never asked about the graveyard's effects, CR 111.7). Behind the
+#: three above, which is CR 616.1e's default for a seat nobody asks and the
+#: order the dying permanent's controller would choose: a Firestorm Phoenix
+#: returned to its owner's hand or a Gravebane Zombie put on its library first
+#: is no longer going to a graveyard (CR 614.7), and Disintegrate's exile sends
+#: it where this would anyway.
+EXILE_PERMANENT_INSTEAD_OF_GRAVEYARD = 40  # Samurai of the Pale Curtain
 DISCARD_DESTINATION = 10  # Library of Leng
 # Before the Library's offer: both replace where a discarded card goes, and
 # CR 616.1's default for a seat nobody asks is the battlefield.

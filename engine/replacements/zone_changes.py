@@ -33,6 +33,7 @@ from ..replacement_choices import (
 from .registry import (DISCARD_DESTINATION, DISCARD_INTO_EXILE,
                        DISCARD_TO_BATTLEFIELD, EXILE_INSTEAD_OF_DYING,
                        EXILE_INSTEAD_OF_GRAVEYARD, EXILE_INSTEAD_OF_LEAVING,
+                       EXILE_PERMANENT_INSTEAD_OF_GRAVEYARD,
                        LIBRARY_TOP_INSTEAD_OF_DYING,
                        RETURN_TO_HAND_INSTEAD_OF_DYING,
                        SHUFFLE_INSTEAD_OF_GRAVEYARD, ReplacementOutcome,
@@ -145,6 +146,94 @@ def _exile_instead_of_leaving(game, payload: dict) -> ReplacementOutcome | None:
     game.log.append(
         f"{permanent.effective_card.name} was exiled instead of being put into "
         f"{payload.get('destination', 'another zone')}"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+#: "If a permanent would be put into a graveyard, exile it instead." (Samurai
+#: of the Pale Curtain.) CR 614.1a's "instead" on every permanent's road to a
+#: graveyard — and a permanent reaches a graveyard only from the battlefield,
+#: so the event is the one ``DeathsMixin._move_permanent_to_graveyard`` asks
+#: about every departure into a graveyard (``would_die``), tokens included.
+#: Matched on the line as the registries see it.
+_PERMANENT_GRAVEYARD_TO_EXILE = re.compile(
+    r"^if a permanent would be put into a graveyard, exile it instead$"
+)
+
+
+def permanent_graveyard_exile_line(line: str) -> bool:
+    """Whether *line* is Samurai of the Pale Curtain's replacement.
+
+    One matcher, asked by the interceptor below and by
+    ``lines.replacement_claims_line``, so what is exiled and what is claimed
+    cannot drift.
+    """
+    return _PERMANENT_GRAVEYARD_TO_EXILE.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    ) is not None
+
+
+def _permanent_graveyard_exile_sources(game, payload: dict) -> list:
+    """Every permanent whose printed line exiles a permanent bound for a
+    graveyard (Samurai of the Pale Curtain). Pure.
+
+    Three places to look, because the line is a static ability that applies to
+    the event while its source is on the battlefield as the event happens:
+    the battlefield; what the same departure event has already taken off it
+    (``Game.departed_in_this_event`` — a Wrath's permanents leave together, so a
+    Samurai moved first still applies to the rest, CR 603.10a's look-back for
+    a departure); and the dying permanent itself, which a sacrifice or a
+    targeted destruction takes off before the move and which is a permanent
+    that would be put into a graveyard like any other.
+    """
+    dying = payload["permanent"]
+    candidates: list = []
+    for perm in (*game.all_permanents(), *game.departed_in_this_event(), dying):
+        if any(perm is seen for seen in candidates):
+            continue
+        candidates.append(perm)
+    return [
+        perm for perm in candidates
+        if any(
+            permanent_graveyard_exile_line(line)
+            for line in (perm.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_permanent_graveyard_exile(game, payload: dict) -> bool:
+    return bool(_permanent_graveyard_exile_sources(game, payload))
+
+
+@replacement_effect(
+    "would_die", EXILE_PERMANENT_INSTEAD_OF_GRAVEYARD,
+    applies=_applies_permanent_graveyard_exile,
+    sources=_permanent_graveyard_exile_sources,
+    label="Exile it instead of putting it into a graveyard",
+)
+def _exile_permanent_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
+    """Samurai of the Pale Curtain: "If a permanent would be put into a
+    graveyard, exile it instead."
+
+    The permanent never reaches the graveyard, so it does not die (CR 700.4)
+    and no dies-trigger fires (CR 614.6) — a token included: it leaves the
+    battlefield for exile and ceases to exist there (CR 111.7) rather than in
+    a graveyard. A card goes to its **owner's** exile (CR 400.3), which is not
+    its controller's the moment it was stolen.
+    """
+    permanent = payload["permanent"]
+    if not permanent.metadata.get("is_token", False):
+        owner_index = game.owner_index_of(permanent)
+        owner = game.players[
+            owner_index if owner_index is not None
+            else game.players.index(payload["player"])
+        ]
+        game.put_card_into_exile(owner, permanent.card)
+    sources = _permanent_graveyard_exile_sources(game, payload)
+    by = sources[0].effective_card.name if sources else None
+    game.log.append(
+        f"{permanent.effective_card.name} was exiled instead of being put into "
+        "a graveyard" + (f" ({by})" if by else "")
     )
     return ReplacementOutcome(replaced=True)
 

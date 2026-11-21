@@ -49,7 +49,8 @@ from .zone_changes import (RETURN_TO_HAND_INSTEAD_TEXT,
                            TOP_OF_LIBRARY_DISCARD_TEXT,
                            TOP_OF_LIBRARY_INSTEAD_OF_DYING,
                            discard_to_battlefield, graveyard_exile_scope,
-                           graveyard_shuffle_subject)
+                           graveyard_shuffle_subject,
+                           permanent_graveyard_exile_line)
 
 
 #: Each entry is ``(the phrase an interceptor of this package self-selects on, the
@@ -279,6 +280,11 @@ def replacement_claims_line(line: str) -> bool:
     # the interceptor uses, so a scope word it cannot answer leaves the line
     # unclaimed rather than admitted with nothing exiled.
     if graveyard_exile_scope(normalized) is not None:
+        return True
+    # "If a permanent would be put into a graveyard, exile it instead."
+    # (Samurai of the Pale Curtain.) The same destination on the permanent's
+    # road rather than the card's, through the reader its interceptor asks.
+    if permanent_graveyard_exile_line(normalized):
         return True
     # "If a spell or ability an opponent controls causes you to discard this
     # card, put it onto the battlefield with two +1/+1 counters on it instead of

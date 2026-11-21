@@ -81,6 +81,8 @@ from ..extra_triggers import extra_trigger_line
 from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
 from ..landwalk import landwalk_per_type_spec
+from ..legend_rule import (LEGEND_RULE_EXEMPTION_CLAIM,
+                           legend_rule_exemption)
 from ..life_prohibitions import life_gain_ban_line
 from ..mulligan_exchanges import MULLIGAN_EXCHANGE_CLAIM, mulligan_exchange_line
 from ..game_result_bans import game_result_ban_line
@@ -602,6 +604,19 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # reader, so there is nothing to lower. Only beside the name it names.
     if any_number_line(line, card_name):
         return DECK_CONSTRUCTION_CLAIM
+
+    # engine/legend_rule.py -- "If there are exactly two permanents named
+    # Brothers Yamazaki on the battlefield, the "legend rule" doesn't apply to
+    # them." CR 704.5j switched off for one name while the battlefield holds
+    # exactly that many permanents with it, read off the board by the rule's
+    # own group reader (``legend_groups``) every time the state-based check
+    # asks it, so there is nothing to lower. Claimed through the reader that
+    # enforces it, so a count or a wording it cannot read stays refused. (The
+    # printed quotation marks send the line down the parser's quoted path,
+    # which never asks this function; the creature static-line gate and the
+    # static-line guard ask it directly.)
+    if legend_rule_exemption(line) is not None:
+        return LEGEND_RULE_EXEMPTION_CLAIM
 
     return None
 

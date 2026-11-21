@@ -5,13 +5,13 @@ admits a line when every keyword it names is one the engine implements, read
 off ``vocabulary.IMPLEMENTED_KEYWORDS`` rather than a list of its own (the
 comment below says why that is one frozenset). A parameterised keyword is
 admitted by the reader that *implements* it — protection's and hexproof's
-qualities, rampage's number, cumulative upkeep's and madness's costs, "bands
+qualities, rampage's and bushido's numbers, cumulative upkeep's and madness's costs, "bands
 with other", a quality-first landwalk — so a quality or a cost the engine
 cannot carry out keeps the whole line refused, naming it.
 
 :func:`keyword_line_triggers` is the other half: the keywords whose rules text
 the CR defines as a triggered ability (rampage, cumulative upkeep, flanking,
-madness, provoke, storm), read here for both of the compiler's line loops. And
+bushido, madness, provoke, storm), read here for both of the compiler's line loops. And
 :func:`_protection_clause_modelled` is asked by the static-line gate
 (``engine/static_line_support.py``) too, so "protection from ..." printed on a
 line of its own and inside a keyword list is admitted by one reader.
@@ -25,6 +25,7 @@ import re
 
 from .oracle_types import ParsedTriggeredAbility, _COLOR_WORD_TO_SYMBOL
 from .amplify import amplify_amount
+from .bushido import bushido_amount, bushido_triggers
 from .cumulative_upkeep import cumulative_upkeep_triggers
 from .flanking import flanking_triggers
 from .madness import madness_triggers
@@ -166,6 +167,11 @@ def _argument_keyword_ability(part: str) -> str | None:
     # the qualities `_protection_qualities` models.
     if rampage_amount(part) is not None:
         return "rampage"
+    # Bushido carries a number too (CR 702.45a: "Bushido N"), and is admitted
+    # exactly as rampage one row up is: by the reader that builds its trigger
+    # (`engine/bushido.py`), so a bushido it cannot read keeps the line refused.
+    if bushido_amount(part) is not None:
+        return "bushido"
     # Amplify carries a number too (CR 702.38a: "Amplify N"), and is admitted
     # the same way: by the reader the entry state reveals with
     # (`engine/amplify.py`), so an amplify it cannot read keeps the line refused
@@ -305,6 +311,10 @@ def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility,
         *rampage_triggers(normalized_line),
         *cumulative_upkeep_triggers(normalized_line),
         *flanking_triggers(normalized_line),
+        # CR 702.45a: "Whenever this creature blocks or becomes blocked, it
+        # gets +N/+N until end of turn." (`engine/bushido.py`.) One ability per
+        # instance (CR 702.45b), fired by both block dispatchers.
+        *bushido_triggers(normalized_line),
         # CR 702.35a's second ability ("When this card is exiled this way, its
         # owner may cast it by paying [cost] …"). Its static half is not an
         # ability this returns: it is a CR 614 replacement, read off the

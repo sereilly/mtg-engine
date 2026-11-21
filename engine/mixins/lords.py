@@ -30,7 +30,8 @@ from ..keywords import (LINE_DERIVED_KEYWORDS, add_derived_ability_line,
 from ..land_animation import LAND_ANIMATIONS_REACHING
 from ..linked_exile_keywords import LINKED_EXILE_FAMILY, linked_exile_landwalks
 from ..layer_bridge import QUALIFIED_BUFFS
-from ..lord_buffs import LORD_BUFF_KIND, LordBuff, lord_buff_from_payload
+from ..lord_buffs import (LORD_BUFF_KIND, LordBuff, keyword_points,
+                          lord_buff_from_payload)
 from ..handlers._targets import attached_host
 from ..search_filters import name_key
 from ..source_tapped_effects import effects_while_tapped
@@ -486,6 +487,30 @@ class LordBuffsMixin:
                     # empty artifact: the buff carries only a P/T delta, so
                     # there is nothing else it could still be giving.
                     scale = self._creatures_sharing_a_type_with(target_perm)
+                    if scale <= 0:
+                        continue
+                    _add_static_buff(
+                        target_perm,
+                        replace(
+                            buff,
+                            power=buff.power * scale,
+                            toughness=buff.toughness * scale,
+                        ),
+                        observer,
+                    )
+                    continue
+                if buff.per_point_of:
+                    # "Each other Samurai creature you control gets +1/+1 **for
+                    # each point of bushido it has**." (Takeno, Samurai
+                    # General.) Coat of Arms' per-creature scale one relation
+                    # over: counted off what *this* creature says, through
+                    # layer 6 as pass 2a just completed it — so a bushido a
+                    # Sensei Golden-Tail granted counts and one a "loses all
+                    # abilities" took away does not. No points, no
+                    # contribution, for the branch above's reason.
+                    scale = keyword_points(
+                        target_perm.effective_card, buff.per_point_of
+                    )
                     if scale <= 0:
                         continue
                     _add_static_buff(
