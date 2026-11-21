@@ -97,6 +97,8 @@ from ..target_requirements import CLAIM as TARGET_REQUIREMENTS_CLAIM
 from ..target_requirements import must_choose_claims_line
 from ..enchant_targets import enchant_line_subject
 from ..untap_restrictions import self_untap_line, untap_restriction_for
+from ..tapped_blockers import CLAIM as TAPPED_BLOCKERS_CLAIM
+from ..tapped_blockers import tapped_blockers_line
 
 
 def _normalized(line: str) -> str:
@@ -273,6 +275,13 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # so the claim cannot outlive either half.
     if global_play_timing_line(normalized):
         return GLOBAL_PLAY_TIMING_CLAIM
+
+    # engine/tapped_blockers.py — CR 509.1a's untapped requirement waived:
+    # "Tapped creatures you control can block as though they were untapped."
+    # (Masako the Humorless.) Enforced at every blocker gate through the
+    # reader asked here.
+    if tapped_blockers_line(normalized):
+        return TAPPED_BLOCKERS_CLAIM
 
     # engine/cast_bans.py — the same two gates over a *phase* instead of
     # a turn: "During combat, players can't cast instant spells or activate
@@ -493,7 +502,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # rather than here, because the support gate reads it too: what the engine
     # implements and what it claims to have read cannot drift while both
     # readers ask the implementer.
-    if replacement_claims_line(line):
+    if replacement_claims_line(line, card_name):
         return "replacements"
 
     # engine/life_prohibitions.py — "Players can't gain life." (Forsaken

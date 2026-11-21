@@ -811,3 +811,37 @@ EVENT_PRODUCES: dict[str, frozenset[str]] = {
     # (`Game.announce_put_onto_stack`).
     "spell_or_ability_put_onto_stack": frozenset({EVENT_CHOSEN_TARGETS}),
 }
+
+
+#: "Whenever **a Warrior you control** deals combat damage to **a creature**,
+#: destroy **that creature** at end of combat." (Sosuke, Son of Seshiro.) A
+#: damage event with a *described* damager names two objects, and
+#: ``damage_trigger_names_damaged_end`` reads a bare "that creature" as the
+#: damager there (Mangara's Equity, whose recipient is a player). Where the
+#: damager's phrase is not headed by the noun "creature" at all and the
+#: damaged end is printed as "a creature", the demonstrative has one referent
+#: — the damaged creature, the id ``damage_events._announce`` stamps. Seeded
+#: into ``produced`` by :func:`event_produces` for such an event only.
+DAMAGED_CREATURE_NAMED = "damaged_creature_named"
+
+
+def event_produces(event: "ast.TriggerEvent") -> frozenset[str]:
+    """What the firing *event* leaves for the effect to read back:
+    :data:`EVENT_PRODUCES`' row for its kind, plus
+    :data:`DAMAGED_CREATURE_NAMED` for a damage event whose "that creature"
+    can only be the creature dealt damage."""
+    produced = EVENT_PRODUCES.get(event.kind, frozenset())
+    subject = event.subject
+    if (
+        event.kind == "damage_dealt"
+        and isinstance(subject, ast.ObjectFilter)
+        and not subject.is_source
+        and "creature" not in subject.card_types
+        and subject.subtypes
+        and any(
+            stem == "damaged" and narrowing.card_types == ("creature",)
+            for stem, narrowing in event.narrowings
+        )
+    ):
+        produced = produced | {DAMAGED_CREATURE_NAMED}
+    return produced

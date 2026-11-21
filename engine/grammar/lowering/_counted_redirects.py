@@ -79,6 +79,15 @@ def _lower_next_damage_redirect(
         )
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if _is_you(node.new_recipient) and not _is_source(node.to):
+        # "{1}: The next 1 damage that would be dealt to target legendary
+        # creature you control this turn is dealt to **you** instead."
+        # (Vassal's Duty.) Daughter of Autumn's point pool with the
+        # ability's controller (CR 109.5) taking the damage in place of its
+        # source: the same record on the protected creature, whose
+        # ``new_recipient`` has carried a player since it was written — so
+        # the same handler, told which end takes it (``taker``).
+        return _with_controller_taking(_lower_next_damage_redirect_to_taker(node))
     if not _is_source(node.new_recipient) and not _is_source(node.to):
         # "The next X damage that would be dealt to **target creature,
         # planeswalker, or player** this turn is dealt to **another target
@@ -108,6 +117,29 @@ def _lower_next_damage_redirect(
         raise LoweringError(
             "a counted redirect moves the damage somewhere else", node=node
         )
+    return _lower_next_damage_redirect_to_taker(node)
+
+
+def _with_controller_taking(
+    lowered: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """*lowered* — the protected-target redirect — with the ability's
+    controller as the end that takes the damage (``taker: "you"``) instead of
+    its source. Emitted only for the sentence that prints "you", so Daughter
+    of Autumn's payload is unchanged."""
+    (instruction,) = lowered
+    payload = dict(instruction.payload)
+    payload["taker"] = "you"
+    return (OracleInstruction(instruction.kind, instruction.value, payload),)
+
+
+def _lower_next_damage_redirect_to_taker(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """The protected end of a counted redirect whose taker the handler knows
+    without a choice — the ability's source (Daughter of Autumn) or its
+    controller (Vassal's Duty): one chosen object, described for the picker
+    and re-checked at resolution (CR 608.2b)."""
     spec = node.to
     # "…dealt to **target creature, planeswalker, or player**" (Martyrdom's
     # granted ability) — CR 115.4's union, which the reference reader gives the

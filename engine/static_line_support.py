@@ -539,9 +539,23 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # whole static half is this sentence reported "text too complex" for the one
     # line the engine could enforce end to end. Asked of the reader that
     # enforces it, so the claim cannot outlive the ban.
-    from .cast_bans import chosen_name_ban_line, own_cast_ban_line
+    from .cast_bans import (chosen_name_ban_line, global_play_timing_line,
+                            own_cast_ban_line)
 
     if own_cast_ban_line(normalized) is not None:
+        return True
+    # "Players can cast spells only during their own turns." (Dosan the
+    # Falling Leaf.) City of Solitude's own-turn restriction, casting half
+    # alone, enforced off the board by the cast gate (`cast_prohibitions`'s
+    # `global_play_timing` row) through the reader asked here.
+    if global_play_timing_line(normalized) is not None:
+        return True
+    # "Tapped creatures you control can block as though they were untapped."
+    # (Masako the Humorless.) CR 509.1a waived at every blocker gate
+    # (``engine/tapped_blockers.py``), through the reader asked here.
+    from .tapped_blockers import tapped_blockers_line
+
+    if tapped_blockers_line(normalized):
         return True
     # "Spells with the chosen name can't be cast." (Meddling Mage.) The same
     # CR 601.3 prohibition keyed on a name the permanent recorded as it entered,
@@ -578,7 +592,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     from .prevention import prevention_claims_line
     from .replacements import replacement_claims_line
 
-    if replacement_claims_line(normalized):
+    if replacement_claims_line(normalized, card_name):
         return True
     # CR 615's shields, asked the same way and for the same reason: a creature
     # printing a static prevention line works through the interceptor and would

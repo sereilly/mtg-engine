@@ -97,6 +97,14 @@ class DoubleLifeTotal:
 
 
 @dataclass(frozen=True)
+class RedistributeLifeTotals:
+    """"Redistribute any number of players' life totals." (Reverse the
+    Sands.) CR 119.7's redistribution: the controller hands every life total
+    to one player each as the effect resolves (its rulings, 2004-12-01) — a
+    permutation, never a split. No field: the sentence names every player."""
+
+
+@dataclass(frozen=True)
 class ExchangeLifeTotals:
     """"Exchange life totals with target opponent." (Mirror Universe.)
 
@@ -323,6 +331,11 @@ class CreateCopyToken:
     #: not a permanent, so ``subject`` carries only "a card" and this flag is
     #: what the lowering reads first.
     of_exiled_card: bool = False
+    #: "…a copy of target nonlegendary creature you control, **except it has
+    #: haste**." (Kiki-Jiki, Mirror Breaker.) CR 707.9a/b's exception: the
+    #: keywords the copy has in addition to the copiable values, and which
+    #: become part of them (so a copy of the token has them too).
+    except_keywords: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

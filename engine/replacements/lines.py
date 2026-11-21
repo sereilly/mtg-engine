@@ -48,8 +48,8 @@ from .revealed_draws import (REVEALED_DRAW_TAXED_TEXT,
 from .zone_changes import (RETURN_TO_HAND_INSTEAD_TEXT,
                            TOP_OF_LIBRARY_DISCARD_TEXT,
                            TOP_OF_LIBRARY_INSTEAD_OF_DYING,
-                           discard_to_battlefield, graveyard_exile_scope,
-                           graveyard_shuffle_subject,
+                           dealt_damage_exile_line, discard_to_battlefield,
+                           graveyard_exile_scope, graveyard_shuffle_subject,
                            permanent_graveyard_exile_line)
 
 
@@ -180,16 +180,23 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
 )
 
 
-def replacement_claims_line(line: str) -> bool:
+def replacement_claims_line(line: str, card_name: str | None = None) -> bool:
     """Whether one printed line is, in full, a replacement effect implemented
     in this package.
 
     The reduction matches what the interceptors really see: they probe the
     card's lowercased oracle text, and a line differs from it only by its
-    trailing full stop.
+    trailing full stop. *card_name* is for a line whose subject may be the
+    card's own name (Kumano, Master Yamabushi's "dealt damage by Kumano").
     """
     normalized = line.strip().lower().rstrip(".")
     if any(normalized == phrase + tail for phrase, tail in REPLACEMENT_LINES):
+        return True
+    # "If a creature dealt damage by this creature this turn would die, exile
+    # it instead." (Frostwielder, Kumano's Pupils, Kumano.) Matched by shape
+    # because the subject may be the card's own name, through the reader the
+    # interceptor self-selects on.
+    if dealt_damage_exile_line(normalized, card_name):
         return True
     # "**If you control a creature,** damage that would reduce your life total
     # to less than 1 reduces it to 1 instead." (Worship.) Matched by shape

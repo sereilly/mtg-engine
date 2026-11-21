@@ -836,6 +836,21 @@ class PhaseStepsMixin:
             return True
         return self._consume_skip(self.skip_step_counts, step)
 
+    def step_skip_owed(self, step: str, seat) -> bool:
+        """Whether :meth:`_consume_step_skip` would skip *seat*'s *step* now —
+        the same three keys, read without spending one. For a reader that
+        must not offer a decision inside a step that will not happen (the
+        untap step's Winter Orb selection), asked before the step spends it."""
+        seat_index = None if seat is None else self.seat_index(seat)
+        keys = [(seat_index, step, self.turn), step]
+        if seat is not None:
+            keys.insert(1, (seat_index, step))
+        return any(
+            self.skip_step_counts.get(key, 0) == EVERY_INSTANCE
+            or self.skip_step_counts.get(key, 0) > 0
+            for key in keys
+        )
+
     def _consume_skip(self, bucket: dict[object, int], key: object) -> bool:
         amount = bucket.get(key, 0)
         if amount == EVERY_INSTANCE:

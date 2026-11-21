@@ -39,6 +39,7 @@ from . import (  # noqa: E402,F401
     keywords,
     library,
     life_and_game,
+    life_redistribution,
     linked_exile,
     mana,
     naming,

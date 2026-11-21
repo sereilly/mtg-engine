@@ -667,10 +667,22 @@ def redirect_next_damage_to_source_until_eot(
 
     payload = instruction.payload
     card_name = getattr(context.card, "name", "")
-    taker = context.source_permanent
-    if taker is None or not game.is_on_battlefield(taker):
-        game.log.append(f"{card_name}: nothing is there to take the damage")
-        return True, "resolved"
+    if payload.get("taker") == "you":
+        # "…is dealt to **you** instead." (Vassal's Duty.) The ability's
+        # controller (CR 109.5) takes the moved points, a player the record
+        # has carried as ``new_recipient`` since it was written; CR 614.9's
+        # liveness for a player (still in the game) is ``live_recipient``'s.
+        taker = context.caster
+        taker_name = getattr(taker, "name", "you")
+        if taker not in game.players or getattr(taker, "lost", False):
+            game.log.append(f"{card_name}: nobody is there to take the damage")
+            return True, "resolved"
+    else:
+        taker = context.source_permanent
+        if taker is None or not game.is_on_battlefield(taker):
+            game.log.append(f"{card_name}: nothing is there to take the damage")
+            return True, "resolved"
+        taker_name = taker.card.name
     described = (payload.get("targets") or {}).get("filter") or {}
     caster = context.caster
     observer = game.players.index(caster) if caster in game.players else None
@@ -712,7 +724,7 @@ def redirect_next_damage_to_source_until_eot(
         )
         game.log.append(
             f"{card_name}: the next {amount} damage that would be dealt to "
-            f"{player.name} this turn is dealt to {taker.card.name} instead"
+            f"{player.name} this turn is dealt to {taker_name} instead"
         )
         return True, "resolved"
     if protected is None:
@@ -733,7 +745,7 @@ def redirect_next_damage_to_source_until_eot(
     )
     game.log.append(
         f"{card_name}: the next {amount} damage that would be dealt to "
-        f"{protected.card.name} this turn is dealt to {taker.card.name} instead"
+        f"{protected.card.name} this turn is dealt to {taker_name} instead"
     )
     return True, "resolved"
 

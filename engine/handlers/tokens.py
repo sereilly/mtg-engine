@@ -156,10 +156,17 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
         )
         for _ in range(max(0, count))
     ]
+    # "…, except it has haste." (Kiki-Jiki.) The printed keywords as the
+    # lines a copy effect grants (CR 707.9a), read by the compiler like any
+    # other line of the token's text.
+    excepted = tuple(
+        str(keyword)[:1].upper() + str(keyword)[1:]
+        for keyword in instruction.payload.get("except_keywords") or ()
+    )
     # One event (CR 603.6a): the copies enter together.
     with game.entering_together():
         for seat in makers:
-            token = game.create_token_copy(seat, source)
+            token = game.create_token_copy(seat, source, grants_text=excepted)
             # "When this enchantment leaves the battlefield, exile **the token**."
             # (Dance of Many.) Which permanent made this one, stamped for the same
             # reason `create_token` beside it stamps it: the sentences that name

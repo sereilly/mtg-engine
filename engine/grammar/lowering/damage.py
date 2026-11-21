@@ -134,7 +134,13 @@ def _lower_halved_damage(
 #: ("Creatures dealt damage this way…", Flamebreak —
 #: ``handlers/damage_sweeps._mass_damage_players_and_creatures``).
 _RIDER_READING_KINDS: dict[str, frozenset[str]] = {
-    "deal_damage": frozenset({"no_regen", "no_regen_if_dealt", "exile_if_dies"}),
+    "deal_damage": frozenset({
+        "no_regen", "no_regen_if_dealt", "exile_if_dies", "exile_if_dealt",
+    }),
+    # "…deals 1 damage to each creature. If a creature dealt damage this way
+    # would die this turn, exile it instead." (Yamabushi's Storm.) The sweep
+    # stamps the replacement on each creature it dealt to.
+    "deal_damage_each_matching": frozenset({"exile_if_dealt"}),
     "earthquake_damage": frozenset({"no_regen_if_dealt"}),
     "hurricane_damage": frozenset({"no_regen_if_dealt"}),
     "deal_damage_each_creature_and_player": frozenset({"no_regen_if_dealt"}),
@@ -171,6 +177,7 @@ def _lower_damage(
         ("no_regen", node.riders.no_regen),
         ("no_regen_if_dealt", node.riders.no_regen_if_dealt),
         ("exile_if_dies", node.riders.exile_if_dies),
+        ("exile_if_dealt", node.riders.exile_if_dealt),
     )
     for key, printed in riders:
         if not printed:
@@ -781,6 +788,8 @@ def _lower_damage_shape(
         payload["no_regen_if_dealt"] = True
     if node.riders.exile_if_dies:
         payload["exile_if_dies"] = True
+    if node.riders.exile_if_dealt:
+        payload["exile_if_dealt"] = True
     if node.riders.unpreventable_to_creature:
         payload["unpreventable_to_creature"] = True
     if node.riders.cant_be_prevented:

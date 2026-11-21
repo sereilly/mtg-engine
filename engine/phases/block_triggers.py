@@ -326,6 +326,10 @@ class BlockTriggersMixin:
         if self.combat_unblocked_triggers_fired:
             return
         self.combat_unblocked_triggers_fired = True
+        # The same moment's other announcement: "Whenever one or more
+        # creatures block" (Tide of War) is about the declaration as a whole,
+        # so it is made here, once, by the flag that makes this once.
+        self._announce_blockers_declared()
         if not (0 <= self.active_player_index < len(self.players)):
             return
         controller_index = self.active_player_index
@@ -399,6 +403,25 @@ class BlockTriggersMixin:
                 subject=permanent,
                 source_permanent=permanent,
             )
+
+    def _announce_blockers_declared(self) -> None:
+        """"Whenever one or more creatures block" (Tide of War) — CR 509.1's
+        declaration as a whole, announced to the whole table as it completes.
+
+        Once a combat and only if at least one creature was declared as a
+        blocker (the card's 2004-12-01 ruling: "triggers only once each combat
+        and only if at least one blocker is declared"), from the one seam that
+        runs once as the declaration completes
+        (:meth:`_fire_unblocked_attack_triggers`, on every road that completes
+        it). Board-wide, so through ``emit``: the watcher is neither combatant.
+        Nothing is bound — the effect reads the combat ("each blocking
+        creature", "each blocked creature") as it resolves.
+        """
+        from ..events import emit
+
+        if not any(perm.is_blocking for perm in self.all_permanents()):
+            return
+        emit(self, "one_or_more_creatures_block")
 
     def _fire_delayed_block_triggers(
         self, controller_index: int, assignments: dict[int, list[int]]

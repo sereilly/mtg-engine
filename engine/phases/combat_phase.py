@@ -364,7 +364,7 @@ class CombatPhaseMixin:
 
         attacker_controller = self.players[self.active_player_index]
         for blocker in self.controlled_by(defender_index):
-            if not blocker.is_creature or blocker.tapped:
+            if not blocker.is_creature or self._tapped_out_of_blocking(blocker):
                 continue
             # CR 802.4a: this defender can only block attackers aimed at them.
             for attacker_idx, defending_idx in self.combat_attackers.items():
@@ -485,7 +485,10 @@ class CombatPhaseMixin:
                 defender_index = next(iter(self.combat_defending_players()), None)
             if not isinstance(defender_index, int):
                 return
-            if any(p.is_creature and not p.tapped for p in self.controlled_by(defender_index)):
+            if any(
+                p.is_creature and not self._tapped_out_of_blocking(p)
+                for p in self.controlled_by(defender_index)
+            ):
                 return  # awaiting the defender's pile assignment
             self.resolve_camouflage_blocking(defender_index)
             if self.interactive_seats:

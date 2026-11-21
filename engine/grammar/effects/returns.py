@@ -396,6 +396,16 @@ def _parse_return(
         "under", "their", "owners'", "control"
     ):
         under_control_of = ast.PlayerRef("owner")
+    # "…to the battlefield under its owner's control **with a +1/+1 counter
+    # on it**." (Otherworldly Journey.) The counters rider printed after the
+    # controller rather than before it — the same phrase, read by the same
+    # reader, onto the same field, once.
+    if (
+        destination.name == "battlefield"
+        and under_control_of is not None
+        and not entering_counters
+    ):
+        entering_counters = _parse_entering_counters(stream)
 
     # "…attached to that creature." (Takklemaggot.) CR 303.4f: an effect that
     # puts an Aura onto the battlefield has to say what it attaches to. "That

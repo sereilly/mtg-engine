@@ -48,7 +48,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from .aura_restrictions import aura_restriction_active
-from .cast_bans import combat_play_ban, global_play_timing
+from .cast_bans import ACTIVATE, combat_play_ban, global_play_timing
 from .late_modules import LateModules
 from .oracle import compile_card_oracle
 from .spell_prohibitions import nonmana_activations_forbidden, permanent_activations_forbidden
@@ -134,8 +134,9 @@ def _own_turn_only(game, seat, source, ability):
     # "Players can cast spells and activate abilities only during their own
     # turns." (City of Solitude.) The activation half of the one sentence
     # ``cast_prohibitions`` reads for its casting half, through the same
-    # reader. No mana-ability exception: the sentence names none.
-    wrong_turn = global_play_timing(game, seat)
+    # reader. No mana-ability exception: the sentence names none. Asked
+    # for the activation half only: Dosan's casting-only line binds no ability.
+    wrong_turn = global_play_timing(game, seat, ACTIVATE)
     if wrong_turn is None:
         return None
     return (

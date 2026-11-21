@@ -220,6 +220,11 @@ LIFE_GAIN_TO_DRAW = 10  # Lich
 # ban, which is why it contends here at all (``replacements/life_gain.py``).
 LIFE_GAIN_REPLACED_BY_NOTHING = 20  # Sulfuric Vortex
 EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
+#: "If a creature dealt damage by this creature this turn would die, exile it
+#: instead." (Frostwielder.) The same destination as Disintegrate's marker
+#: from a standing ability of the damager, and a contender of its own (CR
+#: 616.1 counts effects): next to it, ahead of the Phoenix's hand.
+EXILE_INSTEAD_OF_DYING_DEALT_DAMAGE = 15  # Frostwielder, Kumano
 #: "If the creature would leave the battlefield, exile it instead of putting it
 #: anywhere else." (Dreams of the Dead.) Its own event kind rather than a wider
 #: reading of ``would_die``: a death is one of the ways a permanent leaves, and

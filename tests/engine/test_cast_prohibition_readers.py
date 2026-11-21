@@ -217,6 +217,11 @@ _SCENARIOS: dict[str, list[tuple]] = {
     # or without a ban.
     "global_play_timing": [
         ("another player's turn", OPPONENTS_TURN, "Opt", "City of Solitude", 1, {}, None),
+        # "Players can cast spells only during their own turns." (Dosan the
+        # Falling Leaf, a creature.) The casting half alone, through the same
+        # reader — its activation half is no row of the activation table.
+        ("casting only, another player's turn", OPPONENTS_TURN, "Opt",
+         "Dosan the Falling Leaf", 1, {}, None),
     ],
     "combat_play_ban": [
         ("an instant in combat", OWN_COMBAT, "Opt", "Hand to Hand", 1, {}, None),

@@ -56,6 +56,12 @@ _PRINTED = (
      "attacked_this_turn"),
     (re.compile(r"\b(?:players?|opponents?) previously dealt damage by it\b", re.I),
      "dealt_damage_by_source"),
+    # "Target player dealt damage by this creature this turn loses 1 life."
+    # (Wicked Akuba, CHK.) The same reduced relative over the turn's ledger.
+    (re.compile(
+        r"\b(?:players?|opponents?) dealt damage by (?:it|this \w+) this turn\b",
+        re.I,
+    ), "dealt_damage_by_source_this_turn"),
     (re.compile(
         r"\b(?:players?|opponents?) who tapped a land for mana this turn\b", re.I
     ), "tapped_land_for_mana_this_turn"),

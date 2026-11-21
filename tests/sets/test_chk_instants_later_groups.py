@@ -35,6 +35,174 @@ log), not instruction kinds alone.
 # ==== w1g8 ==========================================================
 # w1g8's tests go between this line and the "end w1g8" line.
 
+from engine import PlayerState as _w1g8_PlayerState
+from engine.models import Permanent as _w1g8_Permanent
+from tests.helpers import (
+    _game as _w1g8_game,
+    _nosick as _w1g8_nosick,
+    settle as _w1g8_settle,
+    stock_libraries as _w1g8_stock_libraries,
+)
+
+
+def _w1g8_table(mine=(), theirs=(), *, hand=(), opponent_hand=()):
+    """Two seats on seat 0's precombat main phase of turn 2, the permanents
+    placed through the entry funnel, libraries stocked."""
+    game = _w1g8_game(
+        _w1g8_PlayerState(name="P1", hand=list(hand), life=20),
+        _w1g8_PlayerState(name="P2", hand=list(opponent_hand), life=20),
+    )
+    _w1g8_stock_libraries(game)
+    game.turn = 2
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    placed = []
+    for seat, cards in ((0, mine), (1, theirs)):
+        row = []
+        for card in cards:
+            permanent = _w1g8_Permanent(card=card)
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            row.append(_w1g8_nosick(permanent))
+        placed.append(row)
+    game._sync_control()
+    _w1g8_settle(game)
+    return game, placed[0], placed[1]
+
+
+def _w1g8_zone_names(game, seat, zone):
+    return [card.name for card in getattr(game.players[seat], zone)]
+
+
+# --- Yamabushi's Flame --------------------------------------------------------
+# "Yamabushi's Flame deals 3 damage to any target. If a creature dealt damage
+# this way would die this turn, exile it instead." A replacement on what the
+# damage was *dealt* to (CR 615.1a), for the rest of the turn and by any
+# means of dying (CR 700.4).
+
+
+def test_w1g8_yamabushis_flame_exiles_the_creature_it_kills(set_pool):
+    flame = set_pool("CHK")["Yamabushi's Flame"]
+    giant = set_pool("LEA")["Hill Giant"]
+    game, _, (hill,) = _w1g8_table([], [giant], hand=[flame])
+    cast = game.cast_from_hand(
+        0, "Yamabushi's Flame", target_permanent_ids=[hill.permanent_id]
+    )
+    assert cast.supported, cast.details
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "exile") == ["Hill Giant"]
+    assert _w1g8_zone_names(game, 1, "graveyard") == []
+
+
+def test_w1g8_yamabushis_flame_exiles_a_survivor_that_dies_later_this_turn(set_pool):
+    flame = set_pool("CHK")["Yamabushi's Flame"]
+    terror = set_pool("LEA")["Terror"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    game, _, (wurm,) = _w1g8_table([], [craw], hand=[flame, terror])
+    assert game.cast_from_hand(
+        0, "Yamabushi's Flame", target_permanent_ids=[wurm.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert game.is_on_battlefield(wurm)
+    assert game.cast_from_hand(0, "Terror", target_permanent_ids=[wurm.permanent_id]).supported
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "exile") == ["Craw Wurm"]
+
+
+def test_w1g8_yamabushis_flame_at_a_player_is_plain_damage(set_pool):
+    flame = set_pool("CHK")["Yamabushi's Flame"]
+    game, _, _ = _w1g8_table([], [], hand=[flame])
+    assert game.cast_from_hand(0, "Yamabushi's Flame", target_player_index=1).supported
+    _w1g8_settle(game)
+    assert game.players[1].life == 17
+
+
+# --- Otherworldly Journey -----------------------------------------------------
+# "Exile target creature. At the beginning of the next end step, return that
+# card to the battlefield under its owner's control with a +1/+1 counter on
+# it." Liberate's delayed return (CR 603.7) with Sand Golem's counter rider:
+# a new object (CR 400.7) with one +1/+1 counter (the 2004-12-01 ruling).
+
+
+def test_w1g8_otherworldly_journey_returns_the_creature_with_a_counter(set_pool):
+    journey = set_pool("CHK")["Otherworldly Journey"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, _, (bear,) = _w1g8_table([], [bears], hand=[journey])
+    cast = game.cast_from_hand(
+        0, "Otherworldly Journey", target_permanent_ids=[bear.permanent_id]
+    )
+    assert cast.supported, cast.details
+    _w1g8_settle(game)
+    assert _w1g8_zone_names(game, 1, "exile") == ["Grizzly Bears"]
+    assert not game.is_on_battlefield(bear)
+
+    game._set_phase_and_step("ending", "end")
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+    returned = [p for p in game.controlled_by(game.players[1])]
+    assert [p.card.name for p in returned] == ["Grizzly Bears"]
+    back = returned[0]
+    assert back is not bear
+    assert (back.effective_power, back.effective_toughness) == (3, 3)
+    assert _w1g8_zone_names(game, 1, "exile") == []
+
+
+def test_w1g8_otherworldly_journey_returns_a_stolen_creature_to_its_owner(set_pool):
+    from engine.control import change_control
+
+    journey = set_pool("CHK")["Otherworldly Journey"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, _, (bear,) = _w1g8_table([], [bears], hand=[journey])
+    change_control(bear, 0, source="a test")
+    game._sync_control()
+    assert game.controller_index_of(bear) == 0
+    assert game.cast_from_hand(
+        0, "Otherworldly Journey", target_permanent_ids=[bear.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    game._set_phase_and_step("ending", "end")
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+    assert [p.card.name for p in game.controlled_by(game.players[1])] == ["Grizzly Bears"]
+    assert [p.card.name for p in game.controlled_by(game.players[0])] == []
+
+
+
+# --- Crushing Pain (drive list) -----------------------------------------------
+# "Crushing Pain deals 6 damage to target creature that was dealt damage this
+# turn." Supported on arrival and wrong: the narrowing rode the instruction's
+# filter, but a ``deal_damage`` cast is judged by the target spec alone, which
+# dropped it (``target_descriptions._narrowing_flags``) — an undamaged
+# creature was a legal announcement and took the 6 (CR 601.2c).
+
+
+def test_w1g8_crushing_pain_targets_only_a_creature_dealt_damage_this_turn(set_pool):
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    pain = set_pool("CHK")["Crushing Pain"]
+    shock = set_pool("LEA")["Lightning Bolt"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    assert derive_cast_spec(pain, compile_card_oracle(pain)) == {
+        "kind": "creature", "filter": {"dealt_damage_this_turn": True},
+    }
+    game, _, (wurm,) = _w1g8_table([], [craw], hand=[pain, shock])
+    refused = game.cast_from_hand(
+        0, "Crushing Pain", target_permanent_ids=[wurm.permanent_id]
+    )
+    assert not refused.supported
+    assert wurm.damage_marked == 0
+    assert "Crushing Pain" in _w1g8_zone_names(game, 0, "hand")
+
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[wurm.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert game.cast_from_hand(
+        0, "Crushing Pain", target_permanent_ids=[wurm.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert not game.is_on_battlefield(wurm)
+
 # ==== end w1g8 ======================================================
 
 

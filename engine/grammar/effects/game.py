@@ -552,6 +552,20 @@ def _parse_exchange_life_totals(stream: TokenStream) -> ast.Statement:
     return ast.ExchangeLifeTotals(player)
 
 
+def parse_redistribute_life_totals(stream: TokenStream) -> ast.Statement | None:
+    """``Redistribute any number of players' life totals.`` (Reverse the
+    Sands; its reminder text is reminder text.) Every word required: a
+    redistribution among named players would be a different sentence, and
+    refuses here without consuming."""
+    mark = stream.mark()
+    if stream.accept_word("redistribute") and stream.accept_phrase(
+        "any", "number", "of", "players'", "life", "totals"
+    ):
+        return ast.RedistributeLifeTotals()
+    stream.reset(mark)
+    return None
+
+
 def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
     """``<player>'s life total becomes <N>`` / ``your life total becomes <N>``.
 

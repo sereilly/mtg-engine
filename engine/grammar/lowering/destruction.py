@@ -479,6 +479,30 @@ def _lower_destroy(
             return (
                 OracleInstruction("destroy_event_subject", "", tapped_payload),
             )
+        # "Whenever a creature becomes the target of a spell or ability,
+        # **destroy that creature**." (Horobi, Death's Wail.) The object the
+        # trigger's own event froze by id (Cowardice's "return that creature",
+        # ``bounce_event_subject``) — never a pick (CR 603.3d), so it rides
+        # ``destroy_event_subject`` as Suleiman's Legacy's "destroy it" does.
+        # Behind the stamped-target events, which put the object on the stack
+        # item instead; and the noun restates the trigger's subject, so a
+        # narrowing of its own would be a test nothing makes and refuses.
+        if (
+            event in _EVENT_SUBJECT_OBJECTS
+            and event not in _EVENT_STAMPED_TARGET_OBJECTS
+        ):
+            if _restrictions_beyond(filt, frozenset({"card_types"})):
+                raise LoweringError(
+                    "the event-subject destroy names the object the trigger "
+                    "bound and carries no narrowing of its own",
+                    node=node,
+                )
+            event_payload: dict[str, object] = {}
+            if node.no_regen:
+                event_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_event_subject", "", event_payload),
+            )
         if event not in _EVENT_STAMPED_TARGET_OBJECTS:
             raise LoweringError(
                 "\"that\" names the firing event's object, and this event records none",

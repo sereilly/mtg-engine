@@ -154,7 +154,7 @@ class BlockRequirementsMixin:
         blockers = [
             (blocker_idx, blocker)
             for blocker_idx, blocker in enumerate(self.controlled_by(controller_index))
-            if blocker.is_creature and not blocker.tapped
+            if blocker.is_creature and not self._tapped_out_of_blocking(blocker)
         ]
         found: list[BlockRequirement] = []
 
@@ -437,7 +437,10 @@ class BlockRequirementsMixin:
         declared: list[Permanent] = []
         for blocker_idx, blocked in blocks.items():
             blocker = self.permanent_at(controller_index, blocker_idx)
-            if blocker is None or not blocker.is_creature or blocker.tapped:
+            if (
+                blocker is None or not blocker.is_creature
+                or self._tapped_out_of_blocking(blocker)
+            ):
                 return True
             if len(blocked) > self._max_blocks_for(blocker):
                 return True
@@ -506,7 +509,7 @@ class BlockRequirementsMixin:
         blockers = {
             blocker_idx: blocker
             for blocker_idx, blocker in enumerate(self.controlled_by(controller_index))
-            if blocker.is_creature and not blocker.tapped
+            if blocker.is_creature and not self._tapped_out_of_blocking(blocker)
         }
         legal: dict[int, tuple[int, ...]] = {}
         for blocker_idx, blocker in blockers.items():

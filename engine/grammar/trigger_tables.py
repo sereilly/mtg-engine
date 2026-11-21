@@ -244,6 +244,13 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("becomes_unattached",
      ("this", "equipment", "becomes", "unattached", "from", "a", "permanent")),
     ("land_tapped_for_mana", ("a", "player", "taps", "a", "land", "for", "mana")),
+    # "Whenever one or more creatures block" (Tide of War). CR 509.1's
+    # declaration as a whole, once a combat and only if a blocker was
+    # declared (its 2004-12-01 ruling); announced as the declaration
+    # completes (``block_triggers._announce_blockers_declared``). The phrase
+    # is the whole event: no creature is the subject, and none is bound.
+    ("one_or_more_creatures_block",
+     ("one", "or", "more", "creatures", "block")),
     # "Whenever a player chooses one or more targets" (Psychic Battle). The
     # whole phrase is the event — "one or more" is CR 115.6's wording for "the
     # object is targeted" and carries no number to read.

@@ -93,6 +93,7 @@ from .effects import (
     _parse_flip_coin,
     _parse_gain_control,
     _parse_exchange_life_totals,
+    parse_redistribute_life_totals,
     _parse_life_total_becomes,
     _parse_look_at_hand,
     _parse_exile_bound_card,
@@ -218,6 +219,12 @@ def parse_imperative_verb(
         divided = _parse_assign_divided_among_defenders(stream)
         if divided is not None:
             return divided
+    if stream.at_word("redistribute"):
+        # "Redistribute any number of players' life totals." (Reverse the
+        # Sands.) The verb names the one production that reads it.
+        redistributed = parse_redistribute_life_totals(stream)
+        if redistributed is not None:
+            return redistributed
     if stream.at_word("exchange"):
         # One printed verb, two effect families: "exchange **control** of …"
         # acts on permanents (`board`) and "exchange **life totals** with …"

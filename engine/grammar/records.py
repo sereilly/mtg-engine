@@ -751,6 +751,20 @@ def accept_player_deed(stream: TokenStream, parse_filter) -> "ast.PlayerDeed | N
     # naming another one would be a different record.
     if stream.accept_phrase("previously", "dealt", "damage", "by", "it"):
         return ast.PlayerDeed("dealt_damage_by_source")
+    stream.reset(mark)
+    # "Target player **dealt damage by this creature this turn** loses 1
+    # life." (Wicked Akuba.) The same reduced relative with the turn for its
+    # window instead of "previously": the turn's damage ledger, joined from
+    # the ability's own source (by id, CR 400.7) to the seat. The source is
+    # read by the one reference reader ("this creature", the card's name,
+    # "it"), and "this turn" is required — without it the window is
+    # Diseased Vermin's, which is another record.
+    if (
+        stream.accept_phrase("dealt", "damage", "by")
+        and accept_source_reference(stream)
+        and stream.accept_phrase("this", "turn")
+    ):
+        return ast.PlayerDeed("dealt_damage_by_source_this_turn")
     # "…each player **whose coin comes up tails** sacrifices a creature of
     # their choice." (Goblin Assassin.) The face a coin this same resolution
     # flipped for the seat showed. Only "tails" is printed, so only "tails" is

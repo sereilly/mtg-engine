@@ -35,6 +35,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .. import simultaneous_damage
+from ..damage_events import exile_if_dies_if_dealt
 from ..dexterity import flip_lands_on
 from ..game_types import single_chosen_id
 from ..models import Permanent
@@ -418,6 +419,11 @@ def deal_damage_each_matching(
         for perm, dealt in recipients
     ]
 
+    # "If a creature dealt damage this way would die this turn, exile it
+    # instead." (Yamabushi's Storm.) Stamped on each creature the sweep
+    # actually dealt to, inside its event (CR 615.1a).
+    exiles = bool(instruction.payload.get("exile_if_dealt"))
+
     def hit(entry) -> None:
         perm, dealt = entry
         # The dealer is the permanent (CR 120.7) — for the bite because the
@@ -426,6 +432,11 @@ def deal_damage_each_matching(
         # printed card, so Pyroclasm is unchanged.
         apply_damage_to_creature(
             game, perm, dealt, biter if biter is not None else dealer, asks=True,
+            then=(
+                lambda amount, perm=perm: exile_if_dies_if_dealt(
+                    perm, amount, getattr(card, "name", None)
+                )
+            ) if exiles else None,
         )
 
     def summary() -> None:

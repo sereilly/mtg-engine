@@ -85,6 +85,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_choose_cards_in_hand, _lower_put_iterated_card_on_library,
                        _lower_choose_graveyard_card,
                        _lower_pay_life, _lower_ante, _lower_exchange_life_totals,
+                       _lower_redistribute_life_totals,
                        _lower_set_life_total, _lower_double_power, _lower_switch_pt,
                        _lower_double_counters, _lower_double_unspent_mana,
                        _lower_double_life_total, _lower_pay_any_amount_of_life,
@@ -293,12 +294,12 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SwitchPT: _lower_switch_pt,
     ast.Ante: _lower_ante,
     ast.ExchangeLifeTotals: _lower_exchange_life_totals,
+    ast.RedistributeLifeTotals: _lower_redistribute_life_totals,
     ast.SetLifeTotal: _lower_set_life_total,
     ast.LoseAbilityText: _lower_lose_ability_text,
     ast.GainActivatedAbilitiesOf: _lower_gain_activated_abilities_of,
     ast.PayLife: _lower_pay_life,
     ast.DamageReducedByPaidMana: _lower_damage_reduced_by_paid_mana,
-    ast.SkipStep: _lower_skip_step,
     ast.SkipTurn: _lower_skip_turn,
     ast.TargetingBan: _lower_targeting_ban,
     ast.ExtraLandPlays: _lower_extra_land_plays,
@@ -506,6 +507,9 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # fired. It left the name-only table above the moment it started deciding
     # that.
     ast.SkipPhase: _lower_skip_phase,
+    # "...**that player** skips their next untap step" (Shisato): the same
+    # frozen seat one level of the turn structure down.
+    ast.SkipStep: _lower_skip_step,
     # "…**that player** chooses draw step, main phase, or combat phase. The
     # player skips each instance of the chosen step or phase this turn."
     # (Fatespinner.) The chooser is the seat the upkeep froze, so the event

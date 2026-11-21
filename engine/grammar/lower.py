@@ -45,7 +45,7 @@ from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
 from .statics import _lower_static_ability
-from .lowering._events import EVENT_PRODUCES
+from .lowering._events import event_produces
 from .lowering._roles import describe_sequence_target_roles
 from .lowering import (
     GRAMMAR_ONLY_PAYLOAD_KEYS,
@@ -523,7 +523,7 @@ def lower_ability(
             # (CR 603.10) — the trigger's twin of an activation cost's records
             # one branch down, and seeded here for the same reason: this is
             # the one place the condition and the effect are both in view.
-            produced=EVENT_PRODUCES.get(node.event.kind, frozenset()),
+            produced=event_produces(node.event),
         )
         # This used to refuse every decomposed upkeep trigger — a
         # `may(pay, untap_self)` where the registry in
