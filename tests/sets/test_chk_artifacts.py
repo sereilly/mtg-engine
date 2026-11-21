@@ -453,3 +453,120 @@ def test_w1g9_tatsumasa_comes_back_when_its_dragon_dies_and_not_otherwise(set_po
             assert names == [] and [c.name for c in alice.exile] == ["Tatsumasa, the Dragon's Fang"]
 
 # ==== end w1g9 ======================================================
+
+
+# ==== W2G3 ====
+# W2G3's tests: Hankyu, Kusari-Gama, Shell of the Last Kappa.
+
+from engine import Game as _W2G3Game, PlayerState as _W2G3PlayerState
+from engine.models import Permanent as _W2G3Permanent
+from tests.helpers import declare_attack as _w2g3_declare_attack
+from tests.helpers import drive_combat as _w2g3_drive_combat
+from tests.helpers import settle as _w2g3_settle
+
+
+def _w2g3_card(set_pool, name):
+    for code in ("CHK", "LEA"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w2g3_table(set_pool, *, hand=(), mine=(), theirs=(), interactive=()):
+    """Two seats on seat 0's first main phase, costs not enforced; *mine* /
+    *theirs* placed and not summoning sick."""
+    card = lambda name: _w2g3_card(set_pool, name)  # noqa: E731
+    game = _W2G3Game(players=[
+        _W2G3PlayerState(name="Alice", hand=[card(n) for n in hand],
+                         library=[card("Island")] * 12),
+        _W2G3PlayerState(name="Bob", library=[card("Island")] * 12),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _W2G3Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+            placed[seat].append(permanent)
+    game._sync_control()
+    game.start_turn(0)
+    _w2g3_settle(game)
+    return game, placed[0], placed[1]
+
+
+def _w2g3_slot(game, permanent):
+    seat = game.controller_index_of(permanent)
+    return [p.permanent_id for p in game.players[seat].battlefield].index(
+        permanent.permanent_id
+    )
+
+
+def _w2g3_activate(game, permanent, **announce):
+    seat = game.controller_index_of(permanent)
+    result = game.activate_permanent_ability(
+        seat, permanent.card.name, permanent_index=_w2g3_slot(game, permanent),
+        **announce,
+    )
+    _w2g3_settle(game)
+    return result
+
+
+def _w2g3_equip(game, equipment, creature):
+    return _w2g3_activate(game, equipment, target_permanent_ids=[creature.permanent_id])
+
+
+def test_w2g3_kusari_gama_deals_that_much_to_each_other_creature_defending_player_controls(set_pool):
+    """"Equipped creature has '{2}: This creature gets +1/+0 until end of
+    turn.' Whenever equipped creature deals damage to a blocking creature,
+    this Equipment deals that much damage to each other creature defending
+    player controls."
+
+    The granted pump twice makes the Bears 4/2; blocked by a Wall of Stone it
+    deals the Wall 4, and the Equipment deals 4 to each *other* creature Bob
+    controls — his Bears and his Craw Wurm die — but not again to the Wall
+    ("other" is the damaged blocker: the Equipment is not a creature), and
+    not to Alice's own tapped Bears ("defending player controls")."""
+    game, mine, theirs = _w2g3_table(
+        set_pool,
+        mine=["Kusari-Gama", "Grizzly Bears", "Grizzly Bears"],
+        theirs=["Wall of Stone", "Grizzly Bears", "Craw Wurm"],
+    )
+    gama, bears, idle = mine
+    wall, _their_bears, _wurm = theirs
+    idle.tapped = True
+    assert _w2g3_equip(game, gama, bears).supported
+    assert gama.metadata.get("attached_to") is bears
+    for _ in range(2):
+        assert _w2g3_activate(game, bears).supported
+    assert (bears.effective_power, bears.effective_toughness) == (4, 2)
+
+    _w2g3_declare_attack(game, 0, blocks={
+        _w2g3_slot(game, wall): _w2g3_slot(game, bears),
+    })
+    _w2g3_drive_combat(game, through="combat_damage")
+    assert "Kusari-Gama dealt 4 damage to Grizzly Bears, Craw Wurm" in game.log
+    assert sorted(c.name for c in game.players[1].graveyard) == ["Craw Wurm", "Grizzly Bears"]
+    assert wall.damage_marked == 4
+    assert idle.damage_marked == 0
+    assert [p.card.name for p in game.controlled_by(1)] == ["Wall of Stone"]
+
+
+def test_w2g3_kusari_gama_does_not_fire_on_damage_to_a_player(set_pool):
+    """The trigger names "a blocking creature": the equipped creature
+    unblocked deals its damage to Bob and the Equipment deals none."""
+    game, mine, theirs = _w2g3_table(
+        set_pool, mine=["Kusari-Gama", "Grizzly Bears"], theirs=["Grizzly Bears"],
+    )
+    gama, bears = mine
+    their_bears = theirs[0]
+    assert _w2g3_equip(game, gama, bears).supported
+    _w2g3_declare_attack(game, 0)
+    _w2g3_drive_combat(game)
+    assert game.players[1].life == 18
+    assert their_bears.damage_marked == 0
+    assert not any(line.startswith("Kusari-Gama dealt") for line in game.log)
+
+# ==== end W2G3 ====

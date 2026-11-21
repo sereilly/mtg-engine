@@ -142,7 +142,10 @@ def lower_each_matching_damage(
     node: ast.DealDamage,
     recipient: ast.TargetSpec,
     amount,
-    computed: bool,
+    back_reference: dict,
+    bonus: int,
+    produced: frozenset[str] = frozenset(),
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…deals 2 damage to **each creature you control**" (Sorrow's Path),
     "…to **each creature**" (Pyroclasm), "…to each creature **for each Aura
@@ -175,7 +178,18 @@ def lower_each_matching_damage(
             "only a creature sweep is damaged by the printed noun phrase",
             node=node,
         )
-    if computed:
+    # "…this Equipment deals **that much** damage to each other creature
+    # defending player controls." (Kusari-Gama.) The firing event's number, or
+    # one an earlier step of this effect recorded — the two channels
+    # ``_back_reference_payload`` decides between for every damage sentence,
+    # and the two ``deal_damage_each_matching`` reads, as ``deal_damage`` does.
+    # One number for the whole sweep, which is CR 611.2c's fixed set. Any other
+    # computed shape (a printed constant beside it, an X read off an object)
+    # still refuses: the handler has no reading of it.
+    if bonus or (
+        back_reference
+        and set(back_reference) not in ({"amount_from_trigger"}, {"amount_from"})
+    ):
         raise LoweringError(
             "a creature sweep cannot carry a computed damage amount", node=node
         )
@@ -189,6 +203,30 @@ def lower_each_matching_damage(
         require_narrowing=False,
     )
     payload: dict[str, object] = {"amount": amount, "filter": described}
+    payload.update(back_reference)
+    # "…each **other** creature defending player controls." The noun parser
+    # writes "other" as "other than this ability's source" (``exclude_self``),
+    # which is what it means for Crater Hellion and Fire Ants. Under a damage
+    # trigger whose damager is the creature the source is *attached to*, the
+    # source is an Aura or an Equipment and never a creature (CR 303.4d,
+    # 301.5c), so that reading excludes nothing — the word silently dropped,
+    # and the blocker that was just dealt damage dealt it a second time. There
+    # the one creature "other" can set apart is the damaged one, which the
+    # event froze by id (``_events.OTHER_THAN_DAMAGED_CREATURE``).
+    #
+    # Any *other* attached-source sweep printing "other" refuses rather than
+    # keeping the no-op exclusion: nothing tells which creature it means.
+    if described.get("exclude_self"):
+        from ._events import OTHER_THAN_DAMAGED_CREATURE
+
+        if OTHER_THAN_DAMAGED_CREATURE in produced:
+            del described["exclude_self"]
+            payload["other_than_damaged_permanent"] = True
+        elif getattr(event_subject, "is_enchanted", False):
+            raise LoweringError(
+                "\"other\" in a sweep by an attached source names no creature",
+                node=node,
+            )
     if node.per_each is not None:
         payload["per_recipient_count"] = _per_recipient_multiplier(node)
     # "If a creature dealt damage this way would die this turn, exile it
