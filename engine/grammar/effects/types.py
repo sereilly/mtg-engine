@@ -199,8 +199,16 @@ def _parse_becomes_creature_type(
     ):
         stream.reset(mark)
         return None
+    # "…becomes a Samurai **in addition to its other creature types**."
+    # (Sensei Golden-Tail.) CR 205.1b's retention tail, read here for the
+    # printed word exactly as the two choice spellings above read it for
+    # theirs — before the duration, which is where every card prints it — so
+    # the record *adds* the creature type rather than setting the set.
+    in_addition = _accept_in_addition_to_other_types(stream)
     duration = _parse_duration(stream)
-    typed = ast.BecomeThatType(subject, duration, subtypes=tuple(words))
+    typed = ast.BecomeThatType(
+        subject, duration, subtypes=tuple(words), in_addition=in_addition,
+    )
     if color is None:
         return typed
     return ast.Conjunction((ast.BecomeColor(subject, color, duration), typed))

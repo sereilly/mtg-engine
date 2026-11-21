@@ -422,6 +422,19 @@ class LordBuff:
     # After ``per_counter`` for that field's own reason: the positional callers
     # above must keep the arguments they were written with.
     per_shared_creature_type: bool = False
+    # "Each other Samurai creature you control gets +1/+1 **for each point of
+    # bushido it has**." (Takeno, Samurai General.) Coat of Arms' shape one
+    # relation over: the multiplier is counted **per buffed creature**, here
+    # off that creature's own abilities rather than off the board around it —
+    # the N of every instance of the named keyword it has, summed
+    # (:func:`keyword_points`). A keyword name rather than a flag, because the
+    # counted thing is a printed word and the reader that sums it is chosen by
+    # that word; a word with no reader refuses the line.
+    #
+    # Only the P/T delta scales, for ``per_counter``'s reason exactly, and
+    # :func:`lord_buff_for` refuses the combination the same way. Last, for
+    # the positional callers' reason.
+    per_point_of: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +478,52 @@ _PER_SHARED_TYPE_RE = re.compile(
     r"^(?P<effect>.+?) for each other creature on the battlefield that "
     r"shares at least one creature type with it$"
 )
+
+
+#: "…gets +1/+1 **for each point of bushido it has**." (Takeno, Samurai
+#: General.) The third trailing scale clause, lifted off the effect for
+#: `_PER_COUNTER_RE`'s reason. The keyword is payload; which keywords have
+#: points to count is :data:`_POINTED_KEYWORDS`.
+_PER_POINT_RE = re.compile(
+    r"^(?P<effect>.+?) for each point of (?P<keyword>[a-z]+) it has$"
+)
+
+#: The keywords whose instances carry a number a sentence can count "points"
+#: of, each with the reader that sums them over what a permanent says. Bushido
+#: (CR 702.45a, "Bushido N") is the one the pool prints the count for.
+_POINTED_KEYWORDS = frozenset({"bushido"})
+
+
+def keyword_points(card, keyword: str) -> int:
+    """How many points of *keyword* *card* has — every instance's N, summed.
+
+    *card* is what the permanent says (``Permanent.effective_card``), so a
+    granted instance counts and a removed one does not. Asked only for a word
+    in :data:`_POINTED_KEYWORDS`, which :func:`lord_buff_for` enforces.
+    """
+    if keyword == "bushido":
+        from .bushido import bushido_points
+
+        return bushido_points(card)
+    raise ValueError(f"no reader counts points of {keyword!r}")
+
+
+def _split_per_point(effect: str) -> tuple[str, str | None, bool]:
+    """*effect* with Takeno's trailing "for each point of <keyword> it has"
+    removed: ``(effect, keyword or None, whether a clause was printed)``.
+
+    The third flag is what lets a keyword nothing counts refuse the line
+    rather than read as no clause at all.
+    """
+    match = _PER_POINT_RE.match(effect)
+    if match is None:
+        return effect, None, False
+    keyword = match.group("keyword")
+    return (
+        match.group("effect").strip(),
+        keyword if keyword in _POINTED_KEYWORDS else None,
+        True,
+    )
 
 
 def _split_per_shared_type(effect: str) -> tuple[str, bool]:
@@ -862,6 +921,11 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     effect = clause[match.start():].strip()
     effect, per_counter = _split_per_counter(effect)
     effect, per_shared_type = _split_per_shared_type(effect)
+    effect, per_point_of, per_point_printed = _split_per_point(effect)
+    if per_point_printed and per_point_of is None:
+        # "…for each point of <a keyword nothing counts> it has": refused, for
+        # ``per_counter``'s reason — a dropped scale is a larger card.
+        return None
 
     keywords: tuple[str, ...] = ()
     protection_from: tuple[str, ...] = ()
@@ -946,6 +1010,13 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
         # scale multiplies a P/T delta and nothing else, and two scales on one
         # sentence is a product nothing computes.
         return None
+    if per_point_of is not None and (
+        keywords or protection_from or granted_ability or per_counter
+        or per_shared_type or not (power or toughness)
+    ):
+        # The scale multiplies a P/T delta and nothing else, and two scales on
+        # one sentence is a product nothing computes — Coat of Arms' refusal.
+        return None
     if per_counter is not None and (
         keywords or protection_from or granted_ability or not (power or toughness)
     ):
@@ -959,6 +1030,7 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
         subject, power, toughness, keywords, protection_from, granted_ability,
         condition, per_counter=per_counter,
         per_shared_creature_type=per_shared_type,
+        per_point_of=per_point_of,
     )
 
 
@@ -1036,6 +1108,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["per_counter"] = buff.per_counter
     if buff.per_shared_creature_type:
         payload["per_shared_creature_type"] = True
+    if buff.per_point_of:
+        payload["per_point_of"] = buff.per_point_of
     return payload
 
 
@@ -1077,12 +1151,14 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
         condition=payload.get("condition"),
         per_counter=payload.get("per_counter"),
         per_shared_creature_type=bool(payload.get("per_shared_creature_type")),
+        per_point_of=payload.get("per_point_of"),
     )
 
 
 __all__ = [
     "CONDITIONS", "LORD_BUFF_KIND", "LordBuff",
     "LordBuffFilter", "QUALIFIER_FIELDS", "SACRIFICE_WHEN_CONDITION_FAILS",
-    "grantable_keywords", "grantable_quoted_ability", "lord_buff_for",
+    "grantable_keywords", "grantable_quoted_ability", "keyword_points",
+    "lord_buff_for",
     "lord_buff_from_payload", "lord_buff_payload", "sacrifice_state_trigger",
 ]

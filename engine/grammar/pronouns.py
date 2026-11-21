@@ -52,6 +52,7 @@ from .nouns import parse_object_filter
 from .effects import (_parse_create_token, _parse_gains, _parse_gets,
                       _parse_loses, _parse_put_counter)
 from .effects.characteristics import _parse_quoted_abilities
+from .conjuncts import _with_gained_type_conjunct
 from .phrases import _accept_self_reference
 from .rebinding import statement_bound_target as _statement_bound_target
 from .rebinding import (statement_bound_several_targets
@@ -294,6 +295,14 @@ def _parse_pronoun_grant_rider(
     except GrammarError:
         stream.reset(mark)
         return None
+    # "Put a training counter on target creature. **That creature gains
+    # bushido 1 and becomes a Samurai in addition to its other creature
+    # types.**" (Sensei Golden-Tail.) The type tail the sentence parser joins
+    # onto every "gains" (`subject_verb`, Disciple of Kangee), read here too
+    # because this rider is where a bound "that creature" is parsed: left
+    # unread, the "and becomes" is a sentence with no subject and the whole
+    # line refuses. The same joiner, so the window is shared the same way.
+    grant = _with_gained_type_conjunct(stream, grant, subject)
     # "Put target creature card from a graveyard onto the battlefield under
     # your control. It gains haste." (Liliana, Waker of the Dead's emblem.)
     # A durationless grant to a reanimated card folds into the reanimation —

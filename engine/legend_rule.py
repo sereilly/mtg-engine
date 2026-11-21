@@ -46,28 +46,103 @@ read would have missed both.
 
 from __future__ import annotations
 
+import re
+
 #: The prompt kind — ``LEGEND_RULE_SPEC`` in ``mixins/stack/choices/permanents.py``.
 LEGEND_RULE = "legend_rule"
+
+#: The registry label a claimed exemption line carries
+#: (``grammar/registries.registry_for_line``).
+LEGEND_RULE_EXEMPTION_CLAIM = "legend_rule"
+
+#: "If there are exactly two permanents named Brothers Yamazaki on the
+#: battlefield, the "legend rule" doesn't apply to them." (Brothers Yamazaki.)
+#: A static ability that switches CR 704.5j off for one name while the
+#: battlefield holds exactly that many permanents with it. The count and the
+#: name are payload — read out of the printed sentence, never compared against
+#: a name spelled here — so a card printing the sentence about itself needs
+#: nothing more. Matched on the line as the registries see it (lowercased, no
+#: full stop), with either spelling of the quotation marks and the apostrophe.
+_EXEMPTION_LINE = re.compile(
+    r"^if there are exactly (?P<count>[a-z]+) permanents named (?P<name>.+?) "
+    r"on the battlefield, the [\"“]legend rule[\"”] "
+    r"doesn['’]t apply to them$"
+)
+
+
+def legend_rule_exemption(line: str) -> tuple[int, str] | None:
+    """``(count, lowercased name)`` for a printed legend-rule exemption line,
+    or None when *line* is not one.
+
+    One reader, asked by the registry claim (so the support gate admits only
+    what this can read) and by :func:`exempt_from_legend_rule` (so what is
+    admitted is what is enforced).
+    """
+    from .grammar.vocabulary import NUMBER_WORDS
+
+    normalized = " ".join((line or "").strip().lower().rstrip(".").split())
+    match = _EXEMPTION_LINE.match(normalized)
+    if match is None:
+        return None
+    count = NUMBER_WORDS.get(match.group("count"))
+    if count is None:
+        return None
+    return count, match.group("name")
+
+
+def exempt_from_legend_rule(game, name: str) -> bool:
+    """Whether CR 704.5j does not apply to the permanents named *name* now.
+
+    True when a permanent on the battlefield says an exemption line naming
+    *name* (through ``effective_card``, so a Brothers that lost its abilities
+    exempts nobody and a copy of one exempts as the card does) and the whole
+    battlefield — every player's, because the sentence counts "permanents …
+    on the battlefield", not "you control" — holds exactly the count it prints.
+    A third Brothers Yamazaki ends it for every one of them (the card's
+    2013-07-01 ruling: "If a third Brothers Yamazaki enters the battlefield,
+    the legend rule will apply.").
+    """
+    wanted = name.lower()
+    on_battlefield = [
+        perm for perm in game.all_permanents()
+        if perm.effective_card.name.lower() == wanted
+    ]
+    for perm in game.all_permanents():
+        for line in (perm.effective_card.oracle_text or "").splitlines():
+            exemption = legend_rule_exemption(line)
+            if exemption is None:
+                continue
+            count, exempt_name = exemption
+            if exempt_name == wanted and len(on_battlefield) == count:
+                return True
+    return False
 
 
 def legend_groups(game, seat: int) -> list[tuple[str, list]]:
     """*seat*'s legendary permanents that share a name with another it
     controls: ``(name, permanents)`` per name, two or more each, in the order
     each name's first permanent sits on the battlefield and each group in
-    battlefield order."""
+    battlefield order. A name an exemption switches the rule off for
+    (:func:`exempt_from_legend_rule`) is no group."""
     by_name: dict[str, list] = {}
     for perm in game.controlled_by(seat):
         if perm.has_supertype("legendary"):
             by_name.setdefault(perm.effective_card.name, []).append(perm)
-    return [(name, perms) for name, perms in by_name.items() if len(perms) > 1]
+    return [
+        (name, perms) for name, perms in by_name.items()
+        if len(perms) > 1 and not exempt_from_legend_rule(game, name)
+    ]
 
 
 def live_candidates(game, choice) -> list:
     """The permanents a ``legend_rule`` prompt is about **now**: every
-    legendary permanent its seat controls with its name. Re-derived rather than
+    legendary permanent its seat controls with its name — none while an
+    exemption switches the rule off for that name. Re-derived rather than
     frozen at arming, so the list offered, the list an answer is checked
     against and the list binned are one rule."""
     name = choice.data.get("name")
+    if name is not None and exempt_from_legend_rule(game, name):
+        return []
     return [
         perm for perm in game.controlled_by(choice.player_index)
         if perm.has_supertype("legendary") and perm.effective_card.name == name

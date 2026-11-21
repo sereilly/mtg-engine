@@ -670,6 +670,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if block_permission_claims_line(normalized):
         return True
+    # "If there are exactly two permanents named Brothers Yamazaki on the
+    # battlefield, the "legend rule" doesn't apply to them." CR 704.5j
+    # switched off for a name, read off the board by the rule's own group
+    # reader (``legend_rule.legend_groups``) at every state-based check — no
+    # instruction, and asked of the reader that enforces it.
+    from .legend_rule import legend_rule_exemption
+
+    if legend_rule_exemption(normalized) is not None:
+        return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",
         # "this creature enters with x +1/+1 counters on it" was a row here,

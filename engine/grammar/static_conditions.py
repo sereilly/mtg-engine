@@ -296,7 +296,7 @@ def _graveyard_anthem_condition(
             "the protection reader gathers no source from a graveyard",
             node=node,
         )
-    if buff.per_counter or buff.per_shared_creature_type:
+    if buff.per_counter or buff.per_shared_creature_type or buff.per_point_of:
         raise LoweringError(
             "an anthem gathered from a graveyard carries a fixed size",
             node=node,

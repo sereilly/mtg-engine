@@ -165,6 +165,14 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     # creatures have provoke"), and a grant of a line-derived keyword grants
     # the line (`keywords.LINE_DERIVED_KEYWORDS`).
     "provoke",
+    # CR 702.45: bushido. Rampage's shape exactly — a number for an argument
+    # (`NUMERIC_ARGUMENT_KEYWORDS` below, so a grant with no N refuses) and a
+    # triggered ability the CR *defines*, built at compile time out of the
+    # printed line (`engine/bushido.py`). Listed here because the word has
+    # readers of its own in Champions of Kamigawa: Sensei Golden-Tail grants
+    # it ("That creature gains bushido 1") through the grant gate, which reads
+    # this set, and Takeno counts it ("for each point of bushido it has").
+    "bushido",
 })
 
 
@@ -183,7 +191,11 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
 #: number is no ability at all. It is here so the argument is stripped wherever
 #: a printed instance is named back to its ability (``keywords.
 #: keyword_ability_name``): "amplify 1" is the ability *amplify*.
-NUMERIC_ARGUMENT_KEYWORDS: frozenset[str] = frozenset({"rampage", "amplify"})
+#:
+#: Bushido (CR 702.45a, "Bushido N") is the third, and rampage's twin: in
+#: :data:`IMPLEMENTED_KEYWORDS` because a card grants it, here so the grant
+#: names its N ("gains bushido 1") and a bare "bushido" grant refuses.
+NUMERIC_ARGUMENT_KEYWORDS: frozenset[str] = frozenset({"rampage", "amplify", "bushido"})
 
 
 #: The keyword **families** a card can name wholesale: "loses all landwalk

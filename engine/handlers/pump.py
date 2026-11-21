@@ -109,6 +109,16 @@ def pump_self(game: Game, instruction: OracleInstruction, context: OracleExecuti
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
+    # "…it gets +2/+2 until end of turn." (Bushido, Chub Toad, every
+    # firebreather.) The creature is the one that was on the battlefield when
+    # the ability was put on the stack; once it has left, the card that went
+    # to a graveyard is a new object (CR 400.7) and there is nothing for the
+    # pump to change. Resolved as doing nothing — the log used to say the
+    # dead creature got the bonus, and the boost was written onto a permanent
+    # no longer on any battlefield (`keyword_removal`'s answer, the same rule).
+    if not game.is_on_battlefield(source_permanent):
+        game.log.append(f"{card.name}: it is no longer on the battlefield")
+        return True, "resolved"
     # "…gets +X/+0 until end of turn, where X is the number of other attacking
     # creatures." (Alpine Houndmaster.) X is defined by a count taken at
     # resolution, through the one evaluator every computed amount shares — so

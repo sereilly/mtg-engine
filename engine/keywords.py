@@ -190,7 +190,13 @@ ALL_ABILITIES_REMOVED = "all_abilities_removed"
 #: **lord** grants: "All Sliver creatures have provoke" (Hunter Sliver). The
 #: lord pass (`mixins/lords._recalculate_lord_buffs`) grants such a keyword's
 #: line on the derived-ability channel beside the word, as the Aura path does.
-LINE_DERIVED_KEYWORDS = frozenset({"rampage", "flanking", "provoke"})
+#:
+#: Bushido (CR 702.45a, `engine/bushido.py`) is the fourth, and the first a
+#: **one-shot** grant gives without a duration: Sensei Golden-Tail's "That
+#: creature gains bushido 1" grants the line "Bushido 1" for as long as the
+#: creature stays on the battlefield, and the compiler builds the trigger out
+#: of the folded text.
+LINE_DERIVED_KEYWORDS = frozenset({"rampage", "flanking", "provoke", "bushido"})
 
 
 def keyword_ability_name(keyword: str) -> str:
