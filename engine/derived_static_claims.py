@@ -286,6 +286,15 @@ def _derived_static_claims(
 
     if any(exiler_play_line(line) for line in (oracle_text or "").splitlines()):
         claims.append(EXILER_PLAY_CLAIM)
+    # "All instances of color words in the text of spells and permanents are
+    # changed to the chosen color word." (Swirl the Mists.) CR 612 as a static
+    # ability, written onto every spell and permanent by the board-wide pass
+    # (``engine/global_text_changes.py``) — no instruction, so its own claim,
+    # asked through the reader the writer uses.
+    from .global_text_changes import BOARD_TEXT_CHANGE_CLAIM, all_color_words_line
+
+    if any(all_color_words_line(line) for line in (oracle_text or "").splitlines()):
+        claims.append(BOARD_TEXT_CHANGE_CLAIM)
     # "Rather than pay the mana cost for a spell, its controller may discard a
     # card that shares a color with that spell." (Dream Halls.) CR 118.9's
     # alternative cost granted from a board rather than printed on the spell,

@@ -32,6 +32,7 @@ from engine.activation_restrictions import (  # noqa: E402
 from engine.cast_permissions import (board_free_cast_line,  # noqa: E402
                                      board_graveyard_play_line)
 from engine.exiler_grants import exiler_play_line  # noqa: E402
+from engine.global_text_changes import all_color_words_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
@@ -454,6 +455,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # .permission_for`. Its own channel, asking the reader both ask.
     ("exiler_grants.py (exilers look at and play their cards)",
      exiler_play_line),
+    # "All instances of color words in the text of spells and permanents are
+    # changed to the chosen color word." (Swirl the Mists.) CR 612 as a static
+    # ability: one record per source on every spell and permanent, kept in step
+    # with the board by `global_text_changes.sync_board_text_changes`. Its own
+    # channel, asking the reader the writer asks.
+    ("global_text_changes.py (every colour word changed)",
+     all_color_words_line),
     # A CR 614 replacement effect, in full. `engine/replacements/lines.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

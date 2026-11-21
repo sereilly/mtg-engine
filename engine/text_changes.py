@@ -74,6 +74,18 @@ LAND_WORD = "land_word"
 #: and because a creature type is the one vocabulary here that card *names*
 #: are made of (CR 612.2: "Relentless Rats" keeps its name).
 CREATURE_WORD = "creature_word"
+#: **Every** colour word, changed to one (CR 612): "All instances of color
+#: words in the text of spells and permanents are changed to the chosen color
+#: word." (Swirl the Mists.) Its own kind rather than five colour-word records,
+#: because one effect's substitutions are simultaneous (:func:`one_pass`): five
+#: records applied one after another would be five effects, and a record that
+#: turned "white" into "red" ahead of one turning "red" into the chosen word
+#: would chain. The record's ``from`` is :data:`ALL_WORDS`; its ``to`` is the
+#: chosen word. Written by ``engine/global_text_changes.py``, which keeps it on
+#: every spell and permanent for as long as its source is on the battlefield.
+COLOR_WORD_ALL = "color_word_all"
+#: The ``from`` of a :data:`COLOR_WORD_ALL` record: no one word is replaced.
+ALL_WORDS = "all"
 
 #: The two words of "replacing all instances of **one creature type with
 #: another**" (Artificial Evolution): the word replaced and its replacement,
@@ -161,6 +173,16 @@ def _forms(kind: str, old: str, new: str) -> tuple[tuple[str, str], ...]:
     "All Mountain are …", off by a letter and by nothing that matters to the
     rules. No permanent in this pool writes that phrase.
     """
+    if kind == COLOR_WORD_ALL:
+        # Every colour word and every "non<colour>" compound, each to the one
+        # word — :data:`COLOR_WORD`'s two forms below for the whole vocabulary
+        # at once, so the effect is one pass and nothing it writes is read
+        # again by it (no chaining).
+        pairs = {}
+        for word in COLOR_WORDS.values():
+            pairs[f"non{word}"] = f"non{new}"
+            pairs[word] = new
+        return tuple(sorted(pairs.items(), key=lambda item: (-len(item[0]), item[0])))
     if kind == COLOR_WORD:
         # "**non**black" is an instance of the word "black", and Mind Bend's own
         # reminder text says so: "you may change 'nonblack creature' to
@@ -478,10 +500,19 @@ def text_seen_by(game, holder, seat: "int | None") -> "CardDefinition":
 
 def _changes_of(holder) -> tuple[dict, ...]:
     """The recorded changes of a permanent (:func:`text_changes`) or a spell
-    (:func:`spell_text_changes`)."""
+    (:func:`spell_text_changes`), in timestamp order (CR 613.7).
+
+    Sorted, because recorded order is no longer always timestamp order: a
+    board-wide change (``engine/global_text_changes.py``) carries its source's
+    timestamp (CR 613.7a) and is written onto a spell or permanent whenever
+    the board is recomputed — after a Sleight of Mind made later may already
+    have recorded its own. A stable sort, so every record a writer appended in
+    order stays where it was."""
     if isinstance(getattr(holder, "metadata", None), dict):
-        return text_changes(holder)
-    return spell_text_changes(holder)
+        changes = text_changes(holder)
+    else:
+        changes = spell_text_changes(holder)
+    return tuple(sorted(changes, key=lambda entry: int(entry.get("timestamp", 0))))
 
 
 # ---------------------------------------------------------------------------
@@ -564,12 +595,15 @@ def apply_text_changes(
         # The name is deliberately absent: CR 612.2 forbids a text change from
         # rewriting a card name even when the name contains the word.
         type_line = one_pass(type_line, replacements)
-        if change["kind"] == CREATURE_WORD:
+        if change["kind"] in (CREATURE_WORD, COLOR_WORD_ALL):
             # …and a creature type is what card names are *made of*, so the
             # names written inside the rules text are kept too: the card's own
             # ("Reckless One's power …") and any "named …" phrase ("cards named
-            # Relentless Rats"). Only for this kind, so a colour or land-type
-            # change folds byte for byte as it always has.
+            # Relentless Rats"). Swirl the Mists' every-colour-word change keeps
+            # them for CR 612.2's own reason: "This effect doesn't remove Black
+            # Ward" names a card, and the name is not a colour word. Only for
+            # these two kinds, so Sleight of Mind's one-word colour change and
+            # every land-type change fold byte for byte as they always have.
             oracle_text = _one_pass_outside_names(oracle_text, replacements, card.name)
         else:
             oracle_text = one_pass(oracle_text, replacements)
@@ -715,12 +749,16 @@ def _net_map(perm: Permanent, kind: str, vocabulary: Iterable[str]) -> dict[str,
     same fold ``apply_text_changes`` performs — not a merge of the entries,
     which is the thing that does not commute.
     """
-    changes = [c for c in _changes_of(perm) if c.get("kind") == kind]
+    # Swirl the Mists' every-colour-word change is a colour-word change too,
+    # ordered among the one-word ones by timestamp: every word it meets
+    # becomes its word.
+    kinds = (COLOR_WORD, COLOR_WORD_ALL) if kind == COLOR_WORD else (kind,)
+    changes = [c for c in _changes_of(perm) if c.get("kind") in kinds]
     result = {}
     for word in vocabulary:
         current = word
         for change in changes:
-            if current == change["from"]:
+            if change.get("kind") == COLOR_WORD_ALL or current == change["from"]:
                 current = change["to"]
         result[word] = current
     return result
@@ -779,7 +817,8 @@ def changed_words(perm: Permanent) -> list[dict]:
 
 
 __all__ = [
-    "COLOR_WORD", "COLOR_WORDS", "CREATURE_WORD", "LAND_TYPE_WORDS", "LAND_WORD",
+    "ALL_WORDS", "COLOR_WORD", "COLOR_WORD_ALL", "COLOR_WORDS", "CREATURE_WORD",
+    "LAND_TYPE_WORDS", "LAND_WORD",
     "TEXT_CHANGE_EFFECTS", "TEXT_CHANGE_NEW_CREATURE_TYPE",
     "TEXT_CHANGE_OLD_CREATURE_TYPE", "apply_text_changes",
     "carry_spell_text_changes", "change_color_word", "change_creature_word",

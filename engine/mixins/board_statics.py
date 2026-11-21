@@ -36,6 +36,8 @@ from ..land_types import (STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND,
                           resolve_static_land_type_change,
                           static_land_type_change_applies,
                           static_supertype_removal_applies)
+from ..global_text_changes import (has_board_text_change_source,
+                                   sync_board_text_changes)
 from ..printed_characteristics import seed_characteristics
 from ..type_layer import (attached_animation_type_effect,
                           global_static_type_effect,
@@ -279,6 +281,10 @@ class BoardStaticsMixin:
         judging = (
             bool(self.lingering_global_statics)
             or bool(global_static_sources(board))
+            # "All instances of color words in the text of spells and
+            # permanents are changed …" (Swirl the Mists): layer 3, which the
+            # pass writes first — a permanent enters with its text changed.
+            or has_board_text_change_source(board)
             or any(
                 instr.kind in (LAND_ANIMATION_KIND, STATIC_SUPERTYPE_REMOVAL_KIND)
                 for source in board
@@ -463,6 +469,13 @@ class BoardStaticsMixin:
         wait behind the effect that made a land a creature.
         """
         stack_static_grant_sources = _late.stack_statics.stack_static_grant_sources
+
+        # **Layer 3 before layer 4** (CR 613.1c): a board-wide text change
+        # (Swirl the Mists) rewrites what every permanent in the pass and every
+        # spell on the stack says, and everything below reads that text. Kept
+        # in step with the board here, so a source that left takes its records
+        # with it (``engine/global_text_changes.py``).
+        sync_board_text_changes(self, all_permanents)
 
         # Both derived layer-4 channels are cleared before anything is judged,
         # so no candidate can read a previous pass's contribution as this
