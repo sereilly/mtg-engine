@@ -2191,11 +2191,26 @@ def test_w2g4_captains_maneuver_in_a_simulated_game_protects_its_caster():
             games=4, seed=seed, max_turns=18, required_cards=["Captain's Maneuver"],
         )
         assert report.ok, report.issues[:3]
+        # Whose Maneuver each resolution is, by the stack's own order (CR
+        # 405.5: last in, first out). The report lists a step's casts before
+        # that step's game log, so with one cast "in response to" another the
+        # last cast line is not the spell resolving: two seats' Maneuvers in
+        # one combat (seed 7, game 2, once the attack read the fight) were
+        # both read as the second caster's, and the first caster's own
+        # protection as a redirect onto itself.
+        pending: list = []
         caster = None
         for line in report.log_lines:
-            if " cast Captain's Maneuver" in line:
-                caster = line.split(" cast ")[0].split()[-1]
+            if line.startswith("=== Game") or line.startswith("RESULT"):
+                pending.clear()
+            elif " cast Captain's Maneuver" in line:
+                if "-> queued" in line or "-> resolved" in line:
+                    pending.append(line.split(" cast ")[0].split()[-1])
+            elif line.strip().startswith("Captain's Maneuver was countered"):
+                if pending:
+                    pending.pop()
             elif line.strip().startswith("Captain's Maneuver: the next "):
+                caster = pending.pop() if pending else None
                 spared = line.split("would be dealt to ")[1].split(" this turn")[0]
                 taker = line.split("is dealt to ")[1].split(" instead")[0]
                 # Whose the spared creature is, when it is one: the seat
