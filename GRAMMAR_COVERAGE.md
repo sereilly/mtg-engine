@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 440 | 71.4% | 68.0% | 48.2% | 184 |
+| CHK *(measured)* | 291 | 440 | 73.4% | 70.7% | 50.7% | 192 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,9 +71,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1019 | 523 | expected a subject |  |
-| 209 | 111 | unrecognized effect verb |  |
-| 152 | 81 | unconsumed text |  |
+| 1015 | 519 | expected a subject |  |
+| 206 | 108 | unrecognized effect verb |  |
+| 150 | 79 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -1464,6 +1464,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target permanent to its owner's hand.`
 - **Boris Devilboon**
   - `{2}{B}{R}, {T}: Create a 1/1 black and red Demon creature token named Minor Demon.`
+- **Boseiju, Who Shelters All**
+  - `{T}, Pay 2 life: Add {C}. If that mana is spent on an instant or sorcery spell, that spell can't be countered.`
 - **Bosh, Iron Golem**
   - `{3}{R}, Sacrifice an artifact: Bosh deals damage equal to the sacrificed artifact's mana value to any target.`
 - **Bottle Gnomes**
@@ -4333,6 +4335,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Favorable Destiny**
   - `Enchanted creature gets +1/+2 as long as it's white.`
   - `Enchanted creature has shroud as long as its controller controls another creature. (It can't be the target of spells or abilities.)`
+- **Feast of Worms**
+  - `Destroy target land. If that land was legendary, its controller sacrifices another land of their choice.`
 - **Feast or Famine**
   - `• Create a 2/2 black Zombie creature token.`
   - `• Destroy target nonartifact, nonblack creature. It can't be regenerated.`
@@ -5376,6 +5380,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you control a Dwarf, sacrifice this creature.`
 - **Godo, Bandit Warlord**
   - `When Godo enters, you may search your library for an Equipment card, put it onto the battlefield, then shuffle.`
+  - `Whenever Godo attacks for the first time each turn, untap it and all Samurai you control. After this phase, there is an additional combat phase.`
 - **Goham Djinn**
   - `{1}{B}: Regenerate this creature.`
   - `This creature gets -2/-2 as long as black is the most common color among all permanents or is tied for most common.`
@@ -5629,6 +5634,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, change Halfdane's base power and toughness to the power and toughness of target creature other than Halfdane until the end of your next upkeep.`
 - **Hall of Gemstone**
   - `At the beginning of each player's upkeep, that player chooses a color. Until end of turn, lands tapped for mana produce mana of the chosen color instead of any other color.`
+- **Hall of the Bandit Lord**
+  - `{T}, Pay 3 life: Add {C}. If that mana is spent on a creature spell, it gains haste.`
 - **Hallow**
   - `Prevent all damage target spell would deal this turn. You gain life equal to the damage prevented this way.`
 - **Hallowed Ground**
@@ -6913,6 +6920,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.`
 - **Kokusho, the Evening Star**
   - `When Kokusho dies, each opponent loses 5 life. You gain life equal to the life lost this way.`
+- **Konda's Banner**
+  - `Creatures that share a color with equipped creature get +1/+1.`
+  - `Creatures that share a creature type with equipped creature get +1/+1.`
 - **Kookus**
   - `At the beginning of your upkeep, if you don't control a creature named Keeper of Kookus, this creature deals 3 damage to you and attacks this turn if able.`
   - `{R}: This creature gets +1/+0 until end of turn.`
@@ -7666,6 +7676,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Add one mana of any color.`
   - `{T}: Add {C}.`
   - `{1}, {T}: Add one mana of any color.`
+- **Mana Seism**
+  - `Sacrifice any number of lands, then add that much {C}.`
 - **Mana Severance**
   - `Search your library for any number of land cards, exile them, then shuffle.`
 - **Mana Short**
@@ -8763,6 +8775,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player chooses target player who has more life than they do and is their opponent. The first player may have this enchantment deal 1 damage to the second player.`
 - **Oath of Scholars**
   - `At the beginning of each player's upkeep, that player chooses target player who has more cards in hand than they do and is their opponent. The first player may discard their hand and draw three cards.`
+- **Oathkeeper, Takeno's Daisho**
+  - `Whenever equipped creature dies, return that card to the battlefield under your control if it's a Samurai card.`
+  - `When Oathkeeper is put into a graveyard from the battlefield, exile equipped creature.`
 - **Obelisk of Undoing**
   - `{6}, {T}: Return target permanent you both own and control to your hand.`
   - `{6}, {T}: Return target permanent you both own and control to your hand.`
@@ -12888,6 +12903,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}: This enchantment deals 1 damage to target creature. Any player may activate this ability but only as a sorcery.`
 - **Taste of Paradise**
   - `You gain 3 life plus an additional 3 life for each additional {1}{G} you paid.`
+- **Tatsumasa, the Dragon's Fang**
+  - `{6}, Exile Tatsumasa: Create a 5/5 blue Dragon Spirit creature token with flying. Return Tatsumasa to the battlefield under its owner's control when that token dies.`
 - **Tattoo Ward**
   - `Sacrifice this Aura: Destroy target enchantment.`
 - **Tavern Swindler**
@@ -13850,6 +13867,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target creature to its owner's hand.`
   - `Return target creature to its owner's hand.`
   - `Return target creature to its owner's hand.`
+- **Untaidake, the Cloud Keeper**
+  - `{T}, Pay 2 life: Add {C}{C}. Spend this mana only to cast legendary spells.`
 - **Untamed Wilds**
   - `Search your library for a basic land card, put that card onto the battlefield, then shuffle.`
   - `Search your library for a basic land card, put that card onto the battlefield, then shuffle.`
