@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 462 | 83.1% | 82.9% | 60.8% | 230 |
+| CHK *(measured)* | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,8 +71,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 999 | 506 | expected a subject |  |
-| 198 | 100 | unrecognized effect verb |  |
+| 996 | 503 | expected a subject |  |
+| 195 | 97 | unrecognized effect verb |  |
 | 147 | 74 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
@@ -7077,6 +7077,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Kuro, Pitlord**
   - `At the beginning of your upkeep, sacrifice Kuro unless you pay {B}{B}{B}{B}.`
   - `Pay 1 life: Target creature gets -1/-1 until end of turn.`
+- **Kusari-Gama**
+  - `Whenever equipped creature deals damage to a blocking creature, this Equipment deals that much damage to each other creature defending player controls.`
 - **Kyren Archive**
   - `At the beginning of your upkeep, you may exile the top card of your library face down.`
   - `{5}, Discard your hand, Sacrifice this artifact: Put all cards exiled with this artifact into their owner's hand.`
@@ -10514,6 +10516,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Any number of target players each gain life equal to the greatest mana value among permanents you control.`
 - **Rewards of Diversity**
   - `Whenever an opponent casts a multicolored spell, you gain 4 life.`
+- **Reweave**
+  - `Target permanent's controller sacrifices it. If the player does, they reveal cards from the top of their library until they reveal a permanent card that shares a card type with the sacrificed permanent, put that card onto the battlefield, then shuffle.`
 - **Rewind**
   - `Counter target spell. Untap up to four lands.`
   - `Counter target spell. Untap up to four lands.`
@@ -11502,6 +11506,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Exile target creature and put a +1/+1 counter on Shauku.`
 - **Shelkin Brownie**
   - `{T}: Target creature loses all "bands with other" abilities until end of turn.`
+- **Shell of the Last Kappa**
+  - `{3}, {T}: Exile target instant or sorcery spell that targets you. (The spell has no effect.)`
+  - `{3}, {T}, Sacrifice Shell of the Last Kappa: You may cast a spell from among cards exiled with Shell of the Last Kappa without paying its mana cost.`
 - **Shelter**
   - `Target creature you control gains protection from the color of your choice until end of turn.`
   - `Draw a card.`
@@ -12651,6 +12658,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}, {T}, Discard a card: Counter target noncreature spell.`
 - **Stronghold Taskmaster**
   - `Other black creatures get -1/-1.`
+- **Struggle for Sanity**
+  - `Target opponent reveals their hand. That player exiles a card from it, then you exile a card from it. Repeat this process until all cards in that hand have been exiled. That player returns the cards they exiled this way to their hand and puts the rest into their graveyard.`
 - **Student of Elements**
   - `When this creature has flying, flip it.`
   - `Creatures you control have flying.`

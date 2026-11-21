@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**452 / 663 tracked rules covered (68%)** — 3789 tests, 0 unannotated.
+**452 / 663 tracked rules covered (68%)** — 3797 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -273,7 +273,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
 - [x] **115.5** A spell or ability on the stack is an illegal target for itself. *(2 tests)*
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(6 tests)*
-- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(34 tests, subrules aef)*
+- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(36 tests, subrules acef)*
 - [x] **115.8** Modal spells and abilities may have different targeting requirements for each mode. An effect tha... *(2 tests)*
 - [x] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma... *(2 tests, subrules a)*
 - [x] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ... *(2 tests, subrules a)*
@@ -740,7 +740,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(2 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(222 tests, subrules bcdfghmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(223 tests, subrules bcdfghmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -769,8 +769,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 612. Text-Changing Effects
 
-- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(24 tests)*
-- [x] **612.2** A text-changing effect changes only those words that are used in the correct way (for example, a ... *(1 tests)*
+- [x] **612.1** Some continuous effects change an object’s text. This can apply to any words or symbols printed o... *(27 tests)*
+- [x] **612.2** A text-changing effect changes only those words that are used in the correct way (for example, a ... *(2 tests)*
 - [x] **612.3** Effects that add or remove abilities don’t change the text of the objects they affect, so any abi... *(1 tests)*
 - [ ] **612.4** A token’s subtypes and rules text are defined by the spell or ability that created the token. A t...
 - [ ] **612.5** One card (Exchange of Words) instructs a player to exchange the text boxes of two objects. This r...
@@ -788,7 +788,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(15 tests)*
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(123 tests, subrules abdem)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(128 tests, subrules abdem)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(44 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
@@ -919,7 +919,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.44** Sunburst *(12 tests, subrules abcd)*
 - [x] **702.45** Bushido *(10 tests, subrules ab)*
 - [x] **702.46** Soulshift *(7 tests, subrules ab)*
-- [x] **702.47** Splice *(18 tests, subrules abcde)*
+- [x] **702.47** Splice *(21 tests, subrules abcde)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 
@@ -958,7 +958,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
 - [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(15 tests, subrules abc)*
-- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(25 tests, subrules ac)*
+- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(26 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...
