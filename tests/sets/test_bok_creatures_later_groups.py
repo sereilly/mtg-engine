@@ -323,6 +323,142 @@ def test_w1g8_chisei_asks_a_person_whether_and_from_which_permanent(set_pool):
         assert (counters_on(baku, "ki"), counters_on(altar, "ki")) == (2, 0)
 
 
+def _w1g8_flipped(bok, name):
+    """*name* on seat 0's battlefield, two Spirit casts taking a ki counter
+    each, then the end step's "you may flip it" accepted (CR 710)."""
+    from engine.named_counters import counters_on
+
+    game, (flip,) = _w1g8_table([bok[name]], [])
+    game.enforce_mana_costs = False
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    for _ in range(2):
+        game.players[0].hand.append(bok["Petalmane Baku"])
+        assert game.cast_from_hand(0, "Petalmane Baku").supported
+        _w1g8_settle(game, answers={"optional_pay": _w1g8_accept})
+    assert counters_on(flip, "ki") == 2
+    game.resolve_end_step(0)
+    _w1g8_settle(game, answers={"optional_pay": _w1g8_accept})
+    game.resolve_cleanup_step(0)
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    return game, flip
+
+
+def test_w1g8_the_ki_flip_cards_flip_and_their_bottom_halves_work(set_pool):
+    """The five ki flip cards: two Spirit casts, two ki counters, flipped at
+    the end step, and each bottom half's ki ability spends a counter and does
+    what it prints — Kaiso's prevention (a Lightning Bolt into the shielded
+    creature), Scarmaker's fear, Azamuki's control until end of turn, Ichiga's
+    +2/+2 (and trample)."""
+    from engine.named_counters import counters_on
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+
+    game, kaiso = _w1g8_flipped(bok, "Faithful Squire")
+    assert kaiso.card.name == "Kaiso, Memory of Loyalty" and kaiso.has_keyword("flying")
+    bears = _w1g8_Permanent(card=lea["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, bears, None)
+    assert game.activate_permanent_ability(
+        0, kaiso.card.name, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g8_settle(game)
+    game.players[0].hand.append(lea["Lightning Bolt"])
+    game.cast_from_hand(0, "Lightning Bolt", target_permanent_ids=[bears.permanent_id])
+    _w1g8_settle(game)
+    assert game.is_on_battlefield(bears) and counters_on(kaiso, "ki") == 1
+
+    game, scarmaker = _w1g8_flipped(bok, "Hired Muscle")
+    assert scarmaker.card.name == "Scarmaker"
+    assert game.activate_permanent_ability(
+        0, "Scarmaker", target_permanent_ids=[scarmaker.permanent_id],
+    ).supported
+    _w1g8_settle(game)
+    assert scarmaker.has_keyword("fear")
+
+    game, azamuki = _w1g8_flipped(bok, "Cunning Bandit")
+    assert azamuki.card.name == "Azamuki, Treachery Incarnate"
+    ogre = _w1g8_Permanent(card=lea["Gray Ogre"])
+    game._put_permanent_onto_battlefield(1, ogre, None)
+    game._sync_control()
+    assert game.activate_permanent_ability(
+        0, azamuki.card.name, target_permanent_ids=[ogre.permanent_id],
+    ).supported
+    _w1g8_settle(game)
+    assert game.controller_index_of(ogre) == 0
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+    game.resolve_cleanup_step(0)
+    assert game.controller_index_of(ogre) == 1
+
+    game, ichiga = _w1g8_flipped(bok, "Budoka Pupil")
+    assert ichiga.card.name == "Ichiga, Who Topples Oaks" and ichiga.has_keyword("trample")
+    assert game.activate_permanent_ability(
+        0, ichiga.card.name, target_permanent_ids=[ichiga.permanent_id],
+    ).supported
+    _w1g8_settle(game)
+    assert (ichiga.effective_power, ichiga.effective_toughness) == (6, 5)
+
+
+def test_w1g8_jaraku_counters_a_spell_unless_its_controller_pays_two(set_pool):
+    """Callow Jushi flipped: "Remove a ki counter from Jaraku: Counter target
+    spell unless its controller pays {2}." A caster with no mana left loses
+    the spell; one with two untapped Forests pays and keeps it."""
+    lea = set_pool("LEA")
+    bok = set_pool("BOK")
+    for forests, countered in ((0, True), (2, False)):
+        game, jaraku = _w1g8_flipped(bok, "Callow Jushi")
+        assert jaraku.card.name == "Jaraku the Interloper"
+        game.enforce_mana_costs = True
+        for _ in range(forests):
+            land = _w1g8_Permanent(card=lea["Forest"])
+            game._put_permanent_onto_battlefield(1, land, None)
+        game._sync_control()
+        game.players[1].hand.append(lea["Grizzly Bears"])
+        game.players[1].mana_pool["G"] = 2
+        game.active_player_index = 1
+        assert game.queue_from_hand(1, "Grizzly Bears").supported
+        assert game.activate_permanent_ability(
+            0, "Jaraku the Interloper", target_stack_index=0,
+        ).supported
+        _w1g8_settle(game)
+        bears_out = any(p.card.name == "Grizzly Bears" for p in game.controlled_by(1))
+        assert bears_out is not countered
+        assert ("Grizzly Bears" in [c.name for c in game.players[1].graveyard]) is countered
+
+
+def test_w1g8_the_ki_baku_spend_x_counters_on_x(set_pool):
+    """Petalmane, Skullmane and Waxmane Baku with three ki counters each, X=2:
+    {G}{G} added; a 3/3 at 1/1; two creatures tapped — one counter left on
+    each."""
+    from engine.named_counters import add_counters, counters_on
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game, (petal, skull, wax, giant, bears, ogre) = _w1g8_table(
+        [bok["Petalmane Baku"], bok["Skullmane Baku"], bok["Waxmane Baku"]],
+        [lea["Hill Giant"], lea["Grizzly Bears"], lea["Gray Ogre"]],
+    )
+    game.enforce_mana_costs = False
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    for baku in (petal, skull, wax):
+        add_counters(baku, "ki", 3)
+    assert game.activate_permanent_ability(
+        0, "Petalmane Baku", x_value=2, mana_color="G",
+    ).supported
+    _w1g8_settle(game)
+    assert game.players[0].mana_pool["G"] == 2
+    assert game.activate_permanent_ability(
+        0, "Skullmane Baku", x_value=2, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g8_settle(game)
+    assert (giant.effective_power, giant.effective_toughness) == (1, 1)
+    assert game.activate_permanent_ability(
+        0, "Waxmane Baku", x_value=2,
+        target_permanent_ids=[bears.permanent_id, ogre.permanent_id],
+    ).supported
+    _w1g8_settle(game)
+    assert bears.tapped and ogre.tapped and not giant.tapped
+    assert [counters_on(b, "ki") for b in (petal, skull, wax)] == [1, 1, 1]
+
+
 def test_w1g8_the_kept_sentence_names_the_pool_it_keeps():
     """"…**you** don't lose this mana" after "that player adds", or "**they**"
     after a bare "Add", names a pool the mana did not go into: refused, never
