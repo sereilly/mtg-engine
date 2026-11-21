@@ -25,12 +25,16 @@ from tests.helpers import run_app_js, seat_plays_first, settle
 
 client = TestClient(app)
 
-#: The sets the cards below are first printed in, searched in this order.
-_W2G1_SETS = ("CHK", "LEA", "MIR", "TMP", "5DN", "DST", "MRD", "ONS", "M21")
-
-
 def _w2g1_card(set_pool, name: str):
-    for code in _W2G1_SETS:
+    """The card named *name*: Champions of Kamigawa's first, then each set of
+    the manifest in printing order (the shipped role and the measured one)."""
+    from engine.card_loader import manifest_measured_sets, manifest_sets
+
+    codes = ["CHK"] + [
+        entry["code"] for entry in (*manifest_sets(), *manifest_measured_sets())
+        if entry["code"] != "CHK"
+    ]
+    for code in codes:
         pool = set_pool(code)
         if name in pool:
             return pool[name]
@@ -562,3 +566,71 @@ def test_w2g1_gifts_ungiven_refuses_a_repeated_name_and_counts_the_opponents_pic
     settle(game)
     assert sorted(c.name for c in caster.hand) == ["Grizzly Bears", "Shock"]
     assert {"Lightning Bolt", "Hill Giant"} <= {c.name for c in caster.graveyard}
+
+
+# ---------------------------------------------------------------------------
+# "…target … with mana value X": the X picker follows the targets
+# ---------------------------------------------------------------------------
+
+
+def test_w2g1_an_x_held_to_the_targets_mana_value_is_offered_as_those_values(set_pool):
+    """Hearth Kami and Gorilla Shaman refuse an X that is not the named
+    target's mana value (W1G3). The wire now says so — the spec's
+    `x_is_target_mana_value`, each target's `mana_value` — and nowhere else
+    (Prodigal Sorcerer's ping carries neither). The X prompt offers the mana
+    values the targets have, naming them (`manaValueXChoices`), the picker is
+    narrowed to the X announced (`specNarrowedToManaValueX`), and the pair the
+    client builds is the one the gate takes while any other X is refused.
+    Detonate, whose target is picked first, is offered that target's X alone."""
+    sid, game = _w2g1_session()
+    game.enforce_mana_costs = False
+    shaman = _w2g1_place(game, 0, _w2g1_card(set_pool, "Gorilla Shaman"))
+    _w2g1_place(game, 0, _w2g1_card(set_pool, "Hearth Kami"))
+    sorcerer = _w2g1_place(game, 0, _w2g1_card(set_pool, "Prodigal Sorcerer"))
+    _w2g1_place(game, 1, _w2g1_card(set_pool, "Sol Ring"))
+    stone = _w2g1_place(game, 1, _w2g1_card(set_pool, "Mind Stone"))
+    game.players[0].hand = [_w2g1_card(set_pool, "Detonate")]
+    state = _w2g1_state(sid)
+    spec = _w2g1_on_board(state, 0, shaman.permanent_id)["target_spec"]
+    assert spec["x_is_target_mana_value"] is True
+    assert {t["name"]: t["mana_value"] for t in spec["valid_targets"]} == {
+        "Sol Ring": 1, "Mind Stone": 2,
+    }
+    ping = _w2g1_on_board(state, 0, sorcerer.permanent_id)["target_spec"]
+    assert "x_is_target_mana_value" not in ping
+    assert all("mana_value" not in t for t in ping["valid_targets"])
+    detonate = state["players"][0]["hand"][0]["target_spec"]
+    assert detonate["x_is_target_mana_value"] is True
+
+    stone_entry = next(t for t in detonate["valid_targets"] if t["name"] == "Mind Stone")
+    seen = run_app_js(
+        ["manaValueXChoices", "specNarrowedToManaValueX"],
+        """
+        return {
+          choices: manaValueXChoices(INPUT.spec),
+          narrowed: specNarrowedToManaValueX(INPUT.spec, 2).valid_targets.map((t) => t.name),
+          untouched: specNarrowedToManaValueX(INPUT.ping, 2) === INPUT.ping,
+          none: manaValueXChoices(INPUT.ping),
+          detonate: manaValueXChoices(INPUT.detonate, (t) => t.kind === "permanent"
+            && t.seat === INPUT.stone.seat && t.index === INPUT.stone.index),
+        };
+        """,
+        {"spec": spec, "ping": ping, "detonate": detonate, "stone": stone_entry},
+    )
+    assert seen["choices"] == [{"x": 1, "names": ["Sol Ring"]}, {"x": 2, "names": ["Mind Stone"]}]
+    assert seen["narrowed"] == ["Mind Stone"]
+    assert seen["untouched"] is True and seen["none"] is None
+    assert seen["detonate"] == [{"x": 2, "names": ["Mind Stone"]}]
+
+    def activate(x_value):
+        return client.post(f"/api/sessions/{sid}/action", json={
+            "seat": 0, "action": "activate", "permanent_name": "Gorilla Shaman",
+            "permanent_id": shaman.permanent_id, "target_seat": 1,
+            "target_permanent_id": stone.permanent_id, "x_value": x_value,
+        })
+
+    refused = activate(1)
+    assert refused.status_code == 400, refused.text
+    assert activate(2).status_code == 200
+    settle(game)
+    assert stone not in game.players[1].battlefield, game.log[-6:]

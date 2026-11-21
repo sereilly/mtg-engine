@@ -604,7 +604,7 @@ class AbilityTargetsMixin:
     ) -> str | None:
         """Why a named target's mana value is not the X named beside it, for
         an ability printing "target … with mana value X", or None."""
-        from .targeting import targets_mana_value_x
+        from .targeting import mana_value_for_x, targets_mana_value_x
 
         instruction = getattr(ability, "instruction", None)
         if x_value is None or instruction is None:
@@ -617,7 +617,7 @@ class AbilityTargetsMixin:
             chosen = self.permanent_by_id(permanent_id)
             if chosen is None:
                 continue
-            mana_value = int(getattr(chosen.card, "cmc", 0) or 0)
+            mana_value = mana_value_for_x(chosen)
             if mana_value != int(x_value):
                 return (
                     f"{card.name} targets an object with mana value X, and "

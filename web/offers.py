@@ -37,6 +37,7 @@ from engine.oracle_types import x_spend_colors_from_text
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.text_changes import TEXT_CHANGE_MODE_KINDS, current_text_card, words_written
 from engine.splice import splice_candidates, spliced_text_card
+from engine.targeting import mana_value_for_x, targets_mana_value_x
 
 
 def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
@@ -734,3 +735,41 @@ def splice_offers(game: Game, seat: int, card, hand_index: int | None) -> list |
             ),
         })
     return offered or None
+
+
+def mark_mana_value_x(game: Game, spec: dict | None, instructions) -> dict | None:
+    """Say on *spec* that its target's mana value is the X announced beside
+    it — "Destroy target artifact with mana value X" (Hearth Kami, Gorilla
+    Shaman, Detonate), "…nonblack creature with mana value X" (Plaguebearer),
+    "Counter target spell with mana value X" (Spell Blast) — and give each
+    target its mana value, so the X a person picks can follow the target.
+
+    ``x_is_target_mana_value`` is set only where ``targeting.targets_mana_value_x``
+    reads it off *instructions* (the ability's, or the spell's program), and
+    each permanent or stack entry of ``valid_targets`` gains ``mana_value``,
+    read by ``targeting.mana_value_for_x`` — the reading the activation gate
+    refuses a mismatched X by (W1G3), so the offer and the refusal cannot
+    disagree. Every other spec is returned untouched. Returns *spec*.
+    """
+    if not isinstance(spec, dict) or not instructions:
+        return spec
+    if not targets_mana_value_x([each for each in instructions if each is not None]):
+        return spec
+    spec["x_is_target_mana_value"] = True
+    stack_top_first = list(reversed(game.stack))
+    for entry in spec.get("valid_targets") or ():
+        if not isinstance(entry, dict):
+            continue
+        target = None
+        if entry.get("kind") == "permanent":
+            seat, index = entry.get("seat"), entry.get("index")
+            if isinstance(seat, int) and isinstance(index, int) and 0 <= seat < len(game.players):
+                target = game.permanent_at(seat, index)
+        elif entry.get("kind") == "stack":
+            # Top-first, as the enumeration emits it (`legality_stack`).
+            index = entry.get("stack_index")
+            if isinstance(index, int) and 0 <= index < len(stack_top_first):
+                target = stack_top_first[index]
+        if target is not None:
+            entry["mana_value"] = mana_value_for_x(target)
+    return spec

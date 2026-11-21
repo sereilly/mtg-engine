@@ -16592,10 +16592,25 @@ function renderActivationPrompt() {
         : xPayableSentence(payable);
     }
     const choiceButtons = [];
-    for (let value = 0; value <= pendingCastX.maxX; value += 1) {
-      choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
+    if (Array.isArray(pendingCastX.mvChoices)) {
+      // X is a target's mana value: one button per mana value the targets
+      // have, naming them; one the pool cannot pay is shown, not offered.
+      for (const choice of pendingCastX.mvChoices) {
+        const short = choice.x > pendingCastX.maxX;
+        choiceButtons.push(
+          `<button type="button" class="prompt-choice-btn" data-x-choice="${choice.x}"${short ? " disabled" : ""}>`
+          + `X = ${choice.x} — ${escapeHtml(choice.names.join(", "))}${short ? " (can't pay)" : ""}</button>`,
+        );
+      }
+      if (!pendingCastX.mvChoices.length) {
+        choiceButtons.push("<div>No target has a mana value to announce as X.</div>");
+      }
+    } else {
+      for (let value = 0; value <= pendingCastX.maxX; value += 1) {
+        choiceButtons.push(`<button type="button" class="prompt-choice-btn" data-x-choice="${value}">${value}</button>`);
+      }
+      choiceButtons.push('<button type="button" class="prompt-choice-btn" data-x-choice="custom">Custom...</button>');
     }
-    choiceButtons.push('<button type="button" class="prompt-choice-btn" data-x-choice="custom">Custom...</button>');
     steps.innerHTML = (
       pendingCastX.loyalty
         ? [
@@ -18974,9 +18989,12 @@ function resumeActivationAfterCost(card, activation, fields) {
   // spec alone — the target is exactly what is still owed.
   const spec = targetSpecOf(card);
   const costOnly = !spec?.cost_spec && ACTIVATION_COST_FLAGS.some((flag) => spec?.[flag]);
+  // "…target … with mana value X": the X just announced decides which
+  // targets the picker offers (`specNarrowedToManaValueX`).
+  const narrowed = specNarrowedToManaValueX(spec, pendingActivationCost.fields.x_value);
   const rest = costOnly
     ? { ...card, target_spec: { kind: "none", requires_target: false, valid_targets: [] } }
-    : card;
+    : narrowed !== spec ? { ...card, target_spec: narrowed } : card;
   startActivationPrompt(rest, activation.targetSeat, activation.permanentIndex);
 }
 
@@ -21906,6 +21924,39 @@ function counterRemovalXKind(activationCost) {
   return match ? match[1].toLowerCase() : "";
 }
 
+// "Destroy target artifact with mana value X" (Hearth Kami, Gorilla Shaman,
+// Plaguebearer; Detonate, Spell Blast on the cast side): the X is the target's
+// mana value, so the X prompt offers the mana values the targets have, each
+// with the targets it names, rather than every X the pool can pay (the engine
+// refuses any other, W1G3). The server marks the spec
+// (`x_is_target_mana_value`) and each target's `mana_value`
+// (web/offers.mark_mana_value_x). Null for every other spec. With
+// *onlyTarget* (a cast, whose target is picked first), that target's alone.
+function manaValueXChoices(spec, onlyTarget = null) {
+  if (!spec?.x_is_target_mana_value) return null;
+  const byX = new Map();
+  for (const entry of Array.isArray(spec.valid_targets) ? spec.valid_targets : []) {
+    if (!Number.isInteger(entry?.mana_value)) continue;
+    if (onlyTarget && !onlyTarget(entry)) continue;
+    if (!byX.has(entry.mana_value)) byX.set(entry.mana_value, []);
+    byX.get(entry.mana_value).push(entry.name || "a target");
+  }
+  return [...byX.entries()].sort(([a], [b]) => a - b).map(([x, names]) => ({ x, names }));
+}
+
+// …and, once X is announced, the targets that match it: the spec with its
+// `valid_targets` narrowed to that mana value (CR 601.2c names a target the
+// announced X allows). Every other spec is returned as it was.
+function specNarrowedToManaValueX(spec, xValue) {
+  if (!spec?.x_is_target_mana_value || !Number.isInteger(xValue)) return spec;
+  return {
+    ...spec,
+    valid_targets: (Array.isArray(spec.valid_targets) ? spec.valid_targets : []).filter(
+      (entry) => !Number.isInteger(entry?.mana_value) || entry.mana_value === xValue,
+    ),
+  };
+}
+
 function startActivationXPrompt(
   card, cardName, targetSeat, permanentIndex, abilityIndex, maxXOverride = null,
   options = {},
@@ -21937,6 +21988,8 @@ function startActivationXPrompt(
     // A "Remove X counters" X: bounded by the counters, never re-priced.
     xFromCounters: maxXOverride !== null,
     awaitingCustomValue: false,
+    // "…target … with mana value X": the X values the targets offer.
+    mvChoices: options.thenTargets ? manaValueXChoices(targetSpecOf(card)) : null,
   };
   renderActivationPrompt();
 }
@@ -21982,6 +22035,13 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     costCard: card,
     maxX: castXCeiling(card, Math.max(0, Number(castXPayable(card)?.board) || 0)),
     awaitingCustomValue: false,
+    // "…target … with mana value X" (Detonate, Spell Blast): the target is
+    // picked, so X is its mana value — the one choice offered.
+    mvChoices: manaValueXChoices(targetSpecOf(card), (entry) => (
+      Number.isInteger(targetStackIndex)
+        ? entry.kind === "stack" && entry.stack_index === targetStackIndex
+        : entry.kind === "permanent" && entry.seat === targetSeat && entry.index === targetPermanentIndex
+    )),
   };
   renderActivationPrompt();
 }
