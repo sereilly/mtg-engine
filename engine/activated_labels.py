@@ -873,4 +873,13 @@ ACTIVATED_LABELS: dict[str, str] = {
     # activated position, and what the `game_end` category default already
     # said, so the row moves no label: it pins one.
     "target_player_loses_game": "activated_game_end",
+    # --- Champions of Kamigawa -------------------------------------------
+    # Myojin of Infinite Rage: "Remove a divinity counter …: Destroy all
+    # lands." The triggered table's `triggered_destruction` sweep in the
+    # activated position, beside Nova Cleric's one-type sweep above.
+    "destroy_all_lands": "activated_destruction",
+    # Myojin of Night's Reach: "…: Each opponent discards their hand." A
+    # player discards, so the bucket `discard_controller_cards` files under;
+    # the triggered table's word for the same event is `triggered_discard`.
+    "discard_hand": "activated_discard",
 }
