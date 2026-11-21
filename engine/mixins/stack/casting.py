@@ -46,6 +46,7 @@ from ...classifier import classify_card
 from ...cost_modifiers import (cost_reduction_for_cast, spell_cost_tax,
                                spell_life_tax, spell_symbol_tax)
 from ...self_cost_modifiers import self_per_target_tax
+from ...splice import announce_splices, spliced_permanents
 from ...target_keywords import (ANTE, GRAVEYARD, announced_slot,
                                 cast_target_zone)
 from ...game_types import as_target_slots, SimulationResult
@@ -186,6 +187,13 @@ class SpellCastingMixin:
         # copies the first permanent of the type, which is what keeps an AI
         # and a headless cast copying. Ignored for a card offering no copy.
         decline_copy: bool | None = None,
+        # CR 601.2b's other reveal: the cards **spliced onto** this spell
+        # (CR 702.47), one dict each in the order their effects are to happen
+        # — ``hand_index`` (the card's place in the caster's hand, the spell
+        # still in it) and the same target keywords a cast takes, for the
+        # gained text's targets (CR 702.47d). None splices nothing, which is
+        # what a splice being optional means (``engine/splice.py``).
+        splice_cards: list[dict] | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -222,6 +230,7 @@ class SpellCastingMixin:
             chosen_source_permanent_index=chosen_source_permanent_index,
             chosen_source_stack_index=chosen_source_stack_index,
             decline_copy=decline_copy,
+            splice_cards=splice_cards,
         )
         if not queued.supported:
             return queued
@@ -384,6 +393,13 @@ class SpellCastingMixin:
         # copies the first permanent of the type, which is what keeps an AI
         # and a headless cast copying. Ignored for a card offering no copy.
         decline_copy: bool | None = None,
+        # CR 601.2b's other reveal: the cards **spliced onto** this spell
+        # (CR 702.47), one dict each in the order their effects are to happen
+        # — ``hand_index`` (the card's place in the caster's hand, the spell
+        # still in it) and the same target keywords a cast takes, for the
+        # gained text's targets (CR 702.47d). None splices nothing, which is
+        # what a splice being optional means (``engine/splice.py``).
+        splice_cards: list[dict] | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         # CR 601.2c, said one role at a time. Turned **here**, before anything
@@ -679,6 +695,28 @@ class SpellCastingMixin:
         if seat_beside is not None:
             target_player_index = seat_beside
 
+        # CR 601.2b's reveal and CR 601.2c's targets for what it adds: the
+        # cards spliced onto this spell (CR 702.47), each announced, defaulted,
+        # gated and stamped into ids before anything is paid
+        # (``splice.announce_splices``). Its costs join the total as
+        # additional costs (CR 601.2f) — before the reductions below, which
+        # apply to the whole (Long-Forgotten Gohei's ruling).
+        spliced, splice_cost, splice_names, splice_refusal = announce_splices(
+            self, caster_index, card, splice_cards,
+            spell_hand_index=hand_index if from_zone == "hand" else None,
+        )
+        if splice_refusal is not None:
+            return refuse(card.name, classification.effect_kind, splice_refusal)
+        if splice_cost:
+            extra_generic_tax += splice_cost.get("generic", 0)
+            for symbol, count in splice_cost.items():
+                if symbol != "generic":
+                    extra_pip_tax[symbol] = extra_pip_tax.get(symbol, 0) + count
+            price_notes.append(
+                f"costs {mana_cost_label(splice_cost)} more: "
+                f"splicing {', '.join(splice_names)}"
+            )
+
         # What the spell points at, computed once: both taxes whose scope is
         # "that target this creature" need it, and the mana one is charged at
         # CR 601.2f while the life one is charged at 601.2h — the same fact,
@@ -700,6 +738,9 @@ class SpellCastingMixin:
             )
             if found is not None:
                 aimed_at = [found]
+        # …and what its spliced text points at: one spell, whose targets are
+        # the main text's and the gained text's together (CR 702.47d).
+        aimed_at = [*aimed_at, *spliced_permanents(self, spliced)]
 
         # …and what it points at **on the stack** (Counterspell naming a
         # Kaervek's Torch). Resolved here rather than beside the target
@@ -1233,7 +1274,7 @@ class SpellCastingMixin:
                 target_permanent_index=target_permanent_index,
                 target_player_index=target_player_index,
                 target_stack_item=target_stack_item, x_mana_spent=x_mana_spent,
-                mana_spent_to_cast=mana_spent_to_cast,
+                mana_spent_to_cast=mana_spent_to_cast, spliced=spliced,
             )
 
         self._resolve_card(

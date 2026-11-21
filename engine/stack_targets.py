@@ -606,8 +606,15 @@ def chosen_targets(game: "Game", item: "StackItem") -> "tuple[ChosenTarget, ...]
 
 def has_targets(game: "Game", item: "StackItem") -> bool:
     """Whether *item* chose one or more targets (CR 115.6) — False where the
-    engine cannot say, which is the safe direction for a trigger."""
-    return bool(chosen_targets(game, item))
+    engine cannot say, which is the safe direction for a trigger.
+
+    …counting the targets chosen for text spliced onto a spell (CR 702.47d):
+    one spell, whose gained text's targets are its own. Each segment is asked
+    as the spell-shaped object it is (``engine/splice.py``)."""
+    return bool(chosen_targets(game, item)) or any(
+        bool(chosen_targets(game, segment))
+        for segment in (getattr(item, "spliced", ()) or ())
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1015,6 +1022,10 @@ def names_several_targets(item: "StackItem") -> bool:
     """
     modes = tuple(getattr(item, "chosen_modes", ()) or ())
     if len(modes) > 1:
+        return True
+    # …or text spliced onto it (CR 702.47d): a segment's targets are more of
+    # the same spell's.
+    if getattr(item, "spliced", ()):
         return True
     if len((getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS) or ()) > 1:
         return True

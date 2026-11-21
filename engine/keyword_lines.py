@@ -209,6 +209,16 @@ def _argument_keyword_ability(part: str) -> str | None:
     # line-only gate like this one cannot see.
     if is_storm(part):
         return "storm"
+    # Splice (CR 702.47a) carries a quality and a cost, and is admitted by
+    # the reader the cast path splices with (`engine/splice.py`): a quality it
+    # cannot test a spell for or a cost it cannot charge keeps the line
+    # refused, and the support gate names it (`splice.unread_splice_line`).
+    # Not in `IMPLEMENTED_KEYWORDS` for morph's reason — the bare word would
+    # admit a splice with no quality and no price.
+    from .splice import splice_part_offer
+
+    if splice_part_offer(part) is not None:
+        return "splice"
     return None
 
 

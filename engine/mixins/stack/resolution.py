@@ -35,6 +35,7 @@ from ...oracle import OracleInstruction, compile_card_oracle
 from ...oracle_types import SPELL_RETURNED_TO_HAND, SPELL_SHUFFLED_INTO_LIBRARY
 from ...modal_triggers import modal_trigger_modes
 from ...resumption import run_resumable
+from ...splice import spliced_steps
 from ...stack_targets import source_name
 from ...state_triggers import release_latch
 from ...target_descriptions import ANNOUNCED_SEAT
@@ -1046,7 +1047,16 @@ class StackResolutionMixin:
                     )
 
                 run_resumable(
-                    self, item.chosen_modes, apply_copied_mode,
+                    self,
+                    [
+                        *(lambda mode=mode: apply_copied_mode(mode) for mode in item.chosen_modes),
+                        # …and the text spliced onto the original (CR 707.10,
+                        # Uyo's ruling), after the main text (CR 702.47b).
+                        *spliced_steps(
+                            self, item.spliced, copied_card, item.caster_index,
+                        ),
+                    ],
+                    lambda step: step(),
                     then=lambda: self.log.append(f"{copied_card.name} (copy) resolved"),
                 )
                 return
@@ -1075,6 +1085,16 @@ class StackResolutionMixin:
                 trigger_context=item.trigger_context,
                 target_graveyard_card=item.target_graveyard_card,
             )
+            if item.spliced:
+                # CR 707.10 copies the spliced text with the rest (Uyo,
+                # Silent Prophet's 2004-12-01 ruling), after the main text.
+                run_resumable(
+                    self,
+                    spliced_steps(self, item.spliced, item.card, item.caster_index),
+                    lambda step: step(),
+                    then=lambda: self.log.append(f"{item.card.name} (copy) resolved"),
+                )
+                return
             self.log.append(f"{item.card.name} (copy) resolved")
             return
 
@@ -1114,6 +1134,8 @@ class StackResolutionMixin:
             # CR 612: read as it resolves, carried onto the permanent it
             # becomes (CR 400.7a); ``card`` stays the printed card.
             text_change_effects=item.text_change_effects,
+            # CR 702.47: the text spliced onto it, after its own.
+            spliced=item.spliced,
         )
         return
     def _resolve_card(
@@ -1171,6 +1193,11 @@ class StackResolutionMixin:
         # card that moves; what the spell says is *card* with these applied,
         # folded once below (``text_card``) for every text read here.
         text_change_effects=(),
+        # ``StackItem.spliced`` (CR 702.47): each spliced card's gained text
+        # with its own targets, run after this card's own text in the order
+        # announced (CR 702.47b) — an instant or a sorcery only, the one
+        # kind of spell an Arcane spell is.
+        spliced: tuple = (),
     ) -> None:
         caster = self.players[caster_index]
         # The slot channel in its one shape, re-read off the ids the push
@@ -1386,7 +1413,22 @@ class StackResolutionMixin:
         # its damage was still waiting on an answer. Word of Command already
         # needed the same care for its own reason, and is the reason `finish`
         # was a separable step to begin with.
-        run_resumable(self, [apply_text, finish], lambda step: step())
+        # Each spliced text is one step more between the two (CR 702.47b: "The
+        # effects of the main spell must happen first"), resumable for the
+        # main path's reason: a spliced Through the Breach may stop to ask.
+        run_resumable(
+            self,
+            [
+                apply_text,
+                *spliced_steps(
+                    self, spliced, card, caster_index, contexts_run=contexts_run,
+                    text_change_effects=text_change_effects,
+                    cast_from_zone=cast_from_zone,
+                ),
+                finish,
+            ],
+            lambda step: step(),
+        )
         # The one thing that may legitimately follow a resumable loop: a note
         # that it *stopped*. ``finish`` is where a held spell says so, and a
         # suspending prompt (a scry, a search, and since discards suspend, a

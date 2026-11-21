@@ -39,6 +39,7 @@ from ...game_types import (
 from ...mana_combination import MANA_COMBINATION
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
+from ...splice import segment_names
 from ...sunburst import MANA_SPENT_TO_CAST
 from ...target_keywords import ANTE_INDEX
 from ...target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLE_SEATS
@@ -176,6 +177,7 @@ class CastCompletionMixin:
         role_graveyard_stamps, role_seats, sacrificed_for_cost, source_seat,
         target_permanent_ids, target_permanent_index, target_player_index,
         target_stack_item, x_mana_spent, mana_spent_to_cast=None,
+        spliced=(),
     ):
         """The spell put on the stack, and cast (CR 601.2i).
 
@@ -255,6 +257,9 @@ class CastCompletionMixin:
                 target_stack_item=target_stack_item_val,
                 chosen_mode_index=mode_index,
                 chosen_modes=chosen_modes,
+                # CR 702.47: the cards spliced onto it, their targets already
+                # announced and stamped (``splice.announce_splices``).
+                spliced=tuple(spliced or ()),
                 cast_from_zone=from_zone,
                 # CR 707.12: a copy of a card cast under the grant that
                 # made it (``engine/copy_casts.py``) is a copy on the stack
@@ -399,6 +404,14 @@ class CastCompletionMixin:
             spell_item.choices[ANTE_INDEX] = ante_index
         self._stack_push(spell_item)
         self.log.append(f"{card.name} added to stack")
+        if spell_item.spliced:
+            # CR 702.47a: the spliced cards are *revealed* — public, and said
+            # for the reason a kick is below: the opponent deciding whether to
+            # respond is answering the whole spell, gained text included.
+            self.log.append(
+                f"{caster.name} spliced {', '.join(segment_names(spell_item))} "
+                f"onto {card.name} (revealed from hand)"
+            )
         if any(cost.choose_number is not None for cost in cast_costs):
             # "As an additional cost to cast this spell, choose a number
             # between 0 and 5." (Liquid Fire.) Said in the log for the

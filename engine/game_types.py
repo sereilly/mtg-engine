@@ -831,6 +831,18 @@ class StackItem(_TargetIdsGuard):
     # ``text_changes.carry_spell_text_changes``); never onto a copy (CR 707.2),
     # which every copy builder constructs fresh, so it starts empty.
     text_change_effects: list = field(default_factory=list)
+    # CR 702.47: the cards **spliced onto** this spell, one segment each, in
+    # the order their effects happen after the main spell's (CR 702.47b). A
+    # segment is a ``StackItem`` never put on the stack: its ``card`` is this
+    # spell as the gained text reads (the host's name, cost, colour and types
+    # with the spliced card's rules text, CR 702.47c —
+    # ``splice.spliced_text_card``) and its target fields are the targets
+    # chosen for that text (CR 702.47d), so every reader of a spell's
+    # announcement asks a segment as it asks a spell. Empty for every spell
+    # nothing was spliced onto. Copied onto a copy (CR 707.10; Uyo, Silent
+    # Prophet's 2004-12-01 ruling); gone with the object when it leaves the
+    # stack (CR 702.47e). See ``engine/splice.py``.
+    spliced: tuple = ()
 
     def __post_init__(self) -> None:
         if self.owner_index is None:

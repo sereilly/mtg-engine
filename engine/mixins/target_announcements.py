@@ -859,6 +859,12 @@ class TargetAnnouncementsMixin:
                 targeted_by_card=item.card,
                 event_subject_player=item.caster_index,
             )
+        # …and what the text spliced onto it targets (CR 702.47d): the same
+        # spell's targets, each segment announced as the spell-shaped object
+        # it is — its card the spell's characteristics (CR 702.47c), so "the
+        # target of an Arcane spell" reads the host.
+        for segment in getattr(item, "spliced", ()) or ():
+            self._announce_targeting_now(segment)
 
     def _announce_targeted_player(self, item) -> None:
         """The **player** half of CR 603.2's "becomes the target of".
