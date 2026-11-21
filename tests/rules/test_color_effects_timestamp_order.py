@@ -951,6 +951,13 @@ _J6_STACK_RECOLOURERS = {
 #: card is a decision here, not a silent widening of the census above.
 _J6_CHOSEN_COLOUR_RECOLOURERS = {"Blind Seer", "Illusion", "Vodalian Mystic"}
 
+#: The cards that aim a printed colour at a spell **until end of turn** —
+#: Eight-and-a-Half-Tails' "{1}: Target spell or permanent becomes white until
+#: end of turn". The matrix above asserts an indefinite effect that outlives
+#: the turn, so these are driven by
+#: :func:`test_j6_a_turn_long_lace_of_a_permanent_spell_ends_at_cleanup` instead.
+_J6_TURN_LONG_RECOLOURERS = {"Eight-and-a-Half-Tails": ["W"]}
+
 #: Printed "target spell … becomes <colour>" whose **picker offers no spell**.
 #: Blind Seer stood here until "spell or permanent" became one slot in either
 #: zone (``targeting``'s ``spell_or_permanent``); none is left.
@@ -1014,7 +1021,10 @@ def test_j6_the_cards_that_can_recolour_a_spell_are_the_ones_driven_here():
     asked what the pool really offers. A seventh card that can aim a recolour
     at a spell, or one of these six that no longer can, fails here."""
     pool_size, found, text_only = _j6_stack_recolourers()
-    expected = set(_J6_STACK_RECOLOURERS) | _J6_CHOSEN_COLOUR_RECOLOURERS
+    expected = (
+        set(_J6_STACK_RECOLOURERS) | _J6_CHOSEN_COLOUR_RECOLOURERS
+        | set(_J6_TURN_LONG_RECOLOURERS)
+    )
     assert set(found) == expected, sorted(set(found) ^ expected)
     assert text_only == _J6_PICKER_OFFERS_NO_SPELL, text_only
     assert pool_size >= 4700, pool_size
@@ -1063,6 +1073,41 @@ def test_j6_a_recoloured_permanent_spell_is_that_colour_as_a_permanent(
     # Indefinite: it outlives the turn.
     game.resolve_cleanup_step(0)
     assert _w2g4_colours(game, perm) == wanted
+
+
+@pytest.mark.cr("400.7a", "514.2", "105.3")
+@pytest.mark.parametrize("spell_kind", sorted(_J6_PERMANENT_SPELLS))
+@pytest.mark.parametrize("recolourer", sorted(_J6_TURN_LONG_RECOLOURERS))
+def test_j6_a_turn_long_lace_of_a_permanent_spell_ends_at_cleanup(
+    catalog_by_name, set_pool, recolourer, spell_kind,
+):
+    """Eight-and-a-Half-Tails aims "becomes white until end of turn" at a
+    permanent spell: the spell is white on the stack, the permanent it becomes
+    is white (CR 400.7a; the card's 2016-06-08 ruling, "A permanent spell that
+    becomes white this way will enter the battlefield and continue to be white
+    until end of turn"), and at cleanup the effect ends (CR 514.2) and the
+    printed colour is back."""
+    def card(name):
+        if name == recolourer:
+            return set_pool("CHK")[name]
+        return _w2g4_card(catalog_by_name, set_pool, name)
+
+    _size, found, _text_only = _j6_stack_recolourers()
+    how = found[recolourer]
+    wanted = _J6_TURN_LONG_RECOLOURERS[recolourer]
+    name, printed = _J6_PERMANENT_SPELLS[spell_kind]
+
+    game = _w2g4_table()
+    sources = {recolourer: _w2g4_enter(game, card(recolourer))}
+    host = _w2g4_enter(game, card("Hill Giant")) if spell_kind == "aura" else None
+    item = _j6_cast_onto_stack(game, card(name), at=host)
+    _j6_recolour_spell(game, card(recolourer), how, item, sources)
+    assert sorted(game._stack_item_colors(item)) == wanted, "on the stack"
+
+    perm = _j6_became(game, item)
+    assert _w2g4_colours(game, perm) == wanted, "the permanent it became"
+    game.resolve_cleanup_step(0)
+    assert _w2g4_colours(game, perm) == printed, "ended at cleanup"
 
 
 def _j6_stamp():

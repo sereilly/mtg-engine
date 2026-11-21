@@ -53,6 +53,54 @@ log), not instruction kinds alone.
 # ==== w1g6 ==========================================================
 # w1g6's tests go between this line and the "end w1g6" line.
 
+from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState
+from engine.named_counters import counters_on as _w1g6_counters_on
+from tests.helpers import settle as _w1g6_settle
+
+
+def _w1g6_table(set_pool, *, hand=()):
+    lea = set_pool("LEA")
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(
+            name=f"P{seat}", library=[lea["Island"]] * 20,
+            hand=list(hand) if seat == 0 else [],
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _w1g6_settle(game)
+    return game
+
+
+def test_w1g6_orochi_hatchery_makes_a_snake_for_each_charge_counter(set_pool):
+    """Cast for X=3, it enters with three charge counters; "{5}, {T}: Create a
+    1/1 green Snake creature token for each charge counter on this artifact"
+    makes three green 1/1 Snakes and taps it. The count is read as it
+    resolves: a Hatchery with no counters makes nothing."""
+    chk = set_pool("CHK")
+    game = _w1g6_table(set_pool, hand=[chk["Orochi Hatchery"]])
+    assert game.cast_from_hand(0, "Orochi Hatchery", x_value=3).supported
+    _w1g6_settle(game)
+    hatchery = next(p for p in game.controlled_by(0) if p.card.name == "Orochi Hatchery")
+    assert _w1g6_counters_on(hatchery, "charge") == 3
+
+    assert game.activate_permanent_ability(0, "Orochi Hatchery").supported
+    _w1g6_settle(game)
+    snakes = [p for p in game.controlled_by(0) if p.card.name != "Orochi Hatchery"]
+    assert len(snakes) == 3 and hatchery.tapped
+    for snake in snakes:
+        assert snake.has_type("Snake") and snake.is_creature
+        assert (snake.effective_power, snake.effective_toughness) == (1, 1)
+        assert sorted(game._effective_colors(snake)) == ["G"]
+
+    game = _w1g6_table(set_pool, hand=[chk["Orochi Hatchery"]])
+    assert game.cast_from_hand(0, "Orochi Hatchery", x_value=0).supported
+    _w1g6_settle(game)
+    assert game.activate_permanent_ability(0, "Orochi Hatchery").supported
+    _w1g6_settle(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Orochi Hatchery"]
+
 # ==== end w1g6 ======================================================
 
 

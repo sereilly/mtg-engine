@@ -218,6 +218,54 @@ def test_w1g6_shimatsu_enters_with_a_counter_for_each_permanent_sacrificed(set_p
     assert _w1g6_names(game, 0) == ["Forest"]
     assert "Shimatsu the Bloodcloaked" in [c.name for c in game.players[0].graveyard]
 
+
+def test_w1g6_eight_and_a_half_tails_whitens_a_bolt_then_protects_from_white(set_pool):
+    """The card's own combination: an opponent's Lightning Bolt aimed at a
+    Grizzly Bears is made white ("{1}: Target spell or permanent becomes white
+    until end of turn"), then the Bears gains protection from white ("{1}{W}:
+    Target permanent you control gains protection from white"), and the Bolt
+    is removed for want of a legal target (CR 608.2b)."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g6_table(set_pool, opponent_hand=[lea["Lightning Bolt"]])
+    tails = _w1g6_put(game, chk["Eight-and-a-Half-Tails"], 0)
+    bears = _w1g6_put(game, lea["Grizzly Bears"], 0)
+    whitening = compile_card_oracle(tails.card).activated_abilities[1]
+    assert derive_activation_spec(whitening)["kind"] == "spell_or_permanent"
+
+    game.active_player_index = 1
+    assert game.queue_from_hand(1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id]).supported
+    bolt = game.stack[-1]
+    assert game.queue_permanent_ability(
+        0, "Eight-and-a-Half-Tails", ability_index=1, target_stack_index=0,
+    ).supported
+    assert game.resolve_top_of_stack()
+    assert sorted(game._stack_item_colors(bolt)) == ["W"]
+    assert game.queue_permanent_ability(
+        0, "Eight-and-a-Half-Tails", ability_index=0, target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert game.is_on_battlefield(bears)
+    assert any("every target is illegal" in line for line in game.log[-3:])
+
+
+def test_w1g6_eight_and_a_half_tails_whitens_a_permanent_for_the_turn(set_pool):
+    """The permanent half: an opponent's Hill Giant is white until end of turn,
+    and red again once cleanup ends the effect (CR 514.2)."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g6_table(set_pool)
+    _w1g6_put(game, chk["Eight-and-a-Half-Tails"], 0)
+    giant = _w1g6_put(game, lea["Hill Giant"], 1)
+    assert game.activate_permanent_ability(
+        0, "Eight-and-a-Half-Tails", ability_index=1, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert sorted(game._effective_colors(giant)) == ["W"]
+    game.resolve_cleanup_step(0)
+    assert sorted(game._effective_colors(giant)) == ["R"]
+
 # ==== end w1g6 ======================================================
 
 

@@ -326,6 +326,27 @@ def _lower_become_color(
                 "no handler recolours an object nobody targeted", node=node
             )
         payload: dict[str, object] = {"target_color": node.color}
+        if node.subject.filter.also_spell:
+            # "{1}: Target **spell or permanent** becomes white until end of
+            # turn." (Eight-and-a-Half-Tails.) The Lace cycle's union with
+            # Illusion, Blind Seer's window and a printed colour: the Lace
+            # kind, which recolours either half, carrying ``until_eot`` for
+            # both — the turn-long channel on a permanent, and on a spell the
+            # effect's duration once it is a permanent (CR 400.7a; the card's
+            # 2016-06-08 ruling, "A permanent spell that becomes white this way
+            # will enter the battlefield and continue to be white until end of
+            # turn"). Described, as Illusion's union is, so the picker's spec
+            # is the printed phrase's rather than the kind row's.
+            if _names_several_targets(node.subject) or node.subject.filter.also_ability:
+                raise LoweringError(
+                    "one spell or permanent takes the printed colour for a turn",
+                    node=node,
+                )
+            payload["until_eot"] = True
+            payload["targets"] = spell_or_permanent_description(
+                node.subject, node, effect="a recolour",
+            )
+            return (OracleInstruction("recolor_target_from_text", "", payload),)
         if _names_several_targets(node.subject):
             _describe_several_targets(payload, node.subject)
         else:
