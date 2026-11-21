@@ -125,11 +125,57 @@ def _tap_cost_creatures(card) -> list:
     return fixtures
 
 
+#: The permanents a return-to-hand cost may be paid with, asked in this order
+#: against the cost's own filter (``_return_cost_permanents``).
+_RETURNABLE = (
+    "Island", "Forest", "Plains", "Swamp", "Mountain", "Grizzly Bears",
+    "Sol Ring", "Crusade",
+)
+
+
+def _return_cost_permanents(card, by_name) -> list:
+    """Permanents to pay a "Return N <noun> you control to their owner's hand"
+    cost with, ``return_to_hand_count`` of the first ``_RETURNABLE`` card its
+    ``return_to_hand_filter`` admits, per such ability of *card* — read off
+    each ability's own cost, as ``_tap_cost_creatures`` reads a tap cost.
+
+    Uyo, Silent Prophet (CHK) is why: "{2}, Return two lands you control to
+    their owner's hand: Copy target instant or sorcery spell." Its picker
+    offered every instant and sorcery on the stack and the activation was
+    refused — "not enough lands to return for its cost", the one Island on
+    this table — which read as the gate refusing what the picker offers, at
+    Champions of Kamigawa's promotion rehearsal. A cost no card here can pay
+    fails loudly rather than leaving the ability unexamined."""
+    from engine.handlers._filters import permanent_matches_filter
+
+    fixtures = []
+    for ability in compile_card_oracle(card).activated_abilities:
+        cost = ability.cost
+        count = int(getattr(cost, "return_to_hand_count", 0) or 0)
+        wanted = getattr(cost, "return_to_hand_filter", None)
+        if count <= 0 or wanted is None:
+            continue
+        match = next(
+            (
+                by_name[name] for name in _RETURNABLE
+                if name in by_name
+                and permanent_matches_filter(Permanent(card=by_name[name]), wanted)
+            ),
+            None,
+        )
+        assert match is not None, (
+            f"{card.name}: no card here pays a return-to-hand cost of {wanted}"
+        )
+        fixtures.extend([match] * count)
+    return fixtures
+
+
 def _table(card, by_name):
     """Seat 1 controls *card*, ready to activate, with what a cost may want
     (two cards in hand, a creature to sacrifice, the creatures a "tap N
-    untapped <type>" cost taps — ``_tap_cost_creatures``). Returns
-    ``(game, source)``."""
+    untapped <type>" cost taps — ``_tap_cost_creatures`` — and the permanents
+    a "return N <noun> you control" cost returns, ``_return_cost_permanents``).
+    Returns ``(game, source)``."""
     island = by_name["Island"]
     game = Game(players=[
         PlayerState(name=f"P{seat}", library=[island] * 8) for seat in range(2)
@@ -144,6 +190,8 @@ def _table(card, by_name):
         tapper = Permanent(card=fixture)
         game._put_permanent_onto_battlefield(1, tapper, None)
         tapper.metadata["summoning_sickness_turn"] = -99
+    for fixture in _return_cost_permanents(card, by_name):
+        game._put_permanent_onto_battlefield(1, Permanent(card=fixture), None)
     source = Permanent(card=card)
     game._put_permanent_onto_battlefield(1, source, None)
     source.metadata["summoning_sickness_turn"] = -99
