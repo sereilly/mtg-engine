@@ -49,6 +49,85 @@ from ._events import (_DAMAGED_PERMANENTS, _EVENT_SUBJECT_CONTROLLERS,
 _EXILED_CARDS = "exiled_cards"
 
 
+def _each_dealer_damage(
+    node: ast.DealDamage,
+) -> tuple[OracleInstruction, ...] | None:
+    """"**Each enchantment** deals 2 damage to **its controller**, then **each
+    Aura attached to a creature** deals 2 damage to **the creature it's
+    attached to**." (Aura Barbs.) Every member of a class is a dealer — "The
+    damage is dealt by the enchantments, not by Aura Barbs" (ruling
+    2005-02-01) — each dealing a printed amount to the one recipient its own
+    pronoun names: its controller, or the permanent it is attached to.
+
+    Wave of Reckoning's sweep above with a printed number and a recipient
+    other than the dealer itself, so its own kind beside that one
+    (``deal_damage_from_each_matching``): the handler enumerates the class
+    as the effect resolves and deals every chunk in one dealing, each by its
+    own permanent (CR 120.7) — so protection, prevention by source and
+    lifelink see the enchantment, never the spell.
+
+    None when the sentence is not this shape. Refused when it is and says
+    more than the kind carries: a computed amount, riders, a per-each
+    multiplier, several recipients, and a noun phrase ``subject_matches``
+    cannot test (the class is asked of every permanent, and a dropped
+    narrowing is a board-wide dealer the card never printed).
+    """
+    source = node.source
+    class_dealer = (
+        isinstance(source, ast.TargetSpec)
+        and not source.targeted
+        and source.quantifier in ("all", "each")
+        and not source.filter.is_source
+    )
+    if not class_dealer or len(node.recipients) != 1:
+        if any(
+            isinstance(recipient, ast.TargetSpec)
+            and recipient.quantifier == "dealer_host"
+            for recipient in node.recipients
+        ):
+            # "…the creature it's attached to" names the host of each dealer
+            # of a class; behind any other subject, or beside a second
+            # recipient, it has no reader.
+            raise LoweringError(
+                "'the creature it's attached to' is read only behind a class "
+                "of dealers",
+                node=node,
+            )
+        return None
+    recipient = node.recipients[0]
+    if isinstance(recipient, ast.PlayerRef) and recipient.kind == "controller":
+        to = "controller"
+    elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier == "dealer_host":
+        to = "host"
+    else:
+        return None
+    if (
+        not isinstance(node.amount, ast.Fixed)
+        or node.riders != ast.DamageRiders()
+        or node.per_each is not None
+    ):
+        raise LoweringError(
+            "a class of dealers deals a printed amount and carries no rider",
+            node=node,
+        )
+    described = testable_filter_payload(
+        source.filter,
+        refusal="the class of dealers cannot be tested",
+        node=node,
+    )
+    payload: dict[str, object] = {
+        "amount": node.amount.value, "sources": described, "recipient": to,
+    }
+    if to == "host":
+        payload["host_filter"] = testable_filter_payload(
+            recipient.filter,
+            refusal="the host the damage is dealt to cannot be tested",
+            node=node,
+            require_narrowing=False,
+        )
+    return (OracleInstruction("deal_damage_from_each_matching", "", payload),)
+
+
 def lower_bite(
     node: ast.DealDamage, produced: frozenset[str] = frozenset(),
     event: str | None = None,
@@ -201,6 +280,9 @@ def lower_bite(
                 "each_matching_bites_itself", "", {"filter": described},
             ),
         )
+    dealt = _each_dealer_damage(node)
+    if dealt is not None:
+        return dealt
     # "This creature deals damage equal to its power to target **player** or
     # planeswalker." (Leafkin Avenger.) The recipient is not an object, so the
     # bites handler below — which resolves a permanent — cannot carry it. The

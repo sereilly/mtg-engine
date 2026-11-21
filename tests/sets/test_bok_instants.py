@@ -206,7 +206,50 @@ def test_w1g5_overblaze_spliced_onto_an_arcane_spell(set_pool):
     _w1g5_settle(game)
     assert game.players[0].life == 18, game.log
 
+
+@_w1g5_pytest.mark.parametrize("interactive", _W1G5_SEATS)
+def test_w1g5_aura_barbs_each_enchantment_deals_the_damage(set_pool, interactive):
+    """"Each enchantment deals 2 damage to its controller, then each Aura
+    attached to a creature deals 2 damage to the creature it's attached to."
+    The damage is dealt by the enchantments, not by Aura Barbs (ruling
+    2005-02-01): a Circle of Protection: White shield naming Holy Strength
+    stops Holy Strength's 2 to its controller and nothing else — the Circle
+    of Protection: Red beside it, another white source, still deals its 2 —
+    and the red spell itself is no source a white Circle could ever stop.
+    Holy Strength, on the opponent's Hill Giant, then deals 2 to the Giant;
+    Bad Moon deals 2 to its own controller."""
+    lea = set_pool("LEA")
+    bok = set_pool("BOK")
+    game = _w1g5_table(
+        set_pool, interactive, hand=[bok["Aura Barbs"], lea["Holy Strength"]],
+    )
+    white_circle = _w1g5_put(game, lea["Circle of Protection: White"])
+    _w1g5_put(game, lea["Circle of Protection: Red"])
+    giant = _w1g5_put(game, lea["Hill Giant"], seat=1)
+    _w1g5_put(game, lea["Bad Moon"], seat=1)
+    _w1g5_cast(game, 0, "Holy Strength", target_permanent_ids=[giant.permanent_id])
+    strength = next(
+        perm for perm in game.players[0].battlefield
+        if perm.card.name == "Holy Strength"
+    )
+    result = game.activate_permanent_ability(
+        0, white_circle.card.name,
+        permanent_index=game.battlefield_index_of(white_circle),
+        target_permanent_ids=[strength.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g5_settle(game)
+    _w1g5_cast(game, 0, "Aura Barbs")
+    # Seat 0: three white enchantments deal 2 each; the shielded one is
+    # prevented. Seat 1: Bad Moon's 2.
+    assert [p.life for p in game.players] == [16, 18], game.log
+    assert "Circle of Protection: Red deals 2 damage to P0" in game.log
+    assert "Circle of Protection: White deals 2 damage to P0" in game.log
+    assert "Holy Strength deals 2 damage to P0" not in game.log
+    assert giant.damage_marked == 2 and game.is_on_battlefield(giant), game.log
+
 # ==== end w1g5 ======================================================
+
 
 
 # ==== w1g6 ==========================================================

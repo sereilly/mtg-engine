@@ -749,6 +749,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Reckoning.) The sweep beside the targeted bite above, in the same family
     # for the same reason: what differs is how many creatures bite.
     "each_matching_bites_itself": "damage",
+    # "Each enchantment deals 2 damage to its controller, then each Aura
+    # attached to a creature deals 2 damage to the creature it's attached
+    # to." (Aura Barbs.) Every member of a class is a dealer.
+    "deal_damage_from_each_matching": "damage",
     "source_fights_target": "damage",
     # The same CR 701.14 exchange with **neither** fighter being the ability's
     # source (Triangle of War) — two announcements rather than one, which is a

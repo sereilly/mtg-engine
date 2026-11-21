@@ -182,6 +182,26 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
         if deed is not None:
             return dataclasses.replace(recipient, did=deed)
     if recipient is None:
+        # "…then each Aura attached to a creature deals 2 damage to **the
+        # creature it's attached to**." (Aura Barbs.) The permanent each
+        # dealer of a class is attached to — "it" is the dealer the sentence's
+        # "each" is on, so the phrase means nothing without one. Its own
+        # quantifier (``dealer_host``) for that reason: only the per-dealer
+        # damage lowering reads it, and every other lowering refuses a
+        # quantifier it does not know rather than guessing a host.
+        host = stream.mark()
+        if stream.accept_word("the"):
+            noun = stream.peek_word()
+            if noun in ("creature", "permanent"):
+                stream.advance()
+                if stream.accept_phrase("it", "'s", "attached", "to"):
+                    return ast.TargetSpec(
+                        "dealer_host",
+                        ast.ObjectFilter(
+                            card_types=("creature",) if noun == "creature" else ()
+                        ),
+                    )
+        stream.reset(host)
         # "This creature deals 2 damage to **that creature** at end of combat."
         # (Dwarven Sea Clan.) The back-reference every other family already
         # reads through ``parse_bound_subject`` — the object an earlier sentence
