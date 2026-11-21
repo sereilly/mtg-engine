@@ -22,6 +22,7 @@ from __future__ import annotations
 from .game_types import target_ids
 from .oracle import compile_card_oracle
 from .resolution_overrides import resolves_with_illegal_targets
+from .splice import spliced_segments
 from .text_changes import spell_text_card
 from .modal_triggers import modal_trigger_modes
 from .per_color_targets import PER_COLOR_ASSIGNMENT, holds_assigned_color
@@ -190,15 +191,25 @@ class ResolutionTargetsMixin:
             # later — the same destination by a different rule, so moving it is
             # a decision for the round that can verify it.
             return None
-        program = compile_card_oracle(card)
         legality: list[bool] = []
-        for spec, holder, mode_index in self._resolving_announcements(item, program):
-            verdict = self._announcement_target_legality(
-                item, program, spec, holder, mode_index
-            )
-            if verdict is None:
-                return None
-            legality.extend(verdict)
+        # **One spell, every target**: the text spliced onto it (CR 702.47d,
+        # ``StackItem.spliced``) chose targets of the same spell, so "every
+        # target is illegal" is asked across the main text's and each
+        # segment's together — a spliced spell whose main text targets
+        # nothing still does not resolve when the gained text's only target
+        # has gone (the splice cards' 2013-06-07 ruling). Each segment is a
+        # spell-shaped object, judged by the same reader as the spell.
+        for judged in (item, *spliced_segments(item)):
+            judged_program = compile_card_oracle(spell_text_card(judged))
+            for spec, holder, mode_index in self._resolving_announcements(
+                judged, judged_program,
+            ):
+                verdict = self._announcement_target_legality(
+                    judged, judged_program, spec, holder, mode_index
+                )
+                if verdict is None:
+                    return None
+                legality.extend(verdict)
         if not legality or any(legality):
             return None
         return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
@@ -1225,6 +1236,15 @@ class ResolutionTargetsMixin:
         # exchange cannot be made. Unblanked, the Drake swapped itself for a
         # creature given shroud in response — or, when its target had left,
         # for whichever creature had slid into that battlefield slot.
+        if item.ability_instruction is None and spliced_segments(item):
+            # A spell with text spliced onto it (CR 702.47d) has targets in
+            # several announcements, so a lone illegal slot of any one of them
+            # — the main text's included — is an illegal target of a spell
+            # that still resolves: each is blanked by the one reading.
+            return sum(
+                self._blank_illegal_spell_targets(judged)
+                for judged in (item, *spliced_segments(item))
+            )
         if not names_several_targets(item) and not resolves_with_illegal_targets(
             spell_text_card(item), item.ability_text
         ):
@@ -1238,36 +1258,49 @@ class ResolutionTargetsMixin:
                 return 0
             illegal = [target for target, legal in verdicts if not legal]
         else:
-            # A spell, so the card *is* the object and its printed type is the
-            # question — the bound ``illegal_targets_refusal`` draws in the
-            # same words, for the reason it gives.
-            card = spell_text_card(item)
-            if card.primary_type not in ("instant", "sorcery"):
-                return 0
-            program = compile_card_oracle(card)
-            chosen_modes = tuple(getattr(item, "chosen_modes", ()) or ())
-            for spec, holder, mode_index in self._resolving_announcements(item, program):
-                addresses: list = []
-                verdict = self._announcement_target_legality(
-                    item, program, spec, holder, mode_index, addresses=addresses,
-                )
-                if verdict is None or len(addresses) != len(verdict):
+            return self._blank_illegal_spell_targets(item)
+        if not illegal:
+            return 0
+        return blank_illegal_targets(item, illegal)
+
+    def _blank_illegal_spell_targets(self, item) -> int:
+        """:meth:`blank_illegal_resolution_targets` for a **spell** — or one
+        segment of text spliced onto one (CR 702.47d), which is judged as the
+        spell it is part of: every illegal slot of its announcements blanked,
+        by the verdicts :meth:`_announcement_target_legality` reads."""
+        from .stack_targets import ChosenTarget, blank_illegal_targets
+
+        # A spell, so the card *is* the object and its printed type is the
+        # question — the bound ``illegal_targets_refusal`` draws in the same
+        # words, for the reason it gives.
+        card = spell_text_card(item)
+        if card.primary_type not in ("instant", "sorcery"):
+            return 0
+        illegal: list = []
+        program = compile_card_oracle(card)
+        chosen_modes = tuple(getattr(item, "chosen_modes", ()) or ())
+        for spec, holder, mode_index in self._resolving_announcements(item, program):
+            addresses: list = []
+            verdict = self._announcement_target_legality(
+                item, program, spec, holder, mode_index, addresses=addresses,
+            )
+            if verdict is None or len(addresses) != len(verdict):
+                continue
+            mode = next(
+                (
+                    position for position, chosen in enumerate(chosen_modes)
+                    if chosen is holder
+                ),
+                None,
+            )
+            for address, legal in zip(addresses, verdict):
+                if legal or address is None:
                     continue
-                mode = next(
-                    (
-                        position for position, chosen in enumerate(chosen_modes)
-                        if chosen is holder
-                    ),
-                    None,
-                )
-                for address, legal in zip(addresses, verdict):
-                    if legal or address is None:
-                        continue
-                    kind, channel, position, permanent_id = address
-                    illegal.append(ChosenTarget(
-                        kind, permanent_id=permanent_id, channel=channel,
-                        position=position, mode=mode,
-                    ))
+                kind, channel, position, permanent_id = address
+                illegal.append(ChosenTarget(
+                    kind, permanent_id=permanent_id, channel=channel,
+                    position=position, mode=mode,
+                ))
         if not illegal:
             return 0
         return blank_illegal_targets(item, illegal)
@@ -1341,6 +1374,16 @@ class ResolutionTargetsMixin:
         all on one battlefield (:meth:`announced_target_seat` answers None for
         two), because the field is one seat.
         """
+        # Each segment of text spliced onto a spell (CR 702.47d) records its
+        # own seat beside its own ids, and is settled as the spell it is part
+        # of — by this method, asked of the segment (which carries none).
+        segments_moved = (
+            sum(
+                self.resettle_announced_target_seats(segment)
+                for segment in spliced_segments(item)
+            )
+            if item.ability_instruction is None else 0
+        )
         modes = tuple(getattr(item, "chosen_modes", ()) or ())
 
         def live_ids(holder) -> list:
@@ -1362,14 +1405,14 @@ class ResolutionTargetsMixin:
             )
             for holder in (item, *modes)
         ):
-            return 0
+            return segments_moved
         judged: list[tuple] = []
         if item.ability_instruction is not None:
             if not announced_by_a_choice(item):
-                return 0
+                return segments_moved
             verdicts = self.ability_target_verdicts(item, recorded_only=True)
             if not verdicts:
-                return 0
+                return segments_moved
             judged.append((item, [
                 (target.permanent_id, legal) for target, legal in verdicts
                 if target.kind == "permanent" and target.channel == "item"
@@ -1378,7 +1421,7 @@ class ResolutionTargetsMixin:
         else:
             card = spell_text_card(item)
             if card.primary_type not in ("instant", "sorcery"):
-                return 0
+                return segments_moved
             program = compile_card_oracle(card)
             for spec, holder, mode_index in self._resolving_announcements(item, program):
                 addresses: list = []
@@ -1409,4 +1452,4 @@ class ResolutionTargetsMixin:
             # object resolves (``bare_announcements.resolving_slots``), for a
             # spell, an activated and a triggered ability alike.
             moved += 1
-        return moved
+        return moved + segments_moved

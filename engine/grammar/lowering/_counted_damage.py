@@ -44,7 +44,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import TARGET_OPPONENT_SCOPE, count_spec, seat_scoped_count_spec
 from ._cost_records import COST_RECORD_CHANNELS
-from ._common import _describe_targets, _is_target
+from ._common import _describe_targets, _is_target, _restrictions_beyond
 from ._filters import dropped_narrowings, split_bound_card_type
 from ._sweeps import lower_counted_sweep_damage
 from ._record_keys import REVEALED_UNTIL_CARDS
@@ -305,6 +305,33 @@ def _lower_cost_sacrifice_damage(
     return _payment_channel_damage(
         node, {"cost_sacrifice_characteristic": characteristic}
     )
+
+
+def lower_cost_sacrificed_power_damage(
+    node: ast.DealDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"Soulblast deals damage to any target equal to **the total power of the
+    sacrificed creatures**." (Soulblast, whose additional cost is "sacrifice
+    all creatures you control".)
+
+    The sum of the creatures the spell's own cost ate (CR 601.2h), each at
+    its last power on the battlefield (CR 608.2h) — the record the payment
+    path keeps (``sacrificed_set_for_cost``) and the evaluator Sword of the
+    Ages' X already reads (``cost_sacrifices_power``), on the payment-channel
+    tail every cost-sized damage shares. Only "creatures", for
+    ``_record_definitions._lower_where_x_sacrificed_power``'s reason: a
+    narrower noun would be a sum the record cannot re-ask.
+    """
+    assert isinstance(node.amount, ast.TotalPowerSacrificedThisWay)
+    filt = node.amount.filter
+    if filt.card_types != ("creature",) or _restrictions_beyond(
+        filt, frozenset({"card_types"})
+    ):
+        raise LoweringError(
+            "the sacrificed total is read off creatures and nothing narrower",
+            node=node,
+        )
+    return _payment_channel_damage(node, {"cost_sacrifices_power": True})
 
 
 #: Re-exported from ``_amounts``, where the constant now lives. It was written

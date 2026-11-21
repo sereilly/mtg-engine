@@ -78,6 +78,7 @@ from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .madness import unread_madness_line
 from .affinity import unread_affinity_line
 from .storm import unread_storm_line
+from .splice import unread_splice_line
 from .line_normalization import (_PARENTHETICAL_RE, _normalize_text,
                                  normalize_creature_line)
 from .self_reference import _restriction_line
@@ -543,6 +544,21 @@ def _compile_card_oracle(
             "unsupported",
             "storm on a permanent spell (a copy of a permanent spell becomes a "
             f"token, CR 707.10f): {unread_storm}",
+            normalized_text,
+        )
+
+    # …and a **splice** line the cast path cannot carry out
+    # (``engine/splice.py``): a quality it cannot test a spell for, or a cost
+    # it cannot charge. An instant is supported when any of its lines
+    # compiles, so without this the keyword is dropped and the card ships as a
+    # plain instant (the thirteen Champions of Kamigawa splice cards before
+    # the module existed).
+    unread_splice = unread_splice_line(oracle_text)
+    if unread_splice is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"splice nothing carries out: {unread_splice}",
             normalized_text,
         )
 

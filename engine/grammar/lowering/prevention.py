@@ -28,6 +28,7 @@ from ._events import CHOSEN_DAMAGE_SOURCE, _EVENT_SUBJECT_OBJECTS
 from ._prevented_riders import (
     _alternate_amount,
     _counted_pool_counter_rider,
+    _counted_pool_life_rider,
     _lower_team_shield,
     _names_a_target_spell,
 )
@@ -217,8 +218,12 @@ def _lower_prevent_damage(
             node=node,
         )
     counter_rider = _counted_pool_counter_rider(node)
+    # …and Candles' Glow's life gain on the same pool (``rider_gain_life``,
+    # read by the chosen-recipient branch at the foot of this function).
+    life_rider = _counted_pool_life_rider(node)
     if (
-        counter_rider is None and node.prevented_rider is not None
+        counter_rider is None and not life_rider
+        and node.prevented_rider is not None
         # "Prevent all damage target spell would deal this turn. You gain
         # life equal to the damage prevented this way." (Hallow.) The one
         # other shape that reads the rider: ``_blankets``' spell shield, which
@@ -813,6 +818,11 @@ def _lower_prevent_damage(
     if not isinstance(recipient, ast.TargetSpec) or recipient.quantifier not in ("target", "any_target"):
         raise LoweringError("no handler for this prevention recipient", node=node)
     _describe_targets(payload, recipient)
+    if life_rider:
+        # CR 615.5's additional effect on the pool, performed by its own
+        # interceptor as the points are absorbed and paid to the seat that
+        # armed it (``handlers.prevention.apply_prevention_shield``).
+        payload["rider_gain_life"] = True
     return (OracleInstruction("grant_prevention_shield", "", payload),)
 
 

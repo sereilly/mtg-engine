@@ -460,6 +460,37 @@ def accept_multiplier(stream: TokenStream) -> int | None:
     return None
 
 
+def accept_total_power_sacrificed(
+    stream: TokenStream,
+) -> "ast.TotalPowerSacrificedThisWay | None":
+    """``total power of [the] <creatures> sacrificed this way`` — or, the
+    participle in front, ``total power of the sacrificed <creatures>`` — the
+    sum of what a sacrifice ate, as it last existed (CR 608.2h). None, cursor
+    unmoved, where the words do not open it.
+
+    "…where X is the total power of the creatures sacrificed this way" (Sword
+    of the Ages); "…deals damage to any target equal to **the total power of
+    the sacrificed creatures**" (Soulblast). One reader for both front ends
+    and both word orders, so "equal to" and "where X is" cannot come to read
+    one payment two ways. Once "total power of" has matched, a noun phrase
+    with no sacrifice behind it refuses loudly: a total over anything else is
+    a sum no record holds.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("total", "power", "of"):
+        return None
+    stream.accept_word("the")
+    if stream.accept_word("sacrificed"):
+        return ast.TotalPowerSacrificedThisWay(parse_object_filter(stream))
+    filt = parse_object_filter(stream)
+    if stream.accept_phrase("sacrificed", "this", "way"):
+        return ast.TotalPowerSacrificedThisWay(filt)
+    stream.reset(mark)
+    raise stream.error(
+        "a total power is only read off what was sacrificed this way"
+    )
+
+
 def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     """The definition itself, once any multiplier in front of it is consumed.
 
@@ -514,14 +545,8 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     # Ages). A fourth aggregate over a noun phrase, and the words are again what
     # tell it apart: a *sum* of powers, over the set the ability's own cost ate
     # rather than over anything a zone still holds.
-    if stream.accept_phrase("total", "power", "of"):
-        stream.accept_word("the")
-        filt = parse_object_filter(stream)
-        if stream.accept_phrase("sacrificed", "this", "way"):
-            return ast.TotalPowerSacrificedThisWay(filt)
-        raise stream.error(
-            "a total power is only read off what was sacrificed this way"
-        )
+    if stream.peek_word() == "total" and stream.peek_word(1) == "power":
+        return accept_total_power_sacrificed(stream)
     # "…where X is **the life paid as this artifact entered**" (Phyrexian
     # Processor). Not an aggregate over anything, so it is read beside the two
     # cost channels above rather than under "the number of": the number was

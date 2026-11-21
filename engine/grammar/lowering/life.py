@@ -48,6 +48,7 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER,
                              MANA_PAID_BY_SEAT,
                              OracleInstruction, SECRET_NUMBERS_BY_SEAT,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
+from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._seats import _player_recipient
@@ -58,6 +59,7 @@ from ._cost_records import cost_record_spec
 from ._common import (
     _amount_payload,
     _describe_targets,
+    _filter_payload,
     _restrictions_beyond,
     player_deed_payload,
 )
@@ -707,6 +709,49 @@ def _lower_lose_life(
                 "multiplier": node.amount.value,
             },
         }
+    # "Target player loses 2 life **plus 2 life for each Spirit sacrificed
+    # this way**." (Devouring Greed.) The count is what the spell's own
+    # additional cost sacrificed (CR 601.2h; ``sacrificed_set_for_cost``), the
+    # record Vicious Betrayal's pump reads — so only where a cost could have
+    # written it: no trigger pays one, and a step of the same effect that
+    # sacrificed is a list nothing here counts. The printed constant is one
+    # more repetition of the rate (the count spec's ``offset``) when the two
+    # are the same number, which is the only spelling printed; any other
+    # constant refuses rather than being dropped.
+    sacrifice_rate = isinstance(node.per_each, ast.CountOfSacrificesThisWay)
+    if sacrifice_rate:
+        if event is not None or "sacrificed_cards" in produced:
+            raise LoweringError(
+                "a loss counted off a sacrifice reads the spell's own cost",
+                node=node,
+            )
+        if not isinstance(node.amount, ast.Fixed):
+            raise LoweringError(
+                "a per-sacrifice loss needs a printed rate", node=node
+            )
+        described = object_only_filter(_filter_payload(node.per_each.filter))
+        if described is None:
+            raise LoweringError(
+                "a sacrificed-permanent count cannot test this restriction",
+                node=node,
+            )
+        rate_spec: dict[str, object] = {
+            "cost_sacrificed_count": True, "filter": described,
+            "multiplier": node.amount.value,
+        }
+        if node.plus is not None:
+            if node.plus != node.amount:
+                raise LoweringError(
+                    "a constant beside a per-sacrifice rate is one more "
+                    "repetition of it, printed as the same number",
+                    node=node,
+                )
+            rate_spec["offset"] = 1
+        payload = {"amount": "x", X_FROM_COUNT: rate_spec}
+    elif node.plus is not None:
+        raise LoweringError(
+            "only a per-sacrifice loss carries a printed constant", node=node
+        )
     # "Each player loses 1 life for each creature **they** control."
     # (Stronghold Discipline.) One number per losing seat, counted on that
     # seat's own battlefield — the per-recipient channel the halved loss above
@@ -716,6 +761,7 @@ def _lower_lose_life(
     # below keeps its own payload.
     if (
         node.per_each is not None
+        and not sacrifice_rate
         and not isinstance(node.per_each, ast.CountersOnSource)
         and node.player.kind in _PER_SEAT_LIFE_RECIPIENTS
         and isinstance(node.amount, ast.Fixed)
@@ -764,7 +810,7 @@ def _lower_lose_life(
     # reads the phrase into ``owner: "all"`` exactly as it does for Wellwisher's
     # gain. It fell to the graveyard branch below and refused there, because
     # that branch is the only other reader of a per-each count.
-    if one_seat_count:
+    if one_seat_count or sacrifice_rate:
         pass
     elif (
         isinstance(node.per_each, ast.ObjectFilter)

@@ -55,6 +55,8 @@ import dataclasses
 from . import ast
 from .errors import GrammarError
 from .effects import _parse_gets
+from .nouns import parse_object_filter
+from .records import parse_for_each_sacrificed_this_way
 from .references import parse_recipient
 from .statements import _parse_condition, _parse_statement_body
 from .stream import TokenStream
@@ -90,6 +92,18 @@ def _parse_pronoun_pump_rider(
         return None
     bound = last.subject
     mark = stream.mark()
+    # "Target creature gets +3/+0 until end of turn. **For each Spirit
+    # sacrificed this way,** that creature gets an additional +3/+0 until end
+    # of turn." (Devouring Rage.) The same second pump with a leading rate over
+    # what the spell's own additional cost sacrificed — the reader the
+    # trailing "…for each creature sacrificed this way" (Vicious Betrayal)
+    # already goes through, in front of the pronoun. The rate is carried on
+    # the pump as the trailing spelling carries it, so the two word orders
+    # lower as one (``_counted_pumps.lower_pump_per_sacrificed``).
+    leading_rate = parse_for_each_sacrificed_this_way(stream, parse_object_filter)
+    if leading_rate is not None and not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
     if bound.quantifier == "target" and bound.targeted:
         named = stream.accept_word("it") or stream.accept_phrase("that", "creature")
     elif bound.quantifier in ("all", "each"):
@@ -107,6 +121,18 @@ def _parse_pronoun_pump_rider(
     if not isinstance(pump, ast.Pump):
         stream.reset(mark)
         return None
+    if leading_rate is not None:
+        if (
+            pump.per_each is not None or pump.per_each_sacrificed is not None
+            or pump.per_each_recorded is not None or pump.per_each_milled is not None
+            or pump.per_each_counters is not None or pump.per_each_tapped_this_way
+            or pump.x_definition is not None
+        ):
+            # A second count behind the leading one would multiply the pump
+            # twice; no card prints it, and reading one would drop the other.
+            stream.reset(mark)
+            return None
+        return dataclasses.replace(pump, per_each_sacrificed=leading_rate)
     return _accept_trailing_toll(_parse_statement_body, stream, pump) or pump
 
 

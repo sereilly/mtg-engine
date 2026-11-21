@@ -41,6 +41,7 @@ from ..shields import (
     make_half_source,
     make_life_gain_charge,
     make_life_gain_source,
+    make_life_pool,
     make_named_source_pool,
     make_numeric_pool,
     make_reflect_charge,
@@ -68,7 +69,7 @@ if TYPE_CHECKING:
 
 def _grant_pool(
     recipient, amount: int, source_name: str | None, source_filter: dict | None = None,
-    counter: str = "",
+    counter: str = "", gain_life_seat: "int | None" = None,
 ):
     """Arm one CR 615.7 numeric shield on *recipient* and return it.
 
@@ -89,6 +90,15 @@ def _grant_pool(
     """
     if amount <= 0:
         return None
+    if gain_life_seat is not None:
+        # "…**You gain life equal to the damage prevented this way.**"
+        # (Candles' Glow.) CR 615.5's life gain on the pool, paid by its own
+        # interceptor as the points are absorbed, to the seat that armed it.
+        # No ``source_filter`` and no counter: the lowering admits the rider
+        # only on the plain chosen-recipient pool.
+        return add_shield(
+            recipient, make_life_pool(amount, gain_life_seat, source_name)
+        )
     if counter:
         # "…**For each 1 damage prevented this way, put a +1/+1 counter on that
         # creature.**" (Temper.) CR 615.5's additional effect, so it is the
@@ -116,6 +126,7 @@ def apply_prevention_shield(
     counter: str = "",
     permanent: "Permanent | None" = None,
     object_only: bool = False,
+    gain_life_seat: "int | None" = None,
 ) -> str:
     """Grant `amount` prevention shields to a chosen creature, or otherwise to the
     target player. Records `source_name` (the granting card) so the UI can show
@@ -165,13 +176,19 @@ def apply_prevention_shield(
             context,
             _grant_pool(
                 permanent, amount, source_name, source_filter, counter,
+                gain_life_seat=gain_life_seat,
             ),
             permanent,
         )
         game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
         return permanent.card.name
     _record_shield(
-        context, _grant_pool(target, amount, source_name, source_filter), None
+        context,
+        _grant_pool(
+            target, amount, source_name, source_filter,
+            gain_life_seat=gain_life_seat,
+        ),
+        None,
     )
     game.log.append(f"{target.name} gains prevention shield for {amount} damage")
     return target.name
@@ -583,6 +600,12 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         counter=str(instruction.payload.get("rider_counter") or ""),
         permanent=unannounced,
         object_only=object_only,
+        # Candles' Glow's CR 615.5 rider: "**You** gain life …" — the seat
+        # whose spell or ability armed the shield, wherever it goes.
+        gain_life_seat=(
+            game.players.index(context.caster)
+            if instruction.payload.get("rider_gain_life") else None
+        ),
     )
     return True, "resolved"
 

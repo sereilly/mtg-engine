@@ -29,6 +29,7 @@ from engine.layer_bridge import displayed_type_line
 from engine.mana_combination import cast_split_offer
 from engine.mana_payment import taps_for_payment
 from engine.object_colors import card_colors
+from engine.splice import segment_names, spliced_segments
 from engine.line_classification import LOYALTY_ANY_TIME_STATIC
 from engine.oracle import compile_card_oracle
 from engine.keywords import abilities_lost_at, derived_ability_lines
@@ -36,7 +37,8 @@ from engine.targeting import derive_cast_spec
 from engine.target_roles import recorded_role_seats
 from engine.text_changes import changed_words, spell_text_card
 
-from .offers import _offered_mana, cast_mana_offer, cast_x_payable, tap_mana_split, text_change_offer
+from .offers import (_offered_mana, cast_mana_offer, cast_x_payable, splice_offers,
+                     tap_mana_split, text_change_offer)
 from .runtime import CARD_BY_NAME
 
 
@@ -907,6 +909,13 @@ def _serialize_card(
             x_payable = cast_x_payable(game, caster_index, card)
             if x_payable is not None:
                 serialized["x_payable"] = x_payable
+            # Splice onto Arcane (CR 702.47): what may be revealed and spliced
+            # onto this spell as it is cast, each candidate with the target
+            # spec of the text it would add (``offers.splice_offers``) —
+            # absent for every card nothing can be spliced onto.
+            splices = splice_offers(game, caster_index, card, hand_index)
+            if splices is not None:
+                serialized["splice_offers"] = splices
     faces = face_cards(card)
     if faces:
         # CR 709.3: the player chooses a half *before* anything else about the
@@ -1195,7 +1204,23 @@ def _serialize_stack_item(item, game: Game) -> dict:
         "target_permanent_index": target_permanent_index,
         "target_permanent_name": target_permanent_name,
         "target_permanent_seat": target_permanent_seat,
-        "targets": _stack_item_targets(item, game),
+        # Every target of the spell, the text spliced onto it included
+        # (CR 702.47d: one spell, its gained text's targets its own).
+        "targets": _stack_item_targets(item, game) + [
+            target for segment in spliced_segments(item)
+            for target in _stack_item_targets(segment, game)
+        ],
+        # CR 702.47: the cards spliced onto this spell (revealed, so public),
+        # in the order their texts happen, each with the text it added and
+        # the targets that text chose. Empty for every other object.
+        "spliced": [
+            {
+                "name": name,
+                "text": segment.card.oracle_text,
+                "targets": _stack_item_targets(segment, game),
+            }
+            for name, segment in zip(segment_names(item), spliced_segments(item))
+        ],
         "source_permanent_seat": source_permanent_seat,
         "source_permanent_index": source_permanent_index,
         "ability_text": item.ability_text,

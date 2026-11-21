@@ -76,6 +76,7 @@ from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
 from .lowering._chosen_members import _lower_exile_one_of_chosen
+from .lowering._counted_pumps import fused_base_and_sacrifice_rate_pump
 from .lowering._destroy_sweeps import one_sweep_kind
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
@@ -809,6 +810,14 @@ def lower_statement(
         return _lower_exile(statement, produced, event, event_subject)
 
     if isinstance(statement, ast.Sequence):
+        # "Target creature gets +3/+0 … For each Spirit sacrificed this way,
+        # that creature gets an additional +3/+0 …" (Devouring Rage). Before
+        # the loop, whose two-target pump row refuses any pair of targeted
+        # pumps, and beside it because it needs the producers and the event
+        # (a trigger pays no cost to count).
+        fused = fused_base_and_sacrifice_rate_pump(statement.steps, produced, event)
+        if fused is not None:
+            return fused
         for fuse in (
             # Before its mirror: both take (Discard, Draw)-shaped pairs in the
             # opposite order, and this one additionally requires "that many",

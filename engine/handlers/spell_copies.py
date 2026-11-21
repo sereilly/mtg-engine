@@ -26,6 +26,7 @@ from ..color_changes import forget_spell_color_change, recolor_spell
 from ..game_types import (as_graveyard_stamps, as_target_ids, as_target_slots,
                           single_chosen_id, StackItem)
 from ..resumption import run_resumable
+from ..splice import copied_segments
 from ._targets import triggering_spell
 from .registry import effect_handler
 
@@ -316,6 +317,11 @@ def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
             for mode in copied.chosen_modes
         ),
         target_stack_item=copied.target_stack_item,
+        # …and the text spliced onto the original, with the targets chosen
+        # for it (CR 707.10; Uyo, Silent Prophet's 2004-12-01 ruling: "you'll
+        # copy the spliced text as well as the original spell text"), each
+        # segment its own object for the modes' reason above.
+        spliced=copied_segments(copied, controller_index),
         is_copy=True,
     )
     # …less the one thing in that dict that is not a choice: a colour an effect
