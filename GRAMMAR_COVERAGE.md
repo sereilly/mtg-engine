@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 462 | 82.3% | 81.6% | 59.5% | 224 |
+| CHK *(measured)* | 291 | 462 | 83.1% | 82.9% | 60.8% | 230 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -73,7 +73,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 999 | 506 | expected a subject |  |
 | 198 | 100 | unrecognized effect verb |  |
-| 151 | 78 | unconsumed text |  |
+| 147 | 74 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -710,6 +710,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ashen Powder**
   - `Put target creature card from an opponent's graveyard onto the battlefield under your control.`
   - `Put target creature card from an opponent's graveyard onto the battlefield under your control.`
+- **Ashen-Skin Zubera**
+  - `When this creature dies, target opponent discards a card for each Zubera that died this turn.`
 - **Ashes to Ashes**
   - `Exile two target nonartifact creatures. Ashes to Ashes deals 5 damage to you.`
   - `Exile two target nonartifact creatures. Ashes to Ashes deals 5 damage to you.`
@@ -3592,6 +3594,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals combat damage, sacrifice a permanent.`
 - **Dripping Dead**
   - `Whenever this creature deals combat damage to a creature, destroy that creature. It can't be regenerated.`
+- **Dripping-Tongue Zubera**
+  - `When this creature dies, create a 1/1 colorless Spirit creature token for each Zubera that died this turn.`
 - **Dromar's Attendant**
   - `{1}, Sacrifice this creature: Add {W}{U}{B}.`
 - **Dromar's Cavern**
@@ -3970,6 +3974,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ember Shot**
   - `Ember Shot deals 3 damage to any target.`
   - `Draw a card.`
+- **Ember-Fist Zubera**
+  - `When this creature dies, it deals damage to any target equal to the number of Zubera that died this turn.`
 - **Embermage Goblin**
   - `When this creature enters, you may search your library for a card named Embermage Goblin, reveal it, put it into your hand, then shuffle.`
   - `{T}: This creature deals 1 damage to any target.`
@@ -4651,6 +4657,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature becomes blocked, defending player mills three cards.`
 - **Floating Shield**
   - `Sacrifice this Aura: Target creature gains protection from the chosen color until end of turn.`
+- **Floating-Dream Zubera**
+  - `When this creature dies, draw a card for each Zubera that died this turn.`
 - **Flood**
   - `{U}{U}: Tap target creature without flying.`
   - `{U}{U}: Tap target creature without flying.`
@@ -6271,6 +6279,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts an instant spell, counter it unless that player pays {X}, where X is its mana value.`
 - **Iname, Death Aspect**
   - `When Iname enters, you may search your library for any number of Spirit cards, put them into your graveyard, then shuffle.`
+- **Iname, Life Aspect**
+  - `When Iname dies, you may exile it. If you do, return any number of target Spirit cards from your graveyard to your hand.`
 - **Incendiary**
   - `At the beginning of your upkeep, you may put a fuse counter on this Aura.`
   - `When enchanted creature dies, this Aura deals X damage to any target, where X is the number of fuse counters on this Aura.`
@@ -11650,6 +11660,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}, Sacrifice this artifact: It deals 3 damage to target creature.`
 - **Silent Specter**
   - `Whenever this creature deals combat damage to a player, that player discards two cards.`
+- **Silent-Chant Zubera**
+  - `When this creature dies, you gain 2 life for each Zubera that died this turn.`
 - **Silhouette**
   - `Choose target creature. If a spell or ability that targets that creature would cause a source to deal damage to that creature this turn, prevent that damage.`
 - **Silk Net**
