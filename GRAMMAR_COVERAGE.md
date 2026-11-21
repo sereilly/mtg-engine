@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | CHK | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| BOK *(measured)* | 165 | 288 | 75.7% | 75.0% | 59.0% | 134 |
+| BOK *(measured)* | 165 | 288 | 78.1% | 78.1% | 61.8% | 142 |
 | **All (shipped)** | **9904** | **14799** | **89.5%** | **89.0%** | **62.0%** | **7785** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -72,9 +72,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1040 | 525 | expected a subject |  |
-| 205 | 106 | unrecognized effect verb |  |
-| 156 | 83 | unconsumed text |  |
+| 1037 | 522 | expected a subject |  |
+| 204 | 105 | unrecognized effect verb |  |
+| 154 | 81 | unconsumed text |  |
 | 87 | 67 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -4114,6 +4114,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets +X/+0 until end of turn.`
 - **Enraging Licid**
   - `{R}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {R} to end this effect.`
+- **Enshrined Memories**
+  - `Reveal the top X cards of your library. Put all creature cards revealed this way into your hand and the rest on the bottom of your library in any order.`
 - **Enslaved Dwarf**
   - `{R}, Sacrifice this creature: Target black creature gets +1/+0 and gains first strike until end of turn.`
 - **Enslaved Horror**
@@ -5934,6 +5936,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap an untapped Swamp you control: This enchantment deals 1 damage to any target.`
   - `When this enchantment enters, sacrifice this enchantment unless you sacrifice four creatures.`
   - `Tap an untapped Swamp you control: This enchantment deals 1 damage to any target.`
+- **Heed the Mists**
+  - `Mill a card, then draw cards equal to the milled card's mana value.`
 - **Heightened Awareness**
   - `At the beginning of your draw step, draw an additional card.`
 - **Helionaut**
@@ -9212,6 +9216,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent the next 2 damage that would be dealt to any target this turn. If this spell was kicked, prevent the next 4 damage that would be dealt to that permanent or player this turn instead.`
 - **Orim, Samite Healer**
   - `{T}: Prevent the next 3 damage that would be dealt to any target this turn.`
+- **Ornate Kanzashi**
+  - `{2}, {T}: Target opponent exiles the top card of their library. You may play that card this turn.`
 - **Ornery Dilophosaur**
   - `Whenever this creature attacks, if you control a creature with power 4 or greater, this creature gets +2/+2 until end of turn.`
 - **Orochi Eggwatcher**
@@ -9990,6 +9996,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Psychic Purge**
   - `Psychic Purge deals 1 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, that player loses 5 life.`
+- **Psychic Spear**
+  - `Target player reveals their hand. You choose a Spirit or Arcane card from it. That player discards that card.`
 - **Psychic Theft**
   - `Target player reveals their hand. You choose an instant or sorcery card from it and exile that card. You may cast that card for as long as it remains exiled. At the beginning of the next end step, if you haven't cast the card, return it to its owner's hand.`
 - **Psychic Trance**
@@ -11781,6 +11789,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, {T}: Target legendary creature gains first strike until end of turn.`
 - **Shipwreck Dowser**
   - `When this creature enters, return target instant or sorcery card from your graveyard to your hand.`
+- **Shirei, Shizo's Caretaker**
+  - `Whenever a creature with power 1 or less is put into your graveyard from the battlefield, you may return that card to the battlefield at the beginning of the next end step if Shirei is still on the battlefield.`
 - **Shisato, Whispering Hunter**
   - `At the beginning of your upkeep, sacrifice a Snake.`
   - `Whenever Shisato deals combat damage to a player, that player skips their next untap step.`
@@ -13076,6 +13086,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sway of Illusion**
   - `Any number of target creatures become the color of your choice until end of turn.`
   - `Draw a card.`
+- **Sway of the Stars**
+  - `Each player shuffles their hand, graveyard, and all permanents they own into their library, then draws seven cards. Each player's life total becomes 7.`
 - **Swelter**
   - `Swelter deals 2 damage to each of two target creatures.`
 - **Swift Response**
@@ -13210,6 +13222,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Talisman of Unity**
   - `{T}: Add {C}.`
   - `{T}: Add {G} or {W}. This artifact deals 1 damage to you.`
+- **Tallowisp**
+  - `Whenever you cast a Spirit or Arcane spell, you may search your library for an Aura card with enchant creature, reveal it, put it into your hand, then shuffle.`
 - **Talon Sliver**
   - `All Sliver creatures have first strike.`
 - **Talon of Pain**
@@ -13848,6 +13862,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}, Remove all pain counters from this artifact: It deals damage to target creature equal to the number of pain counters removed this way.`
 - **Tortured Existence**
   - `{B}, Discard a creature card: Return target creature card from your graveyard to your hand.`
+- **Toshiro Umezawa**
+  - `Whenever a creature an opponent controls dies, you may cast target instant card from your graveyard. If that spell would be put into a graveyard, exile it instead.`
 - **Total War**
   - `Whenever a player attacks with one or more creatures, destroy all untapped non-Wall creatures that player controls that didn't attack, except for creatures the player hasn't controlled continuously since the beginning of the turn.`
 - **Totem Speaker**
