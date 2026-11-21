@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 440 | 76.1% | 74.3% | 53.2% | 201 |
+| CHK *(measured)* | 291 | 440 | 79.3% | 77.5% | 56.4% | 209 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,9 +71,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1006 | 511 | expected a subject |  |
+| 1005 | 510 | expected a subject |  |
 | 204 | 106 | unrecognized effect verb |  |
-| 149 | 78 | unconsumed text |  |
+| 148 | 77 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -83,7 +83,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
-| 6 | 2 | expected 'put' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 5 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
@@ -92,10 +91,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 1 | 'that land' names a land no earlier step of this effect chose |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected 'a' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -1630,6 +1630,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Brushwagg**
   - `Whenever this creature blocks or becomes blocked, it gets -2/+2 until end of turn.`
 - **Brutal Deceiver**
+  - `{1}: Look at the top card of your library.`
   - `{2}: Reveal the top card of your library. If it's a land card, this creature gets +1/+0 and gains first strike until end of turn. Activate only once each turn.`
 - **Bubbling Muck**
   - `Until end of turn, whenever a player taps a Swamp for mana, that player adds an additional {B}.`
@@ -1742,6 +1743,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Caller of the Claw**
   - `When this creature enters, create a 2/2 green Bear creature token for each nontoken creature put into your graveyard from the battlefield this turn.`
 - **Callous Deceiver**
+  - `{1}: Look at the top card of your library.`
   - `{2}: Reveal the top card of your library. If it's a land card, this creature gets +1/+0 and gains flying until end of turn. Activate only once each turn.`
 - **Callous Oppressor**
   - `{T}: Gain control of target creature that isn't of the chosen type for as long as this creature remains tapped.`
@@ -2420,6 +2422,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, target creature you control gains "When this creature deals combat damage to a player, you may have it deal damage equal to its power to target creature that player controls."`
 - **Common Cause**
   - `Nonartifact creatures get +2/+2 as long as they all share a color.`
+- **Commune with Nature**
+  - `Look at the top five cards of your library. You may reveal a creature card from among them and put it into your hand. Put the rest on the bottom of your library in any order.`
 - **Complex Automaton**
   - `At the beginning of your upkeep, if you control seven or more permanents, return this creature to its owner's hand.`
 - **Complicate**
@@ -2586,6 +2590,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
 - **Crag Saurian**
   - `Whenever a source deals damage to this creature, that source's controller gains control of this creature.`
+- **Cranial Extraction**
+  - `Choose a nonland card name. Search target player's graveyard, hand, and library for all cards with that name and exile them. Then that player shuffles.`
 - **Cranial Plating**
   - `Equipped creature gets +1/+0 for each artifact you control.`
   - `{B}{B}: Attach this Equipment to target creature you control.`
@@ -2692,6 +2698,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{4}, {T}: Attach target Aura attached to a creature to another creature.`
   - `{4}, {T}: Attach target Aura attached to a creature to another creature.`
 - **Cruel Deceiver**
+  - `{1}: Look at the top card of your library.`
   - `{2}: Reveal the top card of your library. If it's a land card, this creature gains "Whenever this creature deals damage to a creature, destroy that creature" until end of turn. Activate only once each turn.`
 - **Cruel Revival**
   - `Destroy target non-Zombie creature. It can't be regenerated. Return up to one target Zombie card from your graveyard to your hand.`
@@ -4381,6 +4388,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fend Off**
   - `Prevent all combat damage that would be dealt by target creature this turn.`
 - **Feral Deceiver**
+  - `{1}: Look at the top card of your library.`
   - `{2}: Reveal the top card of your library. If it's a land card, this creature gets +2/+2 and gains trample until end of turn. Activate only once each turn.`
 - **Feral Instinct**
   - `Target creature gets +1/+1 until end of turn.`
@@ -5137,6 +5145,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature can't block black creatures.`
 - **Gift of the Woods**
   - `Whenever enchanted creature blocks or becomes blocked, it gets +0/+3 until end of turn and you gain 1 life.`
+- **Gifts Ungiven**
+  - `Search your library for up to four cards with different names and reveal them. Target opponent chooses two of those cards. Put the chosen cards into your graveyard and the rest into your hand. Then shuffle.`
 - **Gigapede**
   - `At the beginning of your upkeep, if this card is in your graveyard, you may discard a card. If you do, return this card to your hand.`
 - **Gilded Drake**
@@ -5682,6 +5692,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
   - `Search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
 - **Harsh Deceiver**
+  - `{1}: Look at the top card of your library.`
   - `{2}: Reveal the top card of your library. If it's a land card, untap this creature and it gets +1/+1 until end of turn. Activate only once each turn.`
 - **Harsh Mercy**
   - `Each player chooses a creature type. Destroy all creatures that aren't of a type chosen this way. They can't be regenerated.`
@@ -5904,6 +5915,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, target opponent loses 2 life and you gain 2 life.`
 - **Hikari, Twilight Guardian**
   - `Whenever you cast a Spirit or Arcane spell, you may exile Hikari. If you do, return it to the battlefield under its owner's control at the beginning of the next end step.`
+- **Hinder**
+  - `Counter target spell. If that spell is countered this way, put that card on your choice of the top or bottom of its owner's library instead of into that player's graveyard.`
 - **Hindering Touch**
   - `Counter target spell unless its controller pays {2}.`
 - **Hint of Insanity**
@@ -5914,6 +5927,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target Spirit or Arcane spell.`
 - **Hisoka's Guard**
   - `{1}{U}, {T}: Target creature you control other than this creature has shroud for as long as this creature remains tapped. (It can't be the target of spells or abilities.)`
+- **Hisoka, Minamo Sensei**
+  - `{2}{U}, Discard a card: Counter target spell if it has the same mana value as the discarded card.`
 - **Historian of Zhalfir**
   - `Whenever this creature attacks, if you control a Teferi planeswalker, draw a card.`
 - **Hoar Shade**
@@ -8059,6 +8074,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent draws a card, you may pay {1}. If you do, draw a card.`
 - **Mindbender Spores**
   - `Whenever this creature blocks a creature, put four fungus counters on that creature. The creature gains "This creature doesn't untap during your untap step if it has a fungus counter on it" and "At the beginning of your upkeep, remove a fungus counter from this creature."`
+- **Mindblaze**
+  - `Choose a nonland card name and a number greater than 0. Target player reveals their library. If that library contains exactly the chosen number of cards with the chosen name, Mindblaze deals 8 damage to that player. Then that player shuffles.`
 - **Mindless Automaton**
   - `{1}, Discard a card: Put a +1/+1 counter on this creature.`
   - `Remove two +1/+1 counters from this creature: Draw a card.`
@@ -9188,6 +9205,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Peer Pressure**
   - `Choose a creature type. If you control more creatures of that type than each other player, you gain control of all creatures of that type. (This effect lasts indefinitely.)`
+- **Peer Through Depths**
+  - `Look at the top five cards of your library. You may reveal an instant or sorcery card from among them and put it into your hand. Put the rest on the bottom of your library in any order.`
 - **Peer into the Abyss**
   - `Target player draws cards equal to half the number of cards in their library and loses half their life. Round up each time.`
 - **Pegasus Refuge**
@@ -9250,6 +9269,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pestilent Haze**
   - `• All creatures get -2/-2 until end of turn.`
   - `• Remove two loyalty counters from each planeswalker.`
+- **Petals of Insight**
+  - `Look at the top three cards of your library. You may put those cards on the bottom of your library in any order. If you do, return Petals of Insight to its owner's hand. Otherwise, draw three cards.`
 - **Petra Sphinx**
   - `{T}: Target player chooses a card name, then reveals the top card of their library. If that card has the chosen name, that player puts it into their hand. If it doesn't, the player puts it into their graveyard.`
 - **Petradon**
@@ -11579,6 +11600,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw three cards, then discard a card.`
 - **Sift Through Sands**
   - `Draw two cards, then discard a card.`
+  - `If you've cast a spell named Peer Through Depths and a spell named Reach Through Mists this turn, you may search your library for a card named The Unspeakable, put it onto the battlefield, then shuffle.`
 - **Sigil of Sleep**
   - `Whenever enchanted creature deals damage to a player, return target creature that player controls to its owner's hand.`
 - **Sigil of the New Dawn**

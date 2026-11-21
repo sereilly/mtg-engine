@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**17 unclaimed sentence(s) across 17 supported card(s).**
+**16 unclaimed sentence(s) across 16 supported card(s).**
 
 - **Blessed Breath**
   - `splice onto arcane {w}`
@@ -49,8 +49,6 @@ anything anyone did, and every ingest would arrive red.
   - `{5}, {t}: create a 1/1 green snake creature token for each charge counter on this artifact`
 - **Psychic Puppetry**
   - `splice onto arcane {u}`
-- **Sift Through Sands**
-  - `if you've cast a spell named peer through depths and a spell named reach through mists this turn, you may search your library for a card named the unspeakable, put it onto the battlefield, then shuffle`
 - **Soulless Revival**
   - `splice onto arcane {1}{b}`
 - **Strange Inversion**
