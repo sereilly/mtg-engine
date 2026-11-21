@@ -1069,6 +1069,59 @@ def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+@effect_handler("sacrifice_target_permanent")
+def sacrifice_target_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Target permanent's controller sacrifices it.**" (Reweave.)
+
+    ``sacrifice_bound_permanent``'s rule on the permanent a spell targeted
+    (CR 601.2c): sacrificed by **its own controller** as the spell resolves
+    (CR 701.21a), so not a destruction — regeneration does not save it and
+    indestructible does not keep it. A target gone or no longer answering the
+    printed noun is not sacrificed (CR 608.2b), and "if the player does" is
+    then false (the card's 2005-11-01 ruling: "The player reveals cards only
+    if the targeted permanent gets sacrificed").
+
+    Three records, all written before the sacrifice, because a moment later the
+    permanent is a card in a graveyard with no controller and no computed
+    types (CR 400.7, 613.1): whether it happened, whose it was (the seat "they
+    reveal" reads), and the card types it had **right before** it was
+    sacrificed (CR 608.2h; the 2005-04-01 ruling) — through the layered
+    accessors, so a land animated into a creature shares "creature" too.
+    """
+    from ..grammar.vocabulary import CARD_TYPES
+    from ..oracle_types import LAST_TARGET_CONTROLLER, SACRIFICED_CARD_TYPES
+    from ..subject_filters import subject_matches
+    from .permanent_choices import _has_card_type
+
+    context.results["sacrificed_this_way"] = 0
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players
+        else None
+    )
+    victim = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer,
+            source=context.source_permanent,
+        ),
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: {departed_object_said(context)}")
+        return True, "resolved"
+    seat = game.controller_index_of(victim)
+    if isinstance(seat, int):
+        context.results[LAST_TARGET_CONTROLLER] = seat
+    context.results[SACRIFICED_CARD_TYPES] = tuple(sorted(
+        card_type for card_type in CARD_TYPES if _has_card_type(victim, card_type)
+    ))
+    name = permanent_name(victim)
+    game.sacrifice_permanent(victim)
+    context.results["sacrificed_this_way"] = 1
+    game.log.append(f"{context.card.name}: {name} was sacrificed")
+    return True, "resolved"
+
+
 @effect_handler("sacrifice_event_subject")
 def sacrifice_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Whenever this Equipment becomes unattached from a permanent,

@@ -307,6 +307,14 @@ ACTIVATED_LABELS: dict[str, str] = {
     # paying its mana cost." (Isochron Scepter.) A cast offered during the
     # resolution (CR 707.12) — a permission to cast, of one copy.
     "cast_copy_of_exiled_card": "activated_permission",
+    # "…You may cast a spell from among cards exiled with Shell of the Last
+    # Kappa without paying its mana cost." The same offer on the exiled card
+    # itself, and the same label.
+    "cast_card_exiled_with_source": "activated_permission",
+    # "{3}, {T}: Exile target instant or sorcery spell that targets you."
+    # (Shell of the Last Kappa.) A spell removed from the stack — not a
+    # counter (its ruling) — labelled as the permanent exile beside it is.
+    "exile_target_spell": "activated_destruction",
     # "…as though they had flash" (Winding Canyons). A permission like its
     # neighbours, about timing rather than about a zone.
     "grant_flash_timing": "activated_permission",

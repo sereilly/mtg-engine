@@ -104,6 +104,28 @@ def _unattached_granter_id(cost_lower: str) -> int | None:
     return None
 
 
+#: "{T}, **Remove all aim counters from Hankyu**: …" with the granter's name
+#: already the relation ``bind_granter`` binds: the grammar's
+#: ``RemoveCounterCost.granter_id`` and this reader delimit the same words.
+#: Only the *where*: which counters and how many are the removal rows' in
+#: ``parse_activated_ability_cost``, which read "remove … counter(s) from "
+#: and stop there.
+_REMOVE_FROM_GRANTER_COST_RE = re.compile(
+    r"^remove .+ counters? from the permanent with id (\d+) "
+    r"that granted this ability$"
+)
+
+
+def _counter_removal_granter_id(cost_lower: str) -> int | None:
+    """The id of the permanent a counter-removal cost takes its counters off,
+    when that is the permanent that granted the ability; otherwise None."""
+    for segment in cost_lower.split(","):
+        match = _REMOVE_FROM_GRANTER_COST_RE.match(segment.strip())
+        if match is not None:
+            return int(match.group(1))
+    return None
+
+
 def _taps_the_attached_permanent(cost_lower: str) -> bool:
     """Whether a cost clause taps the permanent this Aura or Equipment is on.
 
@@ -1255,4 +1277,7 @@ def parse_activated_ability_cost(
         graveyard_to_library_bottom=_graveyard_to_library_bottom_cost(cost_lower),
         mana_alternatives=mana_alternatives,
         unattach_granter_id=_unattached_granter_id(cost_lower),
+        remove_counter_granter_id=(
+            _counter_removal_granter_id(cost_lower) if remove_counter else None
+        ),
     )

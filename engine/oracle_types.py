@@ -1257,6 +1257,16 @@ DISCARDED_CARDS_BY_SEAT = "discarded_cards_by_seat"
 #: resolution cannot record different numbers.
 SACRIFICED_COUNT = "sacrificed_count"
 
+#: The card types (CR 205.2a) the permanent a step sacrificed had **right
+#: before** it was sacrificed — "…until they reveal a permanent card that
+#: shares a card type with **the sacrificed permanent**" (Reweave; its
+#: 2005-04-01 ruling: "it uses the type(s) that the permanent had right before
+#: it was sacrificed"). A sorted tuple of type words, frozen by the sacrifice
+#: (CR 608.2h) because by the next sentence the permanent is a card in a
+#: graveyard and its computed types are gone (CR 613.1). Written by
+#: ``sacrifice_target_permanent``; read by ``reveal_until_match``.
+SACRIFICED_CARD_TYPES = "sacrificed_card_types"
+
 #: How much life a life-loss step actually took, in total across every seat it
 #: took it from.
 #:

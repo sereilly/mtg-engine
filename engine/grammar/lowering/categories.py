@@ -355,6 +355,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.
     "sacrifice_bound_permanent": "destruction",
+    # ...and on the one permanent a spell targeted, by its controller
+    # ("Target permanent's controller sacrifices it", Reweave).
+    "sacrifice_target_permanent": "destruction",
     # ...and on the object a trigger's own event froze (Grafted Wargear:
     # "sacrifice that permanent"), beside `destroy_event_subject`.
     "sacrifice_event_subject": "destruction",
@@ -815,6 +818,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # paying its mana cost." (Isochron Scepter.) CR 707.12's copy of a card,
     # the copy family above.
     "cast_copy_of_exiled_card": "counterspells",
+    # "You may cast a spell from among cards exiled with Shell of the Last
+    # Kappa without paying its mana cost." The same offer on the exiled card
+    # itself, without the copy — the family that offer is in.
+    "cast_card_exiled_with_source": "counterspells",
     # "…copy an instant or sorcery card in it. If you do, you may cast the
     # copy without paying its mana cost." (Reversal of Fortune.) The same
     # copy of a card, out of a revealed hand.

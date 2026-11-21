@@ -70,6 +70,50 @@ from ._events import (
 )
 
 
+def lower_granter_placement(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
+    """"{T}: Put an aim counter on **Hankyu**." — a named counter on the
+    permanent that granted the ability (:class:`ast.GranterRef`, CR 201.5a).
+
+    The third entry point, called first by ``_lower_put_counter`` because
+    every branch there reads a noun phrase this recipient does not have. The
+    counter goes on that one permanent by the id ``bind_granter`` wrote, through
+    ``add_named_counter_to_target``'s ``on_granter_id`` — nothing is chosen, so
+    there is no picker and no target to re-check (CR 608.2b judges targets
+    only).
+
+    Only the shape a card prints: one named counter word, a printed count. A
+    P/T pair would be ``place_pt_counters``' write and an "up to", a doubling
+    or a cap riders no branch here carries, so each refuses rather than
+    landing as a plain placement.
+    """
+    assert isinstance(node.subject, ast.GranterRef)
+    if (
+        is_pt_counter(node.counter)
+        or node.counter == "loyalty"
+        or node.up_to
+        or node.then_double
+        or node.cap is not None
+        or node.distributed
+        or node.chooser is not None
+        or not isinstance(node.count, ast.Fixed)
+    ):
+        raise LoweringError(
+            "a counter on the permanent that granted this ability is one named "
+            "counter, a printed number at a time",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "add_named_counter_to_target", "",
+            {
+                "counter": node.counter,
+                "count": node.count.value,
+                "on_granter_id": node.subject.permanent_id,
+            },
+        ),
+    )
+
+
 def _names_any_permanent(filt: ast.ObjectFilter) -> bool:
     """Whether *filt* is the generic head noun "permanent" — every permanent on
     the battlefield, narrowed (if at all) by what ``refuse_untestable`` checks.

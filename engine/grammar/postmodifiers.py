@@ -666,6 +666,16 @@ def _parse_postmodifiers(
             ) or stream.accept_phrase("shares", "a", "card", "type", "with", "it"):
                 d.shares_card_type_with_it = True
                 continue
+            # "…a permanent card **that shares a card type with the sacrificed
+            # permanent**" (Reweave). The relation above with its far end the
+            # permanent an earlier step sacrificed — recorded as printed, for
+            # the lowering that can name the record to resolve or refuse.
+            elif stream.accept_phrase(
+                "shares", "a", "card", "type", "with", "the", "sacrificed",
+                "permanent",
+            ):
+                d.shares_card_type_with_sacrificed = True
+                continue
             # "…creatures **that share a creature type with it**" (Mana
             # Echoes, the Crowns), "…**with the sacrificed creature**" (Endemic
             # Plague), "…a creature card **that shares a creature type with
@@ -734,6 +744,12 @@ def _parse_postmodifiers(
             # noun phrase is parsed in full and recorded whole, and every
             # lowering not written for it refuses the field by name.
             elif stream.accept_word("targets"):
+                # "…spell **that targets you**" (Shell of the Last Kappa): the
+                # player half of the same question — the seat whose ability is
+                # asking, which no noun phrase reads.
+                if stream.accept_word("you"):
+                    d.targets_you = True
+                    continue
                 stream.accept_word("a", "an")
                 d.targets_object = parse_filter(stream)
                 continue

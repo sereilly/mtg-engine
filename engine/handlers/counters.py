@@ -921,7 +921,17 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
                 f"{context.card.name}: nothing was left to put a counter on"
             )
         return True, "resolved"
-    if instruction.payload.get("on_event_subject"):
+    granter_id = instruction.payload.get("on_granter_id")
+    if granter_id is not None:
+        # "{T}: Put an aim counter on **Hankyu**." (Hankyu's quote on the
+        # creature it equips.) The permanent that granted the ability, by the
+        # id ``bind_granter`` wrote (CR 201.5a) — not a target, so nothing is
+        # re-checked; gone from the battlefield (CR 400.7: a returned Hankyu is
+        # a new object), it takes no counter.
+        target = game.permanent_by_id(granter_id)
+        if target is not None and not game.is_on_battlefield(target):
+            target = None
+    elif instruction.payload.get("on_event_subject"):
         # "Whenever a permanent becomes tapped, put a wind counter on **it**."
         # (Freyalise's Winds.) Nothing was chosen: the object is the one the
         # event was about, read by the id the announcement froze (CR 603.10) —

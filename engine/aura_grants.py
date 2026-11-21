@@ -408,12 +408,25 @@ def aura_conditional_grant_holds(permanent, state: str) -> bool:
 #: and granted by :func:`aura_keyword_grants`, which reads it off this same
 #: match, so the keyword cannot be claimed without the quote nor the quote
 #: folded without the keyword.
+#:
+#: …and **two** quotes: 'Equipped creature has "{T}: Put an aim counter on
+#: Hankyu" and "{T}, Remove all aim counters from Hankyu: …"' (Hankyu). Two
+#: abilities granted by one sentence, captured as one run (``abilities``) and
+#: listed by :func:`quoted_grant_abilities`, so every reader of this match —
+#: the claim, the fold, the keyword half — sees each quote and none of them
+#: can claim the line while the fold hands over only the first.
 _QUOTED_ABILITY_GRANT = _LazyPattern(lambda: re.compile(
     rf'^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has '
     rf'(?:(?P<keywords>(?:{_keyword_alternation()})'
     rf'(?:(?:, and |, | and )(?:{_keyword_alternation()}))*),? and )?'
-    rf'"(?P<ability>[^"]+)"$'
+    r'(?P<abilities>"[^"]+"(?: and "[^"]+")?)$'
 ))
+
+
+def quoted_grant_abilities(match: "re.Match[str]") -> tuple[str, ...]:
+    """Each quoted ability a :data:`_QUOTED_ABILITY_GRANT` match grants, in
+    printed order — one for nearly every card, two for Hankyu."""
+    return tuple(re.findall(r'"([^"]+)"', match.group("abilities")))
 
 
 @lru_cache(maxsize=None)
@@ -433,7 +446,7 @@ def aura_quoted_grants(oracle_text: str) -> tuple[str, ...]:
     for raw_line in (oracle_text or "").splitlines():
         match = _QUOTED_ABILITY_GRANT.match(_line_text(raw_line))
         if match is not None:
-            quotes.append(match.group("ability"))
+            quotes.extend(quoted_grant_abilities(match))
     return tuple(quotes)
 
 

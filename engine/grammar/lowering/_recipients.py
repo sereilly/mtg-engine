@@ -426,7 +426,8 @@ def lower_damage_recipient(
         # lowering for it — see `lowering/_sweeps.py`, which holds this and the
         # "all" spelling together because they are one printed idiom.
         return lower_each_matching_damage(
-            node, recipient, amount, bool(back_reference or bonus)
+            node, recipient, amount, back_reference, bonus, produced,
+            event_subject,
         )
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (
         "any_target", "target", "this"

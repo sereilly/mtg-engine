@@ -641,8 +641,26 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
         else:
             game.log.append(f"{context.card.name}: no creature type was chosen")
 
+    # "…until they reveal a permanent card **that shares a card type with the
+    # sacrificed permanent**." (Reweave.) The types the sacrifice in front
+    # froze as it went (``SACRIFICED_CARD_TYPES``; the 2005-04-01 ruling: the
+    # types it had right before it was sacrificed). **No record means no
+    # match**, for the chosen type's reason above: read as no narrowing, the
+    # run would stop on the first permanent card of any type.
+    shared_from = described.pop("shares_card_type_with_record", None)
+    shared_types: tuple = ()
+    if shared_from is not None:
+        shared_types = tuple(context.results.get(str(shared_from)) or ())
+        if not shared_types:
+            game.log.append(f"{context.card.name}: no card type to share")
+
     def matches(card) -> bool:
         if chosen_from is not None and not chosen_word:
+            return False
+        if shared_from is not None and not any(
+            card_has_type(card, card_type, game=game, owner=player)
+            for card_type in shared_types
+        ):
             return False
         return _card_matches_filter(card, described, game=game, owner=player)
 

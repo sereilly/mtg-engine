@@ -824,14 +824,37 @@ EVENT_PRODUCES: dict[str, frozenset[str]] = {
 #: into ``produced`` by :func:`event_produces` for such an event only.
 DAMAGED_CREATURE_NAMED = "damaged_creature_named"
 
+#: "Whenever **equipped creature** deals damage to **a blocking creature**,
+#: this Equipment deals that much damage to each **other** creature defending
+#: player controls." (Kusari-Gama.) The damaged end printed as a creature
+#: under a damager that is the creature the source is attached to — so the
+#: source is an Aura or an Equipment, never a creature itself (CR 303.4d,
+#: 301.5c), and the one creature the sentence's "other" can set apart is the
+#: one the event damaged (``about_permanent_id``, frozen by
+#: ``damage_events._announce``). Seeded into ``produced`` by
+#: :func:`event_produces`; read by ``_sweeps.lower_each_matching_damage``.
+OTHER_THAN_DAMAGED_CREATURE = "other_than_damaged_creature"
+
 
 def event_produces(event: "ast.TriggerEvent") -> frozenset[str]:
     """What the firing *event* leaves for the effect to read back:
     :data:`EVENT_PRODUCES`' row for its kind, plus
     :data:`DAMAGED_CREATURE_NAMED` for a damage event whose "that creature"
-    can only be the creature dealt damage."""
+    can only be the creature dealt damage, and
+    :data:`OTHER_THAN_DAMAGED_CREATURE` for one whose "other creature" can only
+    set apart the creature dealt damage."""
     produced = EVENT_PRODUCES.get(event.kind, frozenset())
     subject = event.subject
+    if (
+        event.kind == "damage_dealt"
+        and isinstance(subject, ast.ObjectFilter)
+        and subject.is_enchanted
+        and any(
+            stem == "damaged" and narrowing.card_types == ("creature",)
+            for stem, narrowing in event.narrowings
+        )
+    ):
+        produced = produced | {OTHER_THAN_DAMAGED_CREATURE}
     if (
         event.kind == "damage_dealt"
         and isinstance(subject, ast.ObjectFilter)

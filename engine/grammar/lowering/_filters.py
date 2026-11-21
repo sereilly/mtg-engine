@@ -342,6 +342,10 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # refuse. Soldevi Adnate's "a black or artifact creature" is the printing
     # that could not be said any other way.
     "targets_object": "targets_object",
+    # "…spell **that targets you**" (Shell of the Last Kappa): the player
+    # half of the row above, refused everywhere for its reason and carried by
+    # the one lowering written for it (the stack exile's ``targets_you``).
+    "targets_you": "targets_you",
     # "…with a single target" (Reflecting Mirror). CR 115.9a's count of what a
     # stack object chose, which has no ``to_payload`` form for the reason
     # ``targets_object`` beside it has none — it is a question about a spell,

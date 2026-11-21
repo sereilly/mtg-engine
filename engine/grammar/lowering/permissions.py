@@ -52,7 +52,25 @@ def _lower_cast_from_exiled_with(
     ``grant_cast_permission`` already is. What differs is only which pile —
     ``cards_from`` names it, where "exiled_cards" reads a step of this same
     effect and "exiled_with_source" reads the permanent's own linked pile.
+
+    "You may cast a spell from among cards exiled with Shell of the Last Kappa
+    without paying its mana cost." (Shell of the Last Kappa.) With no duration
+    it is no permission at all but a cast made while the ability resolves
+    (CR 608.2g), offered on the card itself: ``cast_card_exiled_with_source``,
+    the Isochron Scepter offer (``engine/copy_casts.py``) without the copy.
     """
+    if node.now:
+        if not node.free:
+            raise LoweringError(
+                "a cast during the resolution is offered free of its mana cost",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "cast_card_exiled_with_source", "",
+                {"filter": _linked_exile_filter(node.filter)},
+            ),
+        )
     return (
         OracleInstruction(
             "grant_cast_permission", "",

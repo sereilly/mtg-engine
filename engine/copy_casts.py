@@ -40,6 +40,16 @@ The pieces:
 
 A seat nobody asks answers as the offer is armed, with the AI's rehearsed cast
 chooser (``ai_policy.choose_copy_cast``) — the madness offer's arrangement.
+
+**…and the same offer on the card itself** (:data:`ORIGINAL`): "{3}, {T},
+Sacrifice Shell of the Last Kappa: You may cast a spell from among cards exiled
+with Shell of the Last Kappa without paying its mana cost." Cast while the
+ability resolves (CR 608.2g), free of its mana cost (CR 118.9), out of the
+exile that holds it — its owner's, which need not be the caster's
+(``CastPermission.zone_player_index``) — and no copy is made, so nothing ceases
+to exist afterwards and the spell is not one (it resolves to its owner's
+graveyard). The prompt, its answer and the AI's default are the copy offer's:
+one question ("cast this card from exile for free?") either way.
 """
 
 from __future__ import annotations
@@ -65,15 +75,20 @@ def make_copy_in_exile(game, seat: int, card):
     return game.put_card_into_exile(game.players[seat], copy)
 
 
-def offer_permission(game, seat: int, copy, source_name: str):
+def offer_permission(
+    game, seat: int, copy, source_name: str, *, original: bool = False,
+    zone_seat: int | None = None,
+):
     """The grant the offer opens: *copy* out of *seat*'s exile, free of its
-    mana cost, cast as a copy."""
+    mana cost, cast as a copy — or, *original*, the exiled card itself out of
+    *zone_seat*'s exile (its owner's), cast as itself."""
     from .cast_permissions import grant_permission
 
     return grant_permission(
         game, player_index=seat, zone="exile", mode="cast", cards=[copy],
         free=True, duration=COPY_CAST_OFFER, source_name=source_name,
-        cast_as_copy=True,
+        cast_as_copy=not original,
+        zone_player_index=zone_seat if original else None,
     )
 
 
@@ -93,7 +108,7 @@ def cease_to_exist(game, seat: int, copy) -> None:
 
 def arm_copy_cast(
     game, seat: int, card, source_name: str, *, one_of=None,
-    from_hand_of: int | None = None,
+    from_hand_of: int | None = None, original: bool = False,
 ) -> None:
     """Offer *seat* a cast of a copy of *card*.
 
@@ -115,6 +130,10 @@ def arm_copy_cast(
     data = {"card_name": card.name, "source_name": source_name, "_card": card}
     if one_of is not None:
         data[ONE_OF] = one_of
+    # *original*: the offer casts *card* itself rather than a copy of it
+    # (Shell of the Last Kappa) — see the module docstring.
+    if original:
+        data[ORIGINAL] = True
     if from_hand_of is not None:
         data[FROM_HAND_OF] = int(from_hand_of)
     game.arm_pending_choice("copy_cast", seat, **data)
@@ -125,6 +144,16 @@ ONE_OF = "_one_of"
 
 #: The pending choice's key for the seat whose hand holds the copied card.
 FROM_HAND_OF = "_from_hand_of"
+
+#: The pending choice's key saying the offer casts the exiled card **itself**,
+#: not a copy (Shell of the Last Kappa).
+ORIGINAL = "_original"
+
+
+def _what(choice) -> str:
+    """How the log names what the offer casts: the card, or a copy of it."""
+    name = getattr(choice.data.get("_card"), "name", "the card")
+    return name if choice.data.get(ORIGINAL) else f"a copy of {name}"
 
 
 def new_one_of() -> dict:
@@ -199,10 +228,7 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
     card = choice.data.get("_card")
     seat = choice.player_index
     if not response.get("accept"):
-        game.log.append(
-            f"{game.players[seat].name} did not cast a copy of "
-            f"{getattr(card, 'name', 'the card')}"
-        )
+        game.log.append(f"{game.players[seat].name} did not cast {_what(choice)}")
         game.discard_pending_choice(choice)
         return True
     if not _still_there(game, choice):
@@ -213,6 +239,7 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
         game, seat, card, str(choice.data.get("source_name") or ""),
         perform=response.get("perform"),
         announcement=dict(response.get("announcement") or {}),
+        original=bool(choice.data.get(ORIGINAL)),
     )
     outcome = response.get("outcome")
     if isinstance(outcome, list):
@@ -226,15 +253,25 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
 
 def _cast_a_copy(
     game, seat: int, card, source_name: str, *, perform=None, announcement=None,
-    choose=None,
+    choose=None, original: bool = False,
 ):
     """Make the copy, cast it, and clean up whatever the cast did not take.
 
     *choose*, for a seat nobody asks, is called with ``(copy, permission)``
     and returns the announcement to cast with, or None to decline — so the
-    AI weighs the very object it would cast."""
-    copy = make_copy_in_exile(game, seat, card)
-    permission = offer_permission(game, seat, copy, source_name)
+    AI weighs the very object it would cast.
+
+    *original* casts *card* itself out of the exile holding it (Shell of the
+    Last Kappa): no copy is made and none ceases to exist."""
+    if original:
+        copy = card
+        permission = offer_permission(
+            game, seat, card, source_name, original=True,
+            zone_seat=_in_exile(game, card),
+        )
+    else:
+        copy = make_copy_in_exile(game, seat, card)
+        permission = offer_permission(game, seat, copy, source_name)
     result = None
     try:
         if choose is not None:
@@ -252,12 +289,13 @@ def _cast_a_copy(
         result = perform(game)
     finally:
         retire_offer(game, permission)
-        if any(held is copy for held in game.players[seat].exile):
+        if not original and any(held is copy for held in game.players[seat].exile):
             cease_to_exist(game, seat, copy)
     if getattr(result, "supported", False):
+        what = card.name if original else f"a copy of {card.name}"
         game.log.append(
-            f"{game.players[seat].name} cast a copy of {card.name} without "
-            f"paying its mana cost ({source_name})"
+            f"{game.players[seat].name} cast {what} without paying its mana "
+            f"cost ({source_name})"
         )
     return result
 
@@ -304,9 +342,7 @@ def default_copy_cast_offer(game, choice) -> None:
     # a seat nobody asks declines it; a person may still loop as long as
     # they like.
     if card is not None and card.name == source_name:
-        game.log.append(
-            f"{game.players[seat].name} did not cast a copy of {card.name}"
-        )
+        game.log.append(f"{game.players[seat].name} did not cast {_what(choice)}")
         game.discard_pending_choice(choice)
         return
 
@@ -326,15 +362,15 @@ def default_copy_cast_offer(game, choice) -> None:
         return cast_announcement(tap_planned_lands(game, seat, action))
 
     if _still_there(game, choice):
-        result = _cast_a_copy(game, seat, card, source_name, choose=choose)
+        result = _cast_a_copy(
+            game, seat, card, source_name, choose=choose,
+            original=bool(choice.data.get(ORIGINAL)),
+        )
         if getattr(result, "supported", False):
             _take_one_of(game, choice)
             game.discard_pending_choice(choice)
             return
-    game.log.append(
-        f"{game.players[seat].name} did not cast a copy of "
-        f"{getattr(card, 'name', 'the card')}"
-    )
+    game.log.append(f"{game.players[seat].name} did not cast {_what(choice)}")
     game.discard_pending_choice(choice)
 
 
@@ -344,6 +380,7 @@ __all__ = [
     "COPY_CAST_PROMPT",
     "FROM_HAND_OF",
     "ONE_OF",
+    "ORIGINAL",
     "arm_copy_cast",
     "cease_to_exist",
     "default_copy_cast_offer",

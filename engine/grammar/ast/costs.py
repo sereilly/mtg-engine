@@ -465,6 +465,12 @@ class RemoveCounterCost:
     counter: str = "+1/+1"
     count: Amount = field(default_factory=lambda: Fixed(1))
     subject: "ObjectFilter | None" = None
+    #: "{T}, Remove all aim counters from **Hankyu**" — the ability an
+    #: Equipment grants, read on its host: the counters come off the permanent
+    #: that granted it, named by the id ``granted_abilities.bind_granter``
+    #: wrote in place of its name (CR 201.5a). None is the source (or
+    #: *subject*); the two are never both set.
+    granter_id: int | None = None
 
 
 @dataclass(frozen=True)

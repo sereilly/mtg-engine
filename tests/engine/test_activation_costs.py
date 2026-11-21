@@ -332,6 +332,17 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{(charged.remove_counter, charged.remove_counter_count)}"
                             f" for {(cost.counter, wanted_count)}"
                         )
+                    # …and *off which permanent*: "Remove all aim counters
+                    # from Hankyu" on the creature it equips takes them off the
+                    # Equipment (CR 201.5a), and a charger that read the kind
+                    # and the count but not the granter would take them off
+                    # the creature — a cost paid with counters it never has.
+                    if charged.remove_counter_granter_id != cost.granter_id:
+                        unpaid.append(
+                            f"{card.name}: charged removal off granter "
+                            f"{charged.remove_counter_granter_id} for "
+                            f"{cost.granter_id}"
+                        )
                 # Its mirror. A cost that *adds* a marker can never be
                 # unpayable, so getting it wrong is not a free ability — but it
                 # is a card whose own state trigger never fires, which is the

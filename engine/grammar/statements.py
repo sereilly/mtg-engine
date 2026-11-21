@@ -61,6 +61,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       parse_passive_each_sacrifice,
                       parse_create_token_with_stated_pt,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
+                      parse_target_controller_sacrifices_it,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library,
                       _parse_bound_permanent_activation_ban,
                       _parse_targeting_ban,
@@ -466,6 +467,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     delayed_self = _parse_delayed_self_action(stream)
     if delayed_self is not None:
         return delayed_self
+    # "**Target permanent's controller sacrifices it.**" (Reweave.) A subject
+    # in the possessive, which the subject-verb reader below cannot read (its
+    # noun phrase stops at the "'s"); gated on the opening word and refusing
+    # without consuming.
+    sacrificed = parse_target_controller_sacrifices_it(stream)
+    if sacrificed is not None:
+        return sacrificed
     # "[Until end of turn,] you may play/cast <cards> [this turn] […]" — a
     # cast-or-play permission (CR 601.3). Tried before the "you may" wrapper
     # below: the permission IS the sentence's whole effect, where the wrapper

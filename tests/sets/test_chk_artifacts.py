@@ -453,3 +453,353 @@ def test_w1g9_tatsumasa_comes_back_when_its_dragon_dies_and_not_otherwise(set_po
             assert names == [] and [c.name for c in alice.exile] == ["Tatsumasa, the Dragon's Fang"]
 
 # ==== end w1g9 ======================================================
+
+
+# ==== W2G3 ====
+# W2G3's tests: Hankyu, Kusari-Gama, Shell of the Last Kappa.
+
+from engine import Game as _W2G3Game, PlayerState as _W2G3PlayerState
+from engine.models import Permanent as _W2G3Permanent
+from tests.helpers import declare_attack as _w2g3_declare_attack
+from tests.helpers import drive_combat as _w2g3_drive_combat
+from tests.helpers import settle as _w2g3_settle
+
+
+def _w2g3_card(set_pool, name):
+    for code in ("CHK", "LEA", "INV"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w2g3_table(set_pool, *, hand=(), mine=(), theirs=(), interactive=()):
+    """Two seats on seat 0's first main phase, costs not enforced; *mine* /
+    *theirs* placed and not summoning sick."""
+    card = lambda name: _w2g3_card(set_pool, name)  # noqa: E731
+    game = _W2G3Game(players=[
+        _W2G3PlayerState(name="Alice", hand=[card(n) for n in hand],
+                         library=[card("Island")] * 12),
+        _W2G3PlayerState(name="Bob", library=[card("Island")] * 12),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _W2G3Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+            placed[seat].append(permanent)
+    game._sync_control()
+    game.start_turn(0)
+    _w2g3_settle(game)
+    return game, placed[0], placed[1]
+
+
+def _w2g3_slot(game, permanent):
+    seat = game.controller_index_of(permanent)
+    return [p.permanent_id for p in game.players[seat].battlefield].index(
+        permanent.permanent_id
+    )
+
+
+def _w2g3_activate(game, permanent, **announce):
+    seat = game.controller_index_of(permanent)
+    result = game.activate_permanent_ability(
+        seat, permanent.card.name, permanent_index=_w2g3_slot(game, permanent),
+        **announce,
+    )
+    _w2g3_settle(game)
+    return result
+
+
+def _w2g3_equip(game, equipment, creature):
+    return _w2g3_activate(game, equipment, target_permanent_ids=[creature.permanent_id])
+
+
+def test_w2g3_kusari_gama_deals_that_much_to_each_other_creature_defending_player_controls(set_pool):
+    """"Equipped creature has '{2}: This creature gets +1/+0 until end of
+    turn.' Whenever equipped creature deals damage to a blocking creature,
+    this Equipment deals that much damage to each other creature defending
+    player controls."
+
+    The granted pump twice makes the Bears 4/2; blocked by a Wall of Stone it
+    deals the Wall 4, and the Equipment deals 4 to each *other* creature Bob
+    controls — his Bears and his Craw Wurm die — but not again to the Wall
+    ("other" is the damaged blocker: the Equipment is not a creature), and
+    not to Alice's own tapped Bears ("defending player controls")."""
+    game, mine, theirs = _w2g3_table(
+        set_pool,
+        mine=["Kusari-Gama", "Grizzly Bears", "Grizzly Bears"],
+        theirs=["Wall of Stone", "Grizzly Bears", "Craw Wurm"],
+    )
+    gama, bears, idle = mine
+    wall, _their_bears, _wurm = theirs
+    idle.tapped = True
+    assert _w2g3_equip(game, gama, bears).supported
+    assert gama.metadata.get("attached_to") is bears
+    for _ in range(2):
+        assert _w2g3_activate(game, bears).supported
+    assert (bears.effective_power, bears.effective_toughness) == (4, 2)
+
+    _w2g3_declare_attack(game, 0, blocks={
+        _w2g3_slot(game, wall): _w2g3_slot(game, bears),
+    })
+    _w2g3_drive_combat(game, through="combat_damage")
+    assert "Kusari-Gama dealt 4 damage to Grizzly Bears, Craw Wurm" in game.log
+    assert sorted(c.name for c in game.players[1].graveyard) == ["Craw Wurm", "Grizzly Bears"]
+    assert wall.damage_marked == 4
+    assert idle.damage_marked == 0
+    assert [p.card.name for p in game.controlled_by(1)] == ["Wall of Stone"]
+
+
+def test_w2g3_kusari_gama_does_not_fire_on_damage_to_a_player(set_pool):
+    """The trigger names "a blocking creature": the equipped creature
+    unblocked deals its damage to Bob and the Equipment deals none."""
+    game, mine, theirs = _w2g3_table(
+        set_pool, mine=["Kusari-Gama", "Grizzly Bears"], theirs=["Grizzly Bears"],
+    )
+    gama, bears = mine
+    their_bears = theirs[0]
+    assert _w2g3_equip(game, gama, bears).supported
+    _w2g3_declare_attack(game, 0)
+    _w2g3_drive_combat(game)
+    assert game.players[1].life == 18
+    assert their_bears.damage_marked == 0
+    assert not any(line.startswith("Kusari-Gama dealt") for line in game.log)
+
+
+def _w2g3_aim(game, creature, ability_index=0, **announce):
+    creature.tapped = False
+    return _w2g3_activate(game, creature, ability_index=ability_index, **announce)
+
+
+def test_w2g3_hankyu_puts_aim_counters_on_itself_and_fires_what_it_removed(set_pool):
+    """"Equipped creature has '{T}: Put an aim counter on Hankyu' and '{T},
+    Remove all aim counters from Hankyu: This creature deals damage to any
+    target equal to the number of aim counters removed this way.'"
+
+    The name in the quote is the Equipment (CR 201.5a): three activations put
+    three aim counters on Hankyu — none on the Bears, none on a second,
+    unattached Hankyu — and the second ability takes all three off as its cost
+    and deals 3 to the Craw Wurm. The counters stay with the Equipment: moved
+    to another creature it fires what it carried, and fired empty it deals
+    nothing."""
+    from engine.named_counters import counters_on
+
+    game, mine, theirs = _w2g3_table(
+        set_pool, mine=["Hankyu", "Grizzly Bears", "Hankyu", "Grizzly Bears"],
+        theirs=["Craw Wurm"],
+    )
+    hankyu, bears, spare, other_bears = mine
+    wurm = theirs[0]
+    assert _w2g3_equip(game, hankyu, bears).supported
+    for _ in range(3):
+        assert _w2g3_aim(game, bears).supported
+    assert counters_on(hankyu, "aim") == 3
+    assert counters_on(bears, "aim") == 0 and counters_on(spare, "aim") == 0
+
+    assert _w2g3_aim(
+        game, bears, ability_index=1, target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    assert counters_on(hankyu, "aim") == 0
+    assert "Grizzly Bears dealt 3 damage to Craw Wurm" in game.log
+    assert wurm.damage_marked == 3
+
+    assert _w2g3_aim(game, bears).supported
+    assert _w2g3_equip(game, hankyu, other_bears).supported
+    assert counters_on(hankyu, "aim") == 1
+    assert _w2g3_aim(game, other_bears, ability_index=1, target_player_index=1).supported
+    assert game.players[1].life == 19
+    assert _w2g3_aim(game, other_bears, ability_index=1, target_player_index=1).supported
+    assert game.players[1].life == 19
+
+
+def test_w2g3_two_hankyus_on_one_creature_each_aim_their_own(set_pool):
+    """Two Hankyus on one creature grant four abilities, and each quote names
+    the Equipment that granted it — by id, not by the shared name — so the
+    second Hankyu's "put an aim counter" ability puts it on the second."""
+    from engine.named_counters import counters_on
+
+    game, mine, _theirs = _w2g3_table(
+        set_pool, mine=["Hankyu", "Hankyu", "Grizzly Bears"],
+    )
+    first, second, bears = mine
+    assert _w2g3_equip(game, first, bears).supported
+    assert _w2g3_equip(game, second, bears).supported
+    assert _w2g3_aim(game, bears, ability_index=2).supported
+    assert (counters_on(first, "aim"), counters_on(second, "aim")) == (0, 1)
+    assert _w2g3_aim(game, bears, ability_index=0).supported
+    assert (counters_on(first, "aim"), counters_on(second, "aim")) == (1, 1)
+
+
+def test_w2g3_hankyu_destroyed_in_response(set_pool):
+    """The abilities are independent of Hankyu once activated (CR 113.7a).
+    Destroyed in response to the aim ability, the counter has nowhere to go
+    (the Equipment is a new object in the graveyard, CR 400.7); destroyed in
+    response to the shot, whose cost already took its two counters, the shot
+    still deals 2."""
+    from engine.named_counters import counters_on
+
+    game, mine, _theirs = _w2g3_table(
+        set_pool, hand=["Shatter", "Shatter"],
+        mine=["Hankyu", "Grizzly Bears", "Hankyu"],
+    )
+    hankyu, bears, other = mine
+    assert _w2g3_equip(game, other, bears).supported
+    assert _w2g3_aim(game, bears).supported
+    bears.tapped = False
+    assert game.queue_permanent_ability(
+        0, "Grizzly Bears", permanent_index=_w2g3_slot(game, bears), ability_index=0,
+    ).supported
+    assert game.queue_from_hand(
+        0, "Shatter", target_permanent_ids=[other.permanent_id],
+    ).supported
+    _w2g3_settle(game)
+    assert not game.is_on_battlefield(other)
+    assert "Grizzly Bears: no valid permanent for a counter" in game.log
+
+    assert _w2g3_equip(game, hankyu, bears).supported
+    for _ in range(2):
+        assert _w2g3_aim(game, bears).supported
+    bears.tapped = False
+    assert game.queue_permanent_ability(
+        0, "Grizzly Bears", permanent_index=_w2g3_slot(game, bears),
+        ability_index=1, target_player_index=1,
+    ).supported
+    assert counters_on(hankyu, "aim") == 0
+    assert game.queue_from_hand(
+        0, "Shatter", target_permanent_ids=[hankyu.permanent_id],
+    ).supported
+    _w2g3_settle(game)
+    assert not game.is_on_battlefield(hankyu)
+    assert game.players[1].life == 18
+
+
+def _w2g3_shell_table(set_pool, *, their_hand=(), mine=("Shell of the Last Kappa",),
+                      interactive=()):
+    game, placed, theirs = _w2g3_table(
+        set_pool, mine=mine, theirs=["Hill Giant"], interactive=interactive,
+    )
+    game.players[1].hand.extend(_w2g3_card(set_pool, n) for n in their_hand)
+    return game, placed, theirs
+
+
+def _w2g3_shell_exile(game, shell):
+    """Shell's first ability aimed at the spell on top of the stack."""
+    shell.tapped = False
+    return game.queue_permanent_ability(
+        0, shell.card.name, permanent_index=_w2g3_slot(game, shell),
+        ability_index=0, target_stack_index=len(game.stack) - 1,
+    )
+
+
+def test_w2g3_shell_exiles_a_spell_that_targets_you_even_one_that_cant_be_countered(set_pool):
+    """"{3}, {T}: Exile target instant or sorcery spell that targets you. (The
+    spell has no effect.)" Bob's Lightning Bolt at Alice goes to Bob's exile,
+    exiled with the Shell (CR 607.2a); so does Urza's Rage, which can't be
+    countered — the 2004-12-01 ruling: exiling it "doesn't technically
+    'counter' anything". Alice takes no damage."""
+    from engine.linked_exile import linked_entries
+
+    game, mine, _theirs = _w2g3_shell_table(
+        set_pool, their_hand=["Lightning Bolt", "Urza's Rage"],
+    )
+    shell = mine[0]
+    for spell in ("Lightning Bolt", "Urza's Rage"):
+        assert game.queue_from_hand(1, spell, target_player_index=0).supported
+        assert _w2g3_shell_exile(game, shell).supported
+        _w2g3_settle(game)
+    assert game.players[0].life == 20
+    assert [c.name for c in game.players[1].exile] == ["Lightning Bolt", "Urza's Rage"]
+    assert [entry["card"].name for entry in linked_entries(shell)] == [
+        "Lightning Bolt", "Urza's Rage",
+    ]
+    assert not any("countered" in line for line in game.log)
+
+
+def test_w2g3_shell_offers_only_a_spell_that_targets_you(set_pool):
+    """The 2004-12-01 ruling: "Shell of the Last Kappa's first ability can only
+    target a spell that targets you." A Bolt at Alice's Bears is no target:
+    the activation is refused with nothing paid (the Shell stays untapped),
+    and the Bolt resolves."""
+    game, mine, _theirs = _w2g3_shell_table(
+        set_pool, their_hand=["Lightning Bolt"],
+        mine=("Shell of the Last Kappa", "Grizzly Bears"),
+    )
+    shell, bears = mine
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    refused = _w2g3_shell_exile(game, shell)
+    assert not refused.supported
+    assert not shell.tapped
+    _w2g3_settle(game)
+    assert "Grizzly Bears" in [c.name for c in game.players[0].graveyard]
+    assert game.players[1].exile == []
+
+
+def test_w2g3_shell_sacrificed_casts_one_exiled_spell_for_free(set_pool):
+    """"{3}, {T}, Sacrifice Shell of the Last Kappa: You may cast a spell from
+    among cards exiled with Shell of the Last Kappa without paying its mana
+    cost." The pile survives the Shell's sacrifice as the cost. Alice, a
+    person, is offered each exiled card in turn (``copy_cast``, the card
+    itself, ``_original``): she declines the Bolt and casts Urza's Rage out of
+    Bob's exile at Bob — one spell, so the Bolt stays exiled — and the Rage
+    goes to its owner's graveyard."""
+    game, mine, _theirs = _w2g3_shell_table(
+        set_pool, their_hand=["Lightning Bolt", "Urza's Rage"], interactive={0},
+    )
+    shell = mine[0]
+    for spell in ("Lightning Bolt", "Urza's Rage"):
+        assert game.queue_from_hand(1, spell, target_player_index=0).supported
+        assert _w2g3_shell_exile(game, shell).supported
+        _w2g3_settle(game)
+    shell.tapped = False
+    assert game.activate_permanent_ability(
+        0, shell.card.name, permanent_index=_w2g3_slot(game, shell), ability_index=1,
+    ).supported
+    offers = [c for c in game.pending_choices if c.kind == "copy_cast"]
+    assert [c.data["card_name"] for c in offers] == ["Lightning Bolt", "Urza's Rage"]
+    assert all(c.data.get("_original") for c in offers)
+    assert "Shell of the Last Kappa" in [c.name for c in game.players[0].graveyard]
+    assert game.confirm_copy_cast(0, False)
+    assert game.confirm_copy_cast(
+        0, True, card_name="Urza's Rage", target_player_index=1,
+    )
+    _w2g3_settle(game)
+    assert game.players[1].life == 17
+    assert [c.name for c in game.players[1].exile] == ["Lightning Bolt"]
+    assert "Urza's Rage" in [c.name for c in game.players[1].graveyard]
+    assert not [c for c in game.pending_choices if c.kind == "copy_cast"]
+
+
+def test_w2g3_shell_casts_an_exiled_sorcery_on_the_opponents_turn(set_pool):
+    """The cast is made while the ability resolves (CR 608.2g), so a sorcery's
+    timing does not apply: on Bob's turn Alice — a seat nobody asks, answered
+    by the AI's cast chooser out of Bob's exile — sacrifices the Shell and
+    casts the Lava Spike it took from Bob, at Bob."""
+    game, mine, _theirs = _w2g3_shell_table(set_pool, their_hand=["Lava Spike"])
+    shell = mine[0]
+    game.start_turn(1)
+    _w2g3_settle(game)
+    assert game.queue_from_hand(1, "Lava Spike", target_player_index=0).supported
+    assert _w2g3_shell_exile(game, shell).supported
+    _w2g3_settle(game)
+    assert game.players[0].life == 20
+    shell.tapped = False
+    assert _w2g3_activate(game, shell, ability_index=1).supported
+    assert game.players[1].life == 17
+    assert [c.name for c in game.players[1].graveyard] == ["Lava Spike"]
+
+
+def test_w2g3_shell_with_nothing_exiled_casts_nothing(set_pool):
+    """Sacrificed with an empty pile, the ability does nothing and offers
+    nothing."""
+    game, mine, _theirs = _w2g3_shell_table(set_pool, interactive={0})
+    assert _w2g3_activate(game, mine[0], ability_index=1).supported
+    assert not game.pending_choices
+    assert "Shell of the Last Kappa: no card exiled with it to cast" in game.log
+
+# ==== end W2G3 ====

@@ -111,6 +111,7 @@ from .board import (
     parse_choose_each_then_destroy,
     _parse_delayed_self_action,
     _parse_that_object,
+    parse_target_controller_sacrifices_it,
 )
 from .returns import (
     _parse_return,
@@ -236,6 +237,7 @@ from .reveal import (
     accept_subject_reveals_counted_top_sorted,
     accept_subject_reveals_top_of_library,
     accept_subject_reveals_until_or_count,
+    accept_they_reveal_until,
     parse_bin_revealed_card,
     parse_graveyard_top_opponent_chooses,
     parse_put_revealed_cards_on_bottom,
@@ -416,6 +418,7 @@ __all__ = [
     "_parse_sacrifice_expansion_permanents",
     "parse_passive_each_sacrifice",
     "_parse_delayed_self_action",
+    "parse_target_controller_sacrifices_it",
     "_parse_shuffle_graveyard_into_library",
     "_parse_shuffle_hand_into_library",
     "_parse_shuffle_library",
@@ -453,6 +456,7 @@ __all__ = [
     "accept_subject_reveals_top_caster_picks",
     "accept_subject_reveals_top_of_library",
     "accept_subject_reveals_until_or_count",
+    "accept_they_reveal_until",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_graveyard_position",
     "_parse_exile_top_of_library",

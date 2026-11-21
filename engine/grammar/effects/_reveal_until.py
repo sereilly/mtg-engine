@@ -252,6 +252,58 @@ def accept_subject_reveals_until_or_count(
     )
 
 
+def accept_they_reveal_until(stream: TokenStream) -> "ast.RevealUntil | None":
+    """``They reveal cards from the top of their library until they reveal a
+    <card>, put that card onto the battlefield, then shuffle.`` (Reweave, as
+    the branch of "If the player does".)
+
+    Anaphoric, as Basalt Golem's "**They** create a 0/2 … token" one family
+    over: "they" is the seat the sentence in front named — the controller of
+    the permanent it sacrificed — and nothing on a board says who that is, so
+    the run reads the seat that step recorded (``LAST_TARGET_CONTROLLER``),
+    exactly as Transmogrify's "that creature's controller reveals …" does. The
+    lowering demands the producer, so with no such step the words name nobody
+    and the line refuses.
+
+    One sentence where Transmogrify prints three, and every word of it
+    required: the find goes onto the battlefield under the revealer's control
+    (no "under your control"), and "then shuffle" shuffles the library the run
+    turned over — CR 701.20b left those cards in it — which is the
+    ``shuffle_into_library`` fate. None with the cursor untouched otherwise.
+    """
+    from ...oracle_types import LAST_TARGET_CONTROLLER
+
+    if not (stream.at_word("they") and stream.peek_word(1) == "reveal"):
+        return None
+    mark = stream.mark()
+    stream.advance(2)
+    if not stream.accept_phrase(
+        "cards", "from", "the", "top", "of", "their", "library", "until",
+        "they", "reveal",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        filt.is_card
+        and stream.accept_punct(",")
+        and stream.accept_phrase(
+            "put", "that", "card", "onto", "the", "battlefield",
+        )
+        and stream.accept_punct(",")
+        and stream.accept_phrase("then", "shuffle")
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RevealUntil(LAST_TARGET_CONTROLLER, filt)
+
+
 def names_the_revealed_cards_placed(stream: TokenStream) -> bool:
     """Whether the rest of the line says "put the revealed cards" anywhere.
 

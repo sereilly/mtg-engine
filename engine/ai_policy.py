@@ -327,10 +327,18 @@ def _choose_exile_cast(
     alternative_cost: bool,
 ) -> "CastAction | None":
     """The best rehearsed cast of *held* out of *player_index*'s exile under
-    *permission*, or None — the body the two offers above share."""
-    pile = game.players[player_index].exile
+    *permission*, or None — the body the two offers above share.
+
+    The pile is the one *permission* opens (``zone_seat``): the caster's own
+    for a copy, and the card's **owner's** for the card itself cast out of
+    somebody else's exile (Shell of the Last Kappa casting a spell it exiled
+    from an opponent) — ``PermittedCast``'s cross-seat case."""
+    if permission is None:
+        return None
+    pile_seat = getattr(permission, "zone_seat", player_index)
+    pile = game.players[pile_seat].exile
     index = next((i for i, card in enumerate(pile) if card is held), None)
-    if index is None or permission is None:
+    if index is None:
         return None
     best: CastAction | None = None
     token = _IN_THE_ABSTRACT.set(True)
@@ -338,7 +346,7 @@ def _choose_exile_cast(
         with deliberating():
             for spell in castable_faces(held):
                 permitted = PermittedCast(
-                    zone="exile", owner_seat=player_index, index=index,
+                    zone="exile", owner_seat=pile_seat, index=index,
                     held=held, spell=spell, permission=permission,
                     alternative_cost=alternative_cost,
                 )

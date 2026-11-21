@@ -52,7 +52,7 @@ being modelled for those abilities, and it is measured by
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -113,6 +113,13 @@ class ChosenTarget:
     channel: str = "item"
     position: int = 0
     mode: int | None = None
+    #: For a target the text **spliced** onto a spell chose (CR 702.47d), the
+    #: position of that segment in ``StackItem.spliced`` — the holder whose
+    #: fields record it, as ``mode`` names a chosen mode's. None is the host's
+    #: own announcement. Set by :func:`change_slots`, read by
+    #: :func:`apply_target_change`, so a retarget (CR 115.7) and a copy's new
+    #: targets (CR 707.10c) reach a spliced text's target too.
+    splice: int | None = None
 
     def same_object(self, other: "ChosenTarget") -> bool:
         """Whether two descriptors name the same object or player (CR 115.3)."""
@@ -966,31 +973,51 @@ def change_slots(game: "Game", item: "StackItem") -> "list[ChangeSlot] | str":
     announced = announcements(item)
     if announced is None:
         return "its targets are not recorded as a stack object's"
-    targeted = [(announcement, _read(game, item, announcement)) for announcement in announced]
-    targeted = [(announcement, targets) for announcement, targets in targeted if targets]
+    # "**…and each spliced text's targets.**" CR 702.47d makes the targets
+    # chosen for text spliced onto a spell the spell's own, so CR 115.7's
+    # "change the target(s)" and CR 707.10c's "new targets for the copy"
+    # reach them as they reach the host's. Each segment is its own holder
+    # (``StackItem.spliced``), enumerated as the spell-shaped object it is —
+    # its own text's words and picker — and its slots carry its position
+    # (``ChosenTarget.splice``) so the write lands in its fields.
+    holders: list = [(item, None, announced)]
+    for position, segment in enumerate(getattr(item, "spliced", ()) or ()):
+        segment_announced = announcements(segment)
+        if segment_announced is None:
+            return "a spliced text's targets are not recorded as a stack object's"
+        holders.append((segment, position, segment_announced))
+    targeted = [
+        (holder, splice, announcement, _read(game, holder, announcement))
+        for holder, splice, each in holders
+        for announcement in each
+    ]
+    targeted = [entry for entry in targeted if entry[3]]
     if not targeted:
         return "it has no targets"
     slots: list[ChangeSlot] = []
-    for announcement, targets in targeted:
+    for holder, splice, announcement, targets in targeted:
         if announcement.printed_mode is not None:
             # One mode's words: a Charm prints "target" once per mode, and
             # only the chosen mode's sentence is this announcement's.
-            modes = compile_card_oracle(spell_text_card(item)).modes
+            modes = compile_card_oracle(spell_text_card(holder)).modes
             label = modes[announcement.printed_mode].label if 0 <= announcement.printed_mode < len(modes) else None
             instances = _target_instances(label) if label else 0
         else:
-            instances = _printed_target_instances(item)
+            instances = _printed_target_instances(holder)
         if (
             instances is not None and instances != 1
-            and not _one_description_for_every_instance(item, instances)
+            and not _one_description_for_every_instance(holder, instances)
         ):
             return "it uses the word \"target\" more than once"
         if any(target.channel not in _CHANGEABLE_CHANNELS for target in targets):
             return "its targets answer different descriptions"
         for current in targets:
-            candidates = _candidates(game, item, announcement, current)
+            candidates = _candidates(game, holder, announcement, current)
             if candidates is None:
                 return "its legal targets cannot be enumerated"
+            if splice is not None:
+                current = replace(current, splice=splice)
+                candidates = [replace(candidate, splice=splice) for candidate in candidates]
             slots.append(ChangeSlot(
                 current,
                 tuple(candidate for candidate in candidates if not candidate.same_object(current)),
@@ -1382,13 +1409,24 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
             return False
         if pick.kind == "player" and game.players[pick.seat].lost:
             return False
+    # A spliced text's slot (``ChosenTarget.splice``) is written into that
+    # segment — its own fields, CR 702.47d — and a position the spell no
+    # longer has refuses the whole change, before anything is written.
+    segments = tuple(getattr(item, "spliced", ()) or ())
+    if any(
+        slot.current.splice is not None
+        and not 0 <= slot.current.splice < len(segments)
+        for slot in slots
+    ):
+        return False
 
-    modes = tuple(getattr(item, "chosen_modes", ()) or ())
     written: list = []
     for slot, pick in zip(slots, picks):
         channel, position = slot.current.channel, slot.current.position
         mode = slot.current.mode
-        holder = modes[mode] if mode is not None and 0 <= mode < len(modes) else item
+        base = item if slot.current.splice is None else segments[slot.current.splice]
+        modes = tuple(getattr(base, "chosen_modes", ()) or ())
+        holder = modes[mode] if mode is not None and 0 <= mode < len(modes) else base
         if not any(holder is seen for seen in written):
             written.append(holder)
         if channel == "stack":
@@ -1407,7 +1445,7 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
             holder.target_player_index = pick.stamp.seat
             continue
         if channel == "divided":
-            divided = list(item.choices.get(DIVIDED_TARGETS) or ())
+            divided = list(base.choices.get(DIVIDED_TARGETS) or ())
             share = divided_entry(divided[position])[2]
             if pick.kind == "player":
                 divided[position] = (pick.seat, None) if share is None else (pick.seat, None, share)
@@ -1416,7 +1454,7 @@ def apply_target_change(game: "Game", item: "StackItem", slots, picks) -> bool:
                 divided[position] = stamped_entry(
                     seat, game.battlefield_index_of(permanent), share, pick.permanent_id
                 )
-            item.choices[DIVIDED_TARGETS] = divided
+            base.choices[DIVIDED_TARGETS] = divided
             continue
         # "item" / "player": the scalar fields, or one slot of the id list.
         if pick.kind == "stack":

@@ -23,8 +23,7 @@ from .phrases import _parse_card_alternatives, accept_graveyard_position
 from .prices import (_accept_mana_alternative, _accept_mana_run,
                      _accept_per_counter)
 from .errors import GrammarError
-from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
-from .lexer import MANA, NUMBER, SELF
+from .lexer import MANA, SELF
 from .lowering._common import (chargeable_tap_filter,
                                graveyard_position_payload)
 from ..keywords import keyword_ability_name
@@ -32,7 +31,7 @@ from .keywords import parse_keyword_list
 from .chargeable import (_is_chargeable_counter_target, _is_chargeable_exile,
                          _is_chargeable_sacrifice)
 from .nouns import parse_object_filter
-from .readers import accept_source_reference
+from .readers import accept_granter_reference, accept_source_reference
 from .references import excluding_source, parse_target_spec
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, IMPLEMENTED_KEYWORDS,
@@ -364,6 +363,16 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
         )
     if accept_source_reference(stream):
         return ast.RemoveCounterCost(counter, count)
+    # "{T}, Remove all aim counters from **Hankyu**: …" — the ability Hankyu
+    # grants the creature it equips, read on that creature once
+    # ``bind_granter`` has written the Equipment's name as the relation
+    # (CR 201.5a). The counters come off that one permanent, by id; the four
+    # count shapes are the source's, because the charger reads the granter
+    # exactly where it reads the source (``activation_costs``'
+    # ``remove_counter_granter_id``).
+    granter = accept_granter_reference(stream)
+    if granter is not None:
+        return ast.RemoveCounterCost(counter, count, granter_id=granter)
     marked = stream.mark()
     try:
         subject = _parse_cost_object(stream, "remove a counter from")
@@ -801,12 +810,11 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # is a cost no charger performs, and refuses.
             mark = stream.mark()
             stream.advance()
-            if stream.accept_phrase(*GRANTER_PHRASE_HEAD):
-                number = stream.accept_kind(NUMBER)
-                if number is not None and stream.accept_phrase(*GRANTER_PHRASE_TAIL):
-                    costs.append(ast.UnattachGranterCost(int(number.text)))
-                    stream.accept_punct(",")
-                    continue
+            granter = accept_granter_reference(stream)
+            if granter is not None:
+                costs.append(ast.UnattachGranterCost(granter))
+                stream.accept_punct(",")
+                continue
             stream.reset(mark)
             raise stream.error("an unattach cost names the Equipment granting it")
         if stream.at_word("untap"):

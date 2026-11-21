@@ -396,6 +396,43 @@ def parse_passive_each_sacrifice(stream: TokenStream) -> ast.Statement | None:
     )
 
 
+def parse_target_controller_sacrifices_it(
+    stream: TokenStream,
+) -> "ast.Sacrifice | None":
+    """``Target <permanent>'s controller sacrifices it.`` (Reweave.)
+
+    The spell targets the permanent (CR 115.1) and its controller performs the
+    sacrifice — the only player who can (CR 701.21a), so the possessive says
+    aloud what the action already implies, as "that creature's controller
+    sacrifices it" does for Basalt Golem. Read as a whole sentence because
+    neither half stands alone: "target permanent's controller" is a seat with
+    nothing to do, and "sacrifices it" names nothing without the possessive.
+
+    The actor is ``target_controller``, a seat a later "If the player does"
+    names back (``control_flow._mandatory_named_actor``); the lowering asks the
+    resolving permanent's controller at resolution, the moment CR 701.21a asks.
+
+    None with the cursor untouched for any other sentence.
+    """
+    if not stream.at_word("target"):
+        return None
+    mark = stream.mark()
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        isinstance(spec, ast.TargetSpec)
+        and spec.quantifier == "target"
+        and stream.accept_phrase("'s", "controller", "sacrifices", "it")
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return None
+    return ast.Sacrifice(ast.PlayerRef("target_controller"), spec)
+
+
 def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     """``Destroy this artifact at the beginning of the next end step.`` /
     ``Return this artifact to its owner's hand at the beginning of the next end

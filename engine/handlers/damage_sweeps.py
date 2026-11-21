@@ -343,10 +343,35 @@ def deal_damage_each_matching(
     # ``damage_dealer`` is the one answer; see its docstring for the four
     # readers.
     dealer = damage_dealer(context)
+    # "…this Equipment deals **that much** damage to each other creature …"
+    # (Kusari-Gama.) The firing event's number, frozen into the trigger's
+    # context by the fire site, or one an earlier step of this resolution
+    # recorded — the two channels ``deal_damage`` reads, under the same names
+    # and the same rule: an absent record deals nothing rather than an amount
+    # the card never printed.
+    from_results = instruction.payload.get("amount_from")
+    from_trigger = instruction.payload.get("amount_from_trigger")
     if instruction.payload.get("amount_from_source_power"):
         damage = max(0, biter.effective_power) if biter is not None else 0
+    elif from_results is not None:
+        damage = max(0, int((context.results or {}).get(from_results, 0) or 0))
+    elif from_trigger is not None:
+        damage = max(0, int((context.trigger_context or {}).get(from_trigger, 0) or 0))
     else:
         damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    # "…each **other** creature defending player controls" under a damage
+    # trigger about an attached creature: other than the creature the event
+    # damaged, by id (CR 400.7), frozen by the fire site as the object the
+    # event was about. A trigger with no such object sweeps nothing rather
+    # than the whole set — the word dropped would hit the blocker twice.
+    spared_id = None
+    if instruction.payload.get("other_than_damaged_permanent"):
+        spared_id = (context.trigger_context or {}).get("about_permanent_id")
+        if spared_id is None:
+            game.log.append(
+                f"{card.name}: no damaged creature for 'other' to set apart"
+            )
+            return True, "resolved"
     described = instruction.payload.get("filter") or {}
     per_recipient = instruction.payload.get("per_recipient_count")
     caster = context.caster
@@ -387,6 +412,8 @@ def deal_damage_each_matching(
     # amount: one list, then one resumable loop over it.
     recipients = []
     for perm in list(game.all_permanents()):
+        if spared_id is not None and perm.permanent_id == spared_id:
+            continue
         if not subject_matches(
             game, perm, described, observer=observer,
             source=context.source_permanent, targeted_player=targeted,

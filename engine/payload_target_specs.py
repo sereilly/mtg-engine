@@ -227,6 +227,13 @@ def _counter_spec(payload: dict) -> dict:
         # narrowing excludes would let Ring of Immortals be activated with
         # nothing it could legally counter — the cost paid for no effect.
         spec["stack_targets_filter"] = dict(targets_filter)
+    if payload.get("targets_you"):
+        # "…instant or sorcery spell **that targets you**" (Shell of the Last
+        # Kappa). The player half of the narrowing above, measured against the
+        # seat whose ability is asking — which only the enumeration holds, so
+        # the flag travels. Without it the ability offers every instant on the
+        # stack and its {3} is paid to exile one aimed at somebody else.
+        spec["stack_targets_you"] = True
     if payload.get("targets_source"):
         # "…that targets **this creature**" (Mistfolk). The picker resolves the
         # word against the ability's own permanent, which `legality` has in hand
@@ -1449,6 +1456,12 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # which part of the turn structure is then skipped.
     "skip_next_phase": _skipped_seat_spec,
     "counter_top_stack_spell": _counter_spec,
+    # "Exile target instant or sorcery spell that targets you." (Shell of the
+    # Last Kappa.) The counter's picker one verb over: the same narrowings on
+    # the same stack object, read off the same payload keys, so the offer and
+    # the exile cannot name different spells. Ertai's Meddling's bare "target
+    # spell" carries none and comes back the plain stack picker it always was.
+    "exile_target_spell": _counter_spec,
     "counter_stack_ability": _counter_ability_spec,
     "choose_permanent": _chosen_permanent_spec,
     # Reverberation names a spell on the stack the same way a counter does, and

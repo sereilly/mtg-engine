@@ -21,7 +21,7 @@ from ..records import (_parse_for_each_history, _parse_for_each_this_way,
                        scaled_by_recorded_count)
 from ..errors import GrammarError
 from ..lexer import PT
-from ..readers import accept_source_reference
+from ..readers import accept_granter_reference, accept_source_reference
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
@@ -408,7 +408,14 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     # creature" one in the same sentence cannot disagree about which is which.
     subject: ast.Recipient | None = parse_pair_ordinal_subject(stream)
     bound = stream.mark()
-    if subject is not None:
+    # "{T}: Put an aim counter on **Hankyu**." (Hankyu's quote, read on the
+    # creature it equips.) ``bind_granter`` wrote the Equipment's name as the
+    # relation (CR 201.5a), so the counter goes on that one permanent, by id —
+    # nothing chosen and no noun phrase to test.
+    granter = accept_granter_reference(stream) if subject is None else None
+    if granter is not None:
+        subject = ast.GranterRef(granter)
+    elif subject is not None:
         pass
     elif stream.accept_word("that"):
         bound_noun = stream.peek_word()

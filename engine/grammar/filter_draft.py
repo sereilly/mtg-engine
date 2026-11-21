@@ -273,6 +273,8 @@ class _FilterDraft:
     shares_color_with_attached_host: bool = False
     #: See ``ast.ObjectFilter.shares_card_type_with_it``.
     shares_card_type_with_it: bool = False
+    #: See ``ast.ObjectFilter.shares_card_type_with_sacrificed``.
+    shares_card_type_with_sacrificed: bool = False
     #: See ``ast.ObjectFilter.colors_of_sacrificed_for_cost``.
     colors_of_sacrificed_for_cost: bool = False
     #: See ``ast.ObjectFilter.shares_creature_type_with``.
@@ -303,6 +305,8 @@ class _FilterDraft:
     subtype_match: str = "any"
     any_classes: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     targets_object: ast.ObjectFilter | None = None
+    #: See ``ast.ObjectFilter.targets_you``.
+    targets_you: bool = False
     target_count: int | None = None
 
 
@@ -341,11 +345,13 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         shares_color_with_it=d.shares_color_with_it,
         shares_color_with_attached_host=d.shares_color_with_attached_host,
         shares_card_type_with_it=d.shares_card_type_with_it,
+        shares_card_type_with_sacrificed=d.shares_card_type_with_sacrificed,
         colors_of_sacrificed_for_cost=d.colors_of_sacrificed_for_cost,
         shares_creature_type_with=d.shares_creature_type_with,
         excluded_basic_lands=d.excluded_basic_lands,
         any_classes=d.any_classes,
         targets_object=d.targets_object,
+        targets_you=d.targets_you,
         target_count=d.target_count,
         created_with_source=d.created_with_source,
         put_onto_battlefield_by_source=d.put_onto_battlefield_by_source,

@@ -86,6 +86,20 @@ _GRAVEYARD_PILE_SEATS = frozenset({"defending_player", "you"})
 _CHOSEN_GRAVEYARD_PILE = "chosen"
 
 
+def _is_target_spell_exile(subject: "ast.Recipient") -> bool:
+    """Whether *subject* is one targeted object on the stack ("target instant
+    or sorcery spell …", Shell of the Last Kappa)."""
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "target"
+        and subject.targeted
+        and subject.count == 1
+        and subject.max_count is None
+        and subject.filter.zone == "stack"
+        and not subject.filter.also_ability
+    )
+
+
 def _is_hand_card_exile(subject: "ast.Recipient") -> bool:
     """Whether *subject* is the "a card from your hand" noun phrase.
 
@@ -487,6 +501,44 @@ def _lower_exile(
         if node.counters:
             payload["counters"] = _entering_counter_payload(node.counters)
         return (OracleInstruction("exile_target_spell", "", payload),)
+    # "{3}, {T}: **Exile target instant or sorcery spell that targets you.**
+    # (The spell has no effect.)" (Shell of the Last Kappa.) The same move off
+    # the stack with no actor printed — the ability's controller exiles it —
+    # and **not a counter** (the card's 2004-12-01 ruling: "it doesn't
+    # technically 'counter' anything", so an uncounterable spell is exiled
+    # too). The card goes into exile linked to the permanent whose ability
+    # moved it (CR 607.2a, ``linked_to_source``), because a second ability of
+    # the same permanent may cast "from among cards exiled with" it.
+    #
+    # The narrowings are the counter's (card types, "that targets you"), on
+    # the payload keys its picker reads (``payload_target_specs._counter_spec``),
+    # so the offer, the activation gate and CR 608.2b's re-check at resolution
+    # all ask one enumeration. Any other narrowing refuses by name.
+    if node.actor is None and _is_target_spell_exile(node.subject):
+        subject = node.subject
+        if node.duration.kind is not None or node.face_down or node.same_zone or node.counters:
+            raise LoweringError(
+                "the targeted-spell exile carries no duration, face-down "
+                "rider, pile or counters", node=node,
+            )
+        filt = subject.filter
+        leftovers = _restrictions_beyond(
+            filt, frozenset({"zone", "card_types", "targets_you"}),
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the targeted-spell exile does not honour {leftovers[0]!r}",
+                node=node,
+            )
+        spell_payload: dict[str, object] = {
+            "targets": {"quantifier": "target", "kind": "spell"},
+            "linked_to_source": True,
+        }
+        if filt.card_types:
+            spell_payload["card_types"] = list(filt.card_types)
+        if filt.targets_you:
+            spell_payload["targets_you"] = True
+        return (OracleInstruction("exile_target_spell", "", spell_payload),)
     # "**Target player** exiles a card from their graveyard." (Scrabbling
     # Claws.) The chosen seat picks out of its own pile as the ability
     # resolves, so the payload names that seat's pile (``"target_player"``) and

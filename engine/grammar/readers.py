@@ -44,8 +44,9 @@ callers (`with_clauses`, `phrases`, `condition_clauses`, `prevented_riders` and
 
 from __future__ import annotations
 
+from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
 from . import ast
-from .lexer import GToken, PT, SELF, WORD
+from .lexer import GToken, NUMBER, PT, SELF, WORD
 from .stream import TokenStream
 from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
                          match_longest, singular as _singular)
@@ -165,6 +166,31 @@ def accept_source_reference(stream: TokenStream) -> bool:
         return True
     stream.reset(mark)
     return False
+
+
+def accept_granter_reference(stream: TokenStream) -> int | None:
+    """Consume "the permanent with id <N> that granted this ability" and return
+    *N*, or None with the cursor unmoved.
+
+    No card prints the words: ``granted_abilities.bind_granter`` writes them in
+    place of the granter's own name as a quoted grant is folded onto its host
+    (CR 201.5a — "the name refers only to the specific object which is that
+    first ability's source"). "{T}: Put an aim counter on **Hankyu**" read on
+    the equipped creature names the Equipment, and only by its id is it the one
+    Equipment and not a second Hankyu on another creature.
+
+    All of the phrase or none of it — a head with no id, or an id with no tail,
+    leaves the line to refuse. The one reading of the relation, shared by the
+    counter placement, the counter-removal and unattach costs, and the count of
+    counters on the granter.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase(*GRANTER_PHRASE_HEAD):
+        number = stream.accept_kind(NUMBER)
+        if number is not None and stream.accept_phrase(*GRANTER_PHRASE_TAIL):
+            return int(number.text)
+    stream.reset(mark)
+    return None
 
 
 def accept_source_reference_spec(stream: TokenStream):

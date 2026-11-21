@@ -437,7 +437,9 @@ class ActivationPaymentMixin:
         # with none, since zero is a number and all of zero is zero.
         if cost.remove_counter and cost.remove_counter_filter is None:
             kind = cost.remove_counter
-            held = counters_on(permanent, kind)
+            # The source, or the permanent that granted the ability (Hankyu).
+            holder = self.counter_cost_holder(cost, permanent)
+            held = counters_on(holder, kind) if holder is not None else 0
             wanted = cost.remove_counter_count
             if wanted == "x":
                 total = max(0, int(x_value or 0))
@@ -746,6 +748,27 @@ class ActivationPaymentMixin:
                 observer=controller_index, source=permanent,
             )
         ]
+
+    def counter_cost_holder(self, cost, permanent):
+        """The permanent a self-referring counter-removal cost reads and pays
+        from: *permanent*, the ability's source — or, "{T}, Remove all aim
+        counters from **Hankyu**" (the ability Hankyu grants the creature it
+        equips), the permanent that granted the ability
+        (``ActivatedAbilityCost.remove_counter_granter_id``, CR 201.5a).
+
+        None when that granter is no longer on the battlefield: it holds no
+        counters any more (CR 400.7), so a cost removing a printed number of
+        them cannot be paid, and one removing "all" of them removes zero.
+        The one answer for the count, the payability check and the charge, so
+        the three cannot come to read two different permanents.
+        """
+        granter_id = getattr(cost, "remove_counter_granter_id", None)
+        if granter_id is None:
+            return permanent
+        granter = self.permanent_by_id(granter_id)
+        if granter is None or not self.is_on_battlefield(granter):
+            return None
+        return granter
 
     def _remove_counter_cost_candidates(
         self, cost, controller_index: int, permanent,

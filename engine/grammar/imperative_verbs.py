@@ -77,6 +77,7 @@ from .effects import (
     _parse_counter,
     _parse_create_token,
     _parse_create_token_for_recipient,
+    accept_they_reveal_until,
     _parse_destroy,
     _parse_discard,
     _parse_double,
@@ -706,6 +707,14 @@ def parse_imperative_verb(
     for_recipient = _parse_create_token_for_recipient(stream)
     if for_recipient is not None:
         return for_recipient
+    # "**They** reveal cards from the top of their library until they reveal
+    # …, put that card onto the battlefield, then shuffle." (Reweave, in the
+    # branch of "If the player does".) The anaphoric seat Basalt Golem's
+    # "they create" reads one line up, for a reveal-until; non-consuming on
+    # refusal.
+    they_reveal = accept_they_reveal_until(stream)
+    if they_reveal is not None:
+        return they_reveal
     if stream.at_word("choose"):
         # Nettling Imp / Norritt's three sentences, which are one effect. Tried
         # first because the sentence *after* the one this opens has nothing to
