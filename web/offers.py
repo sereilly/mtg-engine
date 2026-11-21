@@ -36,6 +36,7 @@ from engine.oracle import compile_card_oracle
 from engine.oracle_types import x_spend_colors_from_text
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.text_changes import TEXT_CHANGE_MODE_KINDS, current_text_card, words_written
+from engine.special_actions import clause_choices
 from engine.splice import splice_candidates, spliced_text_card
 from engine.targeting import mana_value_for_x, targets_mana_value_x
 
@@ -719,6 +720,17 @@ def splice_offers(game: Game, seat: int, card, hand_index: int | None) -> list |
     target now is still listed, with an empty ``valid_targets`` where its
     ``requires_target`` is true — the cast path refuses it (CR 702.47b), and
     the client greys it out by the spec rather than by a second rule.
+
+    A splice cost that is **not mana** ("Splice onto Arcane—Tap an untapped
+    white creature you control", Betrayers of Kamigawa) adds ``price``: what
+    the client must ask before it sends the cast — the morph cost's wire shape
+    (``special_actions.clause_choices``: ``cost_text``, ``cost_permanents``
+    with its ``verb``, ``count`` and ``choices`` by id) plus
+    ``cost_graveyard`` (``count``, ``choices`` by place in the pile) for a
+    graveyard exile — and ``payable`` / ``refusal``, CR 601.2h's answer on
+    the board as it stands. The cast sends the answers on the splice choice
+    (``cost_permanent_ids``, ``cost_graveyard_indices``); none named is the
+    deterministic pick. ``cost`` is the mana alone, "" for none.
     """
     if hand_index is None or card.primary_type not in ("instant", "sorcery"):
         return None
@@ -726,15 +738,42 @@ def splice_offers(game: Game, seat: int, card, hand_index: int | None) -> list |
     for index, spliced, offer in splice_candidates(
         game, seat, card, spell_hand_index=hand_index,
     ):
-        offered.append({
+        entry = {
             "hand_index": index,
             "name": spliced.name,
             "cost": offer.cost,
             "target_spec": game.cast_target_spec(
                 seat, spliced_text_card(card, spliced), from_zone="hand",
             ),
-        })
+        }
+        if offer.price is not None:
+            entry["price"] = _splice_price_choices(game, seat, card, spliced, offer.price)
+        offered.append(entry)
     return offered or None
+
+
+def _splice_price_choices(game: Game, seat: int, card, spliced, price) -> dict:
+    """The ``price`` of one splice offer whose cost is not mana (see
+    :func:`splice_offers`): the morph cost's choices, the graveyard cards an
+    exile may take, and whether the price can be paid now."""
+    asked = clause_choices(game, seat, price)
+    if price.exile_graveyard_filter is not None:
+        graveyard = game.players[seat].graveyard
+        asked["cost_graveyard"] = {
+            "count": price.exiled_from_graveyard(None),
+            "choices": [
+                {"graveyard_index": slot, "name": graveyard[slot].name}
+                for slot in game._graveyard_exile_candidates(seat, price)
+            ],
+        }
+    refusal = game._unpayable_alternative_cost(
+        seat, card, price, spell_hand_index=None,
+        refused_as=f"{spliced.name} can't be spliced onto {card.name}",
+    )
+    asked["payable"] = refusal is None
+    if refusal is not None:
+        asked["refusal"] = refusal
+    return asked
 
 
 def mark_mana_value_x(game: Game, spec: dict | None, instructions) -> dict | None:

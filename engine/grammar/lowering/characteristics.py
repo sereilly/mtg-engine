@@ -623,6 +623,14 @@ def _lower_pump(
                 # through ``has_type`` — so a creature made a Zombie escapes
                 # and a Zombie that stopped being one is caught (layer 4).
                 "excluded_subtypes",
+                # "…each **blocked** creature gets +2/+2 until end of turn."
+                # (Roar of Jukai.) CR 509.1h's state of an attacking creature,
+                # which stays true when its blockers leave combat. No
+                # hand-written key: it rides the description as
+                # ``blocked_only`` (``unblocked_only`` for "unblocked") and
+                # ``subject_matches`` answers it off the permanent, the reading
+                # Sorrow's Path's target and a redirect's source class share.
+                "blocked",
             }),
         )
         if leftover:

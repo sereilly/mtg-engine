@@ -747,7 +747,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                     mark_causative(action) if causative
                     else refuse_uncaused_dealer(action)
                 )
-                return ast.May(ast.PlayerRef("you"), action=action)
+                return _independent_offers(action)
             except GrammarError:
                 stream.reset(mark)
         else:
@@ -861,6 +861,33 @@ def _parse_where_x(stream: TokenStream) -> ast.Amount | None:
     the statement parser has always called it by.
     """
     return parse_where_x_definition(stream)
+
+
+def _independent_offers(action: ast.Statement) -> ast.Statement:
+    """The offer "you may <action>", with a later step of *action* that prints
+    a "you may" **of its own** split off as the offer it is.
+
+    "You may tap or untap target permanent, **then you may** tap or untap
+    another target permanent." (Toils of Night and Day.) The list reader joins
+    ", then" into one ``Sequence``, and wrapped whole the second offer was a
+    step *inside* the first — declining the first never asked the second.
+    The second "may" is printed, so it is its own CR 608.2d choice: the
+    offers become steps of one sequence, each asked in turn. A step behind
+    the "then" that prints no "may" ("You may X, then Y") stays inside the
+    offer, as it always read.
+    """
+    you = ast.PlayerRef("you")
+    if isinstance(action, ast.Sequence):
+        steps = action.steps
+        for index, step in enumerate(steps):
+            if (
+                index > 0 and isinstance(step, ast.May)
+                and step.actor == you and step.action is not None
+            ):
+                head = steps[:index]
+                first = head[0] if len(head) == 1 else ast.Sequence(tuple(head))
+                return ast.Sequence((ast.May(you, action=first), *steps[index:]))
+    return ast.May(you, action=action)
 
 
 def _parse_optional_action(stream: TokenStream) -> ast.Statement:

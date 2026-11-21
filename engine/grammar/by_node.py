@@ -488,9 +488,6 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # the lowering has to know which event fired — and refuses under one that
     # freezes none rather than copying whatever the resolution is holding.
     ast.BecomeCopy: _lower_become_copy,
-    # "…**that player** reveals their hand…" (Crosis, the Purger): the seat the
-    # damage froze, so the bare reveal joins the sentences that name it.
-    ast.RevealHand: _lower_reveal_hand,
     ast.RevealLibrary: _lower_reveal_library,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
     # "…**defending player** can't cast spells this turn." (Xantid Swarm.)
@@ -596,6 +593,12 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: reason: ``lower_statement`` is dispatch and this is a registry. Disjoint from
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
+    # "…**that player** reveals their hand…" (Crosis, the Purger): the seat
+    # the damage froze — and "Counter target spell. **That spell's
+    # controller** reveals their hand" (Minamo's Meddling): the seat the
+    # counter step recorded. Moved here from the event table when the
+    # second arrived.
+    ast.RevealHand: _lower_reveal_hand,
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
     # "Look at **that many** cards from the top of your library" reads the
     # firing event's number (Garruk's Harbinger) or an earlier step's

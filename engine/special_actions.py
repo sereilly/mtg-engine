@@ -698,7 +698,17 @@ def _clause_entry(game: "Game", seat: int, offer: "SpecialActionOffer") -> dict:
     return / tap and how many (by id), and which cards in hand may pay its
     discard or exile (by hand position) — the lists :func:`_clause_payers`
     holds a named answer to. Empty for a price with none."""
-    clauses = offer.clauses
+    return clause_choices(game, seat, offer.clauses)
+
+
+def clause_choices(game: "Game", seat: int, clauses: "AlternativeCost | None") -> dict:
+    """What a client needs to ask before it pays *clauses* — a non-mana price
+    read into an ``AlternativeCost`` — as *seat*: ``cost_text``, ``pay_life``,
+    ``cost_permanents`` (``verb``, ``count``, ``choices`` by id) and
+    ``cost_hand_choices`` / ``cost_hand_verb``. Empty for None.
+
+    One wire shape for every such price: a morph cost's (:func:`_clause_entry`)
+    and a splice cost's (``web/offers.splice_offers``)."""
     if clauses is None:
         return {}
     extras: dict = {"cost_text": clauses.describe()}
@@ -975,6 +985,7 @@ __all__ = [
     "SpecialActionOffer",
     "available_permanent_special_actions",
     "available_special_actions",
+    "clause_choices",
     "permanent_special_action_in_line",
     "permanent_special_action_refusal",
     "permanent_special_action_sentence",

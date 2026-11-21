@@ -666,7 +666,15 @@ _RETURN_TO_HAND = re.compile(
 #: exact recipient: "an opponent" is a seat this cast path can pick and "each
 #: opponent" is a different, strictly larger price that would need a different
 #: payment, so the wider phrase refuses here rather than being charged as one.
-_OPPONENT_GAINS_LIFE = re.compile(r"^have an opponent gain (\d+) life$")
+#:
+#: "Splice onto Arcane—**An opponent gains 5 life**." (Roar of Jukai.) The same
+#: price printed as an item of a cost list rather than after "you may" — the
+#: same payment in the indicative, so one field (``engine/splice.py`` reads a
+#: non-mana splice cost through this table, as flashback and morph read
+#: theirs).
+_OPPONENT_GAINS_LIFE = re.compile(
+    r"^(?:have an opponent gain|an opponent gains) (\d+) life$"
+)
 
 #: "…**have each other player gain 6 life**…" (Reverent Silence, Skyshroud
 #: Cutter.) The wider recipient the pattern above refuses, read as its own

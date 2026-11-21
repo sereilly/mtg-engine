@@ -1527,6 +1527,15 @@ COUNTERED_SPELL_CONTROLLER = "countered_spell_controller_seat"
 #: sentence.
 COUNTERED_SPELL_NAME = "countered_spell_name"
 
+#: The names of the cards **spliced onto** the countered spell (CR 702.47a),
+#: in the order they were spliced — "…discards each card with the same name as
+#: **a card spliced onto that spell**." (Minamo's Meddling.) Written beside
+#: ``COUNTERED_SPELL_NAME`` and for its reason, when the counter step chooses
+#: its spell: by the next sentence the spell has left the stack, and CR
+#: 702.47e strips its splice changes as it does. An empty tuple is a spell
+#: nothing was spliced onto, and names no card.
+COUNTERED_SPELL_SPLICED_NAMES = "countered_spell_spliced_names"
+
 #: Whether the counter step **did** counter the spell it chose — the record
 #: "If that spell is countered this way, its controller may put a creature card
 #: from their hand onto the battlefield" (Fold into Aether) reads. Written by

@@ -267,6 +267,8 @@ class _FilterDraft:
     name_from_event: bool = False
     name_from_recorded_card: bool = False
     shares_name_with_exiled_card: bool = False
+    #: See ``ast.ObjectFilter.name_spliced_onto_spell``.
+    name_spliced_onto_spell: bool = False
     #: See ``ast.ObjectFilter.shares_color_with_it``.
     shares_color_with_it: bool = False
     #: See ``ast.ObjectFilter.shares_color_with_attached_host``.
@@ -342,6 +344,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         name_from_event=d.name_from_event,
         name_from_recorded_card=d.name_from_recorded_card,
         shares_name_with_exiled_card=d.shares_name_with_exiled_card,
+        name_spliced_onto_spell=d.name_spliced_onto_spell,
         shares_color_with_it=d.shares_color_with_it,
         shares_color_with_attached_host=d.shares_color_with_attached_host,
         shares_card_type_with_it=d.shares_card_type_with_it,

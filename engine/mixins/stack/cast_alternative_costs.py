@@ -15,8 +15,8 @@ with the other parts of ``SpellCastingMixin``, directly after it.
 
 from __future__ import annotations
 
-from ...alternative_costs import (AlternativeCost, alternative_costs,
-                                  board_noun)
+from ...alternative_costs import (_SYMBOL_TO_COLOR_WORD, AlternativeCost,
+                                  alternative_costs, board_noun)
 from ...face_down import face_down_card, is_morph_cost
 from ...cost_modifiers import (CostReduction, cost_reduction_for_cast,
                                keyword_cost_modifiers, reduce_cost,
@@ -639,6 +639,14 @@ class AlternativeCastCostsMixin:
             )
             if len(available) < cost.tap_count:
                 noun = board_noun(cost.tap_filter or {})
+                # "…tap an untapped **white** creature you control" (Prismatic
+                # Strands' flashback, Hundred-Talon Strike's splice): the
+                # colour the payment is held to, as ``describe`` spells it —
+                # "no untapped creature" beside an untapped green one names a
+                # shortfall the player cannot see.
+                color = (cost.tap_filter or {}).get("color_filter")
+                if isinstance(color, str) and color:
+                    noun = f"{_SYMBOL_TO_COLOR_WORD.get(color, color)} {noun}"
                 shortfall = (
                     f"no untapped {noun}" if cost.tap_count == 1
                     else f"not enough untapped {noun}s"

@@ -31,7 +31,9 @@ from ..faces import is_face, spell_named, whole_card
 from ..flashback import leaves_stack_to_exile
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
-                            COUNTERED_SPELL_NAME, COUNTERED_SPELL_THIS_WAY)
+                            COUNTERED_SPELL_NAME, COUNTERED_SPELL_SPLICED_NAMES,
+                            COUNTERED_SPELL_THIS_WAY)
+from ..splice import segment_names
 from ._amounts import count_from_payload, resolve_amount
 from ._filters import _card_matches_filter
 from ._targets import triggering_spell
@@ -931,6 +933,10 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # nothing, which is the half-effect that reports resolved.
         context.results[COUNTERED_SPELL_NAME] = target.card.name
         context.results[COUNTERED_SPELL_CONTROLLER] = target.caster_index
+        # …and the cards spliced onto it (Minamo's Meddling), for the same
+        # reason: CR 702.47e takes the splice changes away as the spell leaves
+        # the stack, so only this step can still read them.
+        context.results[COUNTERED_SPELL_SPLICED_NAMES] = tuple(segment_names(target))
         # "This spell can't be countered." (Scragnoth.) CR 113.6g: the ability
         # functions while the object is on the stack, so it is asked here — at
         # CR 608.2, the one moment the spell exists to be asked — and **before**

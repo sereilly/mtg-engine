@@ -359,6 +359,15 @@ def accept_name_comparison(
     # have one.
     if stream.accept_phrase("the", "same", "name", "as", "the", "exiled", "card"):
         return "exiled_card"
+    # "…discards each card **with the same name as a card spliced onto that
+    # spell**." (Minamo's Meddling.) A fifth referent: the cards a spell an
+    # earlier step of this effect countered had spliced onto it (CR 702.47a)
+    # — a set of names, read off the record that step froze, since by then
+    # the spell has left the stack and lost its splice changes (CR 702.47e).
+    if stream.accept_phrase(
+        "the", "same", "name", "as", "a", "card", "spliced", "onto", "that", "spell",
+    ):
+        return "spliced_onto_spell"
     # "…the number of cards in all graveyards **with the same name as that
     # spell**" (Aven, Cabal, Dwarven and Nantuko Shrine; Cephalid Shrine prints
     # "as **the** spell"). The firing event's object again — a cast event is

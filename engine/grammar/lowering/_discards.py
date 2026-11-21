@@ -31,7 +31,9 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
-                             CHOSEN_NUMBER_THIS_WAY,
+                             CHOSEN_NUMBER_THIS_WAY, COUNTERED_SPELL_CONTROLLER,
+                             COUNTERED_SPELL_CONTROLLER_ACTOR,
+                             COUNTERED_SPELL_SPLICED_NAMES,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from .. import ast
@@ -152,6 +154,21 @@ def discard_all_matching(
                 described_filter, name_from_event=False
             )
             carried["name_from"] = "chosen_card_name"
+        # "…discards each card **with the same name as a card spliced onto
+        # that spell**." (Minamo's Meddling.) The names the counter step in
+        # front of this one froze (``COUNTERED_SPELL_SPLICED_NAMES``), split
+        # off and carried for the chosen name's reason above; with no producer
+        # the words name no card, and refuse rather than discard the hand.
+        if described_filter.name_spliced_onto_spell:
+            if COUNTERED_SPELL_SPLICED_NAMES not in produced:
+                raise LoweringError(
+                    "'a card spliced onto that spell' names a spell no step of "
+                    "this effect countered", node=node,
+                )
+            described_filter = dataclasses.replace(
+                described_filter, name_spliced_onto_spell=False
+            )
+            carried["names_from"] = COUNTERED_SPELL_SPLICED_NAMES
         described_filter, shared = hand_name_relation(described_filter, node)
         carried.update(shared)
         described = chargeable_card_filter(described_filter)
@@ -171,6 +188,12 @@ def discard_all_matching(
         payload.update(carried)
     if damaged:
         payload["who"] = "damaged_player"
+    elif named and COUNTERED_SPELL_CONTROLLER in produced:
+        # "Counter target spell. **That spell's controller** reveals their
+        # hand, then discards …" (Minamo's Meddling.) The seat the counter
+        # step recorded, read by name rather than off ``context.target`` —
+        # the reveal in front of this step reads it the same way.
+        payload["who"] = COUNTERED_SPELL_CONTROLLER_ACTOR
     elif not named:
         _describe_targets(payload, node.player)
     return (OracleInstruction("discard_all_matching_cards", "", payload),)

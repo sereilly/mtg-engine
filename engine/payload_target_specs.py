@@ -895,6 +895,10 @@ def _reanimation_spec(payload: dict) -> dict | None:
     # reason above — a picker without it offers every creature card.
     if payload.get("graveyard_subtypes"):
         spec["graveyard_subtypes"] = list(payload["graveyard_subtypes"])
+    # "target **legendary** creature card" (Goryo's Vengeance): the supertype
+    # on the key the handler re-checks, for the subtype's reason above.
+    if payload.get("supertypes"):
+        spec["supertypes"] = list(payload["supertypes"])
     return spec
 
 

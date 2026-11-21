@@ -315,6 +315,24 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # that forces its controller to pitch two cards they were offered the choice
     # of keeping.
     up_to = bool(stream.accept_phrase("up", "to"))
+    # "…, then discards **each card with the same name as a card spliced onto
+    # that spell**." (Minamo's Meddling.) "Each" over a narrowed card phrase
+    # is "all" (Amnesia's "discards all nonland cards"): every card answering
+    # the phrase goes and nobody chooses. Only behind a phrase that narrows —
+    # a bare "each card" is a whole-hand discard no card prints this way —
+    # and reset otherwise, so "each" reaches no other reading.
+    each_mark = stream.mark()
+    if not up_to and stream.accept_word("each"):
+        try:
+            described = parse_object_filter(stream)
+        except GrammarError:
+            described = None
+        if (
+            described is not None and described.is_card
+            and described != ast.ObjectFilter(is_card=True)
+        ):
+            return ast.Discard(player, ast.AllOf(), filter=described)
+        stream.reset(each_mark)
     # "Then that player discards **another** card at random …" (Flay.) One
     # more card, written as a comparison with the discard the sentence in front
     # already made — the reading `_parse_gets` gives Sabertooth Cobra's

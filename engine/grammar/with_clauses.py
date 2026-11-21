@@ -139,6 +139,12 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
         if comparison == "exiled_card":
             d.shares_name_with_exiled_card = True
             return True
+        # "…with the same name as **a card spliced onto that spell**"
+        # (Minamo's Meddling): the names a countered spell's splices carried,
+        # which only the handler holding that step's record can answer.
+        if comparison == "spliced_onto_spell":
+            d.name_spliced_onto_spell = True
+            return True
         # "…with **lesser power**" (No Quarter). A bound stated against the
         # other object the sentence is about, with no number and no
         # possessive — so it opens on the *adjective* rather than on the

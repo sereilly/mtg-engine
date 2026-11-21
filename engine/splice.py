@@ -77,9 +77,10 @@ from typing import TYPE_CHECKING
 from .line_normalization import normalize_creature_line
 
 if TYPE_CHECKING:
+    from .alternative_costs import AlternativeCost
     from .game import Game
-    from .game_types import StackItem
-    from .models import CardDefinition
+    from .game_types import GraveyardTarget, StackItem
+    from .models import CardDefinition, Permanent
 
 
 #: The splice line as it survives ``normalize_creature_line`` — lowercased,
@@ -88,6 +89,29 @@ if TYPE_CHECKING:
 #: of mana symbols.
 _SPLICE_PART = re.compile(
     r"^splice onto (?P<quality>[a-z][a-z ]*?)\s*(?P<cost>(?:\{[^{}]+\})+)$"
+)
+
+#: "Splice onto Arcane**—Tap an untapped white creature you control**."
+#: (Betrayers of Kamigawa: Hundred-Talon Strike, Horobi's Whisper, Roar of
+#: Jukai, Torrent of Stone, Veil of Secrecy.) CR 702.47a's "[cost]" is any
+#: cost, and one that is not only mana is printed behind a dash — the
+#: arrangement flashback's and morph's readers already take
+#: (``flashback._FLASHBACK_COST_LINE``, ``face_down._MORPH_DASH_PART``).
+_SPLICE_COST_PART = re.compile(
+    r"^splice onto (?P<quality>[a-z][a-z ]*?)\s*[—–-]\s*(?P<cost>.+)$"
+)
+
+#: The clause fields a splice price cannot carry, each refused rather than
+#: paid wrongly: a card taken from the hand (the hand holds the spliced cards
+#: themselves, revealed, and no announcement names which other card pays), an
+#: X (nothing announces one for a spliced text, ``_X_WORD``'s reason), the top
+#: cards of a graveyard (a position, which two splices' exiles would contend
+#: for in an order nothing announces), and a relation to the spell's colour.
+#: No splice card prints any of them.
+_UNPAYABLE_SPLICE_CLAUSES = (
+    "exile_from_hand", "discard_from_hand", "sacrifice_count_x",
+    "exile_graveyard_count_x", "exile_graveyard_position",
+    "shares_color_with_spell",
 )
 
 #: Any line that *is* a splice keyword line, readable or not — the wider shape
@@ -112,10 +136,23 @@ _X_WORD = re.compile(r"(?<![{\w])X(?![}\w])")
 @dataclass(frozen=True)
 class SpliceOffer:
     """One printed splice ability: the spell *quality* it splices onto (a
-    lowercased subtype) and its *cost*, the printed mana run ("{1}{R}")."""
+    lowercased subtype), its *cost*'s mana — the printed run ("{1}{R}"), empty
+    for a cost with none — and its *price*, the part of the cost that is not
+    mana ("Tap an untapped white creature you control"), or None.
+
+    The price is read into the record every printed non-mana cost is read
+    into (``alternative_costs.AlternativeCost``, through
+    ``alternative_costs._read_cost_clauses`` — flashback's and morph's
+    arrangement), so CR 601.2h's gate (``Game._unpayable_alternative_cost``)
+    and payer (``Game._pay_alternative_cost``) behind those fields are the
+    ones a splice cost is asked and paid through. It is an *additional* cost
+    of the spell it is spliced onto (CR 702.47a), not an alternative one: the
+    record is shared, the rule is not.
+    """
 
     quality: str
     cost: str
+    price: "AlternativeCost | None" = None
 
 
 def splice_part_offer(part: str) -> SpliceOffer | None:
@@ -128,9 +165,20 @@ def splice_part_offer(part: str) -> SpliceOffer | None:
     """
     from .mana_payment import mana_cost_from_symbols
 
-    match = _SPLICE_PART.match((part or "").strip())
+    stripped = (part or "").strip()
+    match = _SPLICE_PART.match(stripped)
     if match is None:
-        return None
+        dashed = _SPLICE_COST_PART.match(stripped)
+        if dashed is None:
+            return None
+        quality = dashed.group("quality").strip()
+        if quality not in _SUBTYPE_QUALITIES:
+            return None
+        read = _read_splice_cost(dashed.group("cost"), quality)
+        if read is None:
+            return None
+        cost, price = read
+        return SpliceOffer(quality=quality, cost=cost, price=price)
     quality = match.group("quality").strip()
     if quality not in _SUBTYPE_QUALITIES:
         return None
@@ -138,6 +186,64 @@ def splice_part_offer(part: str) -> SpliceOffer | None:
     if mana_cost_from_symbols(cost) is None:
         return None
     return SpliceOffer(quality=quality, cost=cost)
+
+
+def _read_splice_cost(
+    printed: str, quality: str,
+) -> "tuple[str, AlternativeCost | None] | None":
+    """``(mana, price)`` for a splice cost printed behind a dash — the mana run
+    in front ("" for none) and the clauses after it as an
+    ``AlternativeCost`` (None for none) — or None when any part of it is one
+    the cast path cannot charge.
+
+    Mana first, read as mana; the clauses through
+    ``alternative_costs._read_cost_clauses``, the reader morph's
+    (``face_down.morph_price``) and flashback's (``flashback._read_cost``)
+    costs go through, so "Sacrifice two Mountains" charges one thing wherever
+    it is printed. Every clause must read (that reader's all-or-nothing
+    rule), none may be one a splice cannot pay
+    (:data:`_UNPAYABLE_SPLICE_CLAUSES`), and the price may name at most one
+    battlefield payment — the caster names its permanents by id
+    (``cost_permanent_ids``), and one list cannot say which permanent pays
+    which of two verbs (``Game.alternative_cost_permanent_payment``).
+    """
+    from .alternative_costs import AlternativeCost, _read_cost_clauses
+    from .flashback import _COST_PARTS, _lowered_clauses
+    from .mana_payment import mana_cost_from_symbols
+
+    parts = _COST_PARTS.match(_lowered_clauses(printed.strip()))
+    if parts is None:
+        return None
+    mana_text, rest = parts.group("mana"), parts.group("rest")
+    if not mana_text and not rest:
+        return None
+    mana = ""
+    if mana_text:
+        mana = mana_text.upper()
+        if "{X}" in mana or mana_cost_from_symbols(mana) is None:
+            return None
+    price = None
+    if rest:
+        fields = _read_cost_clauses(rest.lower())
+        if fields is None or any(fields.get(name) for name in _UNPAYABLE_SPLICE_CLAUSES):
+            return None
+        verbs = sum((
+            fields.get("sacrifice_filter") is not None,
+            fields.get("return_filter") is not None,
+            bool(fields.get("tap_count")),
+        ))
+        if verbs > 1:
+            return None
+        price = AlternativeCost(
+            f"splice onto {quality}—{printed.strip().lower()}",
+            keyword=SPLICE, **fields,
+        )
+    return mana, price
+
+
+#: ``AlternativeCost.keyword`` for a splice price: what a refusal calls it
+#: ("its splice cost", ``Game._unpayable_alternative_cost``).
+SPLICE = "splice"
 
 
 def is_splice_line(line: str) -> bool:
@@ -345,19 +451,26 @@ def copied_segments(item, controller_index: int) -> "tuple[StackItem, ...]":
 def announce_splices(
     game: "Game", caster_index: int, host: "CardDefinition",
     splice_cards: "list[dict] | None", *, spell_hand_index: int | None,
-) -> "tuple[tuple[StackItem, ...], dict[str, int], list[str], str | None]":
-    """``(segments, cost, names, refusal)`` for a cast of *host* that reveals
-    *splice_cards* (see the module docstring for the shape).
+    spell_graveyard_slot: int | None = None,
+) -> "tuple[tuple[StackItem, ...], dict[str, int], list[str], tuple[SplicePayment, ...], str | None]":
+    """``(segments, cost, names, payments, refusal)`` for a cast of *host*
+    that reveals *splice_cards* (see the module docstring for the shape).
 
     *segments* are the stack objects' segments, their targets announced,
     defaulted where none was named, judged by the cast's own gates and stamped
     into ids — all before anything is paid, so a sacrifice or a discard the
     cast pays afterwards cannot renumber what they name. *cost* is every splice
-    cost summed (CR 601.2f's additional costs), *names* the revealed cards in
-    order. A refusal leaves nothing written.
+    cost's mana summed (CR 601.2f's additional costs), *names* the revealed
+    cards in order, and *payments* each splice cost that is not mana with what
+    pays it settled (:class:`SplicePayment`, :func:`pay_splice_costs`). A
+    refusal leaves nothing written.
+
+    *spell_graveyard_slot* is where the spell sits in its caster's graveyard
+    when it is cast from there: CR 601.2a puts it on the stack first, so it
+    cannot be one of the cards a splice's graveyard exile takes.
     """
     if not splice_cards:
-        return (), {}, [], None
+        return (), {}, [], (), None
     from .bare_announcements import (announced_fields, announced_seat,
                                      default_cast_target, names_an_object)
     from .classifier import classify_card
@@ -370,20 +483,27 @@ def announce_splices(
     segments: list = []
     cost: dict[str, int] = {}
     names: list[str] = []
+    # What the splice costs settled so far take (:func:`_settled_price`): one
+    # permanent pays one splice cost and one graveyard card one exile, so two
+    # Hundred-Talon Strikes want two white creatures, never one tapped twice.
+    payments: list[SplicePayment] = []
+    claimed: list = []
+    claimed_slots: set[int] = set()
+    life_claimed = 0
     for entry in splice_cards:
         entry = dict(entry or {})
         hand_index = entry.get("hand_index")
         if isinstance(hand_index, bool) or not isinstance(hand_index, int) or not (
             0 <= hand_index < len(hand)
         ):
-            return (), {}, [], f"no card in hand at {hand_index!r} to splice onto {host.name}"
+            return (), {}, [], (), f"no card in hand at {hand_index!r} to splice onto {host.name}"
         if hand_index == spell_hand_index:
-            return (), {}, [], (
+            return (), {}, [], (), (
                 f"{host.name} can't be spliced onto itself: it is on the stack, "
                 f"not in the hand (CR 702.47a)"
             )
         if hand_index in taken:
-            return (), {}, [], (
+            return (), {}, [], (), (
                 f"{hand[hand_index].name} can't be spliced onto the same spell "
                 f"twice (CR 702.47b)"
             )
@@ -391,24 +511,24 @@ def announce_splices(
         spliced = hand[hand_index]
         offer = splice_offer(spliced.oracle_text or "")
         if offer is None:
-            return (), {}, [], f"{spliced.name} has no splice ability"
+            return (), {}, [], (), f"{spliced.name} has no splice ability"
         if not spell_has_quality(game, host, caster_index, offer.quality):
-            return (), {}, [], (
+            return (), {}, [], (), (
                 f"{spliced.name} splices onto {offer.quality.title()} spells, "
                 f"and {host.name} is not one (CR 702.47a)"
             )
         text_card = spliced_text_card(host, spliced)
         program = compile_card_oracle(text_card)
         if not program.supported:
-            return (), {}, [], (
+            return (), {}, [], (), (
                 f"{spliced.name}'s rules text is not supported: {program.reason}"
             )
         if program.modes:
-            return (), {}, [], (
+            return (), {}, [], (), (
                 f"{spliced.name}: splicing a modal text is not supported"
             )
         if _X_WORD.search(text_card.oracle_text or ""):
-            return (), {}, [], f"{spliced.name}: splicing a text with X is not supported"
+            return (), {}, [], (), f"{spliced.name}: splicing a text with X is not supported"
 
         # CR 702.47d: "Choose targets for the added text normally (see rule
         # 601.2c)" — so in each zone's own keyword, defaulted and gated
@@ -421,7 +541,7 @@ def announce_splices(
             target_graveyard_indices=entry.get("target_graveyard_indices"),
         )
         if keyword_refusal is not None:
-            return (), {}, [], keyword_refusal
+            return (), {}, [], (), keyword_refusal
         ids = None if zone != "battlefield" else entry.get("target_permanent_ids")
         stack_index = entry.get("target_stack_index")
         stack_item = (
@@ -457,10 +577,26 @@ def announce_splices(
             target_stack_item=stack_item, x_value=None,
         )
         if refusal is not None:
-            return (), {}, [], (
+            return (), {}, [], (), (
                 f"{spliced.name} can't be spliced onto {host.name}: "
                 f"{refusal.details} (CR 702.47b)"
             )
+        # CR 702.47a's "[cost]" when it is not only mana: what pays it is
+        # chosen now (CR 601.2b) and held whole (CR 601.2h), out of what the
+        # splices before this one have not already claimed.
+        payment, price_refusal = _settled_price(
+            game, caster_index, host, spliced, offer, entry,
+            claimed=claimed, claimed_slots=claimed_slots,
+            life_claimed=life_claimed,
+            spell_graveyard_slot=spell_graveyard_slot,
+        )
+        if price_refusal is not None:
+            return (), {}, [], (), price_refusal
+        if payment is not None:
+            payments.append(payment)
+            claimed.extend(payment.permanents)
+            claimed_slots.update(payment.slots)
+            life_claimed += payment.price.pay_life
         segment = StackItem(
             card=text_card,
             caster_index=caster_index,
@@ -478,7 +614,341 @@ def announce_splices(
         for symbol, count in splice_cost_symbols(offer).items():
             cost[symbol] = cost.get(symbol, 0) + count
         names.append(spliced.name)
-    return tuple(segments), cost, names, None
+    return tuple(segments), cost, names, tuple(payments), None
+
+
+# ---------------------------------------------------------------------------
+# A splice cost that is not mana (CR 702.47a, 601.2b, 601.2h)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SplicePayment:
+    """One spliced card's splice cost that is not mana, with what pays it
+    settled at the announcement (CR 601.2b) — before anything is paid, so the
+    CR 601.2h gate counts the objects the payment then takes.
+
+    *permanents* pay its sacrifice, return or tap (by identity; named by the
+    caster's ``cost_permanent_ids``, else the deterministic pick every cost's
+    default makes), *graveyard* its graveyard exile (stamps, which survive the
+    renumbering a spell leaving that pile makes), and *slots* are where those
+    cards sat as the caster looked at the pile — what a later splice may no
+    longer name.
+    """
+
+    name: str
+    price: "AlternativeCost"
+    permanents: "tuple[Permanent, ...]" = ()
+    graveyard: "tuple[GraveyardTarget, ...]" = ()
+    slots: "tuple[int, ...]" = ()
+
+    @property
+    def verb(self) -> "str | None":
+        """The one battlefield payment the price names ("sacrifice",
+        "return", "tap"), or None — ``_read_splice_cost`` admits at most one."""
+        price = self.price
+        if price.sacrifice_filter is not None:
+            return "sacrifice"
+        if price.return_filter is not None:
+            return "return"
+        if price.tap_count:
+            return "tap"
+        return None
+
+
+def _settled_price(
+    game: "Game", caster_index: int, host: "CardDefinition",
+    spliced: "CardDefinition", offer: SpliceOffer, entry: dict, *,
+    claimed: list, claimed_slots: "set[int]", life_claimed: int,
+    spell_graveyard_slot: "int | None",
+) -> "tuple[SplicePayment | None, str | None]":
+    """``(payment, refusal)`` for *spliced*'s splice cost that is not mana —
+    ``(None, None)`` for a cost that is only mana.
+
+    The price is asked CR 601.2h's question through the gate every printed
+    non-mana cost goes through (``Game._unpayable_alternative_cost``: the
+    Mountains against "Sacrifice two Mountains", an opponent who may gain life
+    against "An opponent gains 5 life"), then its objects are chosen out of
+    what *claimed* and *claimed_slots* — the splices before it — left: the
+    ones the caster named (``cost_permanent_ids``, by id; ``cost_graveyard_indices``,
+    by place in the pile with the spell still in it), held to the printed
+    count exactly (CR 601.2h: "Partial payments are not allowed"), else the
+    deterministic pick. A name that cannot pay is a refusal with nothing
+    spent, never a slide onto a neighbour.
+    """
+    price = offer.price
+    named_ids = entry.get("cost_permanent_ids")
+    named_slots = entry.get("cost_graveyard_indices")
+    head = f"{spliced.name} can't be spliced onto {host.name}"
+    if price is None:
+        if named_ids or named_slots:
+            return None, f"{head}: its splice cost is mana, and names nothing to choose"
+        return None, None
+    refusal = game._unpayable_alternative_cost(
+        caster_index, host, price, spell_hand_index=None,
+        spell_graveyard_slot=spell_graveyard_slot, refused_as=head,
+    )
+    if refusal is not None:
+        return None, refusal
+    caster = game.players[caster_index]
+    if price.pay_life and caster.life < life_claimed + price.pay_life:
+        return None, (
+            f"{head}: {caster.name} cannot pay {price.pay_life} more life "
+            f"with {caster.life - life_claimed} left to pay it (CR 119.4)"
+        )
+    payment = game.alternative_cost_permanent_payment(price)
+    permanents: list = []
+    if payment is None:
+        if named_ids:
+            return None, f"{head}: its splice cost names no permanent to choose"
+    else:
+        verb, count = payment
+        candidates = [
+            perm for perm in game._additional_cost_candidates(
+                caster_index, price, giving_up=verb,
+            )
+            if not any(perm is taken for taken in claimed)
+        ]
+        if named_ids:
+            if (
+                not isinstance(named_ids, (list, tuple))
+                or len(set(named_ids)) != len(named_ids)
+                or len(named_ids) != count
+            ):
+                return None, (
+                    f"{head}: its splice cost takes {count} permanent(s) to "
+                    f"{verb}, each named once (CR 601.2h)"
+                )
+            for permanent_id in named_ids:
+                found = game.permanent_by_id(permanent_id)
+                if found is not None and any(found is taken for taken in claimed):
+                    return None, (
+                        f"{head}: {found.card.name} already pays another "
+                        f"splice cost (CR 601.2h)"
+                    )
+                if found is None or not any(found is perm for perm in candidates):
+                    return None, (
+                        f"{head}: the permanent named to {verb} cannot pay "
+                        f"its splice cost (CR 601.2h)"
+                    )
+                permanents.append(found)
+        else:
+            for _ in range(count):
+                available = [
+                    perm for perm in candidates
+                    if not any(perm is picked for picked in permanents)
+                ]
+                if not available:
+                    return None, (
+                        f"{head}: nothing left to {verb} for its splice cost "
+                        f"once the other splice costs are paid (CR 601.2h)"
+                    )
+                permanents.append(game.default_sacrifice_pick(available))
+    stamps: list = []
+    slots: list[int] = []
+    if price.exile_graveyard_filter is not None:
+        wanted = price.exiled_from_graveyard(None)
+        candidates_slots = [
+            slot for slot in game._graveyard_exile_candidates(
+                caster_index, price, spell_slot=spell_graveyard_slot,
+            )
+            if slot not in claimed_slots
+        ]
+        if named_slots is not None:
+            if (
+                not isinstance(named_slots, (list, tuple))
+                or len(set(named_slots)) != len(named_slots)
+                or len(named_slots) != wanted
+                or any(
+                    isinstance(slot, bool) or slot not in candidates_slots
+                    for slot in named_slots
+                )
+            ):
+                return None, (
+                    f"{head}: its splice cost exiles {wanted} card(s) from the "
+                    f"graveyard, each named once out of the ones it can take "
+                    f"(CR 601.2h)"
+                )
+            slots = list(named_slots)
+        else:
+            from .ai_prompt_readers import graveyard_price_order
+
+            if len(candidates_slots) < wanted:
+                return None, (
+                    f"{head}: not enough cards left in the graveyard for its "
+                    f"splice cost once the other splice costs are paid "
+                    f"(CR 601.2h)"
+                )
+            slots = list(graveyard_price_order(
+                game, caster_index, list(reversed(candidates_slots)),
+            ))[:wanted]
+        stamps = [game.graveyard_target_at(caster_index, slot) for slot in slots]
+    elif named_slots:
+        return None, f"{head}: its splice cost exiles nothing from a graveyard"
+    return SplicePayment(
+        name=spliced.name, price=price, permanents=tuple(permanents),
+        graveyard=tuple(stamps), slots=tuple(slots),
+    ), None
+
+
+def pay_splice_costs(game: "Game", caster_index: int, host: "CardDefinition", payments) -> None:
+    """Pay each settled splice cost that is not mana (CR 601.2h), through the
+    payer every printed non-mana cost is paid through
+    (``Game._pay_alternative_cost``): the permanents the announcement settled,
+    the graveyard cards it stamped (re-located now — the spell may have left
+    that pile), an opponent's life gain through ``Game._gain_life``.
+
+    Paid first of the costs that are not mana — the order CR 601.2h leaves
+    free — so the spell's own costs' deterministic picks
+    (``_pay_additional_costs``) take from the board the splice costs leave,
+    which :func:`splice_cost_conflict` checked could pay them.
+
+    One cost, one event (CR 603.10a): every permanent the splice costs take
+    off the battlefield leaves together (``leaving_together``), and a
+    returned one's departure with them.
+    """
+    if not payments:
+        return
+    with game.entering_together(), game.leaving_together():
+        for payment in payments:
+            slots = None
+            if payment.graveyard:
+                slots = [
+                    slot for slot in (
+                        game.graveyard_index_of(stamp) for stamp in payment.graveyard
+                    )
+                    if slot is not None
+                ]
+            game._pay_alternative_cost(
+                caster_index, host, payment.price, None,
+                named_permanents=list(payment.permanents),
+                graveyard_slots=slots,
+                paying_for=f"splice {payment.name} onto {host.name}",
+            )
+
+
+def splice_cost_conflict(
+    game: "Game", caster_index: int, host: "CardDefinition", payments, *,
+    cast_costs=(), optional_paid=None, cost_permanent_ids=None,
+    chosen_alternative=None, alternative_permanents=(), imposed=(),
+    x_value: "int | None" = None,
+) -> "str | None":
+    """Why the spell's own costs cannot be paid beside its splice costs, or
+    None (CR 601.2h: one total cost, paid whole).
+
+    Each gate asks its own cost of the whole board; this asks the costs
+    together. The splice costs are paid first (:func:`pay_splice_costs`), so
+    what they sacrifice or return — and, for a price that taps, what they tap
+    — is withheld from the spell's own: a permanent the caster named for the
+    spell's cost (``cost_permanent_ids``, the alternative cost's named ones)
+    or that an imposed sacrifice picked (Drought, *imposed*) may not be one a
+    splice cost takes, and a cost that picks by default must still find
+    enough once they are gone. Call for Blood's "sacrifice a creature" with
+    Veil of Secrecy's "Return a blue creature you control" on a board of one
+    blue creature is the case: each gate says yes, and together they cannot
+    be paid.
+
+    A spell whose own cost exiles from a graveyard is refused beside a splice
+    cost that does: both name cards by their place in one pile, and nothing
+    here settles which card pays which (no card prints both).
+    """
+    from .mixins.stack.cast_additional_costs import optional_cost_taken
+
+    if not payments:
+        return None
+    gone = [
+        perm for payment in payments if payment.verb in ("sacrifice", "return")
+        for perm in payment.permanents
+    ]
+    tapped = [
+        perm for payment in payments if payment.verb == "tap"
+        for perm in payment.permanents
+    ]
+    head = f"{host.name} can't be cast with those splices"
+
+    def taken_by_splice(perm, *, tapping: bool = False) -> bool:
+        pool = gone + tapped if tapping else gone
+        return any(perm is held for held in pool)
+
+    for perm in imposed or ():
+        if taken_by_splice(perm):
+            return f"{head}: {perm.card.name} is owed to an imposed sacrifice (CR 601.2h)"
+    named = [
+        game.permanent_by_id(permanent_id)
+        for permanent_id in (cost_permanent_ids or ())
+        if isinstance(permanent_id, int)
+    ]
+    for perm in named:
+        if perm is not None and taken_by_splice(perm):
+            return (
+                f"{head}: {perm.card.name} is named for its own cost and for a "
+                f"splice cost (CR 601.2h)"
+            )
+    splices_exile_cards = any(payment.graveyard for payment in payments)
+    for cost in cast_costs or ():
+        if not optional_cost_taken(cost, optional_paid):
+            continue
+        if cost.exile_graveyard_filter is not None and splices_exile_cards:
+            return (
+                f"{head}: its own cost and a splice cost both exile cards from "
+                f"the graveyard (not supported)"
+            )
+        if named:
+            continue
+        demands = (
+            ("sacrifice", cost.sacrifice_filter,
+             0 if cost.sacrifice_any_number else cost.sacrifice_count),
+            ("return", cost.return_filter, cost.returned_count(x_value)),
+            ("exile", cost.exile_filter, 1),
+        )
+        for verb, described, count in demands:
+            if described is None or count <= 0:
+                continue
+            left = [
+                perm for perm in game._additional_cost_candidates(
+                    caster_index, cost, giving_up=verb,
+                )
+                if not taken_by_splice(perm)
+            ]
+            if len(left) < count:
+                return (
+                    f"{head}: not enough left to {verb} for its own cost once "
+                    f"the splice costs are paid (CR 601.2h)"
+                )
+    alternative = chosen_alternative
+    if alternative is not None:
+        if splices_exile_cards and (
+            alternative.exile_graveyard_filter is not None
+            or alternative.exile_graveyard_position is not None
+        ):
+            return (
+                f"{head}: its alternative cost and a splice cost both exile "
+                f"cards from the graveyard (not supported)"
+            )
+        demand = game.alternative_cost_permanent_payment(alternative, x_value)
+        if demand is not None:
+            verb, count = demand
+            tapping = verb == "tap"
+            if alternative_permanents:
+                for perm in alternative_permanents:
+                    if taken_by_splice(perm, tapping=tapping):
+                        return (
+                            f"{head}: {perm.card.name} is named for its "
+                            f"alternative cost and for a splice cost (CR 601.2h)"
+                        )
+            else:
+                left = [
+                    perm for perm in game._additional_cost_candidates(
+                        caster_index, alternative, giving_up=verb,
+                    )
+                    if not taken_by_splice(perm, tapping=tapping)
+                ]
+                if len(left) < count:
+                    return (
+                        f"{head}: not enough left to {verb} for its alternative "
+                        f"cost once the splice costs are paid (CR 601.2h)"
+                    )
+    return None
 
 
 def spliced_steps(
