@@ -28,7 +28,7 @@ from engine.ai_payment import tap_planned_lands
 from engine.ai_prompt_readers import chosen_name_own_zone
 from engine.ai_target_sides import entry_trigger_target_side
 from engine.card_loader import manifest_measured_codes
-from engine.faces import castable_faces
+from engine.faces import castable_faces, text_faces
 from engine.mixins.stack import aura_enchant_noun
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
@@ -204,7 +204,7 @@ def test_w2g6_an_entry_triggers_target_is_on_the_side_the_effect_wants(_w2g6_poo
              "Wall of Wood", "Scryb Sprites"]
     examined, sided, wrong = 0, 0, []
     for whole in _w2g6_pool.values():
-        for card in castable_faces(whole):
+        for card in (text_faces(whole) or castable_faces(whole)):  # a flip card's bottom half too (faces.text_faces, CR 710)
             types = (card.type_line or "").lower()
             if "instant" in types or "sorcery" in types or "land" in types:
                 continue

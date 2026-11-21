@@ -42,8 +42,16 @@ asks it instead.
 Out of scope, deliberately, and each would be its own layout entry here: fuse
 (CR 702.102, both halves on the stack as one spell with the combined
 characteristics), split *permanents* (CR 709.5's shared type line and locked
-halves), and every other multi-face layout (flip, transform, modal DFC,
-adventure, meld). ``CAST_FACE_LAYOUTS`` is where the next one is admitted.
+halves), and every other multi-face layout (transform, modal DFC, adventure,
+meld). ``CAST_FACE_LAYOUTS`` is where the next cast-face one is admitted.
+
+**Flip cards (CR 710) are the second layout, and live beside this module**
+(``engine/flip_cards.py``): the loaded card *is* the top half (CR 710.2), so a
+flip card is none of the multi-face cards above — it is castable as itself and
+:func:`face_cards` gives it no faces — and its bottom half, the card a flipped
+permanent is, carries ``face_of`` like a split card's half, so
+:func:`whole_card` and :func:`is_face` answer for it unchanged.
+:func:`text_faces` is the text census's view of both layouts.
 """
 
 from __future__ import annotations

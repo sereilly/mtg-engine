@@ -57,6 +57,8 @@ import pytest
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import (CAST_FACE_LAYOUTS, compilation_units, face_cards,
                           is_face, unit_label, whole_card)
+from engine.flip_cards import (flipped_face, is_flip_card, is_flipped_face,
+                               loaded_flip_card)
 from engine.models import CardDefinition, CardFace
 from engine.oracle import compile_card_oracle, compiled_units
 
@@ -643,12 +645,16 @@ def test_the_iterator_reaches_every_half_in_the_manifest():
     pool = load_cards(manifest_set_paths(include_measured=True))
     multi = [card for card in pool if card.layout in CAST_FACE_LAYOUTS]
     units = compilation_units(pool)
-    halves = [unit for unit in units if is_face(unit)]
+    # A flip card's bottom half is a face too (``is_face``: it carries
+    # ``face_of``), and follows its card rather than replacing it — counted
+    # apart, by the flip floor below.
+    bottoms = [unit for unit in units if is_flipped_face(unit)]
+    halves = [unit for unit in units if is_face(unit) and not is_flipped_face(unit)]
 
     assert len(multi) >= 5 and len(halves) >= 10, (len(multi), len(halves))
     assert len(halves) == sum(len(face_cards(card)) for card in multi)
     assert not any(unit in multi for unit in units)
-    assert len(units) == len(pool) - len(multi) + len(halves)
+    assert len(units) == len(pool) - len(multi) + len(halves) + len(bottoms)
     for half in halves:
         assert compile_card_oracle(half).instructions, unit_label(half)
     # A half's name is the key these guards index by; it must not collide with
@@ -758,6 +764,126 @@ def test_without_the_iterator_the_same_guard_is_blind(guard, monkeypatch):
     import importlib
 
     check, module = _PLANTED[guard]
+    monkeypatch.setattr(
+        importlib.import_module(f"tests.engine.{module}"),
+        "compilation_units", lambda cards: list(cards),
+    )
+    assert not check(monkeypatch)
+
+
+# ---------------------------------------------------------------------------
+# Flip cards (CR 710): the second multi-face layout, blind the other way round
+# ---------------------------------------------------------------------------
+#
+# A flip card is loaded as its **top half** (CR 710.2, ``engine/flip_cards.py``)
+# — it has text, and its program does things — so a census handed it whole is
+# not empty-handed the way it is with a split card: it reads the top half and
+# reports the card clean without ever reading the bottom half, the text a
+# flipped permanent has. ``compilation_units`` (``faces.text_faces``) follows a
+# flip card with its bottom half. ``castable_faces`` and ``face_cards`` do not,
+# and rightly — a bottom half is no spell anyone casts — so a census about
+# *casting* keeps them, and one about a permanent's abilities may not.
+#
+# The census behind this (CHK W1G1): a pytest plugin that, under
+# ``MTG_PROMOTE=CHK``, wrapped ``compile_card_oracle`` in every loaded module
+# and recorded each test that compiled a flip card's top half and never its
+# bottom half, with the test-side frame that asked. Run over every test file
+# reading text through ``face_cards`` / ``castable_faces`` and the six guards
+# below, it named 19 sites, most with all ten cards. The nine that ask about a
+# permanent's abilities — activations and triggers in ``test_stack_targets``
+# and ``test_target_requirement_census``, the targeted- and controller-trigger
+# censuses, the delayed-trigger pronoun census, the colour-choice population,
+# the AI's entry-trigger sides and ``classify_card``'s agreement — read
+# ``text_faces`` now. The rest are cast-shaped (a sweep that casts each card,
+# a graveyard-cast population, an instant's chosen source) and keep the
+# castable faces.
+
+def _flip(top_text: str, bottom_text: str) -> CardDefinition:
+    """A flip card as the loader builds one: its top half, both halves kept."""
+    return loaded_flip_card(CardDefinition(
+        name="Top // Bottom", mana_cost="{1}{W}", cmc=2.0,
+        type_line="Creature — Human // Legendary Creature — Human Samurai",
+        oracle_text="", colors=("W",), color_identity=("W",), keywords=(),
+        produced_mana=(), raw={}, power="1", toughness="1", layout="flip",
+        faces=(
+            CardFace("Top", "{1}{W}", "Creature — Human", top_text, "1", "1"),
+            CardFace("Bottom", "", "Legendary Creature — Human Samurai",
+                     bottom_text, "3", "4"),
+        ),
+    ))
+
+
+def test_compilation_units_follows_a_flip_card_with_its_bottom_half():
+    flip = _flip("Vigilance", "{T}: Draw a card.")
+    units = compilation_units([_BOLT, flip, _BOLT])
+    assert units == [_BOLT, flip, flipped_face(flip), _BOLT]
+    assert units[1] is flip, "the top half is the card itself"
+    assert [unit_label(unit) for unit in units] == [
+        "Test Bolt", "Top", "Top [Bottom]", "Test Bolt",
+    ]
+    assert whole_card(units[2]) is flip
+    assert [card.name for card, _ in compiled_units([flip])] == ["Top", "Bottom"]
+
+
+def test_the_iterator_reaches_every_flip_bottom_in_the_manifest():
+    """The floor, over both manifest roles: Champions of Kamigawa's ten flip
+    cards, each followed by its bottom half, every bottom half's name its
+    own."""
+    pool = load_cards(manifest_set_paths(include_measured=True))
+    flips = [card for card in pool if is_flip_card(card)]
+    units = compilation_units(pool)
+    bottoms = [unit for unit in units if is_flipped_face(unit)]
+    assert len(flips) >= 10 and len(bottoms) == len(flips), (len(flips), len(bottoms))
+    assert all(whole_card(bottom) in flips for bottom in bottoms)
+    names = [unit.name for unit in units]
+    assert len(names) == len(set(names))
+
+
+def _finds_a_bottom_halfs_ability_label(monkeypatch) -> bool:
+    from tests.engine import test_effect_labels as guard
+
+    activated, _triggered = guard._abilities_of([_flip("Vigilance", "{T}: Draw a card.")])
+    return [name for name, _kind, _label in activated] == ["Bottom"]
+
+
+def _finds_a_bottom_halfs_trigger_line(monkeypatch) -> bool:
+    from tests.engine import test_grammar_lowering as guard
+
+    flip = _flip("Vigilance", "At the beginning of your upkeep, you gain 1 life.")
+    return [name for name, *_ in guard._executed_trigger_lines([flip])] == ["Bottom"]
+
+
+def _finds_a_bottom_halfs_targeting_ability(monkeypatch) -> bool:
+    from tests.engine import test_activation_targeting as guard
+
+    flip = _flip("Vigilance", "{T}: Target creature gets +1/+1 until end of turn.")
+    return [card.name for card in guard._supported_units([flip, _BOLT])] == [
+        "Top", "Bottom", "Test Bolt",
+    ]
+
+
+_PLANTED_ON_A_BOTTOM_HALF = {
+    "effect_labels": (_finds_a_bottom_halfs_ability_label, "test_effect_labels"),
+    "grammar_lowering": (_finds_a_bottom_halfs_trigger_line, "test_grammar_lowering"),
+    "activation_targeting": (
+        _finds_a_bottom_halfs_targeting_ability, "test_activation_targeting",
+    ),
+}
+
+
+@pytest.mark.parametrize("guard", sorted(_PLANTED_ON_A_BOTTOM_HALF))
+def test_a_defect_planted_on_a_flip_cards_bottom_half_is_found(guard, monkeypatch):
+    check, _module = _PLANTED_ON_A_BOTTOM_HALF[guard]
+    assert check(monkeypatch)
+
+
+@pytest.mark.parametrize("guard", sorted(_PLANTED_ON_A_BOTTOM_HALF))
+def test_without_the_iterator_a_flip_cards_bottom_half_goes_unseen(guard, monkeypatch):
+    """Handed the flip card whole, each guard reads its top half — which has
+    text and passes — and never the bottom half the defect is on."""
+    import importlib
+
+    check, module = _PLANTED_ON_A_BOTTOM_HALF[guard]
     monkeypatch.setattr(
         importlib.import_module(f"tests.engine.{module}"),
         "compilation_units", lambda cards: list(cards),

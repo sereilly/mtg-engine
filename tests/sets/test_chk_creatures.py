@@ -495,6 +495,20 @@ def test_w1g1_orochi_eggwatcher_flips_at_ten_creatures(set_pool):
     assert _w1g1_state(egg) == ("Shidako, Broodmistress", True, 6, 6)
     assert sum(1 for p in game.players[0].battlefield if p.is_creature) == 9
 
+
+def test_w1g1_isamaru_is_a_legendary_two_two(set_pool):
+    """Isamaru, Hound of Konda (drive list): a vanilla legendary 2/2 — and a
+    second Isamaru puts one into the graveyard (CR 704.5j)."""
+    chk = set_pool("CHK")
+    game = _w1g1_table(set_pool)
+    first = _w1g1_put(game, chk["Isamaru, Hound of Konda"])
+    assert _w1g1_state(first) == ("Isamaru, Hound of Konda", True, 2, 2)
+    _w1g1_put(game, chk["Isamaru, Hound of Konda"])
+    _w1g1_settle(game)
+    on_board = [p for p in game.players[0].battlefield if p.card.name.startswith("Isamaru")]
+    assert len(on_board) == 1
+    assert [card.name for card in game.players[0].graveyard] == ["Isamaru, Hound of Konda"]
+
 # ==== end w1g1 ======================================================
 
 

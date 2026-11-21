@@ -20,7 +20,7 @@ explicit "sacrifice that creature" spelling already reached.
 
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.faces import face_cards
+from engine.faces import text_faces
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import _mk_card, resolve_stack
@@ -191,7 +191,7 @@ def test_no_shipped_step_delay_behind_a_made_or_taken_permanent_acts_on_its_sour
     seen = {}
     for path in manifest_set_paths(include_measured=True):
         for card in load_cards(path):
-            for face in (face_cards(card) or (card,)):
+            for face in (text_faces(card) or (card,)):  # a flip card's bottom half too (faces.text_faces, CR 710)
                 seen.setdefault(face.name, face)
     examined, hits = 0, []
     for card in seen.values():

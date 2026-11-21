@@ -199,7 +199,7 @@ def _printed_line_for(expanded_line: str | None, printed_text: str) -> str:
 
 
 # Layouts the compiler can read straight from the top-level characteristics.
-# Every other layout (flip, transform, modal_dfc, adventure, meld, …) leaves
+# Every other layout (transform, modal_dfc, adventure, meld, …) leaves
 # mana_cost and oracle_text empty and puts the real text in card_faces, so
 # compiling one as-is would classify it a supported vanilla — a silently wrong
 # answer rather than an error. Those stay explicitly unsupported.

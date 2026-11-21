@@ -280,7 +280,7 @@ def sweep(catalog, by_name, *, sample: bool = True, only=None) -> dict:
 def _trigger_rows(catalog, only=None):
     """``(label, card, trig)`` for every supported non-modal triggered ability
     whose printed line chooses a target."""
-    units = [face for card in catalog for face in (faces.face_cards(card) or [card])]
+    units = [face for card in catalog for face in (faces.text_faces(card) or [card])]  # a flip card's bottom half too (faces.text_faces, CR 710)
     for card in sorted(units, key=lambda entry: entry.name):
         if only is not None and card.name not in only:
             continue

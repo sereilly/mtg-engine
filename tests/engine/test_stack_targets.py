@@ -341,7 +341,7 @@ def _sweep_activations(pool, by_name, only=None) -> _Sweep:
     # would report its halves clean without looking. No half in the pool has
     # an activated ability today, which is exactly when the loop is cheapest
     # to get right.
-    units = [face for card in pool for face in (faces.face_cards(card) or [card])]
+    units = [face for card in pool for face in (faces.text_faces(card) or [card])]  # a flip card's bottom half too (faces.text_faces, CR 710)
     for card in units:
         if only is not None and card.name not in only:
             continue
@@ -865,7 +865,7 @@ def test_a_triggered_ability_that_prints_a_target_has_one_on_the_stack(pool, by_
     pinned list above."""
     targeted, removed, bare = 0, 0, set()
     untargeted_wrong = []
-    units = [face for card in pool for face in (faces.face_cards(card) or [card])]
+    units = [face for card in pool for face in (faces.text_faces(card) or [card])]  # a flip card's bottom half too (faces.text_faces, CR 710)
     for card in units:
         program = compile_card_oracle(card)
         if not program.supported:

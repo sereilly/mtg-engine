@@ -389,7 +389,7 @@ def _sweep_casts(pool, by_name, only=None) -> _Census:
 
 def _sweep_activations(pool, by_name, only=None) -> _Census:
     census = _Census()
-    units = [face for card in pool for face in (faces.face_cards(card) or [card])]
+    units = [face for card in pool for face in (faces.text_faces(card) or [card])]  # a flip card's bottom half too (faces.text_faces, CR 710)
     for card in units:
         if only is not None and card.name not in only:
             continue
