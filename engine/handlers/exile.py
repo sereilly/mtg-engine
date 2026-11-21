@@ -24,7 +24,7 @@ from ..face_down import permanent_name, revealed_as_it_moves
 from ..faces import whole_card
 from ..game_types import first_target_id
 from ..linked_exile import link_exiled_card
-from ..models import Permanent
+from ..models import Permanent, PlayerState
 from ..oracle_types import (EXILED_BY_SEAT, EXILED_CARDS_WITH_OWNERS,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             LAST_TARGET_CONTROLLER,
@@ -1427,7 +1427,16 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
     # froze, or the seat whose step it is. A seat nobody froze exiles nothing
     # rather than falling back to the resolving player's library.
     recipient = instruction.payload.get("recipient")
-    if recipient is not None:
+    if recipient == "target":
+        # "**Target opponent** exiles the top card of their library."
+        # (Ornate Kanzashi.) The seat the activation chose (CR 115.1); an
+        # illegal target was already caught by the resolution's CR 608.2b
+        # check, so a target that is not a player here exiles nothing.
+        if not isinstance(context.target, PlayerState) or context.target.lost:
+            context.results["exiled_cards"] = []
+            return True, "resolved"
+        caster = context.target
+    elif recipient is not None:
         frozen = context.trigger_context or {}
         seat = frozen.get(
             "defending_player_index" if recipient == "damaged_player"
