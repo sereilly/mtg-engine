@@ -239,7 +239,13 @@ def lower_record_condition(
                         + ", ".join(leftover or ("nothing printed",)),
                         node=condition,
                     )
-                payload = {"kind": "dead_card_is", "filter": described}
+                # The zone the card is asked in, said on the payload: the
+                # filter is a *card's* (CR 109.2a), never a battlefield
+                # narrowing, and a walker over battlefield narrowings reads it
+                # so.
+                payload = {
+                    "kind": "dead_card_is", "zone": "graveyard", "filter": described,
+                }
                 if condition.negated:
                     payload["negated"] = True
                 return payload
