@@ -144,12 +144,23 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
         # program where every such question is, and the length a seat nobody
         # asks takes is a weight beside it.
         from ..ai_prompt_readers import (FLIP_RUN_LENGTH,
-                                         chosen_number_bounds_flip_run)
+                                         chosen_number_bounds_flip_run,
+                                         chosen_number_counts_a_named_library,
+                                         named_library_count_guess)
 
         if context.card is not None and chosen_number_bounds_flip_run(
             context.card, instruction
         ):
             default = max(low, FLIP_RUN_LENGTH if high is None else min(high, FLIP_RUN_LENGTH))
+        # …or a count of cards with the name just chosen in the library the
+        # next step reveals: "If that library contains exactly the chosen
+        # number of cards with the chosen name, Mindblaze deals 8 damage"
+        # (``ai_prompt_readers.named_library_count_guess``: the real count in
+        # the chooser's own library, one in another player's).
+        elif context.card is not None and chosen_number_counts_a_named_library(
+            context.card, instruction
+        ):
+            default = named_library_count_guess(game, context, seat, low, high)
         context.results[CHOSEN_NUMBER_THIS_WAY] = default
         game.arm_pending_choice(
             "number_choice", seat,
