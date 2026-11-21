@@ -261,6 +261,15 @@ class ObjectFilter:
     #: Asked of the game (``_protection_qualities``) rather than of the object,
     #: because an Aura, a lord and a metadata grant all contribute one.
     with_protection_from: str | None = None
+    #: "…an Aura card **with enchant creature**" (Tallowisp). The subject of
+    #: the card's own enchant ability (CR 702.5a, "Enchant [object or
+    #: player]"), read off its printed text by ``enchant_targets`` — a question
+    #: about a *card*, which only a library search answers
+    #: (``search_filters.search_matches``' ``enchant`` restriction). Never
+    #: emitted by ``to_payload`` and listed in
+    #: ``lowering/_filters.CONDITIONALLY_EMITTED_FIELDS``, so every lowering
+    #: but the search refuses the phrase by name.
+    with_enchant: str | None = None
     #: "…**with a name originally printed in the Homelands expansion**"
     #: (Apocalypse Chime, Golgothian Sylex). The set *code* the printed
     #: expansion name resolved to, read off ``original_printing`` --

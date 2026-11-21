@@ -411,6 +411,11 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # handler defaults to, instead of in the player's sideboard. Only the
     # outside-the-game pick (``lowering/cards``) reads it.
     "outside_the_game": "outside_the_game",
+    # "…an Aura card **with enchant creature**" (Tallowisp). A question about
+    # a card's own printed enchant ability (CR 702.5a), with no ``to_payload``
+    # form; only the library search (``lowering/search``) reads it, as its
+    # ``enchant`` restriction.
+    "with_enchant": "with_enchant",
     # "…for each **basic land type among** lands you control" (domain). Not a
     # narrowing of the set at all but a statement about what a *count* of it
     # counts, so ``to_payload`` emits nothing — and a lowering that built a
