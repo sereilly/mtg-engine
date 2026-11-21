@@ -148,6 +148,57 @@ def test_w1g6_mannichi_switches_every_creature_on_the_battlefield(set_pool):
     game.resolve_cleanup_step(0)
     assert (mannichi.effective_power, mannichi.effective_toughness) == (1, 2)
 
+
+def test_w1g6_fumiko_blocking_gets_bushido_x_for_the_attackers(set_pool):
+    """"Fumiko has bushido X, where X is the number of attacking creatures."
+    Bob attacks with Grizzly Bears and Hill Giant (Fumiko compels both:
+    "Creatures your opponents control attack each combat if able"); Fumiko
+    3/2 blocks the Giant, her bushido trigger resolves with two attackers
+    (the ruling: counted as it resolves), and the 5/4 kills the Giant and
+    survives its 3 damage."""
+    from tests.helpers import declare_attack as _w1g6_declare_attack
+
+    lea = set_pool("LEA")
+    game, (fumiko, bears, giant) = _w1g6_table(
+        set_pool, mine=[set_pool("BOK")["Fumiko the Lowblood"]],
+        theirs=[lea["Grizzly Bears"], lea["Hill Giant"]],
+    )
+    _w1g6_declare_attack(game, 1, blocks={0: 1})
+    _w1g6_drive_combat(game, through="combat_damage")
+    assert any("+2/+2" in line for line in game.log), game.log
+    assert giant not in game.controlled_by(1), game.log
+    assert fumiko in game.controlled_by(0)
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (5, 4)
+    assert game.players[0].life == 18  # the unblocked Bears
+
+
+def test_w1g6_fumiko_compels_only_her_opponents_creatures(set_pool):
+    """CR 508.1d: Bob may not leave an untapped, unsick creature home while
+    Fumiko is on Alice's side; a summoning-sick one is not compelled (the
+    ruling); Alice's own creatures attack only if she wants."""
+    lea = set_pool("LEA")
+    game, (fumiko, bears, giant) = _w1g6_table(
+        set_pool, mine=[set_pool("BOK")["Fumiko the Lowblood"]],
+        theirs=[lea["Grizzly Bears"], lea["Hill Giant"]],
+    )
+    sick = _w1g6_put(game, 1, lea["Gray Ogre"], sick=True)
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    slots = {perm.card.name: slot for slot, perm in enumerate(game.players[1].battlefield)}
+    ok, why = game.declare_attackers(1, [slots["Grizzly Bears"]], 0)
+    assert not ok and "Hill Giant" in why
+    ok, why = game.declare_attackers(
+        1, [slots["Grizzly Bears"], slots["Hill Giant"]], 0,
+    )
+    assert ok, why
+
+    game, (fumiko,) = _w1g6_table(
+        set_pool, mine=[set_pool("BOK")["Fumiko the Lowblood"]],
+    )
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(0, [], 1)
+    assert ok, why
+
 # ==== end w1g6 ======================================================
 
 
