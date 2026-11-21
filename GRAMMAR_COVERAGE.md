@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | CHK | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| BOK *(measured)* | 165 | 288 | 75.3% | 72.9% | 56.9% | 130 |
+| BOK *(measured)* | 165 | 288 | 75.7% | 75.0% | 59.0% | 134 |
 | **All (shipped)** | **9904** | **14799** | **89.5%** | **89.0%** | **62.0%** | **7785** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -74,7 +74,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 1040 | 525 | expected a subject |  |
 | 205 | 106 | unrecognized effect verb |  |
-| 157 | 84 | unconsumed text |  |
+| 156 | 83 | unconsumed text |  |
 | 87 | 67 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -4048,6 +4048,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you control no other creatures, sacrifice this creature.`
 - **Empress Galina**
   - `{U}{U}, {T}: Gain control of target legendary permanent. (This effect lasts indefinitely.)`
+- **Empty-Shrine Kannushi**
+  - `This creature has protection from each color among permanents you control.`
 - **Empyrial Armor**
   - `Enchanted creature gets +1/+1 for each card in your hand.`
 - **Empyrial Plate**
@@ -7934,6 +7936,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Manipulate Fate**
   - `Search your library for three cards, exile them, then shuffle.`
   - `Draw a card.`
+- **Mannichi, the Fevered Dream**
+  - `{1}{R}: Switch each creature's power and toughness until end of turn.`
 - **Manta Ray**
   - `This creature can't attack unless defending player controls an Island.`
   - `When you control no Islands, sacrifice this creature.`
@@ -8191,6 +8195,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Target player mills two cards.`
   - `{2}, {T}: Target player mills two cards.`
   - `{2}, {T}: Target player mills two cards.`
+- **Minamo Sightbender**
+  - `{X}, {T}: Target creature with power X or less can't be blocked this turn.`
 - **Minamo's Meddling**
   - `Counter target spell. That spell's controller reveals their hand, then discards each card with the same name as a card spliced onto that spell.`
 - **Minamo, School at Water's Edge**
@@ -10152,6 +10158,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search target player's library for up to three cards with flashback and put them into that player's graveyard. Then the player shuffles.`
 - **Quillmane Baku**
   - `Whenever you cast a Spirit or Arcane spell, you may put a ki counter on this creature.`
+  - `{1}, {T}, Remove X ki counters from this creature: Return target creature with mana value X or less to its owner's hand.`
 - **Quirion Druid**
   - `{G}, {T}: Target land becomes a 2/2 green creature that's still a land. (This effect lasts indefinitely.)`
 - **Quirion Dryad**
@@ -12760,6 +12767,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stinging Licid**
   - `{1}{U}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {U} to end this effect.`
   - `Whenever enchanted creature becomes tapped, this creature deals 2 damage to that creature's controller.`
+- **Stir the Grave**
+  - `Return target creature card with mana value X or less from your graveyard to the battlefield.`
 - **Stir the Pride**
   - `• Creatures you control get +2/+2 until end of turn.`
   - `• Until end of turn, creatures you control gain "Whenever this creature deals damage, you gain that much life."`
@@ -13454,6 +13463,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice a Saproling: This creature gets +1/+2 until end of turn.`
 - **That Which Was Taken**
   - `{4}, {T}: Put a divinity counter on target permanent other than That Which Was Taken.`
+  - `Each permanent with a divinity counter on it has indestructible.`
 - **Thaumatog**
   - `Sacrifice a land: This creature gets +1/+1 until end of turn.`
   - `Sacrifice an enchantment: This creature gets +1/+1 until end of turn.`

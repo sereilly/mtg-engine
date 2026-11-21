@@ -54,7 +54,7 @@ Do not edit by hand — re-run the script instead.
 | 40 | Darksteel | DST | 2004-02-06 | 165 | 162 | Complete (165/165 supported) |
 | 41 | Fifth Dawn | 5DN | 2004-06-04 | 165 | 162 | Complete (165/165 supported) |
 | 42 | Champions of Kamigawa | CHK | 2004-10-01 | 291 | 283 | Complete (291/291 supported) |
-| 43 | Betrayers of Kamigawa | BOK | 2005-02-04 | 165 | 159 | Measured (147/165 supported, not shipped) |
+| 43 | Betrayers of Kamigawa | BOK | 2005-02-04 | 165 | 159 | Measured (155/165 supported, not shipped) |
 | 44 | Saviors of Kamigawa | SOK | 2005-06-03 | 165 | 165 | Not Implemented |
 | 45 | Ninth Edition | 9ED | 2005-07-29 | 344 | 0 | Not Implemented |
 | 46 | Ravnica: City of Guilds | RAV | 2005-10-07 | 291 | 280 | Not Implemented |
