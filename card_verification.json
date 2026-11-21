@@ -661,9 +661,9 @@
       "updated_at": 1782601599.96855
     },
     "Commune with Nature": {
-      "reason": "Browser: the look-top-pick modal shows all five cards with no ineligible marking and no way to decline the may. Clicking a noncreature is refused (400) and the modal hides, stranding the prompt until a page reload; with no creature in the top five nothing can be answered (the action refuses a decline: hand_index is required). The wire omits the engine's optional and filter (live_look_top_candidates).",
-      "status": "fail",
-      "updated_at": 1795277978.332554
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795283598.9376576
     },
     "Condescend": {
       "reason": "",
@@ -1566,9 +1566,9 @@
       "updated_at": 1795277710.7316852
     },
     "Hankyu": {
-      "reason": "Browser: the granted {T}: Put an aim counter on Hankyu asks Choose target for the equipped creature, click a valid creature, though the ability targets nothing; its ability_target_specs entry is kind creature with may_name_nothing. Any creature clicked (the AI's included) and the counter still lands on Hankyu. The shot ({T}, remove all aim counters: 2 damage to the AI) and equip work.",
-      "status": "fail",
-      "updated_at": 1795277999.8353286
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1795283609.904194
     },
     "Hasran Ogress": {
       "reason": "",
