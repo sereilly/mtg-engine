@@ -20,7 +20,8 @@ Two censuses:
   mana creature — is tapped through the engine's own seams, the turn is run
   through its end step, its controller's untap step, upkeep and draw step,
   and what it cost (life, a source lost, a missed untap or a return to the
-  hand, a harmful counter) is held to ``mana_drawbacks.tap_prices``.
+  hand, a harmful counter, a creature token another seat now has) is held
+  to ``mana_drawbacks.tap_prices``.
 * **No payment pays more than it must.** For boards mixing each kind of
   drawback source with free sources of its colours, and every real mana cost
   they can pay, each planner — the AI's (the web auto-tap's), and the effect
@@ -136,12 +137,17 @@ def _turn_cost(game, permanent, symbol, ability_index, *, tap: bool) -> "int | N
     ore = {id(aura): counters_on(aura, "ore") for aura in auras}
     shackles = counters_on(permanent, "-0/-2")
     life = game.players[0].life
+    handed = _tokens_handed_over(game)
     if tap and not _tap(game, permanent, symbol, ability_index):
         return None
     settle(game)
     game.resolve_end_step(game.active_player_index)
     settle(game)
     harm = life - game.players[0].life
+    # A creature token another seat now has (Forbidden Orchard's "target
+    # opponent creates a 1/1 colorless Spirit creature token"): its power and
+    # toughness, as ``mana_drawbacks`` prices it.
+    harm += _tokens_handed_over(game) - handed
     if not game.is_on_battlefield(permanent) or game.controller_index_of(permanent) != 0:
         # Back in its owner's hand is a land drop to play it again; anywhere
         # else, or another seat's, the source is gone.
@@ -162,6 +168,17 @@ def _turn_cost(game, permanent, symbol, ability_index, *, tap: bool) -> "int | N
     game.resolve_draw_step(0)
     settle(game)
     return harm + life - game.players[0].life
+
+
+def _tokens_handed_over(game) -> int:
+    """The power and toughness of the creature tokens seats other than seat
+    0 control, one point each (at least one a token)."""
+    return sum(
+        max(1, max(0, permanent.effective_power) + max(0, permanent.effective_toughness))
+        for permanent in game.all_permanents()
+        if permanent.metadata.get("is_token") and permanent.is_creature
+        and game.controller_index_of(permanent) != 0
+    )
 
 
 def _measured(build, position, symbol, ability_index) -> "int | None":
