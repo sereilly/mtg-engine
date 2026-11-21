@@ -403,12 +403,24 @@ def _lower_counter_spell(
         # the counter checks cannot part company. An unkeyed condition here
         # would be a counter that fires on every spell, which is the direction
         # nothing crashes and the card is simply wrong.
-        from ...counter_conditions import counter_condition_key
+        from ...counter_conditions import (COUNTER_CONDITION_COST_RECORDS,
+                                           counter_condition_key)
 
         key = counter_condition_key(node.only_if)
         if key is None:
             raise LoweringError(
                 f"nothing answers the counter condition {node.only_if!r}", node=node
+            )
+        # "…if it has the same mana value as **the discarded card**" (Hisoka,
+        # Minamo Sensei): a row about what the ability's own cost recorded,
+        # demanded of the ability — with no discard cost in front of the colon
+        # the words name no card.
+        record = COUNTER_CONDITION_COST_RECORDS.get(key)
+        if record is not None and record not in produced:
+            raise LoweringError(
+                f"the counter condition {key!r} reads a cost record "
+                f"({record}) nothing in this ability writes",
+                node=node,
             )
         payload["only_if"] = key
     if node.unless_pays is not None:

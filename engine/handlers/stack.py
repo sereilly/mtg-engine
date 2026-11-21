@@ -930,11 +930,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             from ..counter_conditions import counter_condition_holds
 
             if not counter_condition_holds(
-                str(only_if), game, target, game.players.index(context.caster)
+                str(only_if), game, target, game.players.index(context.caster),
+                context,
             ):
+                condition = str(only_if)
                 game.log.append(
                     f"{card.name}: {target.card.name} would not "
-                    f"{str(only_if).replace('it would ', '')}, cannot counter"
+                    f"{condition.replace('it would ', '')}, cannot counter"
+                    if condition.startswith("it would ") else
+                    f"{card.name}: {target.card.name} fails \"{condition}\", "
+                    "cannot counter"
                 )
                 return True, "resolved"
         # "counter target artifact spell **you control**" (Goblin Artisans),

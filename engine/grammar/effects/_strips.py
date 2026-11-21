@@ -114,12 +114,21 @@ def _accept_strip_cards_with_chosen_name(
     if not zones:
         stream.reset(mark)
         return None
-    if not stream.accept_phrase(
-        "for", "all", "cards", "with", "the", "same", "name", "as",
-    ):
+    if not stream.accept_phrase("for", "all", "cards", "with"):
         stream.reset(mark)
         return None
-    name_of = _accept_named_object(stream)
+    # "…for all cards **with that name**" (Cranial Extraction): the name a
+    # "Choose a … card name" sentence in front of it recorded — the record
+    # Lobotomy's "the same name as the chosen card" reads too
+    # (``chosen_card_name``), so the same reading, and the lowering's gate
+    # asks for the same step.
+    if stream.accept_phrase("that", "name"):
+        name_of = None
+    elif stream.accept_phrase("the", "same", "name", "as"):
+        name_of = _accept_named_object(stream)
+    else:
+        stream.reset(mark)
+        return None
     if name_of is False:
         stream.reset(mark)
         return None

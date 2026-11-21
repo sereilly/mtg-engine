@@ -184,6 +184,42 @@ def test_w1g7_petals_of_insight_bottoms_the_three_and_returns_to_hand(set_pool):
     )
 
 
+def _w1g7_extraction(set_pool, interactive=()):
+    game = _w1g7_table(
+        set_pool, hand=["Cranial Extraction"], interactive=interactive,
+        opponent_hand=["Lightning Bolt", "Grizzly Bears", "Lightning Bolt"],
+        opponent_library=["Island", "Lightning Bolt", "Swamp", "Lightning Bolt", "Craw Wurm"],
+        opponent_graveyard=["Lightning Bolt", "Forest"],
+    )
+    assert game.cast_from_hand(0, "Cranial Extraction", target_player_index=1).supported
+    return game
+
+
+def test_w1g7_cranial_extraction_exiles_every_copy_of_the_named_card(set_pool):
+    game = _w1g7_extraction(set_pool, interactive={0})
+    asked = _w1g7_settle(game, defaults=False)
+    assert asked.kind == "choose_card_name"
+    # "a nonland card name": a land's name is refused.
+    assert not game.confirm_choose_card_name(0, "Island")
+    _w1g7_settle(game, answers={
+        "choose_card_name": lambda g, c: g.confirm_choose_card_name(0, "Lightning Bolt"),
+    })
+    victim = game.players[1]
+    assert _w1g7_names(victim.exile) == ["Lightning Bolt"] * 5
+    assert _w1g7_names(victim.hand) == ["Grizzly Bears"]
+    assert _w1g7_names(victim.graveyard) == ["Forest"]
+    assert sorted(_w1g7_names(victim.library)) == ["Craw Wurm", "Island", "Swamp"]
+    assert game.players[0].exile == []
+
+
+def test_w1g7_cranial_extraction_at_a_seat_nobody_asks_names_from_public_evidence(set_pool):
+    """The default names what the target's graveyard shows (CR 400.2), and
+    the strip finds the hidden copies too."""
+    game = _w1g7_extraction(set_pool)
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[1].exile) == ["Lightning Bolt"] * 5
+
+
 def test_w1g7_petals_of_insight_otherwise_draws_three(set_pool):
     game = _w1g7_petals(set_pool, accept=False)
     player = game.players[0]

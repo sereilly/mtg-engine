@@ -146,6 +146,52 @@ def test_w1g7_cruel_deceivers_granted_trigger_destroys_its_blocker(set_pool):
     assert [c.name for c in game.players[1].graveyard] == ["Craw Wurm"]
     assert any("Cruel Deceiver destroyed Craw Wurm" in line for line in game.log)
 
+
+def _w1g7_hisoka_against(set_pool, spell, discard, announce):
+    lea = set_pool("LEA")
+    game, (hisoka, wurm) = _w1g7_table(
+        set_pool, mine=["Hisoka, Minamo Sensei"], theirs=["Craw Wurm"],
+        hand=["Lightning Bolt", "Grizzly Bears", "Wrath of God"],
+    )
+    game.players[1].hand.append(lea[spell])
+    game.queue_from_hand(1, spell, **announce(wurm))
+    held = [card.name for card in game.players[0].hand]
+    assert game.activate_permanent_ability(
+        0, "Hisoka, Minamo Sensei", target_stack_index=0,
+        cost_hand_index=held.index(discard),
+    ).supported
+    _w1g7_settle(game)
+    return game, wurm
+
+
+def test_w1g7_hisoka_counters_a_spell_matching_the_discarded_card(set_pool):
+    game, wurm = _w1g7_hisoka_against(
+        set_pool, "Giant Growth", "Lightning Bolt",
+        lambda wurm: {"target_permanent_ids": [wurm.permanent_id]},
+    )
+    assert [c.name for c in game.players[1].graveyard] == ["Giant Growth"]
+    assert wurm.effective_power == 6                  # never pumped
+    assert [c.name for c in game.players[0].graveyard] == ["Lightning Bolt"]
+
+
+def test_w1g7_hisoka_does_not_counter_a_spell_of_another_mana_value(set_pool):
+    game, wurm = _w1g7_hisoka_against(
+        set_pool, "Giant Growth", "Grizzly Bears",
+        lambda wurm: {"target_permanent_ids": [wurm.permanent_id]},
+    )
+    assert wurm.effective_power == 9                  # Giant Growth resolved
+    assert [c.name for c in game.players[0].graveyard] == ["Grizzly Bears"]
+
+
+def test_w1g7_hisoka_reads_an_x_spells_mana_value_on_the_stack(set_pool):
+    """CR 202.3e: Fireball cast for X=3 has mana value 4 on the stack."""
+    game, wurm = _w1g7_hisoka_against(
+        set_pool, "Fireball", "Wrath of God",
+        lambda wurm: {"target_player_index": 0, "x_value": 3},
+    )
+    assert game.players[0].life == 20
+    assert [c.name for c in game.players[1].graveyard] == ["Fireball"]
+
 # ==== end w1g7 ======================================================
 
 
