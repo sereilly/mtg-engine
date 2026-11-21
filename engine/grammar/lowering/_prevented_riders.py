@@ -151,6 +151,58 @@ def _counted_pool_counter_rider(node: ast.PreventDamage) -> str | None:
     return rider.counter
 
 
+def _counted_pool_life_rider(node: ast.PreventDamage) -> bool:
+    """Whether *node* is Candles' Glow's pool: "Prevent the next 3 damage that
+    would be dealt to any target this turn. **You gain life equal to the damage
+    prevented this way.**"
+
+    Temper's pool with CR 615.5's other rider, read in front of the refusal
+    every other branch shares for :func:`_counted_pool_counter_rider`'s reason.
+    False for any other rider or none; a refusal for a gain-life rider printed
+    on a pool this interceptor (``prevention.shields._prevention_pool_with_life``)
+    does not arm:
+
+    * the plain counted pool only — a half, a blanket, a colour-scoped Circle,
+      a division, a second size, a narrowed source or a combat narrowing each
+      reach a different interceptor that gains nothing;
+    * an unconditional rider — "if damage from a black source is prevented
+      this way" is a property the interceptor would ignore;
+    * a **chosen** recipient ("any target", "target creature"): the life goes
+      to the seat that armed the shield (``Shield.payee_seat``) wherever the
+      shield goes, which is what "**you** gain life" says of a spell whose
+      shield may sit on an opponent's creature. A shield on the controller, the
+      ability's own source or the enchanted permanent is printed by nobody with
+      this rider, and is refused rather than admitted untried.
+    """
+    rider = node.prevented_rider
+    if rider is None or rider.effect != "gain_life":
+        return False
+    if (
+        node.from_filter is not None
+        or node.from_class
+        or node.dealt_by is not None
+        or node.dealt_by_others
+        or node.combat_only
+        or node.division is not None
+        or node.to_others
+        or node.alternate_amount is not None
+        or node.alternate_subject is not None
+        or rider.source_colors
+        or not isinstance(node.amount, ast.Fixed)
+    ):
+        return False
+    if (
+        not isinstance(node.to, ast.TargetSpec)
+        or node.to.quantifier not in ("target", "any_target")
+    ):
+        raise LoweringError(
+            "only a pool armed on a chosen recipient gains its caster the life "
+            "it prevented",
+            node=node,
+        )
+    return True
+
+
 def _names_a_target_spell(spec) -> bool:
     """Whether a shield's ``dealt_by`` is a **target spell** — the stack-scoped
     source ``_blankets``' spell shield reads (Hidden Retreat, Shieldmage Elder,

@@ -33,6 +33,7 @@ from ..shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                        PREVENT_BY_RESOLVING_OBJECT,
                        PREVENT_BY_RESOLVING_OBJECT_AND_GAIN_LIFE,
                        PREVENT_NEXT_N, PREVENT_NEXT_N_AND_COUNTERS,
+                       PREVENT_NEXT_N_AND_GAIN_LIFE,
                        PREVENT_WHOLE, PREVENT_AND_EXILE,
                        PREVENT_ALL_FROM_CHOSEN_SOURCE,
                        PREVENT_TEAM, Shield, drop_spent, shields_on)
@@ -40,7 +41,8 @@ from .registry import (
     CHOSEN_SOURCE_BLANKET, COLOR_SHIELD, COMBAT_BLANKET, COMBAT_BLANKET_EXCEPT,
     COMBAT_BLANKET_SCOPED, COMBAT_SHIELD, GENERIC_CAP, GENERIC_EXILE_SHIELD,
     GENERIC_HALF, GENERIC_REFLECT_SHIELD, GENERIC_SHIELD, GENERIC_TEAM_SHIELD,
-    GENERIC_WHOLE, POOL, POOL_WITH_COUNTERS, PROTECTION, SOURCE_CAP,
+    GENERIC_WHOLE, POOL, POOL_WITH_COUNTERS, POOL_WITH_LIFE, PROTECTION,
+    SOURCE_CAP,
     SOURCE_EXILE_SHIELD, SOURCE_HALF, SOURCE_REFLECT_SHIELD, SOURCE_SHIELD,
     SOURCE_TEAM_SHIELD, SOURCE_WHOLE, SPELL_BLANKET, SPELL_BLANKET_AND_GAIN_LIFE,
     SUBJECT_BLANKET,
@@ -1590,6 +1592,44 @@ def _prevention_pool_with_counters(game, event: dict) -> PreventionOutcome | Non
                 )
 
     return _spend(game, event, PREVENT_NEXT_N_AND_COUNTERS, rider=place)
+
+
+@prevention_effect(
+    POOL_WITH_LIFE, applies=_arms(PREVENT_NEXT_N_AND_GAIN_LIFE),
+    sources=_granted_by(PREVENT_NEXT_N_AND_GAIN_LIFE),
+    label="Prevent the next N damage and gain that much life",
+)
+def _prevention_pool_with_life(game, event: dict) -> PreventionOutcome | None:
+    """Candles' Glow: "Prevent the next 3 damage that would be dealt to any
+    target this turn. You gain life equal to the damage prevented this way."
+
+    Temper's pool with the other CR 615.5 rider: "the prevention takes place at
+    the time the original event would have happened; the rest of the effect
+    takes place immediately afterward" — so the life is gained **here**, as
+    each point is absorbed, by the seat whose spell armed the shield
+    (``Shield.payee_seat``), whoever the shield goes around: an opponent's
+    creature shielded is still life for the caster. Each shield pays for what
+    *it* absorbed, read as its running total before and after the spend, for
+    the counters pool's reason — two pools from two seats on one recipient pay
+    two seats.
+    """
+    before = {
+        id(shield): shield.prevented
+        for shield in _live(game, event, PREVENT_NEXT_N_AND_GAIN_LIFE)
+    }
+
+    def gain(game, event: dict, used: list[Shield], prevented: int) -> None:
+        _log_pool_prevention(game, event, used, prevented)
+        for shield in used:
+            amount = shield.prevented - before.get(id(shield), 0)
+            seat = shield.payee_seat
+            if amount <= 0 or seat is None or not 0 <= seat < len(game.players):
+                continue
+            game._gain_life(
+                game.players[seat], amount, source_name=shield.source_name or None,
+            )
+
+    return _spend(game, event, PREVENT_NEXT_N_AND_GAIN_LIFE, rider=gain)
 
 
 @prevention_effect(

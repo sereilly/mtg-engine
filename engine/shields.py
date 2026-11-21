@@ -88,6 +88,14 @@ PREVENT_NEXT_N = "prevent_next_n"
 #: and what that interceptor does after absorbing is the whole difference — the
 #: exact split ``PREVENT_AND_GAIN_LIFE`` and ``PREVENT_WHOLE`` already are.
 PREVENT_NEXT_N_AND_COUNTERS = "prevent_next_n_and_counters"
+#: "Prevent the next 3 damage that would be dealt to any target this turn.
+#: **You gain life equal to the damage prevented this way.**" (Candles' Glow.)
+#: The same point pool with CR 615.5's other additional effect behind it: the
+#: seat that armed the shield (``Shield.payee_seat``) gains what each point
+#: absorbed, as it is absorbed — at resolution the pool has absorbed nothing.
+#: Its own kind for ``PREVENT_NEXT_N_AND_COUNTERS``' reason: the kind names
+#: the interceptor, and what it does after absorbing is the difference.
+PREVENT_NEXT_N_AND_GAIN_LIFE = "prevent_next_n_and_gain_life"
 #: "…prevent all but N of that damage" — a cap, spent whole on one instance.
 PREVENT_ALL_BUT = "prevent_all_but"
 #: "…prevent that damage. You gain life equal to the damage prevented this way"
@@ -849,6 +857,21 @@ def make_counting_pool(
         amount=amount,
         uses=None,
         counter=counter,
+        source_name=source_name,
+    )
+
+
+def make_life_pool(
+    amount: int, payee_seat: int, source_name: str | None = None,
+) -> Shield:
+    """Candles' Glow's pool: CR 615.7's points with CR 615.5's life gain
+    behind them, paid to *payee_seat* — the seat whose spell armed it, whoever
+    the shield goes around ("**You** gain life …")."""
+    return Shield(
+        kind=PREVENT_NEXT_N_AND_GAIN_LIFE,
+        amount=amount,
+        uses=None,
+        payee_seat=payee_seat,
         source_name=source_name,
     )
 

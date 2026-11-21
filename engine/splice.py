@@ -401,7 +401,7 @@ def announce_splices(
         program = compile_card_oracle(text_card)
         if not program.supported:
             return (), {}, [], (
-                f"{spliced.name}'s rules text is not supported: {program.details}"
+                f"{spliced.name}'s rules text is not supported: {program.reason}"
             )
         if program.modes:
             return (), {}, [], (

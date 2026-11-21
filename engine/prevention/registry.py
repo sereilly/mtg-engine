@@ -189,6 +189,9 @@ SPELL_BLANKET = 13
 #: and behind it: both are free, and CR 616.1e gives the affected player the
 #: choice — this is only the default a non-interactive seat takes.
 SPELL_BLANKET_AND_GAIN_LIFE = 19  # 14-18 are taken in the shared space
+#: …and the same pool with CR 615.5's life gain behind it (Candles' Glow),
+#: beside the counters one and for its reason.
+POOL_WITH_LIFE = 598
 POOL_WITH_COUNTERS = 599
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
 # A permanent's own static prevention, which is never used up by the event —
