@@ -78,6 +78,7 @@ from ._events import (
     _EVENT_SUBJECT_PLAYERS,
     DAMAGED_PERMANENT_CONTROLLER,
     EVENT_SUBJECT_CONTROLLER,
+    EVENT_SUBJECT_OWNER,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
     damage_trigger_names_damaged_end,
@@ -898,6 +899,14 @@ def _lower_lose_life(
         event, event_subject
     ):
         payload["recipient"] = DAMAGED_PERMANENT_CONTROLLER
+        return (OracleInstruction("target_loses_life", "", payload),)
+    if node.player.kind == "that_player" and EVENT_SUBJECT_OWNER in produced:
+        # "Whenever a permanent is put into **an opponent's graveyard**, **that
+        # player** loses 1 life." (Patron of the Nezumi.) The player the
+        # condition named is the graveyard's, which is the dead permanent's
+        # owner (CR 404.1) — frozen by the fire site, and the controller
+        # branch below would have named the thief of a stolen one.
+        payload["recipient"] = EVENT_SUBJECT_OWNER
         return (OracleInstruction("target_loses_life", "", payload),)
     if node.player.kind == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
         payload["recipient"] = "event_subject_controller"

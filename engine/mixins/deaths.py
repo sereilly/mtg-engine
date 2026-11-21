@@ -887,6 +887,14 @@ class DeathsMixin:
                         # `_EVENT_SUBJECT_CONTROLLERS` can name this condition
                         # without a second reader.
                         "event_subject_controller": dead_seat,
+                        # …and whose graveyard it went to (CR 404.1: its
+                        # owner's), for "Whenever a permanent is put into an
+                        # opponent's graveyard, **that player** loses 1 life"
+                        # (Patron of the Nezumi) — the same key Reincarnation's
+                        # bound death freezes. Ownership never changes (CR
+                        # 108.3), so it is the one seat a stolen permanent's
+                        # controller is not.
+                        "event_subject_owner": self.owner_index_of(dead_permanent),
                         # "…create a 1/1 green Saproling creature token **for
                         # each fungus counter on that creature**"
                         # (Sporogenesis). The counters with no rules meaning of

@@ -68,6 +68,7 @@ from .flashback import (FLASHBACK_CLAIM, flashback_x_unannounced,
 from .fading import unread_fading_line
 from .modular import unread_modular_line
 from .soulshift import unread_soulshift_line
+from .offering import unread_offering_line
 from .sunburst import unread_sunburst_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (unread_alternative_cost_sentence,
@@ -503,6 +504,19 @@ def _compile_card_oracle(
     # gate below is "supported when any line is", so a keyword line nothing
     # reads is dropped there silently — all six of Fifth Dawn's noncreature
     # sunburst cards arrived supported entering with no counters at all.
+    # …and an **offering** line the CR 702.48a rewrite could not read
+    # (``engine/offering.py``) — a quality the vocabulary does not know — for
+    # soulshift's reason: a noncreature card whose other line compiles would
+    # otherwise ship with the keyword dropped, castable only at full price
+    # and sorcery speed.
+    unread_offering = unread_offering_line(oracle_text)
+    if unread_offering is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented offering: {unread_offering}",
+            normalized_text,
+        )
     unread_sunburst = unread_sunburst_line(oracle_text)
     if unread_sunburst is not None:
         return OracleProgram(

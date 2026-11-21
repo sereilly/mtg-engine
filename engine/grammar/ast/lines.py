@@ -81,6 +81,14 @@ class TriggerEvent:
     #: subject's own "another" cannot say. The table's ``<stem>_includes_source``
     #: marker is the dispatching half of the same reading.
     includes_source: bool = False
+    #: "…is put into **an opponent's** / **your** graveyard" (Patron of the
+    #: Nezumi, Grim Feast, Enduring Renewal): whose graveyard a death names —
+    #: ``"an_opponent"`` or ``"you"``, None where the line names none. The
+    #: table's ``dying_graveyard_owner`` is the dispatching half; this is what
+    #: lets the effect read the graveyard's owner (CR 404.1: a permanent goes
+    #: to its **owner's** graveyard) as "that player"
+    #: (``lowering/_events.event_produces``).
+    into_graveyard_of: str | None = None
 
 
 @dataclass(frozen=True)

@@ -867,4 +867,13 @@ def event_produces(event: "ast.TriggerEvent") -> frozenset[str]:
         )
     ):
         produced = produced | {DAMAGED_CREATURE_NAMED}
+    if event.kind == "permanent_dies" and getattr(event, "into_graveyard_of", None):
+        # "Whenever a permanent is put into **an opponent's graveyard**, **that
+        # player** loses 1 life." (Patron of the Nezumi.) The sentence names a
+        # player once — the graveyard's — and CR 404.1 makes that the dead
+        # permanent's **owner**, which ``_fire_permanent_dies_triggers``
+        # freezes under ``EVENT_SUBJECT_OWNER``. Without this the pronoun fell
+        # to the controller table and a stolen creature's death drained the
+        # thief.
+        produced = produced | {EVENT_SUBJECT_OWNER}
     return produced

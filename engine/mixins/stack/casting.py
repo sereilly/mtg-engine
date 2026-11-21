@@ -47,6 +47,7 @@ from ...classifier import classify_card
 from ...cost_modifiers import (cost_reduction_for_cast, spell_cost_tax,
                                spell_life_tax, spell_symbol_tax)
 from ...self_cost_modifiers import self_per_target_tax
+from ...offering import offering_announcement, offering_timing_refusal
 from ...splice import announce_splices, spliced_permanents
 from ...target_keywords import (ANTE, GRAVEYARD, announced_slot,
                                 cast_target_zone)
@@ -869,6 +870,38 @@ class SpellCastingMixin:
             extra_generic_tax, offer_x_colorings, optional_paid, x_value,
         ) = announced
 
+        # **Offering** (CR 702.48, ``engine/offering.py``). A cast that began
+        # at instant speed by the offering's window and did not take it is
+        # illegal (CR 601.3c, 601.2e); one that took it is reduced by the
+        # sacrificed permanent's mana cost (CR 702.48c), that permanent named
+        # now (702.48b) — the one the caster named, else the payment's own
+        # default — and the reduction joins the board's (CR 601.2f).
+        offering_refusal = offering_timing_refusal(
+            self, caster_index, card, optional_paid,
+        )
+        if offering_refusal is not None:
+            return refuse(card.name, classification.effect_kind, offering_refusal)
+        offered = offering_announcement(
+            self, caster_index, card, taken=optional_paid,
+            named=self._named_cast_cost_payers(
+                caster_index, cost_permanent_ids, cost_permanent_index,
+            ),
+        )
+        offering_reduction_bought = None
+        if offered is not None:
+            offered_permanent, offering_reduction_bought = offered
+            cost_reduction = cost_reduction.plus(offering_reduction_bought)
+            if offering_reduction_bought:
+                label = mana_cost_label(offering_reduction_bought.symbols())
+                self.log.append(
+                    f"{card.name} costs {label} less to cast (offering "
+                    f"{offered_permanent.effective_card.name})"
+                )
+                price_notes.append(
+                    f"costs {label} less: offering "
+                    f"{offered_permanent.effective_card.name}"
+                )
+
         # The **alternative** cost (CR 118.9), announced in the same step as the
         # additional costs above (CR 601.2b) and resolved here for the same
         # reason the discard is: the card that pays it is named by an index into
@@ -1157,6 +1190,10 @@ class SpellCastingMixin:
                 restated, restated_names = cost_reduction_for_cast(
                     self, caster_index, card, x_value=resolved_x_value,
                 )
+                if offering_reduction_bought is not None:
+                    # The offering's reduction is this cast's, not the
+                    # board's, and does not move with X (CR 702.48c).
+                    restated = restated.plus(offering_reduction_bought)
                 if restated == cost_reduction:
                     break
                 cost_reduction, reducing_names = restated, restated_names

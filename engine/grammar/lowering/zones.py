@@ -642,14 +642,16 @@ def _lower_put_onto_battlefield(
             node=node,
         )
     if node.tapped and not (
-        filt.zone == "hand" and target.quantifier in ("a", "an") and filt.is_card
+        filt.zone == "hand" and filt.is_card
+        and target.quantifier in ("a", "an", "up_to", "any_number")
     ):
         # "…onto the battlefield **tapped**." Only the from-hand pick below
-        # carries the word to its resolver (Terrain Generator); every other
-        # branch here would put the card in untapped, which is a different and
-        # better card than the one printed.
+        # carries the word to its resolver (Terrain Generator), and the chosen
+        # "up to N" put beside it (Patron of the Moon); every other branch
+        # here would put the card in untapped, which is a different and better
+        # card than the one printed.
         raise LoweringError(
-            "only the from-hand pick puts a card onto the battlefield tapped",
+            "only the from-hand picks put a card onto the battlefield tapped",
             node=node,
         )
     if node.attached_to_chosen is not None and not (
@@ -861,7 +863,6 @@ def _lower_put_onto_battlefield(
                 or node.attached_to_chosen is not None
                 or node.entering_colors
                 or node.entering_subtypes
-                or node.tapped
                 or getattr(node, "actor", None) is not None
             ):
                 raise LoweringError(
@@ -876,11 +877,20 @@ def _lower_put_onto_battlefield(
                 else {"card_filter": described, "count": target.count, "up_to": True}
             )
             pick["result_key"] = "chosen_hand_cards"
+            put: dict[str, object] = {
+                "cards_from": "chosen_hand_cards", "card_filter": described,
+            }
+            if node.tapped:
+                # "Put up to two land cards from your hand onto the
+                # battlefield **tapped**." (Patron of the Moon.) The entry
+                # state the put sets on each card before it enters (CR 110.5b)
+                # — emitted only when printed, so every put compiled before
+                # this keeps a byte-identical payload.
+                put["tapped"] = True
             return (
                 OracleInstruction("choose_cards_in_hand", "", pick),
                 OracleInstruction(
-                    "put_chosen_hand_cards_onto_battlefield", "",
-                    {"cards_from": "chosen_hand_cards", "card_filter": described},
+                    "put_chosen_hand_cards_onto_battlefield", "", put,
                 ),
             )
         return (

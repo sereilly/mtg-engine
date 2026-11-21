@@ -69,6 +69,23 @@ class AlternativeCastCostsMixin:
             granted = granted_alternative_cost(
                 permanent.effective_card.oracle_text or ""
             )
+            if granted is not None and granted.spell_filter is not None and not (
+                card_matches_any(
+                    card, (granted.spell_filter,), game=self, owner=caster_index,
+                )
+            ):
+                # "…for **Samurai** spells you cast" (Kentaro): offered only
+                # for the spells the class names, asked of the card as cast.
+                continue
+            if granted is not None and granted.mana_is_spell_mana_value:
+                # "…pay {X} …, where X is that spell's mana value" (Kentaro):
+                # the price written in this spell's own number, so everything
+                # below reads an ordinary run of generic mana.
+                from dataclasses import replace
+
+                granted = replace(
+                    granted, mana=f"{{{int(getattr(card, 'cmc', 0) or 0)}}}",
+                )
             # "…for spells **you** cast" (Fist of Suns): offered to the
             # granting permanent's controller alone (CR 109.5), where Dream
             # Halls' "its controller may" reaches every caster.

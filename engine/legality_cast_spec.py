@@ -32,6 +32,7 @@ from .cost_pickers import _cost_picker_spec
 from .divided_damage import divided_entry
 from .entwine import entwine_cost
 from .faces import is_multi_face
+from .offering import offering_costs
 from .cost_x_definitions import (
     caps_cast_x,
     cast_x_ceiling,
@@ -712,10 +713,21 @@ class CastTargetSpecMixin:
         prints on itself."""
         from .alternative_costs import granted_alternative_cost
 
+        from dataclasses import replace
+
         for _seat, permanent in self.permanents_with_controller():
-            if granted_alternative_cost(
+            granted = granted_alternative_cost(
                 permanent.effective_card.oracle_text or ""
-            ) == cost:
+            )
+            if granted is None:
+                continue
+            # A price sized by the spell (Kentaro's "{X}, where X is that
+            # spell's mana value") is offered with the spell's number written
+            # in, so it is that number less that the grant prints.
+            if granted == cost or (
+                granted.mana_is_spell_mana_value
+                and replace(cost, mana=None) == granted
+            ):
                 return permanent.card.name
         return None
 
@@ -982,6 +994,13 @@ class CastTargetSpecMixin:
                     # the price that chooses every mode (CR 702.42a), which
                     # the client must know to walk each mode's targets.
                     else "entwine" if cost.optional_key == entwine
+                    # "Fox offering" (CR 702.48a): the sacrifice that also
+                    # reduces the cost by the Fox's mana cost and opens the
+                    # instant window — a price whose word the player needs.
+                    else "offering" if any(
+                        cost.optional_key == offered.optional_key
+                        for offered in offering_costs(card)
+                    )
                     else cost.describe()
                 ),
                 "repeatable": False,

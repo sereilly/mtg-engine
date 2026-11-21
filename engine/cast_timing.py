@@ -527,9 +527,19 @@ def casts_at_instant_speed(card, game: "Game | None" = None, seat: int | None = 
 
     if board_free_cast(game, card) is not None:
         return True
-    return granted_flash_timing(game, seat, card) or board_flash_timing(
+    if granted_flash_timing(game, seat, card) or board_flash_timing(
         game, seat, card
-    )
+    ):
+        return True
+    # A fifth, the card's own and conditional: "[Quality] offering" lets its
+    # spell be cast any time an instant could be *if* the offering is paid
+    # (CR 702.48a), and CR 601.3c lets such a cast **begin** as though it had
+    # flash — so the window is open while *seat* has a permanent to offer,
+    # and the cast path refuses an announcement that used it without paying
+    # (``offering.offering_timing_refusal``, asked beside the costs).
+    from .offering import offering_opens_instant_timing
+
+    return offering_opens_instant_timing(game, seat, card)
 
 
 def cast_permission_line(line: str) -> bool:

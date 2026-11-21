@@ -714,7 +714,9 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
             hosts[position] = (
                 game.permanent_by_id(chosen) if isinstance(chosen, int) else None
             )
-        _put_entrants(game, context, entrants, hosts)
+        _put_entrants(
+            game, context, entrants, hosts, tapped=bool(payload.get("tapped")),
+        )
 
     # One step per question and a last one that moves everything — the loop is
     # the last thing this handler does (``engine/resumption.py``).
@@ -722,7 +724,7 @@ def put_chosen_hand_cards_onto_battlefield(game: Game, instruction: OracleInstru
     return True, "resolved"
 
 
-def _put_entrants(game, context, entrants, hosts) -> None:
+def _put_entrants(game, context, entrants, hosts, *, tapped: bool = False) -> None:
     """Put every chosen card onto the battlefield under its owner, each Aura
     attached to its host (see ``put_chosen_hand_cards_onto_battlefield``).
 
@@ -778,7 +780,10 @@ def _put_entrants(game, context, entrants, hosts) -> None:
                 game.put_card_into_hand(owner, card)
                 stays(card, owner, "has nothing it could enchant", "303.4g")
                 continue
-            permanent = Permanent(card=card)
+            # "…onto the battlefield **tapped**." (Patron of the Moon.) CR
+            # 110.5b: the entry state is set on the object before it enters,
+            # not by a tap after it -- no "becomes tapped" event happens.
+            permanent = Permanent(card=card, tapped=tapped)
 
             # Once it is there — at the answer, when an "as it enters" choice
             # keeps it on its way (CR 614.12a, the entry's ``then``).

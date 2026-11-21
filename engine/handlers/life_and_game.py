@@ -258,6 +258,17 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             game.log.append(f"{card.name}: no recorded controller, no life lost")
             return True, "resolved"
         victims = [game.players[seat]]
+    elif recipient == "event_subject_owner":
+        # "Whenever a permanent is put into an opponent's graveyard, **that
+        # player** loses 1 life." (Patron of the Nezumi.) The graveyard's
+        # player — the dead permanent's owner (CR 404.1), frozen by the fire
+        # site (CR 603.10) — which the controller branch above would get wrong
+        # for every stolen permanent.
+        seat = (context.trigger_context or {}).get("event_subject_owner")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded owner, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
     elif recipient == "damaged_permanent_controller":
         # "Whenever this creature deals combat damage to a creature, **that
         # creature's controller** loses 2 life" (Death Charmer). The seat that

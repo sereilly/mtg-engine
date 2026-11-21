@@ -575,6 +575,17 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if cost_modifier_claims_line(normalized):
         return True
+    # "You may pay {X} rather than pay the mana cost for Samurai spells you
+    # cast, where X is that spell's mana value." (Kentaro, the Smiling Cat.)
+    # CR 118.9's alternative cost granted from a board, read at every cast by
+    # ``Game.applicable_alternative_costs`` — the claim the noncreature
+    # classifier makes for Dream Halls and Fist of Suns
+    # (``derived_static_claims``), for the first *creature* to print one, and
+    # through the same reader the offer is made by.
+    from .alternative_costs import granted_alternative_cost_claims_line
+
+    if granted_alternative_cost_claims_line(normalized):
+        return True
     # **Every** CR 614 replacement carried out by engine/replacements/ from
     # the permanent's own text, not one of them.
     #
