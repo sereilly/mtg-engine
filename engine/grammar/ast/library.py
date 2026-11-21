@@ -572,6 +572,17 @@ class SearchRevealOpponentChooses:
     #: and a card that swapped them would be a different spell entirely.
     fate: str = "hand"
     other_fate: str = "graveyard"
+    #: "Search your library for **up to** four cards …" (Gifts Ungiven): a
+    #: ceiling, where Intuition's bare number is CR 701.23d's floor.
+    up_to: bool = False
+    #: "…four cards **with different names**" (Gifts Ungiven): a relation
+    #: across the finds — no two share a name (CR 201.2) — which no one card's
+    #: filter can say, so it is carried beside the count and the search
+    #: resolver asks it of the answer as a whole.
+    distinct_names: bool = False
+    #: How many of the found cards the chooser names: "chooses one"
+    #: (Intuition), "chooses **two of those cards**" (Gifts Ungiven).
+    pick_count: int = 1
 
 
 @dataclass(frozen=True)

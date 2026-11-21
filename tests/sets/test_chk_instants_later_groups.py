@@ -160,6 +160,77 @@ def test_w1g7_sift_through_sands_needs_both_names_cast_this_turn(set_pool):
         assert any("drew 2 card(s)" in line for line in game.log)
 
 
+_W1G7_GIFTS_LIBRARY = [
+    "Lightning Bolt", "Lightning Bolt", "Grizzly Bears", "Craw Wurm",
+    "Dark Ritual", "Forest", "Island",
+]
+
+
+def _w1g7_gifts(set_pool, interactive):
+    game = _w1g7_table(
+        set_pool, hand=["Gifts Ungiven"], library=_W1G7_GIFTS_LIBRARY,
+        interactive=interactive,
+    )
+    assert game.cast_from_hand(0, "Gifts Ungiven", target_player_index=1).supported
+    return game
+
+
+def _w1g7_find(game, names):
+    library = _w1g7_names(game.players[0].library)
+    return game.resolve_pending_choice("search_library", 0, picks=[
+        {"zone": "library", "index": library.index(name)} for name in names
+    ])
+
+
+def test_w1g7_gifts_ungiven_the_opponent_splits_four_different_names(set_pool):
+    game = _w1g7_gifts(set_pool, interactive={0, 1})
+    asked = _w1g7_settle(game, defaults=False)
+    assert asked.kind == "search_library" and asked.data["up_to"]
+    # "with different names": two Lightning Bolts are refused, nothing moves.
+    library = _w1g7_names(game.players[0].library)
+    assert not game.resolve_pending_choice("search_library", 0, picks=[
+        {"zone": "library", "index": 0}, {"zone": "library", "index": 1},
+    ])
+    assert _w1g7_names(game.players[0].library) == library
+    assert _w1g7_find(game, ["Lightning Bolt", "Grizzly Bears", "Craw Wurm", "Dark Ritual"])
+    asked = _w1g7_settle(game, defaults=False)
+    assert asked.kind == "opponent_picks_revealed" and asked.player_index == 1
+    assert asked.data["cards"] == ["Lightning Bolt", "Grizzly Bears", "Craw Wurm", "Dark Ritual"]
+    assert game.confirm_opponent_picks_revealed(1, 0)
+    asked = _w1g7_settle(game, defaults=False)
+    # The second of two picks, the first one no longer on offer.
+    assert asked.kind == "opponent_picks_revealed" and asked.data["legal_indices"] == [1, 2, 3]
+    assert not game.confirm_opponent_picks_revealed(1, 0)
+    assert game.confirm_opponent_picks_revealed(1, 3)
+    _w1g7_settle(game)
+    player = game.players[0]
+    assert _w1g7_names(player.hand) == ["Grizzly Bears", "Craw Wurm"]
+    assert _w1g7_names(player.graveyard) == ["Lightning Bolt", "Dark Ritual", "Gifts Ungiven"]
+    assert sorted(_w1g7_names(player.library)) == ["Forest", "Island", "Lightning Bolt"]
+
+
+def test_w1g7_gifts_ungiven_finding_two_puts_both_in_the_graveyard(set_pool):
+    """Its ruling (2017-03-14): with one or two found, the opponent must
+    choose them for the graveyard — so nobody is asked."""
+    game = _w1g7_gifts(set_pool, interactive={0, 1})
+    _w1g7_settle(game, defaults=False)
+    assert _w1g7_find(game, ["Lightning Bolt", "Craw Wurm"])
+    assert _w1g7_settle(game, defaults=False) is None
+    player = game.players[0]
+    assert player.hand == []
+    assert _w1g7_names(player.graveyard) == ["Lightning Bolt", "Craw Wurm", "Gifts Ungiven"]
+
+
+def test_w1g7_gifts_ungiven_at_seats_nobody_asks(set_pool):
+    game = _w1g7_gifts(set_pool, interactive=())
+    _w1g7_settle(game)
+    player = game.players[0]
+    found = _w1g7_names(player.hand) + _w1g7_names(player.graveyard)[:-1]
+    assert len(player.hand) == 2 and len(found) == 4
+    assert len(set(found)) == 4                         # four different names
+    assert _w1g7_names(player.graveyard)[-1] == "Gifts Ungiven"
+
+
 def test_w1g7_hinder_at_a_seat_nobody_asks_buries_the_card(set_pool):
     game = _w1g7_hinder_a_bolt(set_pool, interactive=())
     _w1g7_settle(game)

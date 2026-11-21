@@ -762,27 +762,37 @@ def _lower_search_reveal_opponent_chooses(
         raise LoweringError(
             "the searched pile is a fixed number of cards", node=node
         )
-    search = OracleInstruction(
-        "search_library", "",
-        {
-            "count": count,
-            "card_type": "any",
-            # One entry per find, which is what drives the counted answer — the
-            # whole pick list in one action, validated together.
-            "destinations": ["held"] * count,
-            "tapped": [False] * count,
-            # "…and **reveal them**." CR 701.20a: the finds are shown to every
-            # player when the search ends.
-            "reveal": True,
-            "record_key": HELD_SEARCH_PILE,
-        },
-    )
+    search_payload: dict[str, object] = {
+        "count": count,
+        "card_type": "any",
+        # One entry per find, which is what drives the counted answer — the
+        # whole pick list in one action, validated together.
+        "destinations": ["held"] * count,
+        "tapped": [False] * count,
+        # "…and **reveal them**." CR 701.20a: the finds are shown to every
+        # player when the search ends.
+        "reveal": True,
+        "record_key": HELD_SEARCH_PILE,
+    }
+    # "…for **up to four cards with different names**" (Gifts Ungiven): the
+    # ceiling CR 701.23d's floor gives way to, and the relation across the
+    # finds the search resolver asks of the answer as a whole. Written only
+    # when printed, so Intuition's payload is what it was.
+    if node.up_to:
+        search_payload["up_to"] = True
+    if node.distinct_names:
+        search_payload["restrictions"] = {"distinct_names": True}
+    search = OracleInstruction("search_library", "", search_payload)
     pick: dict[str, object] = {
         "count": count,
         "cards_from": HELD_SEARCH_PILE,
         "fate": node.fate,
         "other_fate": node.other_fate,
     }
+    # "Target opponent chooses **two** of those cards" (Gifts Ungiven): the
+    # pick is a chain of that many one-card answers over the same pile.
+    if node.pick_count != 1:
+        pick["pick_count"] = int(node.pick_count)
     _describe_targets(pick, node.chooser)
     return (
         OracleInstruction(

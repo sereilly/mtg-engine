@@ -505,6 +505,10 @@ def choose_search_cards(
             ):
                 kept = trial
         return [{"zone": zone, "index": index} for zone, index, _card in kept]
+    # "…up to four cards **with different names**" (Gifts Ungiven): a name
+    # one find used is no find for the next, the resolver's own reading.
+    distinct = bool((working.get("restrictions") or {}).get("distinct_names"))
+    names_taken: set[str] = set()
     for _ in range(count):
         best: tuple[str, int] | None = None
         best_score = float("-inf")
@@ -512,6 +516,8 @@ def choose_search_cards(
             cards = search_zone_cards(player, zone)
             for index, card in enumerate(cards):
                 if (zone, index) in taken or not findable(card):
+                    continue
+                if distinct and name_key(card.name) in names_taken:
                     continue
                 score = sign * _score_tutor_choice(game, player_index, card)
                 if best is None or score > best_score:
@@ -522,6 +528,7 @@ def choose_search_cards(
         zone, index = best
         card = search_zone_cards(player, zone)[index]
         taken.add(best)
+        names_taken.add(name_key(card.name))
         picks.append({"zone": zone, "index": index})
         among = list((working.get("restrictions") or {}).get("named_among") or ())
         if among:

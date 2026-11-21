@@ -466,6 +466,16 @@ class LibrarySearchChoicesMixin:
                     ],
                 }
             found.append((zone, index, card))
+        # "Search your library for up to four cards **with different names**"
+        # (Gifts Ungiven): a relation across the finds (CR 201.2: two cards
+        # share a name when their names are the same), which no one card can
+        # fail — so it is asked of the answer whole, before anything moves.
+        if (choice.data.get("restrictions") or {}).get("distinct_names"):
+            from ....search_filters import name_key
+
+            keys = [name_key(card.name) for _zone, _index, card in found]
+            if len(set(keys)) != len(keys):
+                return False
         # "a land card **of each basic land type**" (Gaea's Balance): every
         # find fills a printed description of its own. Asked of the answer as a
         # whole, after each card has passed the union above — a Tropical Island
@@ -586,15 +596,23 @@ class LibrarySearchChoicesMixin:
                 for (zone, index, _card), slot in zip(findable, assigned)
                 if slot is not None
             ][:limit]
+        from ....search_filters import name_key
+
+        # "…**with different names**" (Gifts Ungiven): one find per name.
+        distinct = bool((choice.data.get("restrictions") or {}).get("distinct_names"))
+        names_taken: set[str] = set()
         for zone in tuple(choice.data.get("zones", ("library",))):
             cards = search_zone_cards(searched, zone)
             for index, card in enumerate(cards):
                 if len(picks) >= limit:
                     return picks
+                if distinct and name_key(card.name) in names_taken:
+                    continue
                 if search_matches(
                     card, choice.data, game=self, owner=choice.player_index
                 ):
                     picks.append({"zone": zone, "index": index})
+                    names_taken.add(name_key(card.name))
         return picks
 
     def _search_findable_entries(self, choice: PendingChoice) -> list[tuple]:
