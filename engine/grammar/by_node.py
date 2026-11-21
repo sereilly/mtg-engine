@@ -56,6 +56,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_flip_permanent,
                        _lower_become_aura, _lower_untap_chosen_by_paying,
                        _lower_reveal_hand_and_choose, _lower_look_top_pick,
+                       _lower_alternating_hand_exile,
                        _lower_player_gets_counters,
                        _lower_gain_type, _lower_attack_as_though,
                        _lower_assigns_combat_damage_as_unblocked,
@@ -224,6 +225,9 @@ _BY_NODE_TYPE: dict[type, object] = {
     # was the one this file already is: a registry inside a dispatcher is the
     # half that grows, so it is the half that leaves.
     ast.MoveCounter: _lower_move_counter,
+    # Struggle for Sanity: the revealer is the announced target and the rest
+    # is the handler's loop; no record and no event is read.
+    ast.AlternatingHandExile: _lower_alternating_hand_exile,
     # "Turn the exiled card face up." (Summoner's Egg.) The linked record
     # names the card; nothing about the line is payload.
     ast.TurnExiledCardFaceUp: _lower_turn_exiled_card_face_up,

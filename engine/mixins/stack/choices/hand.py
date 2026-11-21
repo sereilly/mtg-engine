@@ -23,6 +23,7 @@ from ....exiled_records import record_exiled_card
 from ....linked_exile import link_exiled_card
 from ....entry_awaiting import entry_happened
 from ....models import Permanent
+from ....oracle_types import HAND_EXILES_BY_CHOOSER
 from ....permanent_cards import stays_out_of_battlefield
 from ....grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ....pending_choices import ChoiceSpec, PendingChoice
@@ -414,6 +415,30 @@ class HandChoicesMixin:
             if source is not None:
                 link_exiled_card(source, card, victim_index)
             self.log.append(f"{card.name} was exiled from {victim.name}'s hand")
+            return True
+        if fate == "exile_by_chooser":
+            # "That player exiles a card from it, then you exile a card from
+            # it. Repeat this process …" (Struggle for Sanity.) The exile
+            # above, recorded **by who picked it**: the last sentence returns
+            # "the cards they exiled this way" to the hand and puts the rest
+            # into the graveyard, so each pick is filed under its chooser's
+            # seat in the resolution's record (``HAND_EXILES_BY_CHOOSER``).
+            victim = self.players[victim_index]
+            if not 0 <= hand_index < len(victim.hand):
+                return False
+            card = victim.hand[hand_index]
+            if not self.take_card_from_hand(victim, card):
+                return False
+            card = self.put_card_into_exile(victim, card)
+            record = choice.data.get("record")
+            if record is not None:
+                record.setdefault(HAND_EXILES_BY_CHOOSER, {}).setdefault(
+                    choice.player_index, []
+                ).append(card)
+            self.log.append(
+                f"{self.players[choice.player_index].name} exiled {card.name} "
+                f"from {victim.name}'s hand"
+            )
             return True
         if fate != "exile_until_source_leaves":
             return False

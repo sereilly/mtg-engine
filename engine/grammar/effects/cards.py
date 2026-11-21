@@ -743,6 +743,14 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
         # keeps the reading it already had.
         stream.reset(mark)
         return None
+    # "Target opponent reveals their hand. **That player exiles a card from it,
+    # then you exile a card from it.** …" (Struggle for Sanity.) The revealer
+    # picks first, out of the hand this sentence revealed: its own paragraph,
+    # read whole behind the reveal, and refusing without consuming so every
+    # "you choose" sentence below keeps its reading.
+    alternating = _parse_alternating_hand_exile(stream, player)
+    if alternating is not None:
+        return alternating
     # "…reveals their hand**, then** you choose a card…" (Lobotomy) is the same
     # two sentences with the weaker join. English writes one clause either way
     # and the referent is identical — "it" is the hand this sentence revealed —
@@ -837,6 +845,54 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     # and Mind Warp opens on "look at".
     stream.reset(tail)
     return ast.RevealHandAndChoose(player, chosen.filter, fate="name")
+
+
+def _parse_alternating_hand_exile(
+    stream: TokenStream, player: "ast.PlayerRef",
+) -> "ast.AlternatingHandExile | None":
+    """``. That player exiles a card from it, then you exile a card from it.
+    Repeat this process until all cards in that hand have been exiled. That
+    player returns the cards they exiled this way to their hand and puts the
+    rest into their graveyard.`` — everything after Struggle for Sanity's
+    reveal, read whole.
+
+    Every word is expected. The order of the pickers ("that player … then
+    you"), the bound ("until all cards in that hand have been exiled") and
+    the split ("the cards **they** exiled … to their hand", "the rest into
+    their graveyard") are each the card: a printing that swapped the pickers,
+    stopped after one round or sent both piles somewhere else would be a
+    different effect, and none of them may be read as this one.
+
+    Refuses without consuming, so the reveal's other endings keep theirs.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase(
+        "that", "player", "exiles", "a", "card", "from", "it",
+    ):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_punct(",")
+        and stream.accept_phrase(
+            "then", "you", "exile", "a", "card", "from", "it",
+        )
+        and stream.accept_punct(".")
+        and stream.accept_phrase(
+            "repeat", "this", "process", "until", "all", "cards", "in", "that",
+            "hand", "have", "been", "exiled",
+        )
+        and stream.accept_punct(".")
+        and stream.accept_phrase(
+            "that", "player", "returns", "the", "cards", "they", "exiled",
+            "this", "way", "to", "their", "hand", "and", "puts", "the", "rest",
+            "into", "their", "graveyard",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.AlternatingHandExile(player)
 
 
 def _parse_offered_hand_reveal(stream: TokenStream) -> "ast.May | None":
