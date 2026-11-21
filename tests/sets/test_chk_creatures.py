@@ -552,6 +552,208 @@ def test_w1g3_two_yosei_deaths_skip_two_untap_steps(set_pool):
     game.start_next_turn()  # B's third untap step happens
     assert _w1g3_tapped(game, 1) == []
 
+
+# --- W1G3's drive list: supported on arrival, driven here ------------------
+
+_W1G3_DRAGONS = (
+    "Jugan, the Rising Star", "Keiga, the Tide Star", "Kokusho, the Evening Star",
+    "Ryusei, the Falling Star", "Yosei, the Morning Star",
+)
+
+
+def _w1g3_dragon_table(set_pool, mine, *, hand):
+    lea = set_pool("LEA")
+    return _w1g3_table(
+        mine=mine, theirs=[lea["Hill Giant"], lea["Serra Angel"], lea["Forest"]], hand=hand,
+    )
+
+
+def test_w1g3_each_dragon_alone(set_pool):
+    """Each Dragon destroyed by Rend Spirit, its dies trigger seen through:
+    Jugan's five counters land on the Bear, Keiga steals the Hill Giant,
+    Kokusho drains 5, Ryusei kills every creature without flying (the Bear and
+    the Giant, not the Angel), Yosei taps the opponent's permanents."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    from engine.named_counters import counters_on as _counters_on
+
+    outcomes = {}
+    for name in _W1G3_DRAGONS:
+        game = _w1g3_dragon_table(
+            set_pool, [chk[name], lea["Grizzly Bears"]], hand=[chk["Rend Spirit"]],
+        )
+        _w1g3_kill(game, name)
+        _w1g3_settle(game)
+        outcomes[name] = game
+    jugan = outcomes["Jugan, the Rising Star"]
+    assert _counters_on(_w1g3_on_field(jugan, 0, "Grizzly Bears"), "+1/+1") == 5
+    keiga = outcomes["Keiga, the Tide Star"]
+    assert "Hill Giant" in [p.card.name for p in keiga.controlled_by(0)]
+    kokusho = outcomes["Kokusho, the Evening Star"]
+    assert (kokusho.players[0].life, kokusho.players[1].life) == (25, 15)
+    ryusei = outcomes["Ryusei, the Falling Star"]
+    assert [p.card.name for p in ryusei.controlled_by(0)] == []
+    assert sorted(p.card.name for p in ryusei.controlled_by(1)) == ["Forest", "Serra Angel"]
+    yosei = outcomes["Yosei, the Morning Star"]
+    assert _w1g3_tapped(yosei, 1) == ["Forest", "Hill Giant", "Serra Angel"]
+
+
+def test_w1g3_the_dragons_and_deathcurse_ogre_swept_together(set_pool):
+    """All five Dragons and Deathcurse Ogre die to one Wrath of God. Every
+    trigger chooses its targets once the sweep is over (CR 603.3d): Keiga and
+    Jugan find no creature and are removed, Yosei names the opponent and their
+    two Forests, and the rest resolve in the order they were put on the stack
+    (last pushed first): the Ogre, Yosei, Ryusei (nothing left to hit),
+    Kokusho."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g3_table(
+        mine=[chk[name] for name in _W1G3_DRAGONS] + [chk["Deathcurse Ogre"]],
+        theirs=[lea["Hill Giant"], lea["Serra Angel"], lea["Forest"], lea["Forest"]],
+        hand=[lea["Wrath of God"]],
+    )
+    assert game.cast_from_hand(0, "Wrath of God").supported
+    _w1g3_settle(game)
+    assert (game.players[0].life, game.players[1].life) == (22, 12)
+    assert _w1g3_tapped(game, 1) == ["Forest", "Forest"]
+    removed = [line for line in game.log if "was removed from the stack" in line]
+    assert len(removed) == 2 and any("Keiga" in line for line in removed)
+    assert any("Jugan" in line for line in removed)
+    resolved = [
+        line.split(" ability resolved")[0] for line in game.log if line.endswith("ability resolved")
+    ]
+    assert resolved == [
+        "Deathcurse Ogre", "Yosei, the Morning Star", "Ryusei, the Falling Star",
+        "Kokusho, the Evening Star",
+    ]
+
+
+def test_w1g3_ryusei_dying_to_hideous_laughter_strikes_the_survivors_without_flying(set_pool):
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g3_table(
+        mine=[chk["Ryusei, the Falling Star"], lea["Grizzly Bears"]],
+        theirs=[lea["Hill Giant"], lea["Serra Angel"], lea["Llanowar Elves"], lea["Craw Wurm"]],
+        hand=[chk["Hideous Laughter"]],
+    )
+    _w1g3_on_field(game, 0, "Ryusei, the Falling Star").damage_marked = 3
+    assert game.cast_from_hand(0, "Hideous Laughter").supported
+    _w1g3_settle(game)
+    assert [p.card.name for p in game.controlled_by(1)] == ["Serra Angel"]
+    assert "Craw Wurm" in _w1g3_names(game.players[1].graveyard)
+
+
+def test_w1g3_deathcurse_ogre_drains_each_player(set_pool):
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g3_table(mine=[chk["Deathcurse Ogre"]], hand=[lea["Lightning Bolt"]])
+    _w1g3_kill(game, "Deathcurse Ogre", spell="Lightning Bolt")
+    _w1g3_settle(game)
+    assert (game.players[0].life, game.players[1].life) == (17, 17)
+
+
+def test_w1g3_iname_death_aspect_puts_spirit_cards_into_the_graveyard(set_pool):
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g3_table(hand=[chk["Iname, Death Aspect"]])
+    game.players[0].library = [
+        chk["Kami of Ancient Law"], lea["Forest"], chk["Hana Kami"], lea["Island"],
+    ]
+    assert game.cast_from_hand(0, "Iname, Death Aspect").supported
+    _w1g3_settle(game)
+    assert sorted(_w1g3_names(game.players[0].graveyard)) == ["Hana Kami", "Kami of Ancient Law"]
+    assert sorted(_w1g3_names(game.players[0].library)) == ["Forest", "Island"]
+
+
+def test_w1g3_the_sacrifice_kami(set_pool):
+    """Hana Kami returns an Arcane card (not a Bolt), Kami of Ancient Law
+    destroys an enchantment, Kami of Twisted Reflection bounces only its own
+    side's creature, Pain Kami deals X, Hearth Kami destroys an artifact of
+    mana value X and refuses another X; Rend Spirit refuses a non-Spirit."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g3_table(
+        mine=[chk["Hana Kami"]], graveyard=[chk["Glacial Ray"], lea["Lightning Bolt"]],
+    )
+    assert game.activate_permanent_ability(0, "Hana Kami").supported
+    _w1g3_settle(game)
+    assert _w1g3_names(game.players[0].hand) == ["Glacial Ray"]
+
+    game = _w1g3_table(mine=[chk["Kami of Ancient Law"]], theirs=[lea["Crusade"]])
+    crusade = _w1g3_on_field(game, 1, "Crusade")
+    assert game.activate_permanent_ability(
+        0, "Kami of Ancient Law", target_permanent_ids=[crusade.permanent_id]
+    ).supported
+    _w1g3_settle(game)
+    assert _w1g3_names(game.players[1].graveyard) == ["Crusade"]
+
+    game = _w1g3_table(
+        mine=[chk["Kami of Twisted Reflection"], lea["Grizzly Bears"]], theirs=[lea["Hill Giant"]],
+    )
+    giant = _w1g3_on_field(game, 1, "Hill Giant")
+    assert not game.activate_permanent_ability(
+        0, "Kami of Twisted Reflection", target_permanent_ids=[giant.permanent_id]
+    ).supported
+    bears = _w1g3_on_field(game, 0, "Grizzly Bears")
+    assert game.activate_permanent_ability(
+        0, "Kami of Twisted Reflection", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g3_settle(game)
+    assert _w1g3_names(game.players[0].hand) == ["Grizzly Bears"]
+
+    game = _w1g3_table(mine=[chk["Pain Kami"]], theirs=[lea["Hill Giant"]])
+    giant = _w1g3_on_field(game, 1, "Hill Giant")
+    assert game.activate_permanent_ability(
+        0, "Pain Kami", target_permanent_ids=[giant.permanent_id], x_value=3,
+    ).supported
+    _w1g3_settle(game)
+    assert _w1g3_names(game.players[1].graveyard) == ["Hill Giant"]
+
+    game = _w1g3_table(mine=[chk["Hearth Kami"]], theirs=[lea["Jayemdae Tome"], lea["Sol Ring"]])
+    tome = _w1g3_on_field(game, 1, "Jayemdae Tome")
+    assert not game.activate_permanent_ability(
+        0, "Hearth Kami", target_permanent_ids=[tome.permanent_id], x_value=1,
+    ).supported
+    assert game.activate_permanent_ability(
+        0, "Hearth Kami", target_permanent_ids=[tome.permanent_id], x_value=4,
+    ).supported
+    _w1g3_settle(game)
+    assert [p.card.name for p in game.controlled_by(1)] == ["Sol Ring"]
+
+    game = _w1g3_table(theirs=[chk["Lantern Kami"], lea["Grizzly Bears"]],
+                       hand=[chk["Rend Spirit"], chk["Rend Spirit"]])
+    assert not game.cast_from_hand(
+        0, "Rend Spirit", target_permanent_ids=[_w1g3_on_field(game, 1, "Grizzly Bears").permanent_id]
+    ).supported
+    assert game.cast_from_hand(
+        0, "Rend Spirit", target_permanent_ids=[_w1g3_on_field(game, 1, "Lantern Kami").permanent_id]
+    ).supported
+    _w1g3_settle(game)
+    assert _w1g3_names(game.players[1].graveyard) == ["Lantern Kami"]
+
+
+@_w1g3_pytest.mark.parametrize("name, keyword", [
+    ("Lantern Kami", "flying"), ("Moss Kami", "trample"),
+    ("Kodama of the North Tree", "shroud"), ("Kami of Old Stone", None),
+    ("River Kaijin", None), ("Wandering Ones", None),
+])
+def test_w1g3_the_plain_spirits_attack_for_their_power(set_pool, name, keyword):
+    """The keyword-only and vanilla Spirits: cast from a hand, then an
+    unblocked attack deals their power (Kodama's shroud refuses a Bolt)."""
+    chk = set_pool("CHK")
+    card = chk[name]
+    game = _w1g3_table(hand=[card])
+    assert game.cast_from_hand(0, name).supported
+    _w1g3_settle(game)
+    permanent = _w1g3_on_field(game, 0, name)
+    if keyword:
+        assert game._has_keyword(permanent, keyword)
+    if keyword == "shroud":
+        bolt = _w1g3_card("Test Bolt", 1, "Instant", "This spell deals 3 damage to any target.")
+        game.players[1].hand.append(bolt)
+        assert not game.cast_from_hand(
+            1, "Test Bolt", target_permanent_ids=[permanent.permanent_id]
+        ).supported
+    from tests.helpers import declare_attack
+
+    declare_attack(game, 0)
+    _w1g3_drive_combat(game)
+    assert game.players[1].life == 20 - int(card.power)
+
 # ==== end w1g3 ======================================================
 
 
