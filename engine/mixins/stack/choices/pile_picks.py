@@ -96,7 +96,7 @@ class PileChoicesMixin:
         # (Phyrexian Grimoire.) The pick and what it left behind are one answer,
         # so both halves move here — the pile is only nameable while this prompt
         # is holding it. Absent for every library printing, where CR 701.20b
-        # leaves the rest where they were.
+        # leaves the rest of what was revealed where it was.
         # One event: whatever the pile sends to the battlefield enters together
         # (CR 603.6a).
         with self.entering_together():

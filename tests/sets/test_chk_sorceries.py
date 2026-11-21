@@ -163,7 +163,8 @@ def _w1g7_petals(set_pool, accept):
     )
     assert game.cast_from_hand(0, "Petals of Insight").supported
     asked = _w1g7_settle(game, defaults=False)
-    # The offer is made having seen the three cards (CR 701.20e).
+    # The offer is made having seen the three cards (CR 701.20e: a look, the
+    # private half of a reveal).
     assert asked.kind == "optional_pay"
     assert asked.data["looked_at"] == ["Forest", "Grizzly Bears", "Lightning Bolt"]
     _w1g7_settle(game, answers={

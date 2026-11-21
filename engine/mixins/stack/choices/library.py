@@ -740,19 +740,7 @@ class LibraryChoicesMixin:
         permanent = choice.data.get("_permanent")
         loose = choice.data.get("_card")
         if permanent is None and loose is not None:
-            # A countered spell's card (Hinder), in no zone since the counter
-            # took it off the stack: the answer is its only move.
-            owner = self.players[int(choice.data["owner_index"])]
-            position = "bottom" if to_bottom else "top"
-            self.discard_pending_choice(choice)
-            if self.put_card_into_library(owner, loose, position=position):
-                self.log.append(
-                    f"{loose.name} was countered by "
-                    f"{choice.data.get('card_name', 'a spell')} and put on the "
-                    f"{position} of {owner.name}'s library instead of into "
-                    "their graveyard"
-                )
-            return True
+            return self._put_countered_card_on_library_end(choice, loose, to_bottom)
         if permanent is None or not self.is_on_battlefield(permanent):
             # It left while the prompt was owed. CR 608.2b: the effect does as
             # much as it can, which here is nothing.
@@ -770,6 +758,28 @@ class LibraryChoicesMixin:
             f"{choice.data.get('card_name', 'An effect')}: "
             f"{permanent.card.name} put on {position} of {owner.name}'s library"
         )
+        return True
+
+    def _put_countered_card_on_library_end(
+        self, choice: PendingChoice, card, to_bottom
+    ) -> bool:
+        """The answer for a countered spell's card (Hinder: "put that card on
+        your choice of the top or bottom of its owner's library instead of
+        into that player's graveyard"). It is in no zone since the counter
+        took it off the stack (CR 701.6a) — an object that was a spell, never
+        a permanent, so there is no battlefield exit for the seam to name, the
+        reason ``handlers.stack._redirect_countered_card`` gives — and the
+        answer is its one move, through the library funnel (CR 903.9b)."""
+        owner = self.players[int(choice.data["owner_index"])]
+        position = "bottom" if to_bottom else "top"
+        self.discard_pending_choice(choice)
+        if self.put_card_into_library(owner, card, position=position):
+            self.log.append(
+                f"{card.name} was countered by "
+                f"{choice.data.get('card_name', 'a spell')} and put on the "
+                f"{position} of {owner.name}'s library instead of into "
+                "their graveyard"
+            )
         return True
 
     def _default_library_end_choice(self, choice: PendingChoice) -> None:
