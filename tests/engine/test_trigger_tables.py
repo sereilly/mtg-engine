@@ -183,7 +183,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # Grip of Chaos (SCG W1G8). Every object, as its announcement is whole on
     # the stack (CR 601.2i, 602.2b, 603.3d); not the choice above.
     "spell_or_ability_put_onto_stack": "whenever a spell or ability is put onto the stack",
-    "opponent_casts_spell": "whenever an opponent casts a spell",
+    "opponent_casts_spell": (
+        "whenever an opponent casts a spell",
+        # Ishi-Ishi, Akki Crackshot: the subtype union on the opponent scope.
+        "whenever an opponent casts a spirit or arcane spell",
+    ),
     "you_cast_spell": "whenever you cast a spell",
     # Chance Encounter. CR 705.2: only the player who flipped wins a flip, so
     # the event is the flipper's and is announced by the one seam that flips
@@ -358,6 +362,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature becomes the target of a spell or ability",
         "whenever this creature becomes the target of a spell or ability "
         "an opponent controls",
+        # The Glasskites (and Kira's grant): the self spelling narrowed by the
+        # targeted permanent's history this turn, above the bare self row.
+        "whenever this creature becomes the target of a spell or ability "
+        "for the first time each turn",
         # The board-wide row under "another" (Cloud Cover): the word sits where
         # the article does, inside the delimited subject.
         "whenever another permanent you control becomes the target of a spell "

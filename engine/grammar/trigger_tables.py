@@ -87,14 +87,26 @@ _BECOMES_TARGET_SUBJECTS: tuple[tuple[str, ...], ...] = (
     *(("this", noun) for noun in _DAMAGER_NOUNS),
 )
 
+#: "…**for the first time each turn**" (Jetting and Shimmering Glasskite) — a
+#: fourth axis, on the self spelling only, because that is the only row
+#: ``engine/whenever_triggers.py`` carries the narrowing on: read on another
+#: subject here, the words would be consumed while the condition table matched
+#: the shorter row and dropped them, a trigger firing on every targeting.
+#: Longest first, the table's own rule.
+_BECOMES_TARGET_SUFFIXES: tuple[tuple[str, ...], ...] = (
+    ("for", "the", "first", "time", "each", "turn"),
+    (),
+)
+
 _BECOMES_TARGET_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = tuple(
     (
         "self_becomes_target",
-        subject + ("becomes", "the", "target", "of") + obj + controller,
+        subject + ("becomes", "the", "target", "of") + obj + controller + suffix,
     )
     for subject in _BECOMES_TARGET_SUBJECTS
     for obj in _BECOMES_TARGET_OBJECTS
     for controller in _BECOMES_TARGET_CONTROLLERS
+    for suffix in (_BECOMES_TARGET_SUFFIXES if subject[0] == "this" else ((),))
 )
 
 

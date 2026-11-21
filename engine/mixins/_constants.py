@@ -20,7 +20,8 @@ from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..next_damage import NEXT_DAMAGE_KEYS
 from ..target_immunity import SHROUD_WAIVED_FOR_SEATS
-from ..turn_state import ATTACKED_SEATS_THIS_TURN_KEY, ATTACKS_THIS_TURN
+from ..turn_state import (ATTACKED_SEATS_THIS_TURN_KEY, ATTACKS_THIS_TURN,
+                          TARGETED_THIS_TURN)
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
@@ -114,6 +115,9 @@ _EOT_METADATA_KEYS = (
     # How many times it was declared as an attacker this turn (Godo, Bandit
     # Warlord's "for the first time each turn"), swept with the mark above.
     ATTACKS_THIS_TURN,
+    # How many times it became the target of a spell or ability this turn
+    # (Jetting Glasskite's "for the first time each turn"), the same window.
+    TARGETED_THIS_TURN,
     # "…except for creatures that **couldn't attack**." (Season of the Witch.)
     # Stamped as the declare-attackers step begins (CR 508.1), swept here with
     # its twin above: the two are one turn's record read together, and a stamp

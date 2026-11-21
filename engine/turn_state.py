@@ -129,6 +129,31 @@ ATTACKED_SEATS_THIS_TURN_KEY = "attacked_seats_this_turn"
 #: and returns is a new object with no count (CR 400.7).
 ATTACKS_THIS_TURN = "attacks_this_turn"
 
+#: How many times a permanent has become the target of a spell or ability this
+#: turn (CR 115.1, CR 603.2) — "Whenever this creature becomes the target of a
+#: spell or ability **for the first time each turn**" (Jetting Glasskite) is
+#: the announcement that makes it 1. Godo's attack count one event over:
+#: written by the one announcement seam (``Game._announce_targeting``) for
+#: **every** permanent targeted, whatever it says, so a creature that gains
+#: the ability after it was first targeted (Kira, Great Glass-Spinner arriving
+#: mid-turn) knows the first time has passed; swept at cleanup
+#: (``mixins/_constants._EOT_METADATA_KEYS``); a permanent that leaves and
+#: returns is a new object with no count (CR 400.7).
+TARGETED_THIS_TURN = "targeted_this_turn"
+
+
+def record_targeted(permanent) -> int:
+    """Count one more time *permanent* became a target this turn; returns the
+    new count."""
+    count = int(permanent.metadata.get(TARGETED_THIS_TURN, 0)) + 1
+    permanent.metadata[TARGETED_THIS_TURN] = count
+    return count
+
+
+def times_targeted_this_turn(permanent) -> int:
+    """How many times *permanent* has become a target this turn."""
+    return int(permanent.metadata.get(TARGETED_THIS_TURN, 0))
+
 
 def record_attacked_seat(permanent, seat: int | None) -> None:
     """Stamp that *permanent* was declared attacking *seat* this turn.

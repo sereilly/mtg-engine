@@ -134,6 +134,10 @@ def _targets(item) -> tuple:
     )
 
 
+def _line_key(text) -> str:
+    return " ".join((text or "").lower().split())
+
+
 def interchangeable(items) -> bool:
     """Whether every order of *items* is the same game.
 
@@ -147,8 +151,14 @@ def interchangeable(items) -> bool:
     which says nothing about what the object will do.
     """
     first = items[0]
+    # The printed line compared as the compiler reads it — case and spacing
+    # carry nothing (``line_normalization`` lowercases every line it reads). A
+    # lord's quoted grant is recorded off the normalised line, so a Jetting
+    # Glasskite under Kira, Great Glass-Spinner holds its printed trigger and
+    # the granted one in two cases; compared as written, the one ability twice
+    # asked a person to order two identical objects.
     if any(
-        (item.ability_text or "") != (first.ability_text or "")
+        _line_key(item.ability_text) != _line_key(first.ability_text)
         or item.ability_instruction != first.ability_instruction
         for item in items[1:]
     ):

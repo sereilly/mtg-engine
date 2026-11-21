@@ -830,6 +830,25 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{card.name}: the spell it would counter is no longer on the stack"
                 )
                 return True, "resolved"
+        if instruction.payload.get("bound_to_targeting_object"):
+            # "Whenever this creature becomes the target of a spell or ability
+            # for the first time each turn, counter **that spell or
+            # ability**." (Jetting Glasskite.) The object whose targeting set
+            # the trigger off, frozen by identity by the announcement
+            # (``TARGETS_CHOSEN_ITEM``) — a spell or an ability, which the
+            # ``also_ability`` branch below tells apart. Gone from the stack
+            # (countered, or resolved while the trigger waited) is nothing to
+            # counter, never a bystander (CR 608.2b's shape).
+            from ..stack_targets import TARGETS_CHOSEN_ITEM
+
+            bound = (context.trigger_context or {}).get(TARGETS_CHOSEN_ITEM)
+            chosen = next((item for item in game.stack if item is bound), None)
+            if chosen is None:
+                game.log.append(
+                    f"{card.name}: the spell or ability it would counter is no "
+                    "longer on the stack"
+                )
+                return True, "resolved"
         if instruction.payload.get("bound_to_target"):
             # "…If you win the bidding, counter **that spell**." (Mages'
             # Contest.) A back-reference to the object the announcement chose,

@@ -463,6 +463,42 @@ def grant_target_keyword_until_eot(game: Game, instruction: OracleInstruction, c
             game.log.append(f"{card.name}: nothing was left to grant to")
         game._refresh_dynamic_creatures()
         return True, "resolved"
+    # "Whenever a creature you control enters, **it** gets +2/+0 and gains
+    # haste until end of turn." (In the Web of War.) The object the firing
+    # event was about, by the id its fire site froze (CR 603.10) — a board
+    # search would find a look-alike, and an object that left and came back is
+    # a new one (CR 400.7). The printed noun phrase is re-asked as the grant
+    # resolves, for ``pump_event_subject``'s reason: the words the lowering
+    # carried are the words that have to hold now.
+    if instruction.payload.get("on_event_subject"):
+        from ..subject_filters import subject_matches
+
+        bound = (context.trigger_context or {}).get("event_subject_permanent_id")
+        subject = game.permanent_by_id(bound) if isinstance(bound, int) else None
+        if subject is None or not game.is_on_battlefield(subject):
+            game.log.append(f"{card.name}: the creature it named is gone")
+            return True, "resolved"
+        described = instruction.payload.get("filter")
+        if described and not subject_matches(
+            game, subject, described,
+            observer=game.players.index(context.caster),
+            source=context.source_permanent,
+        ):
+            game.log.append(
+                f"{card.name}: {subject.card.name} no longer answers the clause"
+            )
+            return True, "resolved"
+        lifetime = grant_lifetime(game, instruction, context)
+        keywords = tuple(instruction.payload.get("keywords") or ())
+        for keyword in keywords:
+            _grant_one_keyword(game, subject, keyword, context, lifetime)
+        game.log.append(
+            f"{subject.card.name} gains "
+            f"{' and '.join(_named_keywords(keywords, context))}"
+            f"{DURATION_WORDS.get(lifetime['duration'], '')} ({card.name})"
+        )
+        game._refresh_dynamic_creatures()
+        return True, "resolved"
     # The same three questions the flying twin above asks, through the same
     # reader: two handlers for one printed sentence, and the one that kept its
     # own copy was the one that had none.

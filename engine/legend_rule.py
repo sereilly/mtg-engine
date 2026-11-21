@@ -90,6 +90,32 @@ def legend_rule_exemption(line: str) -> tuple[int, str] | None:
     return count, match.group("name")
 
 
+#: "The "legend rule" doesn't apply." (Mirror Gallery.) CR 704.5j switched off
+#: for every name and every player while the permanent saying it is on the
+#: battlefield — Brothers Yamazaki's sentence above with no name and no count.
+#: Matched on the line as the registries see it, with either spelling of the
+#: quotation marks and the apostrophe.
+_SWITCHED_OFF_LINE = re.compile(
+    r"^the [\"“]legend rule[\"”] doesn['’]t apply$"
+)
+
+
+def legend_rule_switched_off_line(line: str) -> bool:
+    """Whether *line* switches the legend rule off for everything (Mirror
+    Gallery's sentence)."""
+    normalized = " ".join((line or "").strip().lower().rstrip(".").split())
+    return _SWITCHED_OFF_LINE.match(normalized) is not None
+
+
+def legend_rule_claims_line(line: str) -> bool:
+    """Whether *line* is a legend-rule exemption this module enforces — one
+    name's (:func:`legend_rule_exemption`) or every name's
+    (:func:`legend_rule_switched_off_line`). The one question the support gates
+    and the registry claim ask, so what is admitted is what
+    :func:`exempt_from_legend_rule` reads."""
+    return legend_rule_exemption(line) is not None or legend_rule_switched_off_line(line)
+
+
 def exempt_from_legend_rule(game, name: str) -> bool:
     """Whether CR 704.5j does not apply to the permanents named *name* now.
 
@@ -101,6 +127,13 @@ def exempt_from_legend_rule(game, name: str) -> bool:
     A third Brothers Yamazaki ends it for every one of them (the card's
     2013-07-01 ruling: "If a third Brothers Yamazaki enters the battlefield,
     the legend rule will apply.").
+
+    True too, for every name, while a permanent says the rule doesn't apply at
+    all (Mirror Gallery, read through ``effective_card`` for the same reasons).
+    Asked at each check, so the rule applies again at the first check after
+    the last such permanent leaves (Mirror Gallery's 2005-02-01 ruling: "If
+    all Mirror Galleries leave the battlefield, the "Legend rule" will apply
+    the next time state-based actions are performed.").
     """
     wanted = name.lower()
     on_battlefield = [
@@ -109,6 +142,8 @@ def exempt_from_legend_rule(game, name: str) -> bool:
     ]
     for perm in game.all_permanents():
         for line in (perm.effective_card.oracle_text or "").splitlines():
+            if legend_rule_switched_off_line(line):
+                return True
             exemption = legend_rule_exemption(line)
             if exemption is None:
                 continue

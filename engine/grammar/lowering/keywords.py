@@ -25,7 +25,7 @@ import dataclasses
 
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_TARGET_PERMANENTS, OracleInstruction)
-from ...subject_filters import untestable_filter_keys
+from ...subject_filters import observer_source_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..keywords import (PROTECTION_FROM_CHOSEN_COLOR,
@@ -33,7 +33,7 @@ from ..keywords import (PROTECTION_FROM_CHOSEN_COLOR,
                         PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR,
                         PROTECTION_FROM_THE_CHOSEN_COLOR)
 from ..vocabulary import IMPLEMENTED_KEYWORDS
-from ._events import _RECORDED_PERMANENTS, binds_block_pair
+from ._events import _EVENT_SUBJECT_OBJECTS, _RECORDED_PERMANENTS, binds_block_pair
 from ._record_keys import _SWEPT_SETS, CREATED_TOKEN
 from ._common import (_GRANT_DURATIONS, _check_grantable,
                       _describe_several_targets,
@@ -847,6 +847,45 @@ def _lower_granted_keywords(
                     "permanents_from": recorded[0],
                 },
             ),
+        )
+    # "Whenever a creature you control enters, **it** gets +2/+0 and gains
+    # haste until end of turn." (In the Web of War.) The pronoun names the
+    # object the firing event was about, found by the id its fire site froze
+    # (``_EVENT_SUBJECT_OBJECTS``; CR 603.10) — neither the source nor a
+    # target, so nothing is chosen (``on_event_subject``, the record
+    # ``instruction_targets`` reads as "no picker"). The keyword half of the
+    # pump's own branch (``pump_event_subject``) and the grant twin of
+    # ``remove_event_subject_keyword`` (Barbed Foliage's "it loses flanking"),
+    # gated the same way: under any other event the word names an object no
+    # fire site recorded.
+    #
+    # The rebound noun phrase restates the trigger's own narrowing ("a
+    # creature **you control**"), so it is carried and re-checked as the
+    # grant resolves, held to what that handler can answer — the ability's
+    # controller and its source.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "it"
+        and not node.subject.filter.is_source
+        and event in _EVENT_SUBJECT_OBJECTS
+        and duration is not None
+    ):
+        described = _filter_payload(node.subject.filter)
+        if observer_source_filter(described) is None:
+            raise LoweringError(
+                "the event subject's keyword grant carries a restriction the "
+                "resolution cannot test", node=node,
+            )
+        for keyword in node.keywords:
+            _check_grantable(keyword, node)
+        subject_payload: dict[str, object] = {
+            "keywords": tuple(node.keywords), "duration": duration,
+            "on_event_subject": True,
+        }
+        if described:
+            subject_payload["filter"] = described
+        return (
+            OracleInstruction("grant_target_keyword_until_eot", "", subject_payload),
         )
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:

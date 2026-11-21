@@ -705,6 +705,18 @@ def _derived_static_claims(
 
     if any(library_top_line(line) for line in oracle_text.splitlines()):
         claims.append("library_top")
+    # "The "legend rule" doesn't apply." (Mirror Gallery.) CR 704.5j switched
+    # off, read off the board by the rule's own group reader
+    # (``legend_rule.exempt_from_legend_rule``) at every state-based check —
+    # so there is no instruction, and on an artifact whose whole text is the
+    # sentence no instruction would mean the card reports unsupported however
+    # well the exemption works. Asked of the reader that enforces it; the
+    # creature side (Brothers Yamazaki's named exemption) is
+    # ``static_line_support``'s same question.
+    from .legend_rule import LEGEND_RULE_EXEMPTION_CLAIM, legend_rule_claims_line
+
+    if any(legend_rule_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(LEGEND_RULE_EXEMPTION_CLAIM)
     # "You may cast this card from your graveyard by paying {4}{R} rather than
     # paying its mana cost." — CR 702.34a's first static ability, which is what
     # a flashback keyword line is by the time this reads it

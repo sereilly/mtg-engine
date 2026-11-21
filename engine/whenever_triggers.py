@@ -330,6 +330,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever this (?:creature|artifact|enchantment|land|aura|permanent) becomes "
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
      r"|an ability)"
+     r"(?: (?P<targeting_controller>an opponent controls|you control))?"
+     r" (?P<first_time_each_turn>)for the first time each turn"),
+    ("self_becomes_target",
+     r"whenever this (?:creature|artifact|enchantment|land|aura|permanent) becomes "
+     r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
+     r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
     ("self_becomes_target",
      r"whenever (?P<targets_you_or_your_permanent>)you or a permanent you "
@@ -445,6 +451,9 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("opponent_casts_spell",
      r"whenever an opponent casts a spell that targets "
      r"(?P<targets_you_or_your_creature>)you or a creature you control"),
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a (?P<cast_subtype>(?!(?:white|blue|black|red|green) )[a-z][a-z-]+"
+     r"(?: or (?!(?:white|blue|black|red|green) )[a-z][a-z-]+)*) spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     ("your_spell_countered",        r"whenever a spell you've cast is countered"),
     ("you_cast_spell",

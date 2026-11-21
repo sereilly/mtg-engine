@@ -627,6 +627,15 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     # The narrowing is a record an earlier step of the same effect wrote, so
     # the picker's lowering has to know one did — which is this table's shape.
     ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
+    # "Counter target spell unless its controller pays {1} **for each card
+    # revealed this way**." (Brine Seer, Scent of Brine.) The price is a rate
+    # over a record an earlier step of this same effect wrote, and with no such
+    # step the words name nothing — an offer of {0} every board covers, which
+    # is a counterspell that never counters. And "counter **that spell or
+    # ability**" (Jetting Glasskite) names the object the firing event froze:
+    # under a targeting event the one that targeted, under a cast trigger the
+    # spell cast. Moved here from the records table when the second arrived.
+    ast.CounterSpell: _lower_counter_spell,
     # "…**that player** discards a card" (Anvil of Bogardan) names the seat the
     # fire site froze; "…discards all creature cards **of that type**" (Tsabo's
     # Decree) names a creature type an earlier step of this same effect chose.
@@ -724,13 +733,6 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # to what the firing event froze, so it is here for ``ast.Attach``'s
     # reason: with no such record the five words name nothing.
     ast.ChangeEventTargets: _lower_change_event_targets,
-    # "Counter target spell unless its controller pays {1} **for each card
-    # revealed this way**." (Brine Seer, Scent of Brine.) It left the name-only
-    # table above for ``ast.Attach``'s reason: the price is a rate over a record
-    # an earlier step of this same effect wrote, and with no such step the words
-    # name nothing — an offer of {0} every board covers, which is a counterspell
-    # that never counters.
-    ast.CounterSpell: _lower_counter_spell,
     # "Put **it** into your graveyard" is All Hallow's Eve's own card or Call of
     # the Wild's revealed one, and only a reveal earlier in the same effect
     # tells them apart. It left the name-only table above for ``ast.Attach``'s

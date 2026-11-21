@@ -700,9 +700,9 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # switched off for a name, read off the board by the rule's own group
     # reader (``legend_rule.legend_groups``) at every state-based check — no
     # instruction, and asked of the reader that enforces it.
-    from .legend_rule import legend_rule_exemption
+    from .legend_rule import legend_rule_claims_line
 
-    if legend_rule_exemption(normalized) is not None:
+    if legend_rule_claims_line(normalized):
         return True
     static_patterns = (
         "this creature enters with seven +1/+0 counters on it",

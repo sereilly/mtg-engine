@@ -694,6 +694,18 @@ dispatch scopes apart is this group, read by
 
 Above the self spelling, in the order this table's own note asks for.
 '''),
+    ('self_becomes_target', '(?P<first_time_each_turn>)', r'''
+"Whenever this creature becomes the target of a spell or ability **for the
+first time each turn**, counter that spell or ability." (Jetting and
+Shimmering Glasskite; Kira, Great Glass-Spinner grants it.) The self
+spelling narrowed by the targeted permanent's own history this turn —
+Godo's "attacks for the first time each turn" one event over: the
+announcement seam counts each permanent's targetings
+(``turn_state.record_targeted``) and `_self_becomes_target_filter` lets
+the marker through on the count of 1. Above the self row, whose words are
+a strict prefix of these and would leave the narrowing for the effect
+clause to choke on.
+'''),
     ('self_becomes_target', 'or a permanent', r'''
 "Whenever **you or a permanent you control** becomes the target of a spell
 or ability an opponent controls, you may draw a card." (Rayne, Academy
@@ -1095,6 +1107,16 @@ announcement froze. Above the bare row, which is its strict prefix and
 which claimed it: matched there the clause was left unread and the
 enchantment drew a card off every spell an opponent cast, which is the
 silent widening this table is ordered longest-first to prevent.
+'''),
+    ('opponent_casts_spell', 'opponent casts a (?P<cast_subtype>', r'''
+"Whenever an opponent casts a **Spirit or Arcane** spell, Ishi-Ishi deals
+2 damage to that player." (Ishi-Ishi, Akki Crackshot.) The player-scoped
+subtype row below, on the opponent-scoped kind: the same `cast_subtype`
+key split on " or " by the one reader
+(``cast_event_filters._cast_narrowing_admits``), which the opponent filter
+already asks. After the multicolored and colour rows, whose words the
+lookahead keeps out of every member here; above the bare row, which is its
+strict prefix and would strand the subtype words.
 '''),
     ('your_spell_countered', "a spell you've", r'''
 "Whenever a spell you've cast is countered" (Multani's Presence).

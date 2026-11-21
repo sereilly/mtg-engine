@@ -84,7 +84,7 @@ from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
 from ..landwalk import landwalk_per_type_spec
 from ..legend_rule import (LEGEND_RULE_EXEMPTION_CLAIM,
-                           legend_rule_exemption)
+                           legend_rule_claims_line)
 from ..life_prohibitions import life_gain_ban_line
 from ..mulligan_exchanges import MULLIGAN_EXCHANGE_CLAIM, mulligan_exchange_line
 from ..game_result_bans import game_result_ban_line
@@ -639,8 +639,10 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # enforces it, so a count or a wording it cannot read stays refused. (The
     # printed quotation marks send the line down the parser's quoted path,
     # which never asks this function; the creature static-line gate and the
-    # static-line guard ask it directly.)
-    if legend_rule_exemption(line) is not None:
+    # static-line guard ask it directly.) "The "legend rule" doesn't apply."
+    # (Mirror Gallery) is the same reader with no name and no count; on a
+    # noncreature its support comes from ``_derived_static_claims``.
+    if legend_rule_claims_line(line):
         return LEGEND_RULE_EXEMPTION_CLAIM
 
     return None

@@ -356,8 +356,13 @@ def _parse_one_shot_event(stream: TokenStream, word: str) -> ast.TriggerEvent | 
         if not stream.at_kind(SELF):
             # "When **this Equipment** enters, …" (Spellbinder): the subtype
             # as the card's own noun, as ``readers._SELF_NOUNS`` reads it.
+            # "When **this permanent** enters, …" (the ability Clash of
+            # Realities grants every Spirit, whatever its card type): CR
+            # 110.1's own noun, which the becomes-target and untap rows of
+            # ``trigger_tables`` already read as a self-reference.
             stream.accept_word(
                 "creature", "artifact", "enchantment", "land", "aura", "equipment",
+                "permanent",
             )
         if stream.accept_word("enters"):
             stream.accept_phrase("the", "battlefield")

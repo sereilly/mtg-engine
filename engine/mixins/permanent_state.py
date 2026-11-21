@@ -1408,8 +1408,17 @@ class PermanentStateMixin:
         already on its controller's battlefield by the time this runs
         (``Game._enter_battlefield`` appends before initializing), which is what
         lets the matcher answer a relative key at all.
+
+        **Never the entering permanent's own static** (CR 614.12: a
+        replacement modifying how a permanent enters comes from that permanent
+        only when it affects that permanent alone, "as opposed to a general
+        subset of permanents that includes it" — the rule's example is Orb of
+        Dreams, "Permanents enter tapped", entering untapped). It is on the
+        battlefield by now, so the scan below would otherwise meet it.
         """
         for source_seat, source in self.permanents_with_controller():
+            if source is permanent:
+                continue
             for instr in compile_card_oracle(source.effective_card).instructions:
                 if instr.kind != ENTER_TAPPED_STATIC_KIND:
                     continue

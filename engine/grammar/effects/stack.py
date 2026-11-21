@@ -161,7 +161,15 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # article in place of the demonstrative: the one spell this ability is
         # about, which is the one its trigger condition named. The same bound
         # quantifier, for the reason the two words beside it share one.
-        if stream.accept_phrase("that", "spell") or stream.accept_phrase(
+        # "…becomes the target of a spell or ability …, counter **that spell
+        # or ability**." (Jetting and Shimmering Glasskite; Kira's grant.) The
+        # object whose targeting set the trigger off, which may be either kind
+        # (CR 701.6a counters both) — the bound quantifier with
+        # ``also_ability``, the same union "target spell or ability" carries
+        # (Diplomatic Escort). Longest first: "that spell" is its prefix.
+        if stream.accept_phrase("that", "spell", "or", "ability"):
+            subject = ast.TargetSpec("that", ast.ObjectFilter(also_ability=True))
+        elif stream.accept_phrase("that", "spell") or stream.accept_phrase(
             "the", "spell"
         ):
             subject = ast.TargetSpec("that", ast.ObjectFilter())
