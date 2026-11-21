@@ -262,8 +262,12 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         if idx in chosen:
             continue
         attacker = player.battlefield[idx]
+        # The fight each block would be, read as the defender reads it
+        # (`_attack_block_score`: `ai_compelled_blocks.fight_outcome`, the
+        # block's own triggers included) — bushido's +2/+2 on the block, a
+        # first strike, a regeneration shield.
         best_defender_score = max(
-            _score_block_pair(blocker, attacker) for blocker in opponent_blockers
+            _attack_block_score(game, blocker, attacker) for blocker in opponent_blockers
         )
         # Attack when the best possible block is not clearly profitable for the opponent.
         if best_defender_score <= _permanent_value(attacker):
@@ -1165,9 +1169,37 @@ def _estimated_unblocked_damage(
     return total
 
 
-def _score_block_pair(blocker: Permanent, attacker: Permanent) -> float:
-    blocker_kills = blocker.effective_power >= attacker.effective_toughness
-    attacker_kills = attacker.effective_power >= blocker.effective_toughness
+def _attack_block_score(game: Game, blocker: Permanent, attacker: Permanent) -> float:
+    """`_score_block_pair` for the attack: what *blocker* blocking *attacker*
+    is worth to the defender, with who destroys whom read off the fight the
+    blocks themselves read (``ai_compelled_blocks.fight_outcome``) rather than
+    off the printed bodies.
+
+    The bodies were all the attack asked, so a creature whose block trigger
+    wins its fight stayed home: Samurai Enforcers' bushido 2 makes it a 6/6
+    the moment a Shivan Dragon blocks it (CR 702.45a), and the seat declined
+    the attack the blocks would have lost (CHK W1G2); Chub Toad's "Whenever
+    this creature blocks or becomes blocked, it gets +2/+2" the same. The
+    defender's side has read the fight this way since LGN
+    (`_block_loses_its_blocker`), so the two now agree about one fight."""
+    blocker_dies, attacker_dies = fight_outcome(game, attacker, blocker)
+    return _score_block_pair(
+        blocker, attacker, blocker_kills=attacker_dies, attacker_kills=blocker_dies,
+    )
+
+
+def _score_block_pair(
+    blocker: Permanent, attacker: Permanent, *,
+    blocker_kills: "bool | None" = None, attacker_kills: "bool | None" = None,
+) -> float:
+    """What *blocker* blocking *attacker* is worth to the defender. Who
+    destroys whom is the printed bodies' power against toughness unless the
+    caller read the fight itself (*blocker_kills*, *attacker_kills*:
+    `_attack_block_score`)."""
+    if blocker_kills is None:
+        blocker_kills = blocker.effective_power >= attacker.effective_toughness
+    if attacker_kills is None:
+        attacker_kills = attacker.effective_power >= blocker.effective_toughness
 
     attacker_value = _permanent_value(attacker)
     blocker_value = _permanent_value(blocker)
