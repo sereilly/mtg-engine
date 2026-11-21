@@ -323,6 +323,11 @@ class CreateCopyToken:
     #: not a permanent, so ``subject`` carries only "a card" and this flag is
     #: what the lowering reads first.
     of_exiled_card: bool = False
+    #: "…a copy of target nonlegendary creature you control, **except it has
+    #: haste**." (Kiki-Jiki, Mirror Breaker.) CR 707.9a/b's exception: the
+    #: keywords the copy has in addition to the copiable values, and which
+    #: become part of them (so a copy of the token has them too).
+    except_keywords: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

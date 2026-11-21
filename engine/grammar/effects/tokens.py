@@ -32,6 +32,7 @@ from ..back_references import parse_bound_subject
 from ..nouns import parse_object_filter
 from ..records import _parse_for_each_history
 from ..references import parse_target_spec
+from ..keywords import parse_keyword_list
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, KEYWORD_INDEX, SUBTYPE_INDEX,
                           TYPE_LINE_SUPERTYPES, match_longest)
@@ -445,7 +446,23 @@ def _parse_create_token(
             subject = parse_bound_subject(stream)
         if subject is None:
             raise stream.error("expected what the token copies")
-        return ast.CreateCopyToken(count, subject)
+        # "…, **except it has haste**." (Kiki-Jiki, Mirror Breaker.) CR
+        # 707.9a's exception, read through the keyword reader every grant
+        # uses; "or" (one of several) is no exception anybody prints, and a
+        # list read and dropped would be a copy without what the card gave it.
+        except_mark = stream.mark()
+        excepted: tuple[str, ...] = ()
+        if (
+            stream.accept_punct(",")
+            and stream.accept_word("except")
+            and stream.accept_phrase("it", "has")
+        ):
+            excepted, either = parse_keyword_list(stream)
+            if either or not excepted:
+                raise stream.error("expected the keywords the copy has")
+        else:
+            stream.reset(except_mark)
+        return ast.CreateCopyToken(count, subject, except_keywords=excepted)
     stream.reset(mark_copy)
 
     named = stream.peek_word()

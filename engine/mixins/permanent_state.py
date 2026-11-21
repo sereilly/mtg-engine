@@ -1280,7 +1280,10 @@ class PermanentStateMixin:
         )
         self._recalculate_lord_buffs()
 
-    def create_token_copy(self, controller_index: int, source: Permanent) -> Permanent:
+    def create_token_copy(
+        self, controller_index: int, source: Permanent, *,
+        grants_text: tuple[str, ...] = (),
+    ) -> Permanent:
         """A token that is a copy of *source*, under *controller_index*.
 
         Two rules, kept apart. CR 111.1 says what a token is — an object on the
@@ -1319,7 +1322,11 @@ class PermanentStateMixin:
         # was announced to every "whenever a creature enters" watcher as a
         # typeless "Token" — a Soul Warden saw no creature, and the entry seam
         # froze a power of 0 — and only then turned into what it copies.
-        copies.become_copy(token, source)
+        # *grants_text*: the effect's own CR 707.9a exception ("except it has
+        # haste", Kiki-Jiki) — lines the copy has in addition to the copiable
+        # values, and part of them (CR 707.9b), so a copy of this token has
+        # them too.
+        copies.become_copy(token, source, grants_text=grants_text)
         self._put_permanent_onto_battlefield(controller_index, token, None)
         self._recalculate_lord_buffs()
         return token

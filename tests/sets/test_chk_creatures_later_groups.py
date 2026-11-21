@@ -509,6 +509,58 @@ def test_w1g8_sosuke_ignores_a_non_warrior_and_an_opponents_warrior(set_pool):
     assert game.is_on_battlefield(hill)
 
 
+# --- Kiki-Jiki, Mirror Breaker ------------------------------------------------
+# "{T}: Create a token that's a copy of target nonlegendary creature you
+# control, except it has haste. Sacrifice it at the beginning of the next end
+# step." CR 707.9a's exception, part of the copiable values (CR 707.9b, the
+# 2021-03-19 ruling: a copy of the token has haste too).
+
+
+def test_w1g8_kiki_jiki_makes_a_hasty_copy_that_is_sacrificed_at_end_step(set_pool):
+    from engine.copies import copiable_card
+
+    kiki = set_pool("CHK")["Kiki-Jiki, Mirror Breaker"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, (_, bear), _ = _w1g8_table([kiki, bears], [])
+    used = game.activate_permanent_ability(
+        0, "Kiki-Jiki, Mirror Breaker", target_permanent_ids=[bear.permanent_id]
+    )
+    assert used.supported, used.details
+    _w1g8_settle(game)
+    tokens = [
+        p for p in game.controlled_by(game.players[0]) if p.metadata.get("is_token")
+    ]
+    assert len(tokens) == 1
+    token = tokens[0]
+    assert token.effective_card.name == "Grizzly Bears"
+    assert (token.effective_power, token.effective_toughness) == (2, 2)
+    assert token.has_keyword("haste")
+    assert game.can_attack(token, 1) and not game._is_summoning_sick(token)
+    # The haste is a copiable value of the token (CR 707.9b).
+    assert "Haste" in copiable_card(token).oracle_text.splitlines()
+    # The original is untouched.
+    assert not bear.has_keyword("haste")
+
+    game._set_phase_and_step("ending", "end")
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+    assert not game.is_on_battlefield(token)
+    assert game.is_on_battlefield(bear)
+
+
+def test_w1g8_kiki_jiki_cannot_copy_a_legendary_or_an_opponents_creature(set_pool):
+    kiki = set_pool("CHK")["Kiki-Jiki, Mirror Breaker"]
+    sosuke = set_pool("CHK")["Sosuke, Son of Seshiro"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    game, (_, legend), (theirs,) = _w1g8_table([kiki, sosuke], [bears])
+    for chosen in (legend, theirs):
+        refused = game.activate_permanent_ability(
+            0, "Kiki-Jiki, Mirror Breaker", target_permanent_ids=[chosen.permanent_id]
+        )
+        assert not refused.supported
+    assert not any(p.metadata.get("is_token") for p in game.all_permanents())
+
+
 def test_w1g8_the_dealt_damage_exile_reads_only_a_line_about_itself():
     """The subject is the card itself — "this creature" or its own name (CR
     201.5, the legend's short name included) — never another card's."""

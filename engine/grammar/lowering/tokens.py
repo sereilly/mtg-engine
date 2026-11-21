@@ -169,7 +169,36 @@ def _lower_create_copy_token(
     role-key spelling ``recipient`` and ``biter`` already use for the same
     referent. A record of this effect is asked first because it is the closer
     binder; under neither, the words still refuse.
+
+    "…, **except it has haste**." (Kiki-Jiki, Mirror Breaker.) The exception
+    rides every reading as ``except_keywords``, which the handler hands the
+    copy effect (CR 707.9a): the keywords are lowered as their printed lines,
+    so only a keyword the engine implements whole, with no argument, is
+    admitted — anything else would be a copy missing what the card said.
     """
+    if node.except_keywords:
+        from ..vocabulary import IMPLEMENTED_KEYWORDS
+
+        if node.of_exiled_card:
+            raise LoweringError(
+                "a copy of the exiled card carries no exception here", node=node
+            )
+        unread = [k for k in node.except_keywords if k not in IMPLEMENTED_KEYWORDS]
+        if unread:
+            raise LoweringError(
+                f"the copy's exception names keywords no reader implements: "
+                f"{unread}", node=node,
+            )
+        bare = _lower_create_copy_token(
+            dataclasses.replace(node, except_keywords=()), event, produced
+        )
+        if len(bare) != 1 or bare[0].kind != "create_copy_token":
+            raise LoweringError(
+                "the copy's exception has no copy instruction to ride", node=node
+            )
+        excepted = dict(bare[0].payload)
+        excepted["except_keywords"] = tuple(node.except_keywords)
+        return (dataclasses.replace(bare[0], payload=excepted),)
     if node.of_exiled_card:
         # "Create a token that's a copy of the exiled card." (Soul Foundry.)
         # The handler reads the source's linked exile
