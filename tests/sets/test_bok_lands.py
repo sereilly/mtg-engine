@@ -41,6 +41,37 @@ log), not instruction kinds alone.
 # ==== w1g4 ==========================================================
 # w1g4's tests go between this line and the "end w1g4" line.
 
+from engine import Game as _w1g4_Game
+from engine import PlayerState as _w1g4_PlayerState
+from engine.models import Permanent as _w1g4_Permanent
+from tests.helpers import settle as _w1g4_settle
+
+
+def test_w1g4_gods_eye_leaves_a_spirit_behind(set_pool):
+    """"When Gods' Eye is put into a graveyard from the battlefield, create a
+    1/1 colorless Spirit creature token": Stone Rain on it leaves the token."""
+    lea = set_pool("LEA")
+    game = _w1g4_Game(players=[
+        _w1g4_PlayerState("A", hand=[lea["Stone Rain"]], library=[lea["Forest"]] * 12),
+        _w1g4_PlayerState("B", library=[lea["Forest"]] * 12),
+    ])
+    game.enforce_mana_costs = False
+    eye = _w1g4_Permanent(card=set_pool("BOK")["Gods' Eye, Gate to the Reikai"])
+    game._put_permanent_onto_battlefield(0, eye, None)
+    game.start_turn(0)
+    game._settle()
+    result = game.cast_from_hand(
+        0, "Stone Rain", target_player_index=0, target_permanent_ids=[eye.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g4_settle(game)
+    (token,) = game.controlled_by(0)
+    assert token.has_type("spirit") and token.is_creature, game.log
+    assert (token.effective_power, token.effective_toughness) == (1, 1)
+    from engine.handlers._filters import permanent_effective_colors
+
+    assert permanent_effective_colors(token) == set()
+
 # ==== end w1g4 ======================================================
 
 

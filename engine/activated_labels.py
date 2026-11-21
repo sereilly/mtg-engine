@@ -509,6 +509,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     "change_supertype": "activated_characteristic",
     "change_land_type_until": "activated_characteristic",
     "animate_target_until_eot": "activated_characteristic",
+    # The Genju cycle's "Enchanted Forest becomes a 4/4 … creature": the
+    # targeted row's record on the Aura's host, in its bucket — the report's
+    # word for an ability that changes what another permanent is.
+    "animate_enchanted_until_eot": "activated_characteristic",
     "grant_self_ability_text": "activated_pump",
     # Its negative twin (Glittering Lion's "…loses "Prevent all damage …""),
     # in the bucket `remove_self_keyword` already shares with the grant.

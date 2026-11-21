@@ -65,6 +65,11 @@ PUMP_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the same permanent with no end to it (CR 611.2a), so the same category:
     # what differs is the duration, not what the sentence does.
     "animate_target_indefinitely": "pump",
+    # "{2}: Enchanted Forest becomes a 4/4 green Spirit creature until end of
+    # turn. It's still a land." (The Genju cycle.) The same record on the
+    # permanent the Aura is attached to, so the same category: what differs is
+    # which permanent holds it, not what the sentence does.
+    "animate_enchanted_until_eot": "pump",
     # "Forests you control become 2/3 creatures until end of turn." (Thelonite
     # Druid.) The same record again, over every permanent a noun phrase
     # describes rather than over one the sentence named — so the same category

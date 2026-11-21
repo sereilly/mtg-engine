@@ -541,6 +541,12 @@ class BecomeCreature:
     #: a flag rather than a keyword string for that reason: the words are not
     #: on the card.
     protection_from_triggering_spell: bool = False
+    #: "…becomes a **legendary** 8/12 Spirit creature with trample …" (Genju
+    #: of the Realm.) CR 205.4a's supertypes the body adds, printed between the
+    #: article and the size; layer 4 of the same sentence, on the same record
+    #: as the card types beside it. Defaulted empty so every node built before
+    #: the field existed means what it did.
+    supertypes: tuple[str, ...] = ()
 
 
 #: The colour an effect does not name because CR 608.2d makes the choice part of

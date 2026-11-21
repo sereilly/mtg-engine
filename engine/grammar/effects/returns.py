@@ -299,6 +299,21 @@ def _parse_return(
         and stream.accept_phrase("from", "your", "graveyard")
     ):
         pronoun_from = ast.Zone("graveyard", ast.PlayerRef("you"))
+    # "…you may return **Genju of the Realm from your graveyard** to your
+    # hand." The card naming itself (CR 201.5): the lexer collapsed the name to
+    # one SELF token, which ``parse_recipient`` reads as the source with no
+    # room for the zone the noun parser hangs on "this card from your
+    # graveyard". The same filter that phrase builds, so the two spellings are
+    # one reading from here on.
+    elif (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "this"
+        and subject.filter == ast.ObjectFilter(is_source=True)
+        and stream.accept_phrase("from", "your", "graveyard")
+    ):
+        subject = ast.TargetSpec("this", ast.ObjectFilter(
+            is_source=True, zone="graveyard", zone_owner=ast.PlayerRef("you"),
+        ))
     # ``several_targets``: "Return target creature **and target land** to
     # their owners' hands" (Churning Eddy) is one announcement of two targets
     # (CR 601.2c), and the lowering describes both as ordered roles

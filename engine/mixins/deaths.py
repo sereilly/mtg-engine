@@ -68,6 +68,34 @@ _INLINE_DIES_KINDS = frozenset({
 })
 
 
+def _was_attached_to(observer: Permanent, dead_permanent: Permanent) -> bool:
+    """Whether *observer* is — or, having left with it, was — attached to
+    *dead_permanent* as it died: the two attached death scans' one question
+    ("when enchanted creature dies", "when enchanted Forest is put into a
+    graveyard").
+
+    **By identity**, never ``in``: a Permanent compares by value (its id is
+    excluded), and an Aura's ``attached_to`` and its host's
+    ``attached_auras`` name each other, so another copy of the Aura on a host
+    whose metadata matches the dead one's compares round that loop until the
+    interpreter gives up (Mogg Assassin destroying one of the target-id arity
+    census's mirrored Bait pairs raised RecursionError).
+
+    **…or was, as it left with it** (CR 603.10a, 603.6e): an Aura put into a
+    graveyard by the same event is torn down as it goes
+    (``_permanent_to_graveyard``, ``detach_aura``), so a Nevinyrral's Disk
+    reaching the Aura before its creature left the creature dying bare.
+    ``left_attached_to`` is asked of an Aura only — one with no live host is
+    on its way off the battlefield — never of an Equipment, which stays on it
+    unattached (CR 704.5n).
+    """
+    return (
+        any(aura is observer for aura in auras_attached_to(dead_permanent))
+        or observer.metadata.get("attached_to") is dead_permanent
+        or (observer.has_type("aura") and left_attached_to(observer, dead_permanent))
+    )
+
+
 class DeathsMixin:
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> bool:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead.
@@ -908,6 +936,35 @@ class DeathsMixin:
                         },
                     },
                 ))
+            # "When **enchanted Forest** is put into a graveyard, you may return
+            # this card from your graveyard to your hand." (The Genju cycle.)
+            # The scan ``_fire_creature_dies_triggers`` makes for "when
+            # enchanted creature dies", here for a host of any type: the
+            # observer is what the dead permanent was carrying, by identity
+            # and looking back (CR 603.10a) — the Aura is usually still on the
+            # battlefield, about to be put into its owner's graveyard by
+            # CR 704.5m, and one that left in the same event still counts.
+            # The printed noun is asked of the departed host as it last
+            # existed, which the enchant restriction kept it.
+            if _was_attached_to(observer, dead_permanent):
+                for trig in matching_triggers(
+                    observer.effective_card,
+                    condition_kinds={"attached_permanent_dies"},
+                ):
+                    if trig.instruction is None:
+                        continue
+                    noun = trig.condition.payload.get("dying_attached")
+                    if noun and noun != "permanent" and not dead_permanent.has_type(
+                        str(noun)
+                    ):
+                        continue
+                    events.append(make_trigger_event(
+                        controller_index, observer, trig,
+                        trigger_context={
+                            "dead_name": dead_permanent.card.name,
+                            "event_subject_controller": dead_seat,
+                        },
+                    ))
         self._enqueue_triggered_batch(events)
 
     def _fire_creature_dies_triggers(
@@ -1032,31 +1089,9 @@ class DeathsMixin:
             # The direction matters: the observer is attached *to* the dead
             # creature, not the other way round. Both spellings of "attached"
             # are asked because both exist — the list an Aura joins, and the
-            # single slot an Equipment sets.
-            #
-            # **By identity**, never ``in``: a Permanent compares by value (its
-            # id is excluded), and an Aura's ``attached_to`` and its host's
-            # ``attached_auras`` name each other, so another copy of the Aura
-            # on a host whose metadata matches the dead one's compares round
-            # that loop until the interpreter gives up. In play the dead host's
-            # ``last_controller_index`` ends the comparison a level down, by
-            # accident; the target-id arity census's board has no such key, and
-            # Mogg Assassin destroying one of its mirrored Bait pairs raised
-            # RecursionError.
-            #
-            # **…or was, as it left with it** (CR 603.10a, 603.6e): an Aura
-            # put into a graveyard by the same event is torn down as it goes
-            # (``_permanent_to_graveyard``, ``detach_aura``), so a Nevinyrral's
-            # Disk reaching the Aura before its creature left the creature
-            # dying bare. ``left_attached_to`` is asked of an Aura only — one
-            # with no live host is on its way off the battlefield — never of
-            # an Equipment, which stays on it unattached (CR 704.5n).
-            if any(aura is observer for aura in auras_attached_to(dead_permanent)) or (
-                observer.metadata.get("attached_to") is dead_permanent
-            ) or (
-                observer.has_type("aura")
-                and left_attached_to(observer, dead_permanent)
-            ):
+            # single slot an Equipment sets. By identity, and looking back at
+            # an Aura that left with it (``_was_attached_to``).
+            if _was_attached_to(observer, dead_permanent):
                 for trig in matching_triggers(
                     observer.effective_card,
                     condition_kinds={"attached_creature_dies"},

@@ -92,8 +92,9 @@ class _W2G4Board:
     def card(self, name):
         if name in self._catalog:
             return self._catalog[name]
-        # Planeshift, and Scourge while it is measured (Ambush Commander).
-        for code in ("PLS", "SCG"):
+        # Planeshift, and Scourge while it is measured (Ambush Commander);
+        # Betrayers of Kamigawa while it is (the Genju cycle).
+        for code in ("PLS", "SCG", "BOK"):
             pool = self._set_pool(code)
             if name in pool:
                 return pool[name]
@@ -1115,6 +1116,17 @@ def _j6_affinity(b):
     return forest, "animate_until_end_of_turn"
 
 
+def _j6_genju(b):
+    forest = b.enter("Forest")
+    b.cast("Genju of the Cedars", at=forest)
+    (genju,) = [
+        perm for perm in b.game.controlled_by(0)
+        if perm.card.name == "Genju of the Cedars"
+    ]
+    b.activate(genju, _j6_animating_ability(genju))
+    return forest, "animate_until_end_of_turn"
+
+
 #: Every instruction kind that writes an animation record, with the card that
 #: makes one here. (``animate_all_lands`` is a static — Kormus Bell — and is
 #: placed by the board-wide pass, not recorded.)
@@ -1125,6 +1137,9 @@ _J6_ANIMATIONS = {
     "animate_target_until_eot": _j6_animate_land,
     "animate_target_indefinitely": _j6_druid,
     "animate_matching_until_eot": _j6_affinity,
+    # "{2}: Enchanted Forest becomes a 4/4 green Spirit creature until end of
+    # turn." (Genju of the Cedars.) The record on the Aura's host.
+    "animate_enchanted_until_eot": _j6_genju,
 }
 
 

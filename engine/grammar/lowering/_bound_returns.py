@@ -144,6 +144,9 @@ _DEPARTING_HOST_EVENT = "attached_creature_leaves_battlefield"
 #: functions on the battlefield, where it was as its host left.
 _AURA_HOST_DEPARTURES = frozenset({
     "attached_creature_dies", _DEPARTING_HOST_EVENT,
+    # "When enchanted Forest is put into a graveyard, …" (the Genju cycle):
+    # the same departure of a host of any type.
+    "attached_permanent_dies",
 })
 
 #: The question an Aura returning without being cast asks (CR 303.4f: its
@@ -176,6 +179,45 @@ def _lower_aura_returns_after_its_host(
     ``from_controller_graveyard`` says to the handler. A rider refuses.
     """
     owner = node.from_zone.owner
+    if (
+        event in _AURA_HOST_DEPARTURES
+        and owner is not None and owner.kind == "you"
+        and (node.actor is None or node.actor.kind == "you")
+        and node.to.name == "hand"
+        and node.to.owner is not None and node.to.owner.kind == "you"
+    ):
+        # "When enchanted Forest is put into a graveyard, you may **return
+        # this card from your graveyard to your hand**." (The Genju cycle.)
+        # The same exception with the other destination: the ability functions
+        # on the battlefield, so no ``functions_from`` is stamped (stamped, the
+        # graveyard scan alone would collect it and the host's death would
+        # never be heard), and ``return_self_from_graveyard`` looks for the card
+        # by identity in the graveyard of the seat the trigger was put on the
+        # stack under — "your graveyard" is the controller's, so a borrowed
+        # Genju's ability finds nothing, its card being in its owner's
+        # (CR 404.1; Screams from Within's 2004-12-01 ruling, the same shape).
+        if node.entering_tapped or node.entering_counters or node.under_control_of or [
+            name for name in (
+                "attached_to", "exile_on_leave", "repetitions", "losing_subtypes",
+                "losing_abilities", "gaining_abilities", "also_stack",
+                "bound_card_from",
+            )
+            if getattr(node, name, None)
+        ]:
+            raise LoweringError(
+                "an Aura's return behind its host carries no rider", node=node
+            )
+        leftovers = _restrictions_beyond(
+            node.subject.filter, frozenset({"is_source", "zone", "zone_owner"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the self-return handler does not honour {leftovers[0]!r}",
+                node=node,
+            )
+        return (
+            OracleInstruction("return_self_from_graveyard", "", {"to": "hand"}),
+        )
     if not (
         event in _AURA_HOST_DEPARTURES
         and owner is not None and owner.kind == "you"
