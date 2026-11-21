@@ -599,6 +599,32 @@ class AbilityTargetsMixin:
             })
         return options
 
+    def _mana_value_x_refusal(
+        self, card, ability, target_permanent_ids, x_value,
+    ) -> str | None:
+        """Why a named target's mana value is not the X named beside it, for
+        an ability printing "target … with mana value X", or None."""
+        from .targeting import targets_mana_value_x
+
+        instruction = getattr(ability, "instruction", None)
+        if x_value is None or instruction is None:
+            return None
+        if not targets_mana_value_x([instruction]):
+            return None
+        for permanent_id in target_permanent_ids or ():
+            if not isinstance(permanent_id, int):
+                continue
+            chosen = self.permanent_by_id(permanent_id)
+            if chosen is None:
+                continue
+            mana_value = int(getattr(chosen.card, "cmc", 0) or 0)
+            if mana_value != int(x_value):
+                return (
+                    f"{card.name} targets an object with mana value X, and "
+                    f"X={x_value} does not match {mana_value}"
+                )
+        return None
+
     def activation_target_refusal(
         self, controller_index: int, source_permanent, ability, *,
         target_player_index=None, target_permanent_index=None,
@@ -658,6 +684,18 @@ class AbilityTargetsMixin:
         )
         if stray is not None:
             return stray
+        # "{X}, Sacrifice this creature: Destroy target artifact **with mana
+        # value X**." (Hearth Kami; Gorilla Shaman, Plaguebearer.) The cast
+        # gate's check (``_validate_cast_targets``) for an ability: the bound
+        # has no literal the picker could narrow by, because the target and
+        # the X are announced together (CR 602.2b through 601.2b-c), so it is
+        # asked here of the pair. Only an X the activator named, as on the
+        # cast side. Without it any artifact was destroyed for any X.
+        mana_value_x = self._mana_value_x_refusal(
+            card, ability, target_permanent_ids, x_value,
+        )
+        if mana_value_x is not None:
+            return mana_value_x
         if kind in _UNOBLIGED_ACTIVATION_KINDS:
             return None
         # A cost payment (Sacrifice) and a chosen *source* (Circle of
