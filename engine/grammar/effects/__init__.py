@@ -299,6 +299,7 @@ from .tokens import (
 from .game import (
     _parse_ante,
     _parse_exchange_life_totals,
+    parse_redistribute_life_totals,
     _parse_life_total_becomes,
     _parse_wins,
     _parse_count_objects,
@@ -532,6 +533,7 @@ __all__ = [
     "_parse_cant_be",
     "_parse_ante",
     "_parse_exchange_life_totals",
+    "parse_redistribute_life_totals",
     "_parse_life_total_becomes",
     "_parse_wins",
     "_parse_count_objects",

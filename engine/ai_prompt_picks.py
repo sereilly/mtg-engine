@@ -974,6 +974,12 @@ def player_choice_pick(game, choice, live: list[int]) -> int | None:
 
     if not live:
         return None
+    # **The effect's own stated default** (``arm_player_choice``'s
+    # ``stated_default``): Reverse the Sands works out its controller's best
+    # assignment of every life total and says which seat each total goes to.
+    stated = choice.data.get("stated_default")
+    if isinstance(stated, int) and stated in live:
+        return stated
     chooser = choice.player_index
     context = choice.data.get("_context")
     card = getattr(context, "card", None)

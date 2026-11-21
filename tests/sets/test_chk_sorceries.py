@@ -146,6 +146,67 @@ def test_w1g8_yamabushis_storm_spares_what_it_dealt_no_damage_to(set_pool):
     assert _w1g8_zone_names(game, 1, "graveyard") == ["Repentant Blacksmith"]
     assert _w1g8_zone_names(game, 1, "exile") == ["Hill Giant"]
 
+
+
+# --- Reverse the Sands --------------------------------------------------------
+# "Redistribute any number of players' life totals." CR 119.7's
+# redistribution; the rulings (2004-12-01): a life total is never split, and
+# the caster chooses which player gets which as the spell resolves.
+
+
+def test_w1g8_reverse_the_sands_hands_its_caster_the_higher_total(set_pool):
+    sands = set_pool("CHK")["Reverse the Sands"]
+    game, _, _ = _w1g8_table([], [], hand=[sands])
+    game.players[0].life, game.players[1].life = 5, 15
+    cast = game.cast_from_hand(0, "Reverse the Sands")
+    assert cast.supported, cast.details
+    _w1g8_settle(game)
+    assert [p.life for p in game.players] == [15, 5]
+
+
+def test_w1g8_reverse_the_sands_asks_its_caster_who_gets_each_total(set_pool):
+    """An asked caster may leave the totals where they are — "any number of
+    players" includes none — answering the ``player_choice`` prompt."""
+    sands = set_pool("CHK")["Reverse the Sands"]
+    game, _, _ = _w1g8_table([], [], hand=[sands])
+    game.interactive_seats = {0}
+    game.players[0].life, game.players[1].life = 5, 15
+    assert game.queue_from_hand(0, "Reverse the Sands").supported
+    owed = _w1g8_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "player_choice"
+    assert "5 life" in owed.data["prompt"]
+    assert sorted(owed.data["seats"]) == [0, 1]
+    assert game.confirm_player_choice(0, 0)
+    _w1g8_settle(game)
+    assert [p.life for p in game.players] == [5, 15]
+
+
+def test_w1g8_reverse_the_sands_at_a_table_of_three(set_pool):
+    """Each total goes to one player; the caster's default takes the highest
+    and hands the lowest to the opponent most ahead."""
+    sands = set_pool("CHK")["Reverse the Sands"]
+    game, _, _ = _w1g8_table([], [], hand=[sands])
+    game.players.append(_w1g8_PlayerState(name="P3", life=20))
+    _w1g8_stock_libraries(game)
+    game.players[0].life, game.players[1].life, game.players[2].life = 3, 12, 30
+    assert game.cast_from_hand(0, "Reverse the Sands").supported
+    _w1g8_settle(game)
+    lives = [p.life for p in game.players]
+    assert sorted(lives) == [3, 12, 30]
+    assert lives[0] == 30 and lives[2] == 3
+
+
+def test_w1g8_reverse_the_sands_hands_no_higher_total_to_a_player_who_cant_gain(set_pool):
+    """CR 119.7: under "Players can't gain life" no player may receive a
+    higher total, so the only redistribution left is none."""
+    sands = set_pool("CHK")["Reverse the Sands"]
+    wastes = set_pool("MIR")["Forsaken Wastes"]
+    game, _, _ = _w1g8_table([wastes], [], hand=[sands])
+    game.players[0].life, game.players[1].life = 5, 15
+    assert game.cast_from_hand(0, "Reverse the Sands").supported
+    _w1g8_settle(game)
+    assert [p.life for p in game.players] == [5, 15]
+
 # ==== end w1g8 ======================================================
 
 

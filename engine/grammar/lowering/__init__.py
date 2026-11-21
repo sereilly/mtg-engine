@@ -461,6 +461,7 @@ from .game import (
 )
 from .life import (
     _lower_exchange_life_totals,
+    _lower_redistribute_life_totals,
     _lower_gain_life,
     _lower_lose_life,
     _lower_pay_life,
@@ -796,6 +797,7 @@ __all__ = [
     "_lower_repeat_process_until",
     "_lower_repeat_process_while",
     "_lower_exchange_life_totals",
+    "_lower_redistribute_life_totals",
     "_lower_set_life_total",
     "_lower_double_life_total",
     "_lower_pay_any_amount_of_life",

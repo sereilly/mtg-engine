@@ -746,6 +746,7 @@ class PermanentChoicesMixin:
         seats,
         context,
         announcing=None,
+        stated_default: int | None = None,
     ) -> PendingChoice | None:
         """Queue "choose one of these players" for *player_index*.
 
@@ -764,6 +765,11 @@ class PermanentChoicesMixin:
         object with (``announcement_choice_for``).
         """
         extra = {} if announcing is None else {"_trigger_item": announcing}
+        # *stated_default*: the seat the effect itself says a chooser nobody
+        # asks names (Reverse the Sands' best assignment for its controller),
+        # read first by ``ai_prompt_picks.player_choice_pick``.
+        if stated_default is not None:
+            extra["stated_default"] = int(stated_default)
         return self.arm_pending_choice(
             "player_choice", player_index,
             card_name=card_name,

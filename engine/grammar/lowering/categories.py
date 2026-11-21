@@ -303,6 +303,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the handler, not about which switch gates the card.
     "set_life_total": "life",
     "exchange_life_totals": "life",
+    "redistribute_life_totals": "life",
     # The ante zone (CR 407). Its own category rather than "zones": every
     # other member of that family moves an object between zones the ordinary
     # game has, and this one is inert outside the ante variant.

@@ -97,6 +97,14 @@ class DoubleLifeTotal:
 
 
 @dataclass(frozen=True)
+class RedistributeLifeTotals:
+    """"Redistribute any number of players' life totals." (Reverse the
+    Sands.) CR 119.7's redistribution: the controller hands every life total
+    to one player each as the effect resolves (its rulings, 2004-12-01) — a
+    permutation, never a split. No field: the sentence names every player."""
+
+
+@dataclass(frozen=True)
 class ExchangeLifeTotals:
     """"Exchange life totals with target opponent." (Mirror Universe.)
 

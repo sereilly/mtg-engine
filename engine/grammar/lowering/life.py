@@ -951,6 +951,16 @@ def _lower_lose_life(
         return (OracleInstruction("target_loses_life", "", payload),)
     raise LoweringError(f"unsupported life-loss target {node.player.kind!r}", node=node)
 
+def _lower_redistribute_life_totals(
+    node: ast.RedistributeLifeTotals,
+) -> tuple[OracleInstruction, ...]:
+    """"Redistribute any number of players' life totals." (Reverse the
+    Sands.) Nothing to carry: the handler takes every total as it resolves
+    and asks its controller who gets which
+    (``handlers/life_redistribution``)."""
+    return (OracleInstruction("redistribute_life_totals", "", {}),)
+
+
 def _lower_exchange_life_totals(
     node: ast.ExchangeLifeTotals,
 ) -> tuple[OracleInstruction, ...]:
