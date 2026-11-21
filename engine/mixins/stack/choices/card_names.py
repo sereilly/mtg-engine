@@ -10,7 +10,7 @@ only by what the printed sentence allows —
 from __future__ import annotations
 
 import random
-from ....faces import castable_faces, has_name, is_multi_face
+from ....faces import has_name, is_multi_face, nameable_faces
 from ....grammar.phrases import BASIC_LAND_WORDS
 from ....models import Permanent
 from ....pending_choices import ChoiceSpec, PendingChoice
@@ -219,7 +219,6 @@ class CardNameChoicesMixin:
             bare = lowered.removeprefix("snow-covered ").strip()
             if bare in BASIC_LAND_WORDS or lowered == "wastes":
                 return True
-        from ....faces import castable_faces, is_multi_face
         from ....search_filters import card_has_type
 
         held_cards = [
@@ -248,11 +247,15 @@ class CardNameChoicesMixin:
             return False
         # CR 201.4b again: "use only that half's characteristics" — so each
         # card this game holds is asked as the spells it can be cast as, and
-        # the half called *named* is the one whose type line is read.
+        # the half called *named* is the one whose type line is read. And CR
+        # 201.4c for a flip card: its alternative name is judged by "the
+        # card's characteristics as modified by its alternative
+        # characteristics" — Tomoya the Revealer is a legendary creature name
+        # (``faces.nameable_faces`` adds the bottom half).
         borne_by = [
             named_card
             for held in held_cards
-            for named_card in castable_faces(held)
+            for named_card in nameable_faces(held)
             if named_card.name.lower() == lowered
         ]
         if not borne_by:

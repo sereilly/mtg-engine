@@ -690,19 +690,28 @@ class EntryChoicesMixin:
         one thing the printed line excludes: a basic land card name, which
         Null Chamber may not name.
         """
+        from ..faces import nameable_faces
         from ..grammar.phrases import BASIC_LAND_WORDS
 
         basics = {word.capitalize() for word in BASIC_LAND_WORDS}
+        # CR 710.5: "If an effect instructs a player to choose a card name and
+        # the player wants to choose a flip card's alternative name, the
+        # player may do so." So each card seen is offered by every name it may
+        # be named by (``faces.nameable_faces``) — a Jushi Apprentice in a
+        # graveyard offers Tomoya the Revealer too, and a flipped Tomoya
+        # offers Jushi Apprentice.
         seen = [
-            card.name
+            face.name
             for seat, player in enumerate(self.players)
             if seat != chooser_index and not player.lost
             for card in reversed(player.graveyard)
+            for face in nameable_faces(card)
         ] + [
-            perm.card.name
+            face.name
             for seat, player in enumerate(self.players)
             if seat != chooser_index and not player.lost
             for perm in self.controlled_by(seat)
+            for face in nameable_faces(perm.card)
         ]
         return sorted({
             name for name in seen if name not in basics and name != exclude
