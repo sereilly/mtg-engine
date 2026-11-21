@@ -133,6 +133,21 @@ class ZoneHasCards:
 
 
 @dataclass(frozen=True)
+class RecordedPileHasCards:
+    """"If **no cards are in that graveyard**, flip this creature." (Nezumi
+    Graverobber.)
+
+    :class:`ZoneHasCards` with the seat named by the pile rather than by a
+    player: "that graveyard" is the one an earlier step of this effect took
+    its target card out of, whose owner that step recorded (CR 608.2h). The
+    lowering admits it only behind such a step; with none, the words name no
+    pile.
+    """
+    zone: str
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class CardsInZones:
     """"If there are **ten or more creature cards total in all graveyards**"
     (Avatar of Woe).
@@ -803,6 +818,7 @@ Condition = Union[
     SubjectCharacteristicIs,
     TurnIsYours,
     ZoneHasCards,
+    RecordedPileHasCards,
     # Asked of a record of what already happened (``ast/records.py``). The
     # sets a loop walks over a record are not asked and are not here: they
     # are ``ForEach.iterator``'s, in ``ast/loops.py``.

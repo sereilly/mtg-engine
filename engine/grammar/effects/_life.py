@@ -228,6 +228,39 @@ def accept_life_gain(
     return None
 
 
+def accept_count_shortfall(stream: TokenStream) -> "ast.CountShortfall | None":
+    """"…for each **card fewer than three in their hand**" (Stabwhisker the
+    Odious): the shortfall of a pile below a printed number
+    (:class:`ast.CountShortfall`), or None without consuming.
+
+    The number sits between the noun and its zone phrase, so the noun phrase
+    reader cannot take the words whole: "card" and "in their hand" are read
+    here around it, and the pile is the one zone phrase a hand count prints.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each", "card", "fewer", "than"):
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        amount = None
+    if not isinstance(amount, ast.Fixed) or not stream.accept_word("in"):
+        stream.reset(mark)
+        return None
+    owner = (
+        "owner" if stream.accept_word("their")
+        else "you" if stream.accept_word("your")
+        else None
+    )
+    if owner is None or not stream.accept_word("hand"):
+        stream.reset(mark)
+        return None
+    return ast.CountShortfall(
+        ast.ObjectFilter(zone="hand", zone_owner=ast.PlayerRef(owner), is_card=True),
+        amount.value,
+    )
+
+
 def accept_life_loss(
     stream: TokenStream, subject: ast.Recipient
 ) -> "ast.LoseLife | None":
@@ -330,6 +363,8 @@ def accept_life_loss(
             # general reader below would take "1 life" for a quantified object
             # and strand the rest.
             per_each: object | None = accept_each_life_gained(stream)
+            if per_each is None:
+                per_each = accept_count_shortfall(stream)
             if per_each is None:
                 per_each = _parse_for_each(stream, allow_this_way=True)
             if per_each is None:

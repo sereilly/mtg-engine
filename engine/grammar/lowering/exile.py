@@ -844,7 +844,19 @@ def _lower_exile(
         # picker's flag), the announcement gates hold the named seat to it,
         # and the handler takes the card from the caster's pile alone.
         own_pile = filt.zone_owner is not None and filt.zone_owner.kind == "you"
-        if (filt.zone_owner is not None and not own_pile) or filt.subtypes or filt.colors:
+        # "Exile target card **from an opponent's graveyard**." (Nezumi
+        # Graverobber.) CR 102.2/102.3's own-seat exclusion on the pile the
+        # card is chosen from — the picker's ``opponent_graveyard_only``
+        # (Misinformation's and the Advocates' flag) and the handler's
+        # re-check, so neither offers nor takes a card out of the activator's
+        # own graveyard.
+        opponents_pile = (
+            filt.zone_owner is not None and filt.zone_owner.kind == "opponent"
+        )
+        if (
+            (filt.zone_owner is not None and not (own_pile or opponents_pile))
+            or filt.subtypes or filt.colors
+        ):
             # The picker this lowers onto enumerates every graveyard. Whose pile
             # it may read, and a subtype or colour narrowing, are still shapes
             # nothing behind it tests — dropped here they would offer a card the
@@ -870,7 +882,11 @@ def _lower_exile(
             )
         # Emitted only when printed, so every pick compiled before this keeps
         # a byte-identical payload.
-        scope: dict[str, object] = {"graveyard_owner": "you"} if own_pile else {}
+        scope: dict[str, object] = (
+            {"graveyard_owner": "you"} if own_pile
+            else {"graveyard_owner": "an_opponent"} if opponents_pile
+            else {}
+        )
         if filt.card_types:
             # "Exile target **artifact** card from a graveyard." (Grave
             # Robbers.) / "…target **creature** card…" (Eater of the Dead.) The

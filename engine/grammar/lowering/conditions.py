@@ -37,8 +37,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY, REVEALED_HAND_CARDS,
-                             TARGET_PLAYER_OR_CONTROLLER)
+from ...oracle_types import (CHOSEN_CREATURE_TYPE_THIS_WAY, LAST_TARGET_OWNER,
+                             REVEALED_HAND_CARDS, TARGET_PLAYER_OR_CONTROLLER)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (count_filter_on_frozen_seat, count_spec,
@@ -751,6 +751,25 @@ def _lower_condition(
             "player": _condition_seat(
                 condition, condition.player, event, "zone count", produced
             ),
+            "zone": condition.zone,
+            "op": condition.comparison.op,
+            "value": bound.value,
+        }
+    if isinstance(condition, ast.RecordedPileHasCards):
+        # "If no cards are in that graveyard" (Nezumi Graverobber). The pile is
+        # the one a step in front took its target card from, and that step
+        # recorded whose it was (``LAST_TARGET_OWNER``) — the seat the
+        # evaluator reads. With no such step the words name no pile.
+        bound = condition.comparison.value
+        if LAST_TARGET_OWNER not in produced or not isinstance(bound, ast.Fixed):
+            raise LoweringError(
+                "\"that graveyard\" names a pile no step of this effect took a "
+                "card from",
+                node=condition,
+            )
+        return {
+            "kind": "zone_card_count",
+            "player": LAST_TARGET_OWNER,
             "zone": condition.zone,
             "op": condition.comparison.op,
             "value": bound.value,

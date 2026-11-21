@@ -719,6 +719,15 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     own_pile = instruction.payload.get("graveyard_owner") == "you"
     if own_pile:
         owner = context.caster
+    # "…from **an opponent's** graveyard" (Nezumi Graverobber): an
+    # announcement naming the activator's own pile names no card the sentence
+    # can take (CR 608.2b), so nothing is exiled — never a card of the
+    # activator's own.
+    opponents_pile = instruction.payload.get("graveyard_owner") == "an_opponent"
+    if opponents_pile and owner is context.caster:
+        game.log.append(f"{card.name}: no card in an opponent's graveyard was chosen")
+        context.results["exiled_cards"] = []
+        return True, "resolved"
     # **Last-known information is frozen at the fire site** (CR 608.2h, ROADMAP
     # idiom #6). "If it was a creature card" is asked after the card has left
     # the graveyard, so the answer is recorded here, as the card is taken, not
@@ -741,6 +750,9 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
                 ),
                 None,
             )
+        elif opponents_pile:
+            # The announced opponent's pile, if it still holds a card.
+            index = 0 if owner.graveyard else None
         else:
             owner = next((player for player in game.players if player.graveyard), owner)
             index = 0 if owner.graveyard else None

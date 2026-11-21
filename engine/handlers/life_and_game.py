@@ -358,6 +358,13 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
             loss = amount * max(
                 0, int((context.results or {}).get(str(per_each["record"]), 0) or 0)
             )
+        elif per_each is not None and per_each.get("shortfall_below") is not None:
+            # "…that player loses 1 life for each card **fewer than three** in
+            # their hand." (Stabwhisker the Odious.) The victim's own pile,
+            # read now (CR 608.2c), below the printed number and never below
+            # zero (CR 107.1b).
+            pile = getattr(victim, str(per_each.get("zone") or "hand"), ())
+            loss = amount * max(0, int(per_each["shortfall_below"]) - len(pile))
         elif per_each is not None and per_each.get("trigger_record") is not None:
             # "…that player loses 2 life **for each 1 life they gained**."
             # (False Cure.) The firing event's gain, through the one count

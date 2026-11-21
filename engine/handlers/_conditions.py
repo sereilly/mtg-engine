@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 
 from ..faces import has_name
 from ..game_types import single_chosen_id
-from ..oracle_types import TARGET_PLAYER_OR_CONTROLLER
+from ..oracle_types import LAST_TARGET_OWNER, TARGET_PLAYER_OR_CONTROLLER
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
 from ._filters import permanent_matches_filter, permanent_state_holds
@@ -191,6 +191,14 @@ def _condition_player(game: Game, context: OracleExecutionContext, whose):
         return game.players[seat] if seat is not None else None
     if word == "event_subject_player":
         seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return None
+        return game.players[seat]
+    if word == LAST_TARGET_OWNER:
+        # "If no cards are in **that graveyard**" (Nezumi Graverobber): the
+        # owner of the card an earlier step of this resolution took, as that
+        # step recorded it (CR 608.2h). No record is no pile.
+        seat = (context.results or {}).get(LAST_TARGET_OWNER)
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return None
         return game.players[seat]
