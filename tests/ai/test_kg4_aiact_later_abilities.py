@@ -220,11 +220,20 @@ def test_the_rescue_census():
         if action is None or action.permanent_name != name:
             continue
         ability = game.usable_abilities_of(source)[action.ability_index or 0]
-        if not {step.kind for step in _effect_steps(ability.instruction)} & SOURCE_RETURN_KINDS:
+        kinds = {step.kind for step in _effect_steps(ability.instruction)}
+        if not kinds & SOURCE_RETURN_KINDS:
             continue
         activate_chosen_ability(game, 0, action)
         resolve_stack(game)
-        assert any(card.name == name for card in game.players[0].hand), name
+        # Out of the removal's way to where the ability sends it: the hand, or
+        # — "{T}: Draw a card, then put this artifact on top of its owner's
+        # library" (Sensei's Divining Top, read at the CHK promotion) — the top
+        # of the library, the card drawn beside it the rescue's other half.
+        owner = game.players[0]
+        assert any(card.name == name for card in owner.hand) or (
+            "put_source_card_on_library_top" in kinds
+            and owner.library and owner.library[0].name == name
+        ), name
         taken.append(name)
     assert examined >= 25, examined
     assert len(taken) >= _RESCUES_TAKEN_FLOOR, taken
