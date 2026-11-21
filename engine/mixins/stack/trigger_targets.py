@@ -1168,6 +1168,7 @@ class TriggerTargetsMixin:
         """
         from ...oracle_types import ANNOUNCED_THAT_PLAYER
         from ...targeting import derive_instruction_spec
+        from ...text_changes import spell_text_card
 
         step = that_player_dependent_step(item.ability_instruction)
         if step is None:
@@ -1175,8 +1176,11 @@ class TriggerTargetsMixin:
         item.choices[ANNOUNCED_THAT_PLAYER] = seat
         spec = dict(derive_instruction_spec([step]) or {})
         spec["that_player_index"] = seat
+        # The card ``stack_targets._candidates`` enumerates the CR 608.2b
+        # re-check for, so the list offered now and the list re-asked as the
+        # ability resolves are one list.
         candidates = self._enumerate_targets(
-            item.caster_index, item.card, spec, for_cast=False,
+            item.caster_index, spell_text_card(item), spec, for_cast=False,
             ability_instruction=step,
             source_permanent=item.source_permanent,
             ability_source=item.source_permanent,

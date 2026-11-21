@@ -208,6 +208,16 @@ CHOICE_KEYS = (
     # item with no second field to keep in step. ``oracle_types`` names the
     # key and holds its one reader.
     "named_no_target",
+    # The seat a triggered ability's **target player** was announced as, where
+    # a later sentence targets objects "that player controls" (Yosei, the
+    # Morning Star): the antecedent the picker's second stage and the
+    # resolution's "that player" both read. ``oracle_types`` names the key.
+    "announced_that_player",
+    # That target player is an **illegal target** as the object resolves while
+    # some of its objects are not (CR 608.2b; Yosei's 2017-11-17 ruling): the
+    # player is not acted on, the objects are. Written by the resolution's
+    # blanking because the player's seat is also where the objects stood.
+    "announced_player_illegal",
     # Every seat a **several-role** announcement named, one entry per role in
     # role order with ``None`` where the role is not a player ("…creatures
     # **target player** controls … creatures **another target player**
