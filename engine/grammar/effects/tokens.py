@@ -680,6 +680,13 @@ def _finish_create_token(
         _parse_for_each_history(stream, parse_object_filter)
         if per_counter is None else None
     )
+    # "…create a 1/1 colorless Spirit creature token **for each Zubera that
+    # died this turn**." (Dripping-Tongue Zubera.) The game-wide window, read
+    # by the reader the predefined-token branch above already asks for it
+    # (``phrases._parse_for_each``), so a transcribed token and a predefined
+    # one spend the same death tally.
+    if per_history is None and per_counter is None:
+        per_history = _parse_for_each(stream)
     per_each, per_each_beyond_first = (
         (None, False) if per_counter is not None or per_history is not None
         else _parse_per_each_objects(stream)

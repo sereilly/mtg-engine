@@ -295,6 +295,25 @@ def announcements(item: "StackItem") -> "tuple[_Announcement, ...] | None":
         spec = _from_instructions((instruction,))
         if not _spec_targets(spec) or not names_a_target(getattr(item, "ability_text", None)):
             return ()
+        # "When Yosei dies, target player skips their next untap step. Tap up
+        # to five target permanents that player controls." Two announcements
+        # made in two stages as the trigger went on the stack
+        # (``trigger_targets._announce_that_player_targets``): the player on
+        # the seat channel and the permanents on the id channel, the second
+        # enumerated against the seat the first recorded — so CR 608.2b judges
+        # each, and "becomes the target" sees the permanents too.
+        from .mixins.stack.trigger_targets import that_player_dependent_step
+        from .oracle_types import ANNOUNCED_THAT_PLAYER
+
+        dependent = (
+            that_player_dependent_step(instruction)
+            if ANNOUNCED_THAT_PLAYER in (getattr(item, "choices", None) or {}) else None
+        )
+        if dependent is not None:
+            return (
+                _Announcement(spec, item, instruction=instruction),
+                _Announcement(_from_instructions((dependent,)), item, instruction=dependent),
+            )
         return (_Announcement(spec, item, instruction=instruction),)
 
     program = compile_card_oracle(card)
@@ -1034,6 +1053,16 @@ def names_several_targets(item: "StackItem") -> bool:
     # recorded for two or more of them.
     if recorded_role_seats(item) is not None:
         return True
+    # …or a **target player beside the permanents "that player controls"**
+    # (Yosei, the Morning Star): a seat and the ids of a two-stage
+    # announcement, the player one target and each permanent another.
+    from .oracle_types import ANNOUNCED_THAT_PLAYER
+
+    if (
+        ANNOUNCED_THAT_PLAYER in (getattr(item, "choices", None) or {})
+        and any(isinstance(permanent_id, int) for permanent_id in _ids(item))
+    ):
+        return True
     # …or a permanent **beside a card in a graveyard** ("Return two target
     # cards from an opponent's graveyard to their hand. Destroy target
     # attacking creature.", Spurnmage Advocate): one id, but the stamps are
@@ -1103,6 +1132,7 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
     scalar seat beside it. The list is replaced, never mutated: a copy of the
     spell (CR 707.10) shares the original's list object.
     """
+    from .oracle_types import ANNOUNCED_PLAYER_ILLEGAL, ANNOUNCED_THAT_PLAYER
     from .target_roles import ROLE_SEATS
 
     blanked = 0
@@ -1110,6 +1140,18 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
     for target in targets:
         if target.channel == "divided":
             dropped.append(target.position)
+            continue
+        if (
+            target.kind == "player" and target.channel == "player"
+            and ANNOUNCED_THAT_PLAYER in (getattr(item, "choices", None) or {})
+        ):
+            # Yosei's target player beside the permanents "that player
+            # controls": one illegal target of an object that still resolves.
+            # Its seat is also where the permanents stood, so the slot stays
+            # and the record says the player is not acted on
+            # (``oracle_types.ANNOUNCED_PLAYER_ILLEGAL``).
+            item.choices[ANNOUNCED_PLAYER_ILLEGAL] = True
+            blanked += 1
             continue
         if target.kind == "player" and target.channel == "role":
             seats = recorded_role_seats(item) if target.mode is None else None

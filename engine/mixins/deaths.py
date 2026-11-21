@@ -25,6 +25,8 @@ import re
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..aura_attachment import auras_attached_to, left_attached_to
+from ..death_tally import record_creature_death
+from ..object_creature_types import creature_types
 from ..destruction_events import (RESOLVING, announce_destroyed,
                                   destruction_finished)
 from ..delayed_triggers import fire_delayed_triggers
@@ -109,6 +111,10 @@ class DeathsMixin:
         # ``tests/regressions/test_kg_layers_what_died.py``.
         was_land = permanent.has_type("land")
         was_creature = permanent.is_creature
+        # …and its creature types, asked the same live way for the same
+        # reason: "for each Zubera that died this turn" counts what each
+        # creature *was* as it died (CR 603.10a, ``engine/death_tally.py``).
+        died_as = creature_types(self, permanent) if was_creature else frozenset()
         # An Aura's continuous effects end as it leaves (CR 611.3) — asked of
         # what it *is*: a Licid that became an Aura is printed "Creature —
         # Licid" (see ``remove_all_from_battlefield``'s twin of this read).
@@ -214,6 +220,7 @@ class DeathsMixin:
                 self.nontoken_creatures_died_this_turn = (
                     getattr(self, "nontoken_creatures_died_this_turn", 0) + 1
                 )
+            record_creature_death(self, died_as)
             # "…under your control" is a different question from the game-wide
             # count above, and only the controller can answer it. `player` is
             # the controller the permanent last had; the owner is looked up

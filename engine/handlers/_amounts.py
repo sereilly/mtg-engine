@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
     from ..oracle_types import OracleInstruction
+from ..death_tally import died_this_turn_count, is_game_death_tally
 from ..models import Permanent, PlayerState
 from ..target_roles import COUNTED_SEAT_ROLE
 from ._chosen import (_resolve_chosen_color, _resolve_chosen_subtype,
@@ -1075,6 +1076,13 @@ def evaluate_count(
         return int(getattr(
             owner, "nontoken_creatures_put_into_your_graveyard_this_turn", 0
         ))
+    if is_game_death_tally(spec):
+        # "…draw a card **for each Zubera that died this turn**" (Floating-
+        # Dream Zubera), "…equal to the number of Zubera that died this turn"
+        # (Ember-Fist Zubera). The game-wide tally — every seat's deaths, as
+        # the words "that died" say — narrowed to a creature type where the
+        # spec names one; ``engine/death_tally.py`` is the one reader.
+        return _scaled(died_this_turn_count(game, spec), spec)
     if history is not None:
         return 0
     # A *named* board count rather than a count of objects in a zone: a player's

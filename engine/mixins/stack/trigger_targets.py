@@ -84,10 +84,68 @@ def _target_filter_controller(payload) -> str | None:
     return None if inner is None else _target_filter_controller(inner)
 
 
+#: The object kinds a dependent "…that player controls" announcement may
+#: offer: the board picker's own (``_CHOOSABLE_TRIGGER_TARGET_KINDS``).
+_DEPENDENT_OBJECT_KINDS = frozenset({
+    "permanent", "creature", "artifact", "enchantment", "land", "planeswalker",
+})
+
+
+def that_player_dependent_step(instruction):
+    """The step of *instruction* that targets objects "**that player**
+    controls" where "that player" is the **target player** an earlier step of
+    the same ability announces — or None for every other instruction.
+
+    "When Yosei dies, target player skips their next untap step. Tap up to
+    five target permanents that player controls." Two instances of "target"
+    and one announcement (CR 603.3d through CR 601.2c), the second's legal set
+    decided by what the first chose — Keeper of the Dead's shape, which an
+    *activation* announces as roles; a trigger announces it here in two
+    stages, the seat and then the objects narrowed to it.
+
+    Narrow, so it claims nothing else: a ``sequence`` whose targeting steps
+    are exactly two, the first announcing a player and the second a board
+    object kind narrowed by "that player" (``that_player_only``) and nothing
+    a seat the event froze could answer instead.
+    """
+    from ...targeting import derive_instruction_spec
+
+    if getattr(instruction, "kind", None) != "sequence":
+        return None
+    steps = tuple((getattr(instruction, "payload", None) or {}).get("steps") or ())
+    targeted = []
+    for step in steps:
+        spec = derive_instruction_spec([step])
+        if spec and spec.get("kind") not in (None, "none") and announces_a_target(step):
+            targeted.append((step, spec))
+    if len(targeted) != 2:
+        return None
+    (_seat_step, seat_spec), (object_step, object_spec) = targeted
+    if seat_spec.get("kind") != "player":
+        return None
+    if (
+        object_spec.get("kind") not in _DEPENDENT_OBJECT_KINDS
+        or not object_spec.get("that_player_only")
+        or _target_filter_controller(object_step.payload) != "that_player"
+    ):
+        return None
+    return object_step
+
+
 def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
     """Whether *spec* carries the controller narrowing *instruction* prints."""
     controller = _target_filter_controller(getattr(instruction, "payload", None))
     if controller is None:
+        return True
+    # "…target player skips their next untap step. Tap up to five target
+    # permanents **that player** controls." (Yosei.) The narrowing belongs to
+    # the later step and its seat is the one *this* spec announces — so it is
+    # carried by the second stage of the announcement
+    # (``_announce_that_player_targets``), not by this player pick.
+    if (
+        controller == "that_player" and spec.get("kind") == "player"
+        and that_player_dependent_step(instruction) is not None
+    ):
         return True
     # "...put a rust counter on each artifact **target opponent** controls."
     # (Corrosion.) Here the controller word *is* the announcement rather than a
@@ -924,6 +982,15 @@ class TriggerTargetsMixin:
                 "name": perm.effective_card.name,
             })
         up_to = _target_is_up_to(getattr(instruction, "payload", None))
+        dependent = that_player_dependent_step(instruction)
+        if dependent is not None:
+            # A two-stage announcement (Yosei): each stage is its own step's
+            # quantifier. The walk above found the *tap's* "up to five", which
+            # would have let the "target player" stage name nobody.
+            up_to = (
+                spec.get("kind") not in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
+                and _target_is_up_to(dependent.payload)
+            )
         # "…turn **any number of** target creatures with morph abilities …
         # face down." (Weaver of Lies, the pool's first trigger to print it.)
         # No printed ceiling (``unbounded_targets``), so the ceiling is every
@@ -983,7 +1050,13 @@ class TriggerTargetsMixin:
         several = {}
         printed = spec.get("max_targets")
         if unbounded and printed is None:
-            printed = max(2, sum(1 for entry in offered if entry["kind"] == "permanent"))
+            # Every object on offer, a card in a graveyard included: "return
+            # **any number of** target Spirit cards from your graveyard"
+            # (Iname, Life Aspect) offers cards, and a ceiling counted over
+            # permanents alone capped it at two.
+            printed = max(2, sum(
+                1 for entry in offered if entry["kind"] in ("permanent", "graveyard")
+            ))
         quantity_key = spec.get("x_from_trigger")
         if quantity_key:
             # "Whenever this creature deals combat damage to a player, return
@@ -1072,6 +1145,56 @@ class TriggerTargetsMixin:
             _trigger_item=item,
             **several,
         )
+
+    def _announce_that_player_targets(self, item: StackItem, seat: int) -> "bool | None":
+        """The second stage of a trigger announcing a **target player** and
+        then targets "**that player** controls" (:func:`that_player_dependent_step`),
+        or None where *item* prints no such pair.
+
+        "When Yosei dies, target player skips their next untap step. Tap up to
+        five target permanents that player controls." CR 603.3d chooses every
+        target as the ability is put on the stack, and the permanents' legal
+        set is the chosen player's board — so once the seat is chosen it is
+        recorded (``oracle_types.ANNOUNCED_THAT_PLAYER``, which the resolution's
+        "that player" reads) and the objects are offered through the ordinary
+        ``trigger_target`` prompt, narrowed to that seat by the enumerator's
+        own ``that_player_index``.
+
+        Returns True when the announcement is finished or still owed by that
+        second prompt (whose answer announces it), False when the second stage
+        armed nothing and answered nothing — nothing on that board to name, an
+        "up to" naming none — so the caller announces what the first stage
+        chose.
+        """
+        from ...oracle_types import ANNOUNCED_THAT_PLAYER
+        from ...targeting import derive_instruction_spec
+        from ...text_changes import spell_text_card
+
+        step = that_player_dependent_step(item.ability_instruction)
+        if step is None:
+            return None
+        item.choices[ANNOUNCED_THAT_PLAYER] = seat
+        spec = dict(derive_instruction_spec([step]) or {})
+        spec["that_player_index"] = seat
+        # The card ``stack_targets._candidates`` enumerates the CR 608.2b
+        # re-check for, so the list offered now and the list re-asked as the
+        # ability resolves are one list.
+        candidates = self._enumerate_targets(
+            item.caster_index, spell_text_card(item), spec, for_cast=False,
+            ability_instruction=step,
+            source_permanent=item.source_permanent,
+            ability_source=item.source_permanent,
+            triggered=True,
+        )
+        self._arm_trigger_target_choice(item, spec, item.caster_index, candidates)
+        if not any(existing is item for existing in self.stack):
+            # A dependent target the printed count owes, and nothing on that
+            # board to name: CR 603.3d took the ability off the stack.
+            return True
+        owed = any(
+            waiting.data.get("_trigger_item") is item for waiting in self.pending_choices
+        )
+        return owed or item.target_permanent_id is not None
 
     def _stack_objects_offered(self, candidates) -> list:
         """The stack objects a list of ``_enumerate_stack_targets`` entries
@@ -1191,7 +1314,14 @@ class TriggerTargetsMixin:
         one board and applied to another.
         """
         from ...handlers._targets import _THAT_PLAYER_CONTEXT_KEYS
+        from ...oracle_types import ANNOUNCED_THAT_PLAYER
 
+        # The target player a two-stage announcement chose (Yosei), first, as
+        # the resolution's reader asks it first: the sentence names its own
+        # antecedent, so no event's seat is meant.
+        announced = (getattr(item, "choices", None) or {}).get(ANNOUNCED_THAT_PLAYER)
+        if isinstance(announced, int) and 0 <= announced < len(self.players):
+            return announced
         frozen = item.trigger_context or {}
         for key in _THAT_PLAYER_CONTEXT_KEYS:
             seat = frozen.get(key)

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..death_tally import died_this_turn_count
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_OWNER)
@@ -557,7 +558,9 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # own tally, because the objects counted are exactly the ones no zone
         # still holds. Which tally the phrase named is settled at lowering; an
         # unknown one makes no tokens rather than falling back to a wider count.
-        count = int(getattr(game, str(raw_count["history"]), 0) or 0)
+        # "…for each **Zubera** that died this turn" (Dripping-Tongue Zubera)
+        # is that tally narrowed to one creature type — one reader for both.
+        count = died_this_turn_count(game, raw_count)
     elif isinstance(raw_count, dict) and "seat_record" in raw_count:
         # "…equal to **the amount of mana they paid this way**" (Liege of the
         # Hollows). One number per recipient, out of this resolution's own

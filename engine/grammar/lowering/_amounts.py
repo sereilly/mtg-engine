@@ -869,7 +869,64 @@ def per_card_count_spec(
         return count_spec(count_filter_on_targeted_seat(amount.filter, player), node)
     if isinstance(amount, ast.CountersOnSource):
         return {"source_counters": amount.kind}
+    if isinstance(amount, ast.DiedThisTurn):
+        # "…draw a card **for each Zubera that died this turn**" (Floating-
+        # Dream Zubera), "target opponent discards a card for each Zubera that
+        # died this turn" (Ashen-Skin Zubera): the turn's death tally.
+        return died_this_turn_count_spec(amount.filter, node)
     return None
+
+
+def died_this_turn_count_spec(filt: "ast.ObjectFilter", node) -> dict:
+    """The count spec of "<objects> **that died this turn**" — the game's own
+    death tally (``engine/death_tally.py``) — or a ``LoweringError`` naming
+    the narrowing it cannot count.
+
+    One reader for every position the phrase is printed in: the life gain's
+    "for each" (Canopy Stalker), the token count (Gadrak), the "a card for
+    each" of a draw or a discard and "equal to the number of …" (the Zubera).
+    They used to each carry their own refusal of anything narrower than
+    "creature", so a narrowing one of them learned the others did not.
+
+    What the tally can answer, and nothing more: every creature that died
+    (``creatures_died_this_turn``), the nontoken ones (``nontoken_…``), or the
+    ones of **one creature type** (``creature_type``, counted as each creature
+    was as it died). A creature type implies a creature (CR 205.3d), so
+    "Zubera" and "Zubera creature" are one set. Any other narrowing — a
+    colour, a controller, two types, a nontoken Zubera — refuses rather than
+    being counted as though it were not printed.
+    """
+    from ..vocabulary import CREATURE_TYPES
+    from ._filters import _restrictions_beyond
+
+    leftover = _restrictions_beyond(
+        filt, frozenset({"card_types", "nontoken", "subtypes"})
+    )
+    if leftover or filt.card_types not in ((), ("creature",)):
+        raise LoweringError(
+            "the death tally counts creatures, nontoken creatures or one "
+            "creature type, and nothing narrower",
+            node=node,
+        )
+    subtypes = tuple(str(word).lower() for word in filt.subtypes or ())
+    if not subtypes:
+        if filt.card_types != ("creature",):
+            raise LoweringError(
+                "the death tally counts creatures, and the phrase names none",
+                node=node,
+            )
+        return {
+            "history": (
+                "nontoken_creatures_died_this_turn" if filt.nontoken
+                else "creatures_died_this_turn"
+            )
+        }
+    if len(subtypes) != 1 or subtypes[0] not in CREATURE_TYPES or filt.nontoken:
+        raise LoweringError(
+            "the death tally counts one creature type at a time, tokens included",
+            node=node,
+        )
+    return {"history": "creatures_died_this_turn", "creature_type": subtypes[0]}
 
 
 # ---------------------------------------------------------------------------

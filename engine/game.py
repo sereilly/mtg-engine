@@ -639,6 +639,15 @@ class Game(
     # per-seat one beside it is: a reader that wants one and gets the other is
     # wrong by however many tokens died, silently.
     nontoken_creatures_died_this_turn: int = 0
+    # The same turn's deaths **by creature type**: for each creature type, how
+    # many creatures that died this turn had it as they died (CR 603.10a's
+    # look-back, read through the layers like ``is_creature`` beside it).
+    # "…for each **Zubera** that died this turn" (the five Zubera). A count per
+    # type rather than a list of what died, because the question every printed
+    # card asks is one type's count; a creature of two types counts once for
+    # each. Bookkeeping that moves only when a creature dies, exactly when
+    # ``creatures_died_this_turn`` does, and reset with it each turn.
+    creature_types_died_this_turn: dict[str, int] = field(default_factory=dict)
     # Which permanents the end-of-combat sweep destroyed this turn, by stable
     # id. "…destroy the other creature at end of combat. … **if that creature
     # was destroyed this way**" (Infinite Authority) is a question asked a step

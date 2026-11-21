@@ -824,6 +824,12 @@ def _tap_several_targets(
 
     from ..subject_filters import subject_matches
 
+    # "Tap up to five target permanents **that player** controls." (Yosei.)
+    # The seat the one-target branch above already resolves through the one
+    # reader of the phrase; without it ``subject_matches`` refuses the word and
+    # every announced permanent was dropped as though it had left.
+    that_player = frozen_that_player_seat(game, context)
+
     def eligible(perm) -> bool:
         # Through ``subject_matches``, not the pure matcher plus a hand-written
         # seat pair. Those two covered "other" and "you control" and nothing
@@ -834,7 +840,8 @@ def _tap_several_targets(
         # controller and the source is its own permanent, both of which this
         # handler already holds.
         return subject_matches(
-            game, perm, filters, observer=caster_index, source=source
+            game, perm, filters, observer=caster_index, source=source,
+            that_player=that_player,
         )
 
     chosen = resolve_target_permanents(game, context, predicate=eligible)[:maximum]

@@ -53,8 +53,8 @@ from ...oracle_types import (DISCARDED_THIS_WAY, OracleInstruction,
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (count_filter_on_frozen_seat, count_spec,
-                       maximum_amount_spec, printed_count_spec,
-                       recorded_count_spec)
+                       died_this_turn_count_spec, maximum_amount_spec,
+                       printed_count_spec, recorded_count_spec)
 from ._common import (
     dropped_narrowings,
     _amount_payload,
@@ -461,12 +461,10 @@ def lower_per_each_gain(
             raise LoweringError(
                 "the per-each life gain is the effect's own controller", node=node
             )
-        leftover = _restrictions_beyond(node.per_each.filter, frozenset({"card_types"}))
-        if leftover or node.per_each.filter.card_types != ("creature",):
-            raise LoweringError(
-                "the death tally counts creatures and nothing narrower", node=node
-            )
-        payload["per_each"] = {"history": "creatures_died_this_turn"}
+        # "…you gain 2 life for each **Zubera** that died this turn"
+        # (Silent-Chant Zubera): the same tally narrowed to a creature type,
+        # through the floor's one reader of the phrase.
+        payload["per_each"] = died_this_turn_count_spec(node.per_each.filter, node)
         return (OracleInstruction("target_gains_life", "", payload),)
     if isinstance(node.per_each, ast.EachLifeLost):
         # "Whenever you lose life, you gain 2 life **for each 1 life you

@@ -583,6 +583,13 @@ class TriggerChoicesMixin:
             item.target_permanent_id = None
             item.targets_chosen = self._trigger_target_was_a_choice()
             self.log.append(f"{card_name}: targets {self.players[seat].name}")
+            # "…target player skips their next untap step. Tap up to five
+            # target permanents **that player** controls." (Yosei.) The seat
+            # was the first half of the announcement; the objects on its board
+            # are the second, asked now (CR 603.3d), and whichever answer
+            # finishes it announces it.
+            if self._announce_that_player_targets(item, seat):
+                return True
             self._announce_answered_targets(item, choice, queued)
             return True
         offered = {

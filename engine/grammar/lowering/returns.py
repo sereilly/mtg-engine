@@ -655,7 +655,19 @@ def _lower_return_to_zone(
                     "a creature type announced at cast narrows creature cards",
                     node=node,
                 )
-        if _reads_no_return_restriction(returned):
+        # "…return any number of target **Spirit** cards from your graveyard to
+        # your hand." (Iname, Life Aspect.) The Griffin's subtype on the
+        # several-card return, lifted for the one-card branch's reason (the
+        # graveyard-to-hand gate further down this function): it travels as
+        # ``graveyard_subtypes`` (``_graveyard_to_hand_payload``), and the
+        # picker, the announcement gate and the handler's per-card
+        # ``_eligible`` all test it through the one predicate
+        # (``graveyard_card_matches``). Only the subtype: every other adjective
+        # still refuses here until a card prints one on this branch.
+        checked = (
+            dataclasses.replace(returned, subtypes=()) if returned.subtypes else returned
+        )
+        if _reads_no_return_restriction(checked):
             # Raised here rather than left to the generic refusal below, so the
             # named clause says which half is missing: the arity is fine and the
             # adjective is not.

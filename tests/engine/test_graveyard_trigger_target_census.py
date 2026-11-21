@@ -554,7 +554,12 @@ def test_a_seat_nobody_asks_takes_the_card_the_resolution_used_to_find(_pool, _t
         count = _count_owed(spec)
         returned_to = graveyard_return_destination((trigger.instruction,))
         best = None
-        if returned_to is not None and count <= 1:
+        # "…return **any number of** target Spirit cards from your graveyard to
+        # your hand" (Iname, Life Aspect, CHK W1G3): no one card the old scan
+        # found, so no one card to compare with — the default names every
+        # card on offer, and the pile and the "what left is what was chosen"
+        # checks below still hold it.
+        if returned_to is not None and count <= 1 and not spec.get("unbounded_targets"):
             asked = _table(_pool, _tribes, interactive=(0,))
             _fire(asked, card, trigger)
             prompt = _prompt(asked, trigger)

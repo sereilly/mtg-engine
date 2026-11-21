@@ -23,8 +23,8 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
 from ...oracle_types import SEPARATE_DEALINGS, X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
-from ._amounts import (maximum_amount_spec, tapped_this_way_record,
-                       x_offset_amount)
+from ._amounts import (died_this_turn_count_spec, maximum_amount_spec,
+                       tapped_this_way_record, x_offset_amount)
 from ._counted_damage import (
     _LOOPED_PLAYER_RECIPIENTS,
     _lower_board_count_damage,
@@ -39,6 +39,7 @@ from ._counted_damage import (
     lower_difference_damage,
     lower_maximum_damage,
     lower_revealed_this_way_damage,
+    lower_tally_damage,
     lower_subtracted_damage,
 )
 
@@ -523,6 +524,13 @@ def _lower_damage_shape(
     maximum = maximum_amount_spec(node.amount, node, event=event)
     if maximum is not None:
         return lower_maximum_damage(node, maximum)
+    # "…equal to the number of Zubera **that died this turn**" (Ember-Fist
+    # Zubera). The turn's death tally, through the floor's one reader of what
+    # it can count, spent by the same counted tail as the maximum above.
+    if isinstance(node.amount, ast.DiedThisTurn):
+        return lower_tally_damage(
+            node, died_this_turn_count_spec(node.amount.filter, node)
+        )
     # "…equal to the sacrificed creature's power" (Freyalise Supplicant, under
     # the half above). A characteristic of what the cost ate rather than a count
     # of anything on a board, so it sits beside the count rather than inside it.

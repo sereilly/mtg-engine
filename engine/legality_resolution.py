@@ -1130,7 +1130,14 @@ class ResolutionTargetsMixin:
                     )))
                 continue
             instances = _printed_target_instances(item)
-            if instances is not None and instances != 1 and not recorded_only:
+            # One announcement per printed instance is a whole one: "target
+            # player … Tap up to five target permanents that player controls"
+            # (Yosei) records its two instances as two announcements
+            # (``stack_targets.announcements``), so each is judged on its own.
+            if (
+                instances is not None and instances != 1
+                and instances != len(announced) and not recorded_only
+            ):
                 return None
             candidates = _candidates(self, item, announcement, targets[0])
             if candidates is None:

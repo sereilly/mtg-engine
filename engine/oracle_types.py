@@ -340,6 +340,37 @@ def named_no_target(choices) -> bool:
     return bool(choices) and bool(choices.get(NAMED_NO_TARGET))
 
 
+#: The ``StackItem.choices`` key holding the seat a triggered ability's
+#: **target player** was announced as, when a later sentence of the same
+#: ability targets objects "**that player** controls" — "When Yosei dies,
+#: target player skips their next untap step. Tap up to five target
+#: permanents that player controls." (Yosei, the Morning Star.)
+#:
+#: The pronoun's antecedent is the announced target, not a seat any firing
+#: event froze, so neither the picker nor the resolution could read it off the
+#: trigger's context: the trigger announced nothing and the tap found no board.
+#: Written by the trigger picker as the player is chosen (CR 603.3d), before
+#: the dependent objects are offered narrowed to that seat; read first by
+#: ``handlers/_targets.frozen_that_player_seat``, so the objects are judged
+#: against the seat they were announced against even when the player has
+#: become an illegal target (Yosei's 2017-11-17 ruling: the permanents are
+#: still tapped). Here, beside :data:`NAMED_NO_TARGET`, for that key's reason.
+ANNOUNCED_THAT_PLAYER = "announced_that_player"
+
+#: The ``StackItem.choices`` key saying the **target player** of such a
+#: two-stage announcement is an illegal target as the ability resolves (CR
+#: 608.2b) while some of its objects are not — so the object resolves, the
+#: objects are acted on, and the player is not. Yosei's 2017-11-17 ruling: "If
+#: the player becomes an illegal target, the target permanents are tapped, but
+#: the player doesn't skip their untap step." The player's seat is also the
+#: seat the permanents stood on (``target_player_index``, resettled from their
+#: ids as the object resolves), so the slot itself cannot be blanked; written
+#: by ``stack_targets.blank_illegal_targets``, read by the step that acts on
+#: the player (``handlers/life_and_game.skip_next_step``), as
+#: :data:`NAMED_NO_TARGET` is read by the steps that act on a permanent.
+ANNOUNCED_PLAYER_ILLEGAL = "announced_player_illegal"
+
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as

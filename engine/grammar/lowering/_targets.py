@@ -416,6 +416,14 @@ def _describe_several_card_targets(
         # is, and a literal 0 here would show a picker that offers nothing.
         "count": "x" if recipient.count_from_x else recipient.count,
     }
+    # "…return **any number of** target Spirit cards from your graveyard to
+    # your hand." (Iname, Life Aspect.) No printed maximum, so the cap is
+    # however many legal cards there are — the permanent-shaped sibling's
+    # ``unbounded`` flag above, read by the spec builders into
+    # ``unbounded_targets``. Without it the ``count`` of 0 fell back to a
+    # one-card picker for a sentence that names any number.
+    if recipient.quantifier in ("one_or_more", "any_number"):
+        payload["targets"]["unbounded"] = True
 
 
 def _player_comparison_payload(

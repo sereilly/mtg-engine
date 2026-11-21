@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from ..game_types import OracleExecutionContext
 from ..game_types import (first_slot, first_target_id, single_slot,
                           target_ids, target_slots)
-from ..oracle_types import named_no_target
+from ..oracle_types import ANNOUNCED_THAT_PLAYER, named_no_target
 from ..models import Permanent, PlayerState
 from ._filters import graveyard_card_matches
 
@@ -446,6 +446,14 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
     drop the narrowing, since a dropped seat on a destroy is not a card that
     does less, it is one that reaches the wrong battlefield.
     """
+    # "When Yosei dies, **target player** skips their next untap step. Tap up
+    # to five target permanents **that player** controls." The pronoun's
+    # antecedent is the target the trigger announced, recorded as it was
+    # chosen (``oracle_types.ANNOUNCED_THAT_PLAYER``) — read first, because
+    # where the sentence names its own antecedent no event's seat is meant.
+    announced = (context.choices or {}).get(ANNOUNCED_THAT_PLAYER)
+    if isinstance(announced, int) and 0 <= announced < len(game.players):
+        return announced
     frozen = context.trigger_context or {}
     for key in _THAT_PLAYER_CONTEXT_KEYS:
         seat = frozen.get(key)

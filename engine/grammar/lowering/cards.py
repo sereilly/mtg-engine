@@ -351,7 +351,10 @@ def _lower_draw(
         # (Peer into the Abyss). The same spec a plain count travels on, with the
         # division recorded on it — see `halved_count_spec`.
         payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: halved}
-    elif isinstance(node.count, (ast.ColorsAmong, ast.CountOf, ast.CountersOnSource)):
+    elif isinstance(
+        node.count,
+        (ast.ColorsAmong, ast.CountOf, ast.CountersOnSource, ast.DiedThisTurn),
+    ):
         # "Draw a card **for each color among** permanents you control"
         # (Chromatic Orrery), "Draw cards equal to the number of …" (Frantic
         # Inventory), "…draws an additional card **for each growth counter on

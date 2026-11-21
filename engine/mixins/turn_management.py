@@ -405,6 +405,7 @@ class TurnManagementMixin:
         self.creatures_died_this_turn = 0
         self.destroyed_at_end_of_combat_this_turn = []
         self.nontoken_creatures_died_this_turn = 0
+        self.creature_types_died_this_turn = {}
         self.permanents_to_hand_this_turn = {}
         # Aladdin's Lamp: an armed "next draw this turn" replacement expires
         # with the turn it was activated on.

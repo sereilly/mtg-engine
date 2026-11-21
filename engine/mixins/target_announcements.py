@@ -271,7 +271,22 @@ class TargetAnnouncementsMixin:
             or item.target_stack_item is not None
         ):
             return False
-        return self._entry_trigger_chooses_a_target(instruction, item.ability_text)
+        if self._entry_trigger_chooses_a_target(instruction, item.ability_text):
+            return True
+        # …and the two announcements that gate does not list, because a
+        # permanent spell never hands either over (CR 601.2d's division,
+        # Wurmskin Forger; a roles pair, Chromeshell Crab): both are chosen by
+        # the trigger's own picker, so both wait. "When Jugan dies, you may
+        # distribute five +1/+1 counters among any number of target creatures"
+        # dying to Wrath of God beside four Dragons divided its counters among
+        # them as the sweep was still under way, and every one fizzled
+        # (CR 608.2b) on a creature already in the graveyard.
+        from ..targeting import announces_a_target, derive_instruction_spec
+
+        spec = derive_instruction_spec([instruction]) or {}
+        if spec.get("kind") in self._CHOOSABLE_TRIGGER_DIVIDED_KINDS:
+            return self._trigger_division_is_announceable(spec)
+        return spec.get("kind") == "roles" and announces_a_target(instruction)
 
     def _announce_waiting_triggers(self) -> None:
         """Make the choices :meth:`_trigger_choice_waits` held back, oldest

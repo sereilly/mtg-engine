@@ -600,7 +600,29 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     if stream.accept_phrase("that", "died", "under", "your", "control"):
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
+    died = accept_died_this_turn_count(stream, filt)
+    if died is not None:
+        return died
     return ast.CountOf(filt)
+
+
+def accept_died_this_turn_count(stream: TokenStream, filt) -> "ast.DiedThisTurn | None":
+    """``that died this turn`` after a counted noun — the turn's game-wide
+    death tally — or None with nothing consumed.
+
+    "…equal to **the number of Zubera that died this turn**" (Ember-Fist
+    Zubera). The "the number of" spelling of the set ``phrases._parse_for_each``
+    reads in "for each" position ("…for each Zubera that died this turn"), so
+    it lands on the same :class:`ast.DiedThisTurn` and one lowering reads both
+    (``lowering/_amounts.died_this_turn_count_spec``). One reader for the two
+    front ends that print "the number of" — the ", where X is …" trailer here
+    and ``amounts.parse_equal_to`` — for :func:`accept_this_way_count`'s
+    reason. "This turn" is required, for the death tally's: the record is swept
+    each turn, so another window is another number.
+    """
+    if stream.accept_phrase("that", "died", "this", "turn"):
+        return ast.DiedThisTurn(filt)
+    return None
 
 
 #: The characteristics a "the greatest <characteristic> among <noun phrase>"
