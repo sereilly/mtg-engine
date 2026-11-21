@@ -148,6 +148,64 @@ def test_w1g5_flames_at_a_planeswalker_replaces_its_controllers_gains(set_pool):
     _w1g5_cast(game, 1, "Healing Salve", target_player_index=1)
     assert game.players[1].life == 20, game.log
 
+
+@_w1g5_pytest.mark.parametrize("interactive", _W1G5_SEATS)
+def test_w1g5_overblaze_doubles_the_target_permanents_damage_only(
+    set_pool, interactive,
+):
+    """"Each time target permanent would deal damage to a permanent or player
+    this turn, it deals double that damage to that permanent or player
+    instead." The targeted Prodigal Sorcerer pings for 2, every time this
+    turn; a second Sorcerer — the same card, another object — still pings
+    for 1 (CR 614). The record ends at cleanup (CR 514.2)."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(set_pool, interactive, hand=[bok["Overblaze"]])
+    doubled = _w1g5_put(game, lea["Prodigal Sorcerer"])
+    other = _w1g5_put(game, lea["Prodigal Sorcerer"])
+    _w1g5_cast(game, 0, "Overblaze", target_permanent_ids=[doubled.permanent_id])
+
+    def ping(sorcerer):
+        sorcerer.tapped = False
+        result = game.activate_permanent_ability(
+            0, sorcerer.card.name,
+            permanent_index=game.battlefield_index_of(sorcerer),
+            target_player_index=1,
+        )
+        assert result.supported, result.details
+        _w1g5_settle(game)
+
+    ping(doubled)
+    assert game.players[1].life == 18, game.log
+    ping(other)
+    assert game.players[1].life == 17, game.log
+    ping(doubled)
+    assert game.players[1].life == 15, game.log
+    game.resolve_cleanup_step(0)
+    ping(doubled)
+    assert game.players[1].life == 14, game.log
+
+
+def test_w1g5_overblaze_spliced_onto_an_arcane_spell(set_pool):
+    """Spliced onto Lava Spike (CR 702.47), the spell deals its 3 and arms
+    Overblaze's doubling on the permanent the splice targeted — an opposing
+    Prodigal Sorcerer, whose ping then deals 2 — and Overblaze stays in
+    hand."""
+    bok, lea, chk = set_pool("BOK"), set_pool("LEA"), set_pool("CHK")
+    game = _w1g5_table(set_pool, hand=[chk["Lava Spike"], bok["Overblaze"]])
+    theirs = _w1g5_put(game, lea["Prodigal Sorcerer"], seat=1)
+    _w1g5_cast(game, 0, "Lava Spike", target_player_index=1, splice_cards=[
+        {"hand_index": 1, "target_permanent_ids": [theirs.permanent_id]},
+    ])
+    assert game.players[1].life == 17, game.log
+    assert [card.name for card in game.players[0].hand] == ["Overblaze"]
+    result = game.activate_permanent_ability(
+        1, theirs.card.name, permanent_index=game.battlefield_index_of(theirs),
+        target_player_index=0,
+    )
+    assert result.supported
+    _w1g5_settle(game)
+    assert game.players[0].life == 18, game.log
+
 # ==== end w1g5 ======================================================
 
 

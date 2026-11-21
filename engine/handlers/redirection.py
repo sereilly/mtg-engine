@@ -1385,6 +1385,25 @@ def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, cont
     from ..turn_replacements import DAMAGE, TurnReplacement, arm_turn_replacement
 
     payload = instruction.payload
+    source_id = None
+    named = None
+    if payload.get("source") == "target":
+        # "Each time **target permanent** would deal damage to a permanent or
+        # player this turn, it deals double that damage …" (Overblaze.) The
+        # announced object, re-checked against its printed phrase (CR 608.2b)
+        # and recorded by id, so the record answers to that permanent and to
+        # no other copy of its card. Nothing announced, nothing armed: a
+        # record with no source would double every source's damage.
+        described = (payload.get("targets") or {}).get("filter") or {}
+        named = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: permanent_matches_filter(perm, described),
+            fallback_players=(),
+        )
+        if named is None:
+            game.log.append(f"{context.card.name}: its target is gone")
+            return True, "resolved"
+        source_id = named.permanent_id
     record = arm_turn_replacement(game, TurnReplacement(
         seat=game.players.index(context.caster),
         event=DAMAGE,
@@ -1397,6 +1416,7 @@ def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, cont
         becomes=(
             int(payload["becomes"]) if payload.get("becomes") is not None else None
         ),
+        source_id=source_id,
     ))
     what = (
         f"becomes {record.becomes}" if record.becomes is not None
@@ -1407,6 +1427,7 @@ def arm_turn_damage_replacement(game: Game, instruction: OracleInstruction, cont
         + ("combat " if record.combat_only else "")
         + "damage "
         + ("dealt by a creature " if record.source_creature else "")
+        + (f"dealt by {named.card.name} " if named is not None else "")
         + ("to a creature " if record.recipient_creature else "")
         + what
     )

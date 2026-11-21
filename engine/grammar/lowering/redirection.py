@@ -966,6 +966,28 @@ def _lower_turn_damage_replacement(
         payload["becomes"] = node.becomes
     else:
         payload["multiplier"] = node.multiplier
+    if node.source_target is not None:
+        # "Each time **target permanent** would deal damage …" (Overblaze.)
+        # The record answers to that one object, by identity, which the
+        # handler reads off the announcement; the description is what makes
+        # the picker ask for it, and every key of it is re-checked at
+        # resolution (CR 608.2b), so a narrowing the matcher cannot test is a
+        # record wider than the card.
+        if node.source_creature:
+            raise LoweringError(
+                "a turn damage replacement names its source once", node=node
+            )
+        payload["source"] = "target"
+        _describe_targets(payload, node.source_target)
+        untestable = untestable_filter_keys(
+            (payload.get("targets") or {}).get("filter") or {}
+        )
+        if untestable:
+            raise LoweringError(
+                "a turn damage replacement cannot test "
+                + ", ".join(sorted(untestable)),
+                node=node,
+            )
     return (OracleInstruction("arm_turn_damage_replacement", "", payload),)
 
 

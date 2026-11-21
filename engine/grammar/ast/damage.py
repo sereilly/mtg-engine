@@ -263,6 +263,10 @@ class TurnDamageReplacement:
     multiplier: int = 1
     #: "it deals **2** damage to that permanent or player instead".
     becomes: int | None = None
+    #: "Each time **target permanent** would deal damage …" (Overblaze): the
+    #: one announced object whose damage the record replaces; None is every
+    #: source the two flags above admit.
+    source_target: "TargetSpec | None" = None
 
 
 @dataclass(frozen=True)

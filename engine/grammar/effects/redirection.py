@@ -142,15 +142,32 @@ def _parse_turn_damage_replacement(stream: TokenStream) -> "ast.TurnDamageReplac
     sentence keeps the reader it has.
     """
     mark = stream.mark()
-    if not stream.accept_word("if"):
+    # "**Each time** target permanent would deal damage …" (Overblaze) is the
+    # same CR 614 condition as "If …": every event that matches is replaced,
+    # which is what a replacement does each time anyway.
+    if not (stream.accept_word("if") or stream.accept_phrase("each", "time")):
         return None
+    source_spec: ast.TargetSpec | None = None
     if stream.accept_phrase("a", "creature"):
         source_creature = True
     elif stream.accept_phrase("any", "source"):
         source_creature = False
     else:
-        stream.reset(mark)
-        return None
+        # "Each time **target permanent** would deal damage to a permanent or
+        # player this turn, it deals double that damage …" (Overblaze.) The
+        # source named by announcement rather than as a class: one target,
+        # whose damage alone the record replaces. Anything else is a different
+        # sentence and is left unread.
+        named = parse_recipient(stream)
+        if not (
+            isinstance(named, ast.TargetSpec)
+            and named.quantifier == "target"
+            and named.targeted
+            and named.count == 1
+        ):
+            stream.reset(mark)
+            return None
+        source_creature, source_spec = False, named
     if not stream.accept_phrase("would", "deal"):
         stream.reset(mark)
         return None
@@ -201,6 +218,7 @@ def _parse_turn_damage_replacement(stream: TokenStream) -> "ast.TurnDamageReplac
         at_least=at_least,
         multiplier=multiplier,
         becomes=becomes,
+        source_target=source_spec,
     )
 
 

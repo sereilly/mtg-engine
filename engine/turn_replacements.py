@@ -113,6 +113,9 @@ class TurnReplacement:
     becomes            -- "it deals **2** damage … instead"
     affected_seat      -- whose draws a DRAW record takes, whose gains a
                           LIFE_GAIN record replaces
+    source_id          -- "each time **target permanent** would deal damage"
+                          (Overblaze): the one permanent, by id, whose damage
+                          a DAMAGE record answers to; None is any source
     lifetime           -- END_OF_TURN; :func:`clear_turn_replacements` ends it
     """
 
@@ -127,6 +130,7 @@ class TurnReplacement:
     multiplier: int = 1
     becomes: int | None = None
     affected_seat: int | None = None
+    source_id: int | None = None
     lifetime: str = END_OF_TURN
 
 
@@ -206,5 +210,13 @@ def damage_record_answers(record: TurnReplacement, payload: dict) -> bool:
     if record.source_creature:
         source = payload.get("source")
         if not isinstance(source, Permanent) or not source.is_creature:
+            return False
+    if record.source_id is not None:
+        # "Each time target permanent would deal damage …" (Overblaze.) That
+        # object by identity: a permanent that left and came back is a new
+        # object (CR 400.7) with a new id, and a spell or a card is no
+        # permanent at all.
+        source = payload.get("source")
+        if getattr(source, "permanent_id", None) != record.source_id:
             return False
     return True
