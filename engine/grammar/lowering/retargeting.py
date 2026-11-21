@@ -169,6 +169,8 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
             "a retarget names the spell it changes rather than finding one",
             node=node,
         )
+    if node.any_targets:
+        return _lower_change_any_targets(node)
     filt = spec.filter
     if filt.target_count != 1:
         raise LoweringError(
@@ -255,3 +257,66 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
             {**payload, "targets": {"quantifier": "target", "count": 1}},
         ),
     )
+
+
+#: What "change any targets of target <spell>" (CR 115.7c) honours of its
+#: spell's noun phrase: the zone its head noun names, structurally (the
+#: handler reads ``game.stack``, ``_CHANGE_TARGET_HONOURED_FILTER_FIELDS``'
+#: reason), and the subtype union "Arcane spell" reads into — re-asked of the
+#: spell at resolution (CR 608.2b) and handed to the picker. Anything else is
+#: refused by ``_restrictions_beyond``.
+_CHANGE_ANY_TARGETS_HONOURED_FILTER_FIELDS = frozenset({"zone", "any_classes"})
+
+
+def _lower_change_any_targets(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...]:
+    """CR 115.7c — "You may change any targets of target Arcane spell."
+    (Sideswipe.)
+
+    **One instruction**, where the single-target retarget is two: the number
+    of choices is the spell's number of targets, which only the resolution
+    knows, so the handler owns the loop and suspends inside it — the shape
+    :func:`_lower_change_event_targets` has for Psychic Battle's "the target or
+    targets", with the object chosen by this effect's own target instead of
+    frozen by an event. Each target may be kept or moved to another legal
+    target (CR 115.7a, 115.7c), and only the final set is judged (CR 115.7e):
+    CR 115.7d's slot arithmetic, which ``stack_targets.new_target_options``
+    already does for a copy's new targets.
+
+    "You may" in front adds nothing CR 115.7c does not already allow —
+    changing none of the targets is one of its answers — and is folded into
+    the instruction by ``control_flow._offered_target_change``, for that
+    function's reason: the answer has to be taken while this resolves.
+
+    None of the single-target restrictions can ride here: "if that target is
+    you", "the new target must be…" and "…that targets only a player" are
+    questions about one target, and the spell carries no count.
+    """
+    filt = node.subject.filter
+    if (
+        node.current_target is not None or node.new_target is not None
+        or node.current_target_type is not None
+        or node.also_ability or filt.also_ability
+    ):
+        raise LoweringError(
+            "a change of any targets asks nothing about one target", node=node,
+        )
+    if filt.zone != "stack":
+        raise LoweringError(
+            "a change of targets names a spell; this phrase names a permanent",
+            node=node,
+        )
+    leftover = _restrictions_beyond(filt, _CHANGE_ANY_TARGETS_HONOURED_FILTER_FIELDS)
+    if leftover:
+        raise LoweringError(
+            "no handler honours this retarget restriction: " + ", ".join(leftover),
+            node=node,
+        )
+    payload: dict[str, object] = {
+        # Mandatory target (CR 601.2c), read by
+        # ``legality._ability_target_quantifiers``; the spec itself comes from
+        # the kind table in ``engine/payload_target_specs.py``.
+        "targets": {"quantifier": "target", "count": 1},
+    }
+    if filt.any_classes:
+        payload["any_classes"] = [list(entry) for entry in filt.any_classes]
+    return (OracleInstruction("change_any_spell_targets", "", payload),)

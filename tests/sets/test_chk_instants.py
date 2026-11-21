@@ -104,6 +104,120 @@ def test_w1g4_hisokas_defiance_offers_only_spirit_and_arcane_spells(set_pool):
     assert not game.queue_from_hand(0, "Hisoka's Defiance", target_stack_index=2).supported
     assert [item.card.name for item in game.stack][-1] == "Grizzly Bears"
 
+
+# "You may change any targets of target Arcane spell." (Sideswipe, CR 115.7c.)
+
+
+def _w1g4_put(game, seat, card):
+    from engine.models import Permanent
+
+    permanent = Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g4_glacial_ray_at_alice(set_pool, *, interactive):
+    """Bob's turn: Bob's Glacial Ray (Instant — Arcane, 2 damage to any
+    target) aimed at Alice's Grizzly Bears, Sideswipe in Alice's hand."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g4_table(
+        set_pool, hand=[chk["Sideswipe"]], opponent_hand=[chk["Glacial Ray"]],
+    )
+    game.interactive_seats = {0} if interactive else set()
+    mine = _w1g4_put(game, 0, lea["Grizzly Bears"])
+    theirs = _w1g4_put(game, 1, lea["Grizzly Bears"])
+    assert game.queue_from_hand(
+        1, "Glacial Ray", target_permanent_ids=[mine.permanent_id],
+    ).supported
+    return game, mine, theirs
+
+
+def _w1g4_retarget_to(permanent):
+    def answer(game, choice):
+        options = choice.data["options"]
+        index = next(
+            i for i, option in enumerate(options)
+            if option.get("permanent_id") == permanent.permanent_id
+        )
+        assert game.confirm_retarget_choice(choice.player_index, index)
+    return answer
+
+
+def _w1g4_keep(game, choice):
+    assert choice.data["options"][0]["kind"] == "keep"
+    assert game.confirm_retarget_choice(choice.player_index, 0)
+
+
+@_w1g4_pytest.mark.parametrize("moved", [True, False])
+def test_w1g4_sideswipe_changes_an_arcane_spells_target_or_keeps_it(set_pool, moved):
+    """Alice re-aims the Ray at Bob's Bears, or keeps its target: the prompt
+    offers "keep" first (CR 115.7c: any number of targets, none included)."""
+    game, mine, theirs = _w1g4_glacial_ray_at_alice(set_pool, interactive=True)
+    assert game.queue_from_hand(0, "Sideswipe", target_stack_index=0).supported
+    _w1g4_settle(game, answers={
+        "retarget_choice": _w1g4_retarget_to(theirs) if moved else _w1g4_keep,
+    })
+    assert game.is_on_battlefield(mine) is moved, game.log
+    assert game.is_on_battlefield(theirs) is (not moved)
+
+
+def test_w1g4_sideswipe_from_a_seat_nobody_asks_moves_the_ray_off_its_own_bears(set_pool):
+    """A seat nobody asks takes the measured answer: the Ray no longer kills
+    Alice's own Bears."""
+    game, mine, _theirs = _w1g4_glacial_ray_at_alice(set_pool, interactive=False)
+    assert game.queue_from_hand(0, "Sideswipe", target_stack_index=0).supported
+    _w1g4_settle(game)
+    assert game.is_on_battlefield(mine), game.log
+    assert any("changed Glacial Ray's target" in line for line in game.log)
+
+
+def test_w1g4_sideswipe_moves_any_number_of_several_targets(set_pool):
+    """Unearthly Blizzard ("Up to three target creatures can't block this
+    turn", Arcane) aimed at Alice's Bears and Hill Giant: Alice moves the
+    first onto her Serra Angel and keeps the second (CR 115.7c), and the
+    second slot is not offered the Angel the first now names (CR 115.3)."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g4_table(
+        set_pool, hand=[chk["Sideswipe"]], opponent_hand=[chk["Unearthly Blizzard"]],
+    )
+    game.interactive_seats = {0}
+    bears, giant, angel = (
+        _w1g4_put(game, 0, lea[name]) for name in ("Grizzly Bears", "Hill Giant", "Serra Angel")
+    )
+    attacker = _w1g4_put(game, 1, lea["Grizzly Bears"])
+    assert game.queue_from_hand(
+        1, "Unearthly Blizzard", target_permanent_ids=[bears.permanent_id, giant.permanent_id],
+    ).supported
+    assert game.queue_from_hand(0, "Sideswipe", target_stack_index=0).supported
+    first = _w1g4_settle(game, defaults=False)
+    assert first.kind == "retarget_choice"
+    _w1g4_retarget_to(angel)(game, first)
+    second = _w1g4_settle(game, defaults=False)
+    assert angel.permanent_id not in [o.get("permanent_id") for o in second.data["options"]]
+    _w1g4_keep(game, second)
+    _w1g4_settle(game)
+    assert game._can_block_attacker(bears, attacker), game.log
+    assert not game._can_block_attacker(giant, attacker)
+    assert not game._can_block_attacker(angel, attacker)
+
+
+def test_w1g4_sideswipe_targets_only_an_arcane_spell(set_pool):
+    """Giant Growth is an instant but not Arcane: Sideswipe has nothing to
+    target and the cast is refused."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g4_table(
+        set_pool, hand=[chk["Sideswipe"]], opponent_hand=[lea["Giant Growth"]],
+    )
+    theirs = _w1g4_put(game, 1, lea["Grizzly Bears"])
+    assert game.queue_from_hand(
+        1, "Giant Growth", target_permanent_ids=[theirs.permanent_id],
+    ).supported
+    sideswipe = chk["Sideswipe"]
+    assert not game._enumerate_targets(0, sideswipe, _w1g4_cast_spec(sideswipe), for_cast=True)
+    assert not game.queue_from_hand(0, "Sideswipe", target_stack_index=0).supported
+
 # ==== end w1g4 ======================================================
 
 

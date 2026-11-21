@@ -360,6 +360,14 @@ def parse_imperative_verb(
         if reselected is not None:
             return reselected
     if stream.at_word("change"):
+        # "…change **any targets** of target Arcane spell." (Sideswipe, CR
+        # 115.7c.) Asked before the base-P/T rewrite, which reads "change
+        # <subject>'s base …" and *raises* on a subject it cannot read rather
+        # than refusing without consuming — "any targets" is not a subject.
+        if stream.peek_word(1) == "any":
+            any_retarget = _parse_change_target(stream)
+            if any_retarget is not None:
+                return any_retarget
         # The base-P/T rewrite is tried first and refuses without consuming
         # when the sentence is "change the text of …", so the two readings of
         # the verb cannot shadow each other.

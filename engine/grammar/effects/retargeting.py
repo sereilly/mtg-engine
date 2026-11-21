@@ -158,6 +158,22 @@ def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
       to ask it before the ability is activated at all.
     """
     mark = stream.mark()
+    # "You may change **any targets of** target Arcane spell." (Sideswipe.)
+    # CR 115.7c's spelling: any number of the spell's targets, so there is no
+    # "with a single target" to read and no "if that target is" either — both
+    # are about one target. The spell is read by the shared noun parser, and
+    # it has to be a *spell*: "Arcane spell" records the zone (a subtype union
+    # with the head noun "spell", ``nouns``), and a phrase without it names a
+    # permanent no retarget can move.
+    if stream.accept_phrase("change", "any", "targets", "of"):
+        subject = parse_target_spec(stream)
+        if (
+            subject is None
+            or subject.quantifier != "target"
+            or subject.filter.zone != "stack"
+        ):
+            raise stream.error("expected the spell whose targets to change")
+        return ast.ChangeTarget(subject, any_targets=True)
     if not stream.accept_phrase("change", "the", "target", "of"):
         stream.reset(mark)
         return None

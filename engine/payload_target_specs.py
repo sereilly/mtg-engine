@@ -1228,6 +1228,16 @@ def _retarget_spec(payload: dict) -> dict:
     return spec
 
 
+def _retarget_any_spec(payload: dict) -> dict:
+    """"You may change any targets of target **Arcane spell**" (Sideswipe —
+    CR 115.7c). The stack picker, narrowed by the spell's noun phrase in the
+    shape a counterspell's is (``stack_any_classes``, read by the one stack
+    enumeration) — and by nothing about its targets: CR 115.7c names no count,
+    so an Arcane spell that chose none is a legal target whose targets simply
+    cannot move."""
+    return _counter_spec(payload)
+
+
 def _copy_for_each_other_target_spec(payload: dict) -> dict:
     """"Choose target instant or sorcery spell **that targets only a single
     permanent or player**." (Radiate.) The stack picker a copy raises, with
@@ -1329,6 +1339,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "copy_spell_for_each_other_target": _copy_for_each_other_target_spec,
     "copy_top_stack_spell": _copy_target_spell_spec,
     "change_target_spell_target": _retarget_spec,
+    "change_any_spell_targets": _retarget_any_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     # "Target player shuffles up to three target cards from their graveyard
     # into their library." (Gaea's Blessing.) The same picker: the cards are
