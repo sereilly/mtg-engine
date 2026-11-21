@@ -811,7 +811,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | parse rule | 6647 |
 | activation cost | 2862 |
 | trigger table | 2047 |
-| static-line table | 1593 |
+| static-line table | 1594 |
 | keyword table | 1418 |
 | aura enchant noun (oracle_instructions attach) | 401 |
 | activation_restrictions.py | 215 |
@@ -852,7 +852,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | cast_permissions.py (board-wide free cast) | 1 |
 | special_actions.py | 1 |
 | mixins/effects.py (_set_lockout_banning_card) | 1 |
-| cast_bans.py (board-wide own-turn window) | 1 |
 | cast_bans.py (most-permanents play ban) | 1 |
 | target_restrictions.py | 1 |
 | step_skips.py | 1 |

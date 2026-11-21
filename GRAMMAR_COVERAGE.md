@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 440 | 73.4% | 70.7% | 50.7% | 192 |
+| CHK *(measured)* | 291 | 440 | 76.1% | 74.3% | 53.2% | 201 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,9 +71,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1015 | 519 | expected a subject |  |
-| 206 | 108 | unrecognized effect verb |  |
-| 150 | 79 | unconsumed text |  |
+| 1006 | 511 | expected a subject |  |
+| 204 | 106 | unrecognized effect verb |  |
+| 149 | 78 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -6022,6 +6022,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}: Regenerate this creature.`
 - **Hornet Cannon**
   - `{3}, {T}: Create a 1/1 colorless Insect artifact creature token with flying and haste named Hornet. Destroy it at the beginning of the next end step.`
+- **Horobi, Death's Wail**
+  - `Whenever a creature becomes the target of a spell or ability, destroy that creature.`
 - **Horror of Horrors**
   - `Sacrifice a Swamp: Regenerate target black creature. (The next time that creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
 - **Horseshoe Crab**
@@ -6818,6 +6820,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if your opponents control no creatures, this creature deals 4 damage to you.`
 - **Khabál Ghoul**
   - `At the beginning of each end step, put a +1/+1 counter on this creature for each creature that died this turn.`
+- **Kiki-Jiki, Mirror Breaker**
+  - `{T}: Create a token that's a copy of target nonlegendary creature you control, except it has haste. Sacrifice it at the beginning of the next end step.`
 - **Kiku, Night's Flower**
   - `{2}{B}{B}, {T}: Target creature deals damage to itself equal to its power.`
 - **Kill Switch**
@@ -8991,6 +8995,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target opponent reveals their hand. You choose a creature card from it. That player discards that card.`
 - **Otarian Juggernaut**
   - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +3/+0 and attacks each combat if able.`
+- **Otherworldly Journey**
+  - `Exile target creature. At the beginning of the next end step, return that card to the battlefield under its owner's control with a +1/+1 counter on it.`
 - **Oubliette**
   - `When this enchantment enters, target creature phases out until this enchantment leaves the battlefield. Tap that creature as it phases in this way. (Auras and Equipment phase out with it. While permanents are phased out, they're treated as though they don't exist.)`
 - **Ouphe Vandals**
@@ -10423,6 +10429,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
   - `The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
+- **Reverse the Sands**
+  - `Redistribute any number of players' life totals. (Each of those players gets one life total back.)`
 - **Revitalize**
   - `You gain 3 life.`
   - `Draw a card.`
@@ -11476,6 +11484,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, return target instant or sorcery card from your graveyard to your hand.`
 - **Shisato, Whispering Hunter**
   - `At the beginning of your upkeep, sacrifice a Snake.`
+  - `Whenever Shisato deals combat damage to a player, that player skips their next untap step.`
 - **Shiv's Embrace**
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
 - **Shivan Dragon**
@@ -11992,6 +12001,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this land becomes tapped, it deals 2 damage to you and each creature you control.`
 - **Sosuke, Son of Seshiro**
   - `Other Snake creatures you control get +1/+0.`
+  - `Whenever a Warrior you control deals combat damage to a creature, destroy that creature at end of combat.`
 - **Soul Barrier**
   - `Whenever an opponent casts a creature spell, this enchantment deals 2 damage to that player unless they pay {2}.`
   - `Whenever an opponent casts a creature spell, this enchantment deals 2 damage to that player unless they pay {2}.`
@@ -13340,6 +13350,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Create a 5/5 blue Wall creature token with defender. Sacrifice it at the beginning of the next end step.`
 - **Tide Skimmer**
   - `Whenever you attack with two or more creatures with flying, draw a card.`
+- **Tide of War**
+  - `Whenever one or more creatures block, flip a coin. If you win the flip, each blocking creature is sacrificed by its controller. If you lose the flip, each blocked creature is sacrificed by its controller.`
 - **Tigereye Cameo**
   - `{T}: Add {G} or {W}.`
 - **Timberland Ruins**
@@ -14000,6 +14012,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, this creature phases out unless you pay {U}{U}. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Varchild's Crusader**
   - `{0}: This creature can't be blocked this turn except by Walls. Sacrifice this creature at the beginning of the next end step.`
+- **Vassal's Duty**
+  - `{1}: The next 1 damage that would be dealt to target legendary creature you control this turn is dealt to you instead.`
 - **Vault of Whispers**
   - `{T}: Add {B}.`
 - **Vebulid**
@@ -14628,6 +14642,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Whiteout**
   - `All creatures lose flying until end of turn.`
   - `Sacrifice a snow land: Return this card from your graveyard to your hand.`
+- **Wicked Akuba**
+  - `{B}: Target player dealt damage by this creature this turn loses 1 life.`
 - **Wicked Reward**
   - `Target creature gets +4/+2 until end of turn.`
 - **Wiitigo**
@@ -14894,6 +14910,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Until your next upkeep, target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value.`
 - **Xira Arien**
   - `{B}{R}{G}, {T}: Target player draws a card.`
+- **Yamabushi's Flame**
+  - `Yamabushi's Flame deals 3 damage to any target. If a creature dealt damage this way would die this turn, exile it instead.`
+- **Yamabushi's Storm**
+  - `Yamabushi's Storm deals 1 damage to each creature. If a creature dealt damage this way would die this turn, exile it instead.`
 - **Yare**
   - `Target creature defending player controls gets +3/+0 until end of turn. That creature can block up to two additional creatures this turn.`
 - **Yavimaya Ancients**
