@@ -2758,6 +2758,7 @@ class BattlefieldCanvas {
         index: item.idx,
         name: card.name ?? null,
         printed_name: card.printed_name ?? null,
+        flipped: card.flipped === true,
         tapped: !!card.tapped,
         attached_to_id: card.attached_to_id ?? null,
         // "aura" (an attachment fan, keys[0] the host) or "pile" (identical
@@ -3265,6 +3266,30 @@ class BattlefieldCanvas {
     ctx.restore();
   }
 
+  // CR 710.3: "it must be clear at all times whether it's flipped". A flipped
+  // flip card's every field is already its bottom half's (the server swaps
+  // the card, `engine/flip_cards.py`), so the name plate says Tomoya the
+  // Revealer; this amber ribbon across the top of the art — turned upside
+  // down under it, as the card is on the table — says the card was turned.
+  _drawFlippedRibbon(ctx, artX, artTop, artW, nh) {
+    const bandH = Math.max(9, nh * 0.85);
+    ctx.save();
+    ctx.fillStyle = "rgba(150, 96, 12, 0.9)";
+    ctx.fillRect(artX, artTop, artW, bandH);
+    ctx.strokeStyle = "rgba(255, 214, 140, 0.95)";
+    ctx.lineWidth = 1 / this.zoom;
+    ctx.beginPath();
+    ctx.moveTo(artX, artTop + bandH);
+    ctx.lineTo(artX + artW, artTop + bandH);
+    ctx.stroke();
+    ctx.fillStyle = "#fff4dc";
+    ctx.font = `bold ${Math.max(6.5, bandH * 0.66)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(_ellipsizeText(ctx, "⇅ FLIPPED", artW - 4), artX + artW / 2, artTop + bandH / 2 + 0.5);
+    ctx.restore();
+  }
+
   _drawCardFace(ctx, x, y, w, h, card, flags, creatureCard) {
     const { selected, attacking, hovered, targeting, pileCount, emblem, enchantTargetHover, fullImage, noShadow } = flags || {};
     // CR 708: a face-down object is drawn as the seat looking at it may see it
@@ -3346,7 +3371,16 @@ class BattlefieldCanvas {
       ctx.clip();
       ctx.fillStyle = "#0d1320";
       ctx.fillRect(artX, artTop, artW, artH);
-      if (img) {
+      if (img && _isFlipped(card)) {
+        // CR 710.3: a flipped flip card is turned around on the table, so its
+        // one art reads upside down — the first of the two marks (the other
+        // is the FLIPPED ribbon below) that it is flipped.
+        ctx.save();
+        ctx.translate(artX + artW / 2, artTop + artH / 2);
+        ctx.rotate(Math.PI);
+        this._drawImageCover(ctx, img, -artW / 2, -artH / 2, artW, artH);
+        ctx.restore();
+      } else if (img) {
         this._drawImageCover(ctx, img, artX, artTop, artW, artH);
       } else if (card?.name) {
         ctx.fillStyle = "#8ab";
@@ -3376,6 +3410,9 @@ class BattlefieldCanvas {
 
     // ---- Title plate ----
     this._drawNamePlate(ctx, card?.name, x + m, y + m, w - 2 * m, nh, fc, artR + 1);
+
+    // ---- Flipped ribbon (CR 710.3: clear at all times) ----
+    if (_isFlipped(card) && artH > 4) this._drawFlippedRibbon(ctx, artX, artTop, artW, nh);
 
     // ---- Commander crown (CR 903.3: the designated card, never a copy) ----
     if (card?.is_commander) {
@@ -5821,6 +5858,12 @@ function _beamParticles() {
 // (web/serialization._serialize_arriving).
 function _isEntering(card) {
   return !!card && card.entering === true;
+}
+
+// CR 710: a flip card's permanent that has flipped (`flipped: true`, sent for
+// every permanent; `name`, type and P/T are already its bottom half's).
+function _isFlipped(card) {
+  return !!card && card.flipped === true;
 }
 
 // The card a permanent is printed on (`printed_name`), where its `name` is the

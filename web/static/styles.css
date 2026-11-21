@@ -2408,6 +2408,37 @@ h2.targeting-valid {
   display: none;
 }
 
+/* CR 710.3: a flipped flip card is turned around on the table, so its printed
+   image is turned with it — the half that applies reads upright. */
+.card-preview-frame img.card-preview-image-flipped {
+  transform: rotate(180deg);
+}
+
+/* The flip card's half that does not apply (CR 710.1/710.2), printed upside
+   down in the viewer as it is on the card. */
+.preview-flip-lead {
+  color: #f0c46a;
+}
+
+.preview-flip-inactive {
+  display: block;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px dashed rgba(240, 196, 106, 0.55);
+  border-radius: 6px;
+  opacity: 0.78;
+  transform: rotate(180deg);
+}
+
+.preview-flip-inactive-name {
+  font-weight: 700;
+}
+
+.preview-flip-inactive-type {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
 .empty-preview {
   border-style: dashed;
 }

@@ -23103,6 +23103,48 @@ function faceDownPreviewLines(card) {
   return lines;
 }
 
+// CR 710: a flip card's two halves (`flip: {top, bottom}`, sent wherever the
+// card is — a permanent, a hand card, a library or graveyard preview). The
+// half that applies is the one the card's own fields already are: the bottom
+// half for a permanent that has flipped (`flipped: true`), the top half
+// everywhere else (CR 710.2). The viewer shows the other half too, upside
+// down, as it is printed on the card. Null for a card with one half.
+function flipPreviewHalves(card) {
+  const flip = card && typeof card === "object" ? card.flip : null;
+  if (!flip || typeof flip !== "object" || !flip.top || !flip.bottom) return null;
+  const flipped = card.flipped === true;
+  return {
+    flipped,
+    onBattlefield: typeof card.flipped === "boolean",
+    active: flipped ? flip.bottom : flip.top,
+    inactive: flipped ? flip.top : flip.bottom,
+  };
+}
+
+// The line that says which half applies, above the rules text.
+function flipPreviewLead(halves) {
+  if (!halves) return "";
+  if (halves.flipped) {
+    return `⇅ Flipped — this permanent is ${halves.active.name}, the card's bottom half `
+      + `(its colour and mana cost stay the card's, CR 710.1c). ${halves.inactive.name} no longer applies.`;
+  }
+  if (halves.onBattlefield) {
+    return `Flip card, not flipped — ${halves.inactive.name} (upside down below) applies only once it flips (CR 710.1b).`;
+  }
+  return `Flip card — off the battlefield it is only ${halves.active.name} (CR 710.2); `
+    + `${halves.inactive.name} (upside down below) applies to a permanent that flips.`;
+}
+
+// The half that does not apply, printed upside down as it is on the card.
+function flipPreviewInactiveHtml(half) {
+  const pt = half.power != null && half.toughness != null && half.power !== "" ? ` ${half.power}/${half.toughness}` : "";
+  return `<div class="preview-flip-inactive" title="The other half of this flip card (CR 710.1)">`
+    + `<div class="preview-flip-inactive-name">${escapeHtml(half.name || "")}${escapeHtml(pt)}</div>`
+    + `<div class="preview-flip-inactive-type">${escapeHtml(half.type || "")}</div>`
+    + `<div>${renderSymbolsInline(half.oracle_text || "")}</div>`
+    + "</div>";
+}
+
 // Which way the board moves what this card's cast is charged, from the
 // server's two flags (`cost_increased` / `cost_reduced`, web/serialization's
 // `_cast_price` over `cost_modifiers.cast_mana_charge`): "reduced",
@@ -23156,6 +23198,11 @@ function showCardPreview(card) {
     sections.push("👑 Commander - this is the designated commander card");
   }
   for (const line of faceDownPreviewLines(card)) sections.push(renderSymbolsInline(line));
+  // CR 710: which half of a flip card applies, said before anything else.
+  const flipHalves = flipPreviewHalves(card);
+  if (flipHalves) {
+    sections.push(`<span class="preview-flip-lead">${escapeHtml(flipPreviewLead(flipHalves))}</span>`);
+  }
   const priceNote = castPriceNote(card);
   if (priceNote) sections.push(`<span class="preview-price-${castPriceChange(card)}">${renderSymbolsInline(priceNote)}</span>`);
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
@@ -23181,8 +23228,14 @@ function showCardPreview(card) {
   }
   for (const line of counterLines) sections.push(renderSymbolsInline(line));
   if (sicknessLabel) sections.push(renderSymbolsInline(sicknessLabel));
+  // …and the other half of a flip card, upside down as it is printed.
+  if (flipHalves) sections.push(flipPreviewInactiveHtml(flipHalves.inactive));
   const previewEl = q("cardPreviewText");
   if (previewEl) previewEl.innerHTML = sections.join("<br>");
+  // A flipped permanent's card is turned around on the table (CR 710.3): its
+  // printed image is turned too, so the half that applies reads upright and
+  // the other one upside down. Every other card's image is as printed.
+  q("cardPreviewImage")?.classList.toggle("card-preview-image-flipped", !!flipHalves?.flipped);
 
   if (!largeImageUri) {
     q("cardPreview").classList.add("empty-preview");
