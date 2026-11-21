@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**452 / 663 tracked rules covered (68%)** — 3797 tests, 0 unannotated.
+**452 / 663 tracked rules covered (68%)** — 3805 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -318,7 +318,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(13 tests, subrules b)*
 - [x] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces... *(5 tests)*
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
-- [x] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the... *(6 tests)*
+- [x] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the... *(7 tests)*
 - [ ] **119.8** If an effect says that a player can’t lose life, that player can’t make an exchange such that the...
 - [x] **119.9** Some triggered abilities are written, “Whenever [a player] gains life, . . . .” Such abilities ar... *(4 tests)*
 - [x] **119.10** Some replacement effects are written, “If [a player] would gain life, . . . .” Such abilities are... *(1 tests)*
@@ -671,7 +671,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(354 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(362 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(32 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -919,7 +919,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.44** Sunburst *(12 tests, subrules abcd)*
 - [x] **702.45** Bushido *(10 tests, subrules ab)*
 - [x] **702.46** Soulshift *(7 tests, subrules ab)*
-- [x] **702.47** Splice *(21 tests, subrules abcde)*
+- [x] **702.47** Splice *(24 tests, subrules abcde)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 
