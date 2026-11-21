@@ -7653,10 +7653,22 @@ function applyNumberChoicePrompt(info) {
         `${escapeHtml(paysLife ? `Pay ${n} life` : String(n))}</button>`
     )
     .join("");
-  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+  // An open number ("a number greater than 0", Mindblaze; CR 107.1 sets no
+  // ceiling) is any number from the floor up: the buttons are the server's
+  // offer — sized off the largest hand, which says nothing about Mindblaze's
+  // count of a library — so a typed number beside them takes any other.
+  const open = !paysLife && !Number.isInteger(info.maximum);
+  const typed = open
+    ? '<div class="prompt-choice-row">'
+      + `<input id="numberChoiceCustom" type="number" min="${escapeHtml(String(info.minimum))}" step="1"`
+      + ` placeholder="Another number" value="${escapeHtml(numberChoiceDraft ?? "")}" />`
+      + '<button type="button" class="prompt-choice-btn" data-number-custom="1">Choose</button></div>'
+    : "";
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>${typed}`;
 
   steps.querySelectorAll("[data-number]").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      numberChoiceDraft = null;
       await sendAction({
         seat,
         action: "number_choice_confirm",
@@ -7664,6 +7676,34 @@ function applyNumberChoicePrompt(info) {
       });
     });
   });
+  const input = steps.querySelector("#numberChoiceCustom");
+  input?.addEventListener("input", () => { numberChoiceDraft = input.value; });
+  const submitTyped = async () => {
+    const number = openNumberChoiceAnswer(info, input?.value);
+    if (number === null) {
+      updateActionHint(`Type a whole number of ${info.minimum} or more.`, true);
+      return;
+    }
+    numberChoiceDraft = null;
+    try {
+      await sendAction({ seat, action: "number_choice_confirm", number });
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  };
+  input?.addEventListener("keydown", (event) => { if (event.key === "Enter") submitTyped(); });
+  steps.querySelector("[data-number-custom]")?.addEventListener("click", submitTyped);
+}
+
+// What a typed answer to an open number choice is: a whole number at or
+// above the floor, or null — the floor is the one bound the rule has.
+let numberChoiceDraft = null;
+
+function openNumberChoiceAnswer(info, text) {
+  const raw = String(text ?? "").trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const number = Number(raw);
+  return Number.isSafeInteger(number) && number >= Number(info?.minimum ?? 0) ? number : null;
 }
 
 // Goblin Game: "Each player hides at least one item, then all players reveal

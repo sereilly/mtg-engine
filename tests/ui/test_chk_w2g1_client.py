@@ -634,3 +634,45 @@ def test_w2g1_an_x_held_to_the_targets_mana_value_is_offered_as_those_values(set
     assert activate(2).status_code == 200
     settle(game)
     assert stone not in game.players[1].battlefield, game.log[-6:]
+
+
+# ---------------------------------------------------------------------------
+# Mindblaze: an open number — any number from the floor, not just the offer
+# ---------------------------------------------------------------------------
+
+
+def test_w2g1_mindblazes_open_number_takes_a_typed_number_beyond_the_offer(set_pool):
+    """"Choose a nonland card name and a number greater than 0": the number
+    prompt's buttons are an offer sized off the largest hand (1 and 2 here),
+    which says nothing about a library count, and CR 107.1 sets no ceiling.
+    The typed answer (`openNumberChoiceAnswer`) takes any whole number at or
+    above the floor — 4 is accepted by the server — and refuses 0 and junk."""
+    sid, game = _w2g1_session()
+    game.enforce_mana_costs = False
+    game.players[0].hand = [_w2g1_card(set_pool, "Mindblaze")]
+    game.players[1].hand = [_w2g1_card(set_pool, "Island")]
+    game.players[1].library = [_w2g1_card(set_pool, "Grizzly Bears")] * 4
+    cast = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "cast", "card_name": "Mindblaze", "target_seat": 1,
+    })
+    assert cast.status_code == 200, cast.text
+    client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    named = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "choose_card_name_confirm", "card_name": "Grizzly Bears",
+    })
+    assert named.status_code == 200, named.text
+    info = _w2g1_state(sid)["number_choice"]
+    assert info["minimum"] == 1 and info["maximum"] is None and 4 not in info["options"]
+    answers = run_app_js(
+        ["openNumberChoiceAnswer"],
+        "return ['4', '0', '', '2.5', 'x', ' 7 '].map((text) => openNumberChoiceAnswer(INPUT, text));",
+        info,
+    )
+    assert answers == [4, None, None, None, None, 7]
+    life = game.players[1].life
+    chosen = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "number_choice_confirm", "number": 4,
+    })
+    assert chosen.status_code == 200, chosen.text
+    settle(game)
+    assert game.players[1].life == life - 8, game.log[-5:]
