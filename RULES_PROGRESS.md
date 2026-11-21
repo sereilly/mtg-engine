@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**446 / 657 tracked rules covered (67%)** — 3771 tests, 0 unannotated.
+**451 / 662 tracked rules covered (68%)** — 3779 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [121. Drawing a Card](#121-drawing-a-card) | 5/9 | 55% |
 | [122. Counters](#122-counters) | 5/9 | 55% |
 | [200. General](#200-general) | 0/3 | 0% |
-| [201. Name](#201-name) | 2/6 | 33% |
+| [201. Name](#201-name) | 3/6 | 50% |
 | [202. Mana Cost and Color](#202-mana-cost-and-color) | 4/4 | 100% |
 | [205. Type Line](#205-type-line) | 4/4 | 100% |
 | [206. Expansion Symbol](#206-expansion-symbol) | 1/1 | 100% |
@@ -96,6 +96,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [707. Copying Objects](#707-copying-objects) | 6/14 | 42% |
 | [708. Face-Down Spells and Permanents](#708-face-down-spells-and-permanents) | 7/12 | 58% |
 | [709. Split Cards](#709-split-cards) | 4/4 | 100% |
+| [710. Flip Cards](#710-flip-cards) | 4/5 | 80% |
 | [723. Controlling Another Player](#723-controlling-another-player) | 5/9 | 55% |
 | [724. Ending Turns and Phases](#724-ending-turns-and-phases) | 1/2 | 50% |
 | [733. Handling Illegal Actions](#733-handling-illegal-actions) | 2/2 | 100% |
@@ -216,7 +217,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **110.2** A permanent’s owner is the same as the owner of the card that represents it (unless it’s a token;... *(3 tests, subrules a)*
 - [x] **110.3** A nontoken permanent’s characteristics are the same as those printed on its card, as modified by ... *(1 tests)*
 - [x] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I... *(9 tests, subrules a)*
-- [x] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t... *(5 tests, subrules abd)*
+- [x] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t... *(7 tests, subrules abcd)*
 
 ### 111. Tokens
 
@@ -370,7 +371,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **201.1** The name of a card is printed on its upper left corner.
 - [x] **201.2** A card’s name is always considered to be the English version of its name, regardless of printed l... *(7 tests, subrules a)*
 - [ ] **201.3** Some cards with different English names are treated as though they had the same English name. Pai...
-- [ ] **201.4** If an effect instructs a player to choose a card name, the player must choose the name of a card ...
+- [x] **201.4** If an effect instructs a player to choose a card name, the player must choose the name of a card ... *(1 tests, subrules c)*
 - [x] **201.5** Text that refers to the object it’s on by name means just that particular object and not any othe... *(2 tests, subrules c)*
 - [ ] **201.6** Promotional or alternate-art versions of some cards feature a secondary title bar below the name ...
 
@@ -491,7 +492,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(21 tests, subrules a)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(43 tests, subrules a)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(44 tests, subrules a)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -688,7 +689,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 603. Handling Triggered Abilities
 
-- [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(6 tests, subrules b)*
+- [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(7 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(49 tests, subrules bcde)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(129 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
@@ -697,7 +698,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(51 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(38 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(39 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -948,8 +949,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(58 tests, subrules abc)*
-- [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(59 tests, subrules abc)*
+- [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(3 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(3 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(14 tests)*
 - [ ] **707.6** When copying a permanent, any choices that have been made for that permanent aren’t copied. Inste...
@@ -983,6 +984,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **709.2** Although split cards have two castable halves, each split card is only one card. For example, a p... *(2 tests)*
 - [x] **709.3** A player chooses which half of a split card they are casting before putting it onto the stack. *(20 tests, subrules ab)*
 - [x] **709.4** In every zone except the stack, the characteristics of a split card are those of its two halves c... *(10 tests, subrules abc)*
+
+### 710. Flip Cards
+
+- [x] **710.1** Flip cards have a two-part card frame on a single card. The text that appears right side up on th... *(3 tests, subrules abc)*
+- [x] **710.2** In every zone other than the battlefield, and also on the battlefield before the permanent flips,... *(3 tests)*
+- [ ] **710.3** You must ensure that it’s clear at all times whether a permanent you control is flipped or not, b...
+- [x] **710.4** Flipping a permanent is a one-way process. Once a permanent is flipped, it’s impossible for it to... *(2 tests)*
+- [x] **710.5** If an effect instructs a player to choose a card name and the player wants to choose a flip card’... *(1 tests)*
 
 ### 723. Controlling Another Player
 

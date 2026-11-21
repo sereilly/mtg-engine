@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | DST | 165 | 285 | 80.4% | 79.6% | 57.5% | 135 |
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| CHK *(measured)* | 291 | 440 | 81.8% | 81.1% | 58.6% | 214 |
+| CHK *(measured)* | 291 | 462 | 82.3% | 81.6% | 59.5% | 224 |
 | **All (shipped)** | **9613** | **14337** | **89.7%** | **89.2%** | **62.0%** | **7551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -71,9 +71,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1002 | 507 | expected a subject |  |
+| 999 | 506 | expected a subject |  |
 | 198 | 100 | unrecognized effect verb |  |
-| 147 | 76 | unconsumed text |  |
+| 151 | 78 | unconsumed text |  |
 | 83 | 63 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -287,6 +287,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice a land: This creature gets +2/+0 until end of turn. Activate only once each turn.`
 - **Akki Coalflinger**
   - `{R}, {T}: Attacking creatures gain first strike until end of turn.`
+- **Akki Lavarunner**
+  - `Whenever this creature deals damage to an opponent, flip it.`
 - **Akki Rockspeaker**
   - `When this creature enters, add {R}.`
 - **Akki Underminer**
@@ -1634,6 +1636,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}: Reveal the top card of your library. If it's a land card, this creature gets +1/+0 and gains first strike until end of turn. Activate only once each turn.`
 - **Bubbling Muck**
   - `Until end of turn, whenever a player taps a Swamp for mana, that player adds an additional {B}.`
+- **Budoka Gardener**
+  - `{T}: You may put a land card from your hand onto the battlefield. If you control ten or more lands, flip this creature.`
+  - `{4}{G}{G}, {T}: Create an X/X green Elemental creature token, where X is the number of lands you control.`
 - **Builder's Bane**
   - `Destroy X target artifacts. Builder's Bane deals damage to each player equal to the number of artifacts they controlled that were put into a graveyard this way.`
 - **Bull Elephant**
@@ -1670,6 +1675,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice this creature: Target creature gets +2/+2 until end of turn.`
 - **Burst of Energy**
   - `Untap target permanent.`
+- **Bushi Tenderfoot**
+  - `When a creature dealt damage by this creature this turn dies, flip this creature.`
 - **Butcher Orgg**
   - `You may assign this creature's combat damage divided as you choose among defending player and/or any number of creatures they control.`
 - **Bösium Strip**
@@ -6343,6 +6350,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove X charge counters from this artifact: Target creature gets -X/-X until end of turn.`
 - **Inheritance**
   - `Whenever a creature dies, you may pay {3}. If you do, draw a card.`
+- **Initiate of Blood**
+  - `{T}: This creature deals 1 damage to target creature that was dealt damage this turn. When that creature dies this turn, flip this creature.`
 - **Initiates of the Ebon Hand**
   - `{1}: Add {B}. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
   - `{1}: Add {B}. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
@@ -6666,6 +6675,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Junún Efreet**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {B}{B}.`
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {B}{B}.`
+- **Jushi Apprentice**
+  - `{2}{U}, {T}: Draw a card. If you have nine or more cards in hand, flip this creature.`
+  - `{3}{U}{U}, {T}: Target player draws X cards, where X is the number of cards in your hand.`
 - **Justice**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {W}{W}.`
   - `Whenever a red creature or spell deals damage, this enchantment deals that much damage to that creature's or spell's controller.`
@@ -6884,6 +6896,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Kitsune Healer**
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent all damage that would be dealt to target legendary creature this turn.`
+- **Kitsune Mystic**
+  - `At the beginning of the end step, if this creature is enchanted by two or more Auras, flip it.`
+  - `{1}: Attach target Aura attached to a creature to another creature.`
 - **Kjeldoran Dead**
   - `When this creature enters, sacrifice a creature.`
   - `{B}: Regenerate this creature.`
@@ -8655,6 +8670,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player may search their library for up to X basic land cards and put them onto the battlefield tapped. Then each player who searched their library this way shuffles.`
 - **Nezumi Bone-Reader**
   - `{B}, Sacrifice a creature: Target player discards a card. Activate only as a sorcery.`
+- **Nezumi Graverobber**
+  - `{1}{B}: Exile target card from an opponent's graveyard. If no cards are in that graveyard, flip this creature.`
+  - `{4}{B}: Put target creature card from a graveyard onto the battlefield under your control.`
+- **Nezumi Shortfang**
+  - `{1}{B}, {T}: Target opponent discards a card. Then if that player has no cards in hand, flip this creature.`
+  - `At the beginning of each opponent's upkeep, that player loses 1 life for each card fewer than three in their hand.`
 - **Niall Silvain**
   - `{G}{G}{G}{G}, {T}: Regenerate target creature.`
 - **Niambi, Esteemed Speaker**
@@ -9006,6 +9027,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Prevent the next 3 damage that would be dealt to any target this turn.`
 - **Ornery Dilophosaur**
   - `Whenever this creature attacks, if you control a creature with power 4 or greater, this creature gets +2/+2 until end of turn.`
+- **Orochi Eggwatcher**
+  - `{2}{G}, {T}: Create a 1/1 green Snake creature token. If you control ten or more creatures, flip this creature.`
+  - `{G}, Sacrifice a creature: Target creature gets +3/+3 until end of turn.`
 - **Orochi Hatchery**
   - `{5}, {T}: Create a 1/1 green Snake creature token for each charge counter on this artifact.`
 - **Orochi Leafcaller**
@@ -12615,6 +12639,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}, {T}, Discard a card: Counter target noncreature spell.`
 - **Stronghold Taskmaster**
   - `Other black creatures get -1/-1.`
+- **Student of Elements**
+  - `When this creature has flying, flip it.`
+  - `Creatures you control have flying.`
 - **Stun**
   - `Target creature can't block this turn.`
   - `Draw a card.`
