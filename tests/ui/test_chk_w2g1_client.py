@@ -676,3 +676,29 @@ def test_w2g1_mindblazes_open_number_takes_a_typed_number_beyond_the_offer(set_p
     assert chosen.status_code == 200, chosen.text
     settle(game)
     assert game.players[1].life == life - 8, game.log[-5:]
+
+
+def test_w2g1_a_spliced_texts_offer_quotes_the_spliced_text(set_pool):
+    """Through the Breach spliced onto Reach Through Mists asks its "you may"
+    under the host's name (CR 702.47c); the offer now quotes the sentence it
+    asks — the resolving context's `text_card`, the spliced text — where it
+    quoted the host's own "Draw a card." over a Yes/No about putting a
+    creature onto the battlefield. Answered yes, the creature arrives."""
+    sid, game = _w2g1_session()
+    game.enforce_mana_costs = False
+    game.players[0].hand = [
+        _w2g1_card(set_pool, name) for name in ("Reach Through Mists", "Through the Breach", "Craw Wurm")
+    ]
+    cast = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "cast", "card_name": "Reach Through Mists",
+        "splice_cards": [{"hand_index": 1}],
+    })
+    assert cast.status_code == 200, cast.text
+    client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    offer = _w2g1_state(sid)["optional_pay"]["pending"][0]
+    assert offer["card_name"] == "Reach Through Mists"
+    assert offer["card_text"] == "You may put a creature card from your hand onto the battlefield."
+    settle(game, answers={
+        "optional_pay": lambda g, c: g.confirm_optional_pay(c.player_index, accept=True),
+    })
+    assert "Craw Wurm" in [p.card.name for p in game.players[0].battlefield], game.log[-6:]

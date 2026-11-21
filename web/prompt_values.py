@@ -232,11 +232,16 @@ _ACTIVATION_COST = re.compile(r"^[^:]*:\s*")
 def _offer_source_card(data: dict):
     """The card an offer or a number was asked by, as its text reads now: the
     source permanent through ``effective_card`` (CR 612 - a text change is the
-    text), else the resolving spell."""
+    text), else the resolving spell as it **says** — the context's
+    ``text_card``: a text-changed spell's text, and the text a card spliced
+    onto it added (CR 702.47c), whose "you may" a Through the Breach spliced
+    onto Reach Through Mists asks under the host's name. The context's card
+    (the host's own "Draw a card.") was quoted over that question."""
     permanent = data.get("_source_permanent") or data.get("permanent")
     card = getattr(permanent, "effective_card", None)
     if card is None:
-        card = getattr(data.get("_context"), "card", None)
+        context = data.get("_context")
+        card = getattr(context, "text_card", None) or getattr(context, "card", None)
     return card
 
 
