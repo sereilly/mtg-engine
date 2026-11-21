@@ -92,11 +92,23 @@ def _parse_look_pick_tail(
         raise stream.error("expected the sorting sentence after the reveal")
     for word in (
         "put", "the", "rest", "on", "the", "bottom", "of", "your", "library",
-        "in", "a", "random", "order",
+        "in",
     ):
         stream.expect_word(word)
+    # "…in **any** order" (Commune with Nature, Peer Through Depths) beside
+    # Garruk's Harbinger's "in **a random** order": both spellings read, each
+    # to the order it states — the first is the looker's freedom (CR 401.4,
+    # asked of an interactive seat by the bottom-order offer), the second a
+    # shuffle nobody chooses.
+    if stream.accept_word("any"):
+        rest_order = "any"
+    else:
+        for word in ("a", "random"):
+            stream.expect_word(word)
+        rest_order = "random"
+    stream.expect_word("order")
     return ast.LookTopPickToHand(
-        count, filters=filters, optional=True, rest_order="random",
+        count, filters=filters, optional=True, rest_order=rest_order,
     )
 
 
@@ -188,6 +200,38 @@ def _parse_look_top_offer_pick_tail(
             count, pick_destination="library_bottom",
             rest_destination="library_top",
         ),
+        looked_at_top=count,
+    )
+
+
+def _accept_look_top_offer_bottom(
+    stream: TokenStream, count: "ast.Amount"
+) -> "ast.May | None":
+    """``You may put those cards on the bottom of your library in any
+    order.`` (Petals of Insight.)
+
+    The offer over the whole looked-at pile, read where the look is for
+    :func:`_parse_look_top_offer_pick_tail`'s reason — "those cards" are
+    exactly what the first sentence turned up — and returned as the plain
+    :class:`ast.May` it is, with the look carried as ``looked_at_top`` so the
+    seat decides having seen the cards. The branches behind it ("If you do,
+    …" / "Otherwise, …") are not read here: they are the sequence's own
+    riders on an offer (``control_flow._attach_if_you_do``,
+    ``_attach_otherwise``), and any statement may stand in them.
+
+    Declines without consuming, so every other tail opening on "you" keeps
+    its own reading and refusal site.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "you", "may", "put", "those", "cards", "on", "the", "bottom", "of",
+        "your", "library", "in", "any", "order",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.May(
+        actor=ast.PlayerRef("you"),
+        action=ast.PutRevealedCardsOnBottom(looked_at=count),
         looked_at_top=count,
     )
 
@@ -655,6 +699,9 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
             offered = _parse_look_top_offer_pick_tail(stream, count)
             if offered is not None:
                 return offered
+            bottomed = _accept_look_top_offer_bottom(stream, count)
+            if bottomed is not None:
+                return bottomed
             return _parse_look_pick_tail(stream, count, already_split=True)
         # "Exile four of them at random, **then** put the rest on top of your
         # library in any order." (Orcish Librarian.) Nothing is picked and

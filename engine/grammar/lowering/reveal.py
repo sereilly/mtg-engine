@@ -181,7 +181,23 @@ def _lower_put_revealed_cards_on_bottom(
     ``reveal_until_match``, which records it under ``revealed_until_cards``
     (``_records._PRODUCES_FOR_PAYLOAD``). Without it "the revealed cards" name
     nothing, and a step moving nothing would report supported.
+
+    "…You may put **those cards** on the bottom of your library in any
+    order." (Petals of Insight.) The pile a look in front of the step turned
+    up, which no record names — a look moves nothing — so it travels as the
+    printed number of cards still on top, demanded as a number.
     """
+    if node.looked_at is not None:
+        if not isinstance(node.looked_at, ast.Fixed) or node.looked_at.value <= 0:
+            raise LoweringError(
+                "a looked-at pile is a printed number of cards", node=node,
+            )
+        return (
+            OracleInstruction(
+                "put_revealed_cards_on_bottom", "",
+                {"looked_at": node.looked_at.value},
+            ),
+        )
     if REVEALED_UNTIL_CARDS not in produced:
         raise LoweringError(
             '"the revealed cards" with no reveal in front of them', node=node,

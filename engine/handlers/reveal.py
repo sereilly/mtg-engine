@@ -816,8 +816,16 @@ def put_revealed_cards_on_bottom(game: Game, instruction: OracleInstruction, con
     ``offer_library_bottom_order`` — the seam every "in any order" bottom
     reaches.
     """
-    pile = list(context.results.get(REVEALED_UNTIL_CARDS) or ())
     player = context.caster
+    # "…You may put **those cards** on the bottom of your library in any
+    # order." (Petals of Insight.) A looked-at pile: the top N cards, still
+    # where the look found them (the offer that carried the look holds
+    # priority, so nothing moved them in between).
+    looked_at = instruction.payload.get("looked_at")
+    if looked_at:
+        pile = list(player.library[:int(looked_at)])
+    else:
+        pile = list(context.results.get(REVEALED_UNTIL_CARDS) or ())
     moved: list = []
     for card in pile:
         for index, held in enumerate(player.library):
@@ -829,8 +837,9 @@ def put_revealed_cards_on_bottom(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     player.library.extend(moved)
     game.log.append(
-        f"{player.name} put {len(moved)} revealed card(s) on the bottom of "
-        "their library"
+        f"{player.name} put {len(moved)} "
+        + ("looked-at" if looked_at else "revealed")
+        + " card(s) on the bottom of their library"
     )
     game.offer_library_bottom_order(player, len(moved))
     return True, "resolved"

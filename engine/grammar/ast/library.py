@@ -903,9 +903,17 @@ class PutRevealedCardsOnBottom:
     find and everything before it — going to the other end of it, in an order
     its owner chooses (CR 401.4). Its own sentence and its own node because it
     is printed *after* the sentences that read the found card, and CR 608.2c
-    performs them in the order printed. No fields: the pile is the run's
-    record and the library is the one it came out of.
+    performs them in the order printed. The pile is the run's record and the
+    library is the one it came out of.
     """
+
+    #: "Look at the top three cards of your library. You may put **those
+    #: cards** on the bottom of your library in any order." (Petals of
+    #: Insight.) The same move over a pile a *look* turned up rather than a
+    #: run: nothing records it, because a look moves nothing — the pile is the
+    #: top *looked_at* cards of the library, still where the look found them.
+    #: None is the run's pile.
+    looked_at: "Amount | None" = None
 
 @dataclass(frozen=True)
 class PutExiledPileOnLibrary:
