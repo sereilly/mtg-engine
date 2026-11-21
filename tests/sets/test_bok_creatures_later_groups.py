@@ -297,4 +297,66 @@ def test_w1g10_toshiros_cast_pays_the_mana_cost_and_is_not_kept_for_later(set_po
     land = next(p for p in game.controlled_by(0) if p.card.name == "Mountain")
     assert land.tapped
 
+
+def _w1g10_shirei_game(set_pool, *, theirs=("Grizzly Bears",)):
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    return _w1g10_game(
+        mine=[bok["Shirei, Shizo's Caretaker"], lea["Llanowar Elves"], lea["Hill Giant"]],
+        hand=[lea["Lightning Bolt"], lea["Lightning Bolt"], lea["Lightning Bolt"]],
+        theirs=[lea[name] for name in theirs], island=lea["Island"],
+    )
+
+
+def _w1g10_bolt(game, permanent):
+    assert game.cast_from_hand(0, "Lightning Bolt", target_permanent_ids=[permanent.permanent_id]).supported
+    _w1g10_settle(game)
+
+
+def test_w1g10_shirei_returns_a_small_creature_at_the_next_end_step(set_pool):
+    """Shirei, Shizo's Caretaker: "Whenever a creature with power 1 or less is
+    put into your graveyard from the battlefield, you may return that card to
+    the battlefield at the beginning of the next end step if Shirei is still
+    on the battlefield." Asked of a person: the Llanowar Elves (1/1) dies and
+    nothing returns until the end step begins; there Alice is asked and says
+    yes. The Hill Giant (3/3) and Bob's Bears (his graveyard, not hers)
+    trigger nothing."""
+    game = _w1g10_shirei_game(set_pool)
+    alice, bob = game.players
+    _shirei, elves, giant = game.controlled_by(0)
+    (bears,) = game.controlled_by(1)
+    game.interactive_seats = {0}
+    _w1g10_bolt(game, elves)
+    _w1g10_bolt(game, giant)
+    _w1g10_bolt(game, bears)
+    assert sorted(card.name for card in alice.graveyard) == [
+        "Hill Giant", "Lightning Bolt", "Lightning Bolt", "Lightning Bolt", "Llanowar Elves",
+    ]
+    assert [card.name for card in bob.graveyard] == ["Grizzly Bears"]
+    game.resolve_end_step(0)
+    owed = _w1g10_settle(game, defaults=False)
+    assert owed is not None and owed.kind == "optional_pay"
+    assert game.confirm_optional_pay(0, accept=True)
+    _w1g10_settle(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Llanowar Elves", "Shirei, Shizo's Caretaker",
+    ]
+    assert "Hill Giant" in [card.name for card in alice.graveyard]
+    assert "Grizzly Bears" in [card.name for card in bob.graveyard]
+
+
+def test_w1g10_shirei_gone_before_the_end_step_returns_nothing(set_pool):
+    """The condition is the delayed ability's, asked as it resolves: Shirei
+    killed after the Elves died (but before the end step) means the Elves stay
+    in the graveyard. Shirei itself is a 2/2, so its own death returns
+    nothing either."""
+    game = _w1g10_shirei_game(set_pool)
+    alice = game.players[0]
+    shirei, elves, _giant = game.controlled_by(0)
+    _w1g10_bolt(game, elves)
+    _w1g10_bolt(game, shirei)
+    game.resolve_end_step(0)
+    _w1g10_settle(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == ["Hill Giant"]
+    assert "Llanowar Elves" in [card.name for card in alice.graveyard]
+
 # ==== end w1g10 ======================================================
