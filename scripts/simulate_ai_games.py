@@ -220,6 +220,14 @@ def main() -> int:
             f"{later} other than the first bullet"
         )
 
+    # CR 702.47a: cards spliced onto the spells cast, by the spell. Until CHK's
+    # wave 2 no seat spliced: every splice card was cast alone.
+    if report.spliced_casts:
+        spliced = ", ".join(
+            f"{name} x{count}" for name, count in sorted(report.spliced_casts.items())
+        )
+        print(f"Cards spliced onto: {spliced}")
+
     # CR 601.3: spells cast and lands played from a zone other than the hand —
     # a flashback card out of a graveyard (CR 702.34a), a card an Elkin Bottle
     # lent out of exile, the top of a library. Until ODY's wave 2 no seat made

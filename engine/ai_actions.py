@@ -170,6 +170,13 @@ class CastAction:
     # See `ai_casts._cast_naming_its_discards`.
     cost_hand_index: int | None = None
     cost_other_hand_indices: list[int] | None = None
+    # CR 601.2b's other reveal: the cards in hand **spliced onto** this spell
+    # (CR 702.47a), one dict each in the order their texts happen — the cast
+    # path's ``splice_cards``: ``hand_index`` (the card's place in the hand
+    # with the spell still in it) and the gained text's target keywords
+    # (CR 702.47d). None splices nothing, which every AI cast did until CHK
+    # wave 2: each splice card was cast alone, spent. See `ai_splice`.
+    splice_cards: list[dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -367,6 +374,10 @@ def cast_announcement(action: CastAction) -> dict:
         # …and which hand cards pay the discard (`CastAction.cost_hand_index`).
         "cost_hand_index": action.cost_hand_index,
         "cost_other_hand_indices": action.cost_other_hand_indices,
+        # CR 702.47a's reveal (see `CastAction.splice_cards`): the plan tapped
+        # the lands for the splice costs, and a cast that dropped it would
+        # leave that mana in the pool and the gained text unannounced.
+        "splice_cards": action.splice_cards,
     }
 
 
