@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**452 / 663 tracked rules covered (68%)** — 3787 tests, 0 unannotated.
+**452 / 663 tracked rules covered (68%)** — 3789 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -217,7 +217,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **110.2** A permanent’s owner is the same as the owner of the card that represents it (unless it’s a token;... *(3 tests, subrules a)*
 - [x] **110.3** A nontoken permanent’s characteristics are the same as those printed on its card, as modified by ... *(1 tests)*
 - [x] **110.4** There are six permanent types: artifact, battle, creature, enchantment, land, and planeswalker. I... *(9 tests, subrules a)*
-- [x] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t... *(7 tests, subrules abcd)*
+- [x] **110.5** A permanent’s status is its physical state. There are four status categories, each of which has t... *(9 tests, subrules abcd)*
 
 ### 111. Tokens
 
@@ -492,7 +492,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(21 tests, subrules a)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(44 tests, subrules a)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(45 tests, subrules a)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -989,9 +989,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 710. Flip Cards
 
 - [x] **710.1** Flip cards have a two-part card frame on a single card. The text that appears right side up on th... *(3 tests, subrules abc)*
-- [x] **710.2** In every zone other than the battlefield, and also on the battlefield before the permanent flips,... *(3 tests)*
+- [x] **710.2** In every zone other than the battlefield, and also on the battlefield before the permanent flips,... *(4 tests)*
 - [ ] **710.3** You must ensure that it’s clear at all times whether a permanent you control is flipped or not, b...
-- [x] **710.4** Flipping a permanent is a one-way process. Once a permanent is flipped, it’s impossible for it to... *(2 tests)*
+- [x] **710.4** Flipping a permanent is a one-way process. Once a permanent is flipped, it’s impossible for it to... *(3 tests)*
 - [x] **710.5** If an effect instructs a player to choose a card name and the player wants to choose a flip card’... *(1 tests)*
 
 ### 723. Controlling Another Player
