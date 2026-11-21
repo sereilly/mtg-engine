@@ -33,6 +33,7 @@ from . import (  # noqa: E402,F401
     exiled_returns,
     face_down,
     fighting,
+    flips,
     hand,
     hand_reveals,
     keyword_removal,

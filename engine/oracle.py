@@ -52,7 +52,8 @@ from functools import lru_cache
 
 from . import fast_paths
 from .models import COMPILED_PROGRAM_SLOT, CardDefinition
-from .faces import CAST_FACE_LAYOUTS, face_cards, is_multi_face
+from .faces import CAST_FACE_LAYOUTS, is_multi_face, text_faces
+from .flip_cards import FLIP_LAYOUTS, flipped_face, is_flip_card
 from .program_store import seedable
 from .activated_ability_cost import ActivatedAbilityCost
 from .oracle_types import (ModalOption,
@@ -210,10 +211,16 @@ def _printed_line_for(expanded_line: str | None, printed_text: str) -> str:
 # card by asking of its halves. `faces.CAST_FACE_LAYOUTS` is the one list of
 # layouts read that way, so admitting the next one is an entry there plus the
 # cast path's say-so — never an edit to the single-face set below.
+#
+# **Flip cards are the second** (CR 710), and the other way round: the loader
+# keeps a flip card as its top half (`flip_cards.loaded_flip_card`, CR 710.2),
+# so the card compiles its own text box like any card, and its bottom half —
+# the card a flipped permanent is — is derived and compiled beside it
+# (`flip_cards.FLIP_LAYOUTS`; `_compile_card_program` asks both).
 SINGLE_FACE_LAYOUTS = frozenset({
     "normal", "leveler", "class", "saga", "case", "planar", "scheme", "vanguard", "token",
 })
-SUPPORTED_LAYOUTS = SINGLE_FACE_LAYOUTS | CAST_FACE_LAYOUTS
+SUPPORTED_LAYOUTS = SINGLE_FACE_LAYOUTS | CAST_FACE_LAYOUTS | FLIP_LAYOUTS
 
 
 def _effect_handler_kinds() -> frozenset[str]:
@@ -1057,8 +1064,15 @@ def face_programs(card: CardDefinition) -> tuple[tuple[CardDefinition, OraclePro
     the coverage scripts, the behaviour signature, the program differential —
     asks this rather than the whole card's program, which has no instructions
     by construction (see :func:`compile_card_oracle`).
+
+    A flip card's two text boxes (``faces.text_faces``): the card itself with
+    the program of its own text — which is what its permanent runs unflipped,
+    whatever its bottom half's verdict — and its bottom half with its own.
     """
-    return tuple((face, compile_card_oracle(face)) for face in face_cards(card))
+    return tuple(
+        (face, _flip_top_program(face) if is_flip_card(face) else compile_card_oracle(face))
+        for face in text_faces(card)
+    )
 
 
 def compiled_faces(card: CardDefinition) -> tuple[tuple[CardDefinition, OracleProgram], ...]:
@@ -1171,6 +1185,8 @@ def _compile_card_program(card: CardDefinition) -> OracleProgram:
             True, MULTI_FACE_EFFECT_KIND,
             f"{card.layout} card: every face supported", text,
         )
+    if is_flip_card(card):
+        return _flip_card_program(card)
     program = _compile_card_oracle(
         card.name, card.primary_type, card.oracle_text, card.keywords, card.layout,
         card.is_legendary,
@@ -1193,6 +1209,40 @@ def _compile_card_program(card: CardDefinition) -> OracleProgram:
 
 
 _ProgramsHeldOnCards.__wrapped__ = staticmethod(_compile_card_program)
+
+
+def _flip_top_program(card: CardDefinition) -> OracleProgram:
+    """The program of a flip card's own text box — its top half (CR 710.1a),
+    read as the single text box it is."""
+    return _compile_card_oracle(
+        card.name, card.primary_type, card.oracle_text, card.keywords, "normal",
+        card.is_legendary,
+    )
+
+
+def _flip_card_program(card: CardDefinition) -> OracleProgram:
+    """A flip card's verdict (CR 710): its own text box's program, supported
+    only when its bottom half's is too.
+
+    The card is its top half in every zone (CR 710.2), so the program a
+    player's spell and an unflipped permanent run is its own text's. A card
+    whose bottom half does nothing is a card a player can be dealt and whose
+    flip leaves a creature with a dead text box — so, as for a split card,
+    the reason names the half that failed.
+    """
+    own = _flip_top_program(card)
+    if not own.supported:
+        return OracleProgram(
+            False, "unsupported", f"{card.name}: {own.reason}", own.normalized_text,
+        )
+    bottom = compile_card_oracle(flipped_face(card))
+    if not bottom.supported:
+        return OracleProgram(
+            False, "unsupported",
+            f"{card.faces[1].name}: {bottom.reason}",
+            own.normalized_text,
+        )
+    return own
 
 
 def simple_card_keywords(card: CardDefinition) -> tuple[str, ...] | None:
@@ -1222,6 +1272,11 @@ def simple_card_keywords(card: CardDefinition) -> tuple[str, ...] | None:
     # tracker would auto-pass a card whose whole behaviour is a choice between
     # two spells (CR 709.3) that no generic path exercises.
     if is_multi_face(card):
+        return None
+    # Nor is a flip card (CR 710): its behaviour is the flip — a condition, a
+    # second text box and a second set of characteristics — which no generic
+    # keyword path exercises, whatever its top half prints.
+    if is_flip_card(card):
         return None
     program = compile_card_oracle(card)
     if (

@@ -50,6 +50,7 @@ from ..exiled_records import (forget_record, newest_record_for,
 from ..events import emit
 from ..face_down import forget_face_down_departure, revealed_as_it_moves
 from ..faces import whole_card
+from ..flip_cards import forget_flip, unflipped_card
 from ..graveyard_order import (distinct_graveyard_object, held_in_a_graveyard,
                                record_arrival_history, record_graveyard_arrival)
 from ..linked_exile import forget_linked_entries
@@ -163,6 +164,14 @@ class ZoneFunnelsMixin:
 
         seat = self._owner_seat(owner)
         player = self.players[seat]
+        # A flipped permanent's card is its bottom half (``flip_cards``), and
+        # exile holds the flip card — its top half (CR 710.2, 710.4: it
+        # "retains no memory of its status"). The other three funnels ask
+        # ``faces.whole_card``; this one is handed what callers already made
+        # whole, so it unflips and nothing else. A record written for the
+        # object before it landed is bound by the object it was written for.
+        written_for = card
+        card = unflipped_card(card)
         landed = card
         if any(
             held is card for seated in self.players for held in seated.exile
@@ -173,7 +182,7 @@ class ZoneFunnelsMixin:
                 if commander is card:
                     commanders[index] = landed
                     break
-        bind_awaiting_records(self, seat, card, landed)
+        bind_awaiting_records(self, seat, written_for, landed)
         player.exile.append(landed)
         return landed
 
@@ -1305,6 +1314,9 @@ class ZoneFunnelsMixin:
         # face-down values it was last seen leaving with (CR 708.9,
         # ``face_down.reveal_departing``) are not what it is now.
         forget_face_down_departure(permanent)
+        # …and enters unflipped (CR 110.5b, 710.4): a flipped permanent that
+        # left is a new object, its card its top half again.
+        forget_flip(permanent)
         # CR 614.12, before anything asks how this permanent enters: a land
         # is judged "as it would exist on the battlefield", under the
         # continuous effects already there. With Blood Moon out a nonbasic

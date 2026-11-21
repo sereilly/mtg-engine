@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Sequence, Union
 
+from .flip_cards import loaded_flip_card
 from .models import CardDefinition, CardFace
 
 REQUIRED_FIELDS = ("name", "mana_cost", "cmc", "type_line")
@@ -128,7 +129,11 @@ def _load_one(state: tuple[str, int, int]) -> tuple[CardDefinition, ...]:
                 raise ValueError(f"Card is missing required field: {field}")
 
         set_code = str(entry.get("set", ""))
-        cards.append(
+        # A flip card (CR 710) is kept as its top half — its normal
+        # characteristics in every zone (CR 710.2) — with both halves on
+        # ``faces``; ``engine/flip_cards.py`` says why, and derives the bottom
+        # half a flipped permanent is. Every other entry passes unchanged.
+        cards.append(loaded_flip_card(
             CardDefinition(
                 name=str(entry["name"]),
                 mana_cost=str(entry.get("mana_cost", "")),
@@ -150,7 +155,7 @@ def _load_one(state: tuple[str, int, int]) -> tuple[CardDefinition, ...]:
                 collector_number=str(entry.get("collector_number", "")),
                 printings=(set_code,) if set_code else (),
             )
-        )
+        ))
     return tuple(cards)
 
 

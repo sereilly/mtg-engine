@@ -94,18 +94,26 @@ def _cost_colors(mana_cost: str) -> tuple[str, ...]:
     return tuple(color for color in _COLOR_ORDER if color in found)
 
 
-def _face_keywords(card: CardDefinition, oracle_text: str) -> tuple[str, ...]:
-    """The whole card's ingested keywords that this face's text prints.
+def keywords_printed_in(keywords, oracle_text: str) -> tuple[str, ...]:
+    """Those of a whole card's ingested *keywords* that one face's
+    *oracle_text* prints.
 
     The ingest keeps keywords per card, not per face, and a keyword belongs to
     the half that prints it — a card whose one half has flash does not give the
-    other half flash.
+    other half flash, and a flip card's top half is no double striker because
+    its bottom half is (``engine/flip_cards.py``).
     """
-    lowered = oracle_text.lower()
+    lowered = (oracle_text or "").lower()
     return tuple(
-        keyword for keyword in card.keywords
+        keyword for keyword in keywords
         if re.search(rf"\b{re.escape(keyword.lower())}\b", lowered)
     )
+
+
+def _face_keywords(card: CardDefinition, oracle_text: str) -> tuple[str, ...]:
+    """The whole card's ingested keywords that this face's text prints
+    (:func:`keywords_printed_in`)."""
+    return keywords_printed_in(card.keywords, oracle_text)
 
 
 def is_multi_face(card) -> bool:
@@ -174,7 +182,8 @@ def face_cards(card) -> tuple[CardDefinition, ...]:
 
 
 def is_face(card) -> bool:
-    """Whether *card* is one face of a multi-face card (a split card's half)."""
+    """Whether *card* is one face of a multi-face card (a split card's half,
+    or a flip card's bottom half — ``engine/flip_cards.py``)."""
     return getattr(card, "face_of", None) is not None
 
 
@@ -191,6 +200,13 @@ def whole_card(card):
     a card a zone could hold, so the same seams that put a split card's whole
     card into a zone put the face-down object's real one there — asked here,
     once, rather than at every place a hidden object can be sent.
+
+    …and a **flipped** permanent's card (CR 710.4: "if a flipped permanent
+    leaves the battlefield, it retains no memory of its status"). Its card is
+    the flip card's bottom half (``flip_cards.flipped_face``), whose
+    ``face_of`` is the top half every other zone holds (CR 710.2), so the
+    same answer puts Bushi Tenderfoot, not Kenzo the Hardhearted, into the
+    graveyard.
     """
     hidden = getattr(card, "face_down_of", None)
     if hidden is not None:
@@ -205,9 +221,24 @@ def castable_faces(card) -> tuple:
     return face_cards(card) or (card,)
 
 
+def text_faces(card) -> tuple:
+    """*card*'s text boxes as cards, when it has more than one: a split
+    card's halves (CR 709.3a), or a flip card itself and its bottom half
+    (CR 710.1, ``flip_cards.flip_text_faces``); ``()`` for a card with one.
+
+    Not :func:`face_cards`: a flip card's bottom half is no spell anybody can
+    cast (CR 710.2), so it is a text a census reads and never a face the cast
+    path, the AI or the wire offers.
+    """
+    from .flip_cards import flip_text_faces
+
+    return face_cards(card) or flip_text_faces(card)
+
+
 def compilation_units(cards) -> list:
     """*cards* as the cards whose **text compiles**: each single-face card
-    itself, and each face of a multi-face card in its place (CR 709.3a).
+    itself, each face of a multi-face card in its place (CR 709.3a), and a
+    flip card followed by its bottom half (CR 710.1b, :func:`text_faces`).
 
     The one iterator for a census whose question is about rules text — what a
     line parses to, which instructions a program holds, what an ability is
@@ -226,8 +257,13 @@ def compilation_units(cards) -> list:
     A list, in pool order with a card's faces in printed order, so a caller can
     index or count it. A face's ``name`` is the half's own; :func:`unit_label`
     spells it with its card for a message.
+
+    A flip card's top half *is* the card (CR 710.2), so it is read as itself
+    and named as itself; only its bottom half is a derived face. Handed in
+    whole, its census reads the top half's text and never the bottom's —
+    blind to half the card, the split card's failure in another shape.
     """
-    return [unit for card in cards for unit in castable_faces(card)]
+    return [unit for card in cards for unit in (text_faces(card) or (card,))]
 
 
 def unit_label(card) -> str:
@@ -266,11 +302,40 @@ def name_aliases(card) -> tuple[str, ...]:
     one card (CR 709.2), so a name lookup that wants to *find the card* indexes
     these beside its printed name. Not for casting — that is
     :func:`spell_named`, where a half's name means the half.
+
+    A flip card is named by its top half (CR 710.1a) and that is its printed
+    name here, so its aliases are the card file's spelling ("Bushi Tenderfoot
+    // Kenzo the Hardhearted", Scryfall's) in each of those forms, and the
+    bottom half's name alone, which a list may also write and which names no
+    other card.
     """
-    names = [face.name for face in face_cards(card)]
+    from .flip_cards import is_flip_card
+
+    if is_flip_card(card):
+        names = [face.name for face in card.faces]
+    else:
+        names = [face.name for face in face_cards(card)]
     if not names:
         return ()
-    return (*names, " / ".join(names), "/".join(names), "//".join(names))
+    spellings = (" // ".join(names), " / ".join(names), "/".join(names), "//".join(names))
+    if is_flip_card(card):
+        return (*spellings, names[1])
+    return (*names, *spellings[1:])
+
+
+def nameable_faces(card) -> tuple:
+    """The cards whose names a player choosing a card name may choose for
+    *card*, each with the characteristics that name is judged by (CR 201.4):
+    its castable faces (a split card's halves, CR 201.4b) and a flip card's
+    bottom half (CR 201.4c, 710.5: "use the card's characteristics as
+    modified by its alternative characteristics"). Asked of the card as a
+    zone holds it — a flipped permanent's card is answered for its whole
+    card, so both of its names are offered."""
+    from .flip_cards import flipped_face, unflipped_card
+
+    whole = unflipped_card(card)
+    flipped = flipped_face(whole)
+    return castable_faces(whole) + ((flipped,) if flipped is not None else ())
 
 
 def spell_named(card, name: str):
@@ -334,8 +399,11 @@ __all__ = [
     "holds_spell_named",
     "is_face",
     "is_multi_face",
+    "keywords_printed_in",
     "name_aliases",
+    "nameable_faces",
     "spell_named",
+    "text_faces",
     "unit_label",
     "whole_card",
 ]

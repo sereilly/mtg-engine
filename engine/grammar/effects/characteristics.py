@@ -954,3 +954,31 @@ def parse_turn_face(stream: TokenStream) -> "ast.TurnFace | None":
         return ast.TurnFace(subject, face_up=True)
     stream.reset(mark)
     return None
+
+
+def parse_flip_permanent(stream: TokenStream) -> "ast.FlipPermanent | None":
+    """``Flip <permanent>.`` — "flip this creature", "flip it" (CR 710; the
+    ten Champions of Kamigawa flip cards).
+
+    The flipped status (CR 110.5) set by an effect, :func:`parse_turn_face`'s
+    shape: the object is the ordinary recipient, read by the one noun-phrase
+    reader, and the lowering decides what may carry it. "Flip a coin" is read
+    before this (CR 705) and never reaches it; this declines without
+    consuming whenever no recipient follows the verb, so every other "flip …"
+    sentence keeps the reading (or refusal) it has.
+    """
+    if not stream.at_word("flip"):
+        return None
+    mark = stream.mark()
+    stream.advance()
+    if stream.at_word("a", "coin", "two", "three", "four", "five", "x", "again"):
+        stream.reset(mark)
+        return None
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        subject = None
+    if subject is None:
+        stream.reset(mark)
+        return None
+    return ast.FlipPermanent(subject)

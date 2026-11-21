@@ -131,6 +131,7 @@ from .effects import (
     _parse_simultaneous_untap_and_tap,
     _parse_tap_untap,
     parse_turn_face,
+    parse_flip_permanent,
 )
 
 
@@ -157,6 +158,12 @@ def parse_imperative_verb(
         flip = _parse_flip_coin(stream)
         if flip is not None:
             return flip
+    # "Flip this creature." / "…, flip it." (CR 710.2) — a permanent's
+    # flipped status, read after the coin so "flip a coin" keeps its reading.
+    if stream.at_word("flip"):
+        flipped = parse_flip_permanent(stream)
+        if flipped is not None:
+            return flipped
     # "Separate all <objects> into two piles. …" (CR 700.3 — Do or Die, Death
     # or Glory, Fight or Flight), its "For each defending player, separate …"
     # spelling (Stand or Fall), "Each player separates …" (Bend or Break) and
