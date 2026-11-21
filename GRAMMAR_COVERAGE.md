@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5DN | 165 | 273 | 85.7% | 85.3% | 59.3% | 141 |
 | CHK | 291 | 462 | 84.6% | 84.6% | 61.9% | 234 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| BOK *(measured)* | 165 | 288 | 72.9% | 70.1% | 54.2% | 123 |
+| BOK *(measured)* | 165 | 288 | 75.3% | 72.9% | 56.9% | 130 |
 | **All (shipped)** | **9904** | **14799** | **89.5%** | **89.0%** | **62.0%** | **7785** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -72,10 +72,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 1043 | 527 | expected a subject |  |
-| 206 | 107 | unrecognized effect verb |  |
+| 1040 | 525 | expected a subject |  |
+| 205 | 106 | unrecognized effect verb |  |
 | 157 | 84 | unconsumed text |  |
-| 90 | 70 | granted ability in quotes | phase 3 (quoted abilities) |
+| 87 | 67 | granted ability in quotes | phase 3 (quoted abilities) |
 | 45 | 8 | expected what this creature can't block, or a duration |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 26 | 20 | expected 'unless defending player controls' |  |
@@ -2309,6 +2309,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Clairvoyance**
   - `Look at target player's hand.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Clash of Realities**
+  - `All Spirits have "When this permanent enters, you may have it deal 3 damage to target non-Spirit creature."`
+  - `Non-Spirit creatures have "When this creature enters, you may have it deal 3 damage to target Spirit creature."`
 - **Claws of Gix**
   - `{1}, Sacrifice a permanent: You gain 1 life.`
 - **Claws of Wirewood**
@@ -6375,6 +6378,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature attacks, flip a coin. If you win the flip, the next time that creature would deal combat damage this turn, it deals double that damage instead. If you lose the flip, the next time that creature would deal combat damage this turn, prevent that damage.`
 - **In the Eye of Chaos**
   - `Whenever a player casts an instant spell, counter it unless that player pays {X}, where X is its mana value.`
+- **In the Web of War**
+  - `Whenever a creature you control enters, it gets +2/+0 and gains haste until end of turn.`
 - **Iname, Death Aspect**
   - `When Iname enters, you may search your library for any number of Spirit cards, put them into your graveyard, then shuffle.`
 - **Iname, Life Aspect**
@@ -6578,6 +6583,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Add {G}{U}.`
 - **Isao, Enlightened Bushi**
   - `{2}: Regenerate target Samurai.`
+- **Ishi-Ishi, Akki Crackshot**
+  - `Whenever an opponent casts a Spirit or Arcane spell, Ishi-Ishi deals 2 damage to that player.`
 - **Island Fish Jasconius**
   - `At the beginning of your upkeep, you may pay {U}{U}{U}. If you do, untap this creature.`
   - `This creature can't attack unless defending player controls an Island.`
@@ -6685,6 +6692,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}, Sacrifice this artifact: Search target player's library for three cards and exile them. Then that player shuffles.`
 - **Jester's Mask**
   - `{1}, {T}, Sacrifice this artifact: Target opponent puts the cards from their hand on top of their library. Search that player's library for that many cards. That player puts those cards into their hand, then shuffles.`
+- **Jetting Glasskite**
+  - `Whenever this creature becomes the target of a spell or ability for the first time each turn, counter that spell or ability.`
 - **Jeweled Amulet**
   - `{1}, {T}: Put a charge counter on this artifact. Note the type of mana spent to pay this activation cost. Activate only if there are no charge counters on this artifact.`
   - `{T}, Remove a charge counter from this artifact: Add one mana of this artifact's last noted type.`
@@ -7003,6 +7012,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Destroy target Djinn or Efreet.`
 - **Kingfisher**
   - `When this creature dies, draw a card.`
+- **Kira, Great Glass-Spinner**
+  - `Creatures you control have "Whenever this creature becomes the target of a spell or ability for the first time each turn, counter that spell or ability."`
 - **Kirtar's Desire**
   - `Threshold — Enchanted creature can't block as long as there are seven or more cards in your graveyard.`
 - **Kirtar's Wrath**
@@ -9091,6 +9102,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Oracle's Attendants**
   - `{T}: All damage that would be dealt to target creature this turn by a source of your choice is dealt to this creature instead.`
   - `{T}: All damage that would be dealt to target creature this turn by a source of your choice is dealt to this creature instead.`
+- **Orb of Dreams**
+  - `Permanents enter tapped.`
 - **Orbweaver Kumo**
   - `Whenever you cast a Spirit or Arcane spell, this creature gains forestwalk until end of turn. (It can't be blocked as long as defending player controls a Forest.)`
 - **Orc General**
@@ -11744,6 +11757,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each land of the chosen type has phasing. (It phases in or out before its controller untaps during each of their untap steps. While it's phased out, it's treated as though it doesn't exist.)`
 - **Shimmering Efreet**
   - `Whenever this creature phases in, target creature phases out. (It phases in before its controller untaps during their next untap step.)`
+- **Shimmering Glasskite**
+  - `Whenever this creature becomes the target of a spell or ability for the first time each turn, counter that spell or ability.`
 - **Shimmering Mirage**
   - `Target land becomes the basic land type of your choice until end of turn.`
   - `Draw a card.`
