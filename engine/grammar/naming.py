@@ -698,11 +698,30 @@ def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
         # this production), so taking the first sentence here strands the rest
         # — the hazard `imperative_verbs` records beside the call.
         strips = no_basics and stream.at_punct(".") and stream.peek_word(1) == "search"
+        named = ast.ChooseCardName(
+            card_type=card_type, other_than_basic_land=no_basics,
+            excluded_card_type=excluded_card_type,
+        )
         if not strips and (stream.exhausted or stream.at_punct(".", ",")):
-            return ast.ChooseCardName(
-                card_type=card_type, other_than_basic_land=no_basics,
-                excluded_card_type=excluded_card_type,
-            )
+            return named
+        # "Choose a nonland card name **and a number greater than 0**."
+        # (Mindblaze.) The elided second choice ``_parse_choose_number``
+        # reads behind its own number ("… and a color", Scrying Glass), the
+        # other way round: the verb is this production's, so supplying it is
+        # its job, and what comes back is the ordinary Conjunction of the two
+        # choices — each answered, recorded and read back separately.
+        conjunct = stream.mark()
+        if stream.accept_phrase("and", "a", "number", "greater", "than"):
+            floor = parse_amount(stream)
+            if isinstance(floor, ast.Fixed) and (
+                stream.exhausted or stream.at_punct(".", ",")
+            ):
+                # "Greater than 0" is strict (CR 107.1): the smallest legal
+                # answer is one above the printed number.
+                return ast.Conjunction(
+                    (named, ast.ChooseNumber(floor.value + 1, None))
+                )
+        stream.reset(conjunct)
     stream.reset(mark)
     return None
 

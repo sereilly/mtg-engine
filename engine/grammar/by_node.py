@@ -92,6 +92,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_exile_cost_sacrifices, _lower_exile_graveyard,
                        _lower_exile_graveyard_arrivals_this_turn,
                        _lower_reveal_hand, _lower_reveal_random_from_hand,
+                       _lower_reveal_library,
                        _lower_reveal_cards_from_hand,
                        _lower_put_outside_game_card_into_hand,
                        _lower_graveyard_top_to_library,
@@ -483,6 +484,7 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # "…**that player** reveals their hand…" (Crosis, the Purger): the seat the
     # damage froze, so the bare reveal joins the sentences that name it.
     ast.RevealHand: _lower_reveal_hand,
+    ast.RevealLibrary: _lower_reveal_library,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
     # "…**defending player** can't cast spells this turn." (Xantid Swarm.)
     # The seat the attack froze, so the event rides; Orim's Chant's "target

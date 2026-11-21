@@ -278,6 +278,20 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
     # answer to a question that already has one — but it is *read*, because a
     # production that skipped the words would claim a sentence naming somebody
     # else.
+    # "if **that library contains exactly the chosen number of cards with the
+    # chosen name**" (Mindblaze). The same count of a record, over a library
+    # a reveal step showed and by the name rather than the colour a choose
+    # step wrote. Settled by its first two words, which no branch below opens
+    # on, and consuming nothing when they are not there.
+    library_mark = stream.mark()
+    if stream.accept_phrase("that", "library", "contains", "exactly") and (
+        stream.accept_phrase(
+            "the", "chosen", "number", "of", "cards", "with", "the", "chosen",
+            "name",
+        )
+    ):
+        return ast.RevealedLibraryChosenNameCount("eq")
+    stream.reset(library_mark)
     reveal_mark = stream.mark()
     revealer = parse_player_ref(stream)
     if revealer is not None and revealer.kind in ("that_player", "target_opponent"):

@@ -199,6 +199,7 @@ from .records import (
     LifeGainedThisTurn,
     ChosenNameMilledThisWay,
     RevealedChosenColorCount,
+    RevealedLibraryChosenNameCount,
     SharedColorMilledThisWay,
     RevealedCardHasChosenName,
     NamedCardGuessWas,
@@ -358,6 +359,7 @@ from .mana import (
 from .library import (
     PutExiledPileOnLibrary,
     PutRevealedCardsOnBottom,
+    RevealLibrary,
     RevealUntil,
     LookAtHand,
     LookAtFaceDown,
@@ -936,6 +938,7 @@ __all__ = [
     "NameThenRevealTop",
     "RevealUntil",
     "PutRevealedCardsOnBottom",
+    "RevealLibrary",
     "RevealTopToHandOrBottom",
     # stack
     "BidLifeContest",
@@ -1003,6 +1006,7 @@ __all__ = [
     "ChooseCreatureType",
     "ChosenNameMilledThisWay",
     "RevealedChosenColorCount",
+    "RevealedLibraryChosenNameCount",
     "SharedColorMilledThisWay",
     "RevealedCardHasChosenName",
     "NamedCardGuessWas",

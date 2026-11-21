@@ -133,6 +133,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The same zone made public one card at a time, and the same category for
     # that reason.
     "reveal_random_card_from_hand": "zones",
+    # "Target player reveals their library." (Mindblaze.) The hand reveal's
+    # twin one hidden zone over, so the same family.
+    "reveal_library": "zones",
     # "…discards it unless they pay 1 life." The offer and its declined branch
     # are one instruction because the branch acts on a card only the offer knows
     # — the same reason `unless_player_pays` carries its own unpaid steps.

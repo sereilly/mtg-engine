@@ -220,6 +220,50 @@ def test_w1g7_cranial_extraction_at_a_seat_nobody_asks_names_from_public_evidenc
     assert _w1g7_names(game.players[1].exile) == ["Lightning Bolt"] * 5
 
 
+def _w1g7_mindblaze(set_pool, name, number):
+    game = _w1g7_table(
+        set_pool, hand=["Mindblaze"], interactive={0},
+        opponent_library=["Lightning Bolt", "Island", "Lightning Bolt", "Swamp",
+                          "Grizzly Bears"],
+    )
+    assert game.cast_from_hand(0, "Mindblaze", target_player_index=1).supported
+
+    def pick_number(g, c):
+        # "a number greater than 0": zero is refused.
+        assert not g.confirm_number_choice(0, 0)
+        assert g.confirm_number_choice(0, number)
+
+    _w1g7_settle(game, answers={
+        "choose_card_name": lambda g, c: g.confirm_choose_card_name(0, name),
+        "number_choice": pick_number,
+    })
+    return game
+
+
+def test_w1g7_mindblaze_deals_8_when_the_count_is_exact(set_pool):
+    game = _w1g7_mindblaze(set_pool, "Lightning Bolt", 2)
+    assert game.players[1].life == 12
+    assert any("reveals their library (5 card(s))" in line for line in game.log)
+    assert any("shuffled their library" in line for line in game.log)
+    assert sorted(_w1g7_names(game.players[1].library)) == [
+        "Grizzly Bears", "Island", "Lightning Bolt", "Lightning Bolt", "Swamp",
+    ]
+
+
+def test_w1g7_mindblaze_misses_on_any_other_count(set_pool):
+    assert _w1g7_mindblaze(set_pool, "Lightning Bolt", 1).players[1].life == 20
+    assert _w1g7_mindblaze(set_pool, "Lightning Bolt", 3).players[1].life == 20
+    assert _w1g7_mindblaze(set_pool, "Craw Wurm", 1).players[1].life == 20
+
+
+def test_w1g7_mindblaze_refuses_a_land_name(set_pool):
+    game = _w1g7_table(set_pool, hand=["Mindblaze"], interactive={0})
+    assert game.cast_from_hand(0, "Mindblaze", target_player_index=1).supported
+    asked = _w1g7_settle(game, defaults=False)
+    assert asked.kind == "choose_card_name"
+    assert not game.confirm_choose_card_name(0, "Island")
+
+
 def test_w1g7_petals_of_insight_otherwise_draws_three(set_pool):
     game = _w1g7_petals(set_pool, accept=False)
     player = game.players[0]

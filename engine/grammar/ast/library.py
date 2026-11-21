@@ -927,6 +927,24 @@ class PutRevealedCardsOnBottom:
     looked_at: "Amount | None" = None
 
 @dataclass(frozen=True)
+class RevealLibrary:
+    """``Target player reveals their library.`` (Mindblaze.)
+
+    CR 701.20a over a whole library: every card in it shown to every player,
+    and nothing moved (CR 701.20b) — so the sentence behind it ("if that
+    library contains exactly …") reads the cards the reveal recorded, and a
+    shuffle after it ("Then that player shuffles") is its own sentence.
+
+    Its own node rather than a widening of :class:`RevealHand`: a hand reveal
+    is the first half of a discard family (Amnesia, Rag Man) whose readers
+    all mean a hand, and the record each writes is read by different
+    sentences. Guided Passage reveals the *caster's* library inside a fused
+    pick and stays that node.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class PutExiledPileOnLibrary:
     """``Then look at the exiled cards and put them on top of your library in
     any order.`` (Scroll Rack.)

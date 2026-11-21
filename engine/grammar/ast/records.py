@@ -217,6 +217,21 @@ class RevealedChosenColorCount:
 
 
 @dataclass(frozen=True)
+class RevealedLibraryChosenNameCount:
+    """``if that library contains exactly the chosen number of cards with the
+    chosen name`` (Mindblaze).
+
+    :class:`RevealedChosenColorCount`'s question one characteristic and one
+    zone over: three records — the number and the name this resolution's own
+    choose steps wrote, and the library a reveal step showed — read together.
+    "That library" restates the reveal's own seat and is consumed as a
+    restatement, for that node's reason; ``op`` is the printed comparison.
+    """
+
+    op: str = "eq"
+
+
+@dataclass(frozen=True)
 class ChosenNameMilledThisWay:
     """``if a card with the chosen name was milled this way`` (Foreshadow).
 

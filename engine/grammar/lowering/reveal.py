@@ -780,6 +780,23 @@ def _lower_reveal_hand(
     return (OracleInstruction("reveal_hand", "", _targets_only(node.player)),)
 
 
+def _lower_reveal_library(
+    node: "ast.RevealLibrary", event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """"Target player **reveals their library**." (Mindblaze.)
+
+    A chosen player only: the handler reads the seat off the resolution's own
+    target, and the record it writes (``revealed_library_cards``) is what the
+    sentence behind it counts. Any other seat refuses by name rather than
+    revealing a library the card never pointed at.
+    """
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler reveals {node.player.kind!r}'s library", node=node
+        )
+    return (OracleInstruction("reveal_library", "", _targets_only(node.player)),)
+
+
 def _lower_reveal_random_from_hand(
     node: "ast.RevealRandomFromHand",
 ) -> tuple[OracleInstruction, ...]:

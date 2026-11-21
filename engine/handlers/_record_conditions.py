@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..oracle_types import (BIDDING_WINNER, CHOSEN_COLOR_THIS_WAY,
                             CHOSEN_NUMBER_THIS_WAY, REVEALED_HAND_CARDS,
+                            REVEALED_LIBRARY_CARDS,
                             REVEALED_TOP_CARDS_BY_SEAT, MILLED_THIS_WAY,
                             NAMED_CARD_GUESS,
                             DISCARDED_THIS_WAY, PROCESS_ROUNDS_SO_FAR)
@@ -482,6 +483,26 @@ def evaluate_record_condition(
             ):
                 counts[color] += 1
         return any(seen >= wanted for seen in counts.values())
+
+    if kind == "revealed_library_chosen_name_count":
+        # "**If that library contains exactly the chosen number of cards with
+        # the chosen name**, …" (Mindblaze.) The three records the steps in
+        # front wrote — the number, the name, and the library the reveal
+        # showed — and never the library as it stands now, for the colour
+        # count's reason below. A name compares by CR 201.2's identity
+        # (``search_filters.name_key``: case and punctuation aside), and a
+        # missing record is a question never asked, answered False.
+        from ..search_filters import name_key
+
+        wanted = context.results.get(CHOSEN_NUMBER_THIS_WAY)
+        named = context.results.get("chosen_card_name")
+        revealed = context.results.get(REVEALED_LIBRARY_CARDS)
+        if wanted is None or not named or revealed is None:
+            return False
+        count = sum(
+            1 for card in revealed if name_key(card.name) == name_key(str(named))
+        )
+        return _compare_count(count, str(payload.get("op", "eq")), int(wanted))
 
     if kind == "revealed_chosen_color_count":
         # "**If that opponent reveals exactly the chosen number of cards of the

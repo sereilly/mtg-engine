@@ -245,6 +245,11 @@ REVEALED_HAND_CARDS = "revealed_hand_cards"
 # **in it**." (Reversal of Fortune.) A seat, written by the one-hand reveal
 # only — "each player reveals their hand" names no one hand for "it" to be.
 REVEALED_HAND_SEAT = "revealed_hand_seat"
+# "Target player reveals **their library**. If that library contains exactly
+# the chosen number of cards with the chosen name, …" (Mindblaze.) The cards a
+# whole-library reveal showed, as a list — the hand record's twin one zone
+# over, kept apart so a reader of one is never handed the other.
+REVEALED_LIBRARY_CARDS = "revealed_library_cards"
 
 # "Reveal any number of blue cards in your hand. **Counter target spell unless
 # its controller pays {1} for each card revealed this way.**" (Brine Seer and
