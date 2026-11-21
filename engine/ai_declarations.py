@@ -262,6 +262,12 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         if idx in chosen:
             continue
         attacker = player.battlefield[idx]
+        if leaves_before_it_could_block(game, attacker):
+            # It is gone before the next turn's combat whatever happens here
+            # (`leaves_before_it_could_block`), so a block that kills it takes
+            # nothing the seat was keeping: it attacks.
+            chosen.append(idx)
+            continue
         # The fight each block would be, read as the defender reads it
         # (`_attack_block_score`: `ai_compelled_blocks.fight_outcome`, the
         # block's own triggers included) — bushido's +2/+2 on the block, a
@@ -299,6 +305,61 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         )
 
     return sorted(chosen)
+
+
+#: The delayed events that fire before the attacking seat's turn is over —
+#: an effect armed for one of them is gone by the time the creature could
+#: block (``delayed_triggers.DELAYED_EVENTS``).
+_THIS_TURNS_LEAVING_EVENTS = frozenset({
+    "next_end_of_combat", "next_end_step", "controllers_next_end_step",
+    "next_cleanup_step",
+})
+#: What such an effect does to its bound permanent that takes it off the
+#: battlefield.
+_LEAVING_KINDS = frozenset({
+    "sacrifice_bound_permanent", "exile_bound_permanent", "destroy_bound_permanent",
+    "return_bound_permanent_to_hand",
+})
+#: A printed end-step trigger that sacrifices its own creature (Ball
+#: Lightning's "At the beginning of the end step, sacrifice this creature").
+_END_STEP_CONDITIONS = frozenset({"end_step", "end_step_self"})
+
+
+def leaves_before_it_could_block(game: Game, creature: Permanent) -> bool:
+    """Whether *creature*, attacking on its controller's turn, leaves the
+    battlefield before that turn ends — so it never blocks, and nothing a
+    block takes from it was the seat's to keep.
+
+    A delayed ability bound to it for this turn's end of combat, end step or
+    cleanup (CR 603.7: "Sacrifice it at the beginning of the next end step" —
+    Kiki-Jiki's hasty copy, Through the Breach's and Sneak Attack's creature),
+    or its own printed end-step trigger that sacrifices it with no condition
+    (Ball Lightning). Kiki-Jiki was the card that showed it: the copy was
+    held home from a Craw Wurm it trades with nothing for, so the rehearsal
+    of the activation read a token sacrificed at the end step and nothing
+    else, and the seat never activated the ability (CHK W1G8)."""
+    from .trigger_utils import matching_triggers
+
+    permanent_id = getattr(creature, "permanent_id", None)
+    controller = game.controller_index_of(creature)
+    for delayed in getattr(game, "delayed_triggers", ()) or ():
+        if (
+            delayed.bound_permanent_id == permanent_id
+            and delayed.event in _THIS_TURNS_LEAVING_EVENTS
+            and (delayed.event != "controllers_next_end_step"
+                 or delayed.controller_index == controller)
+            and delayed.instruction is not None
+            and delayed.instruction.kind in _LEAVING_KINDS
+        ):
+            return True
+    return any(
+        trigger.instruction is not None
+        and trigger.instruction.kind == "sacrifice_self"
+        and not trigger.condition.payload
+        for trigger in matching_triggers(
+            creature.effective_card, condition_kinds=_END_STEP_CONDITIONS,
+        )
+    )
 
 
 def _attacks_its_held_trick_wins(

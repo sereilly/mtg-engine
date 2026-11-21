@@ -34,6 +34,7 @@ call. Those are genuinely different loops over the same engine seam
 from dataclasses import dataclass, field
 
 from .combat_assignment import combat_damage_assigned_by
+from .phases.combat_damage_assignment import _lethal_damage
 from .ai_scoring import _permanent_value, choose_attack_target
 from .ai_declarations import choose_attackers, choose_combat_blockers, legal_attackers
 
@@ -146,7 +147,7 @@ def choose_combat_damage_assignment(game) -> tuple[dict, list[int]]:
         and combat_damage_assigned_by(game.permanent_at(active, slot)) > 0
     ]
     if not offered:
-        return game._build_auto_damage_assignment(), []
+        return _first_strikes_kept_alive(game, game._build_auto_damage_assignment()), []
     # Every offered attacker as it would divide among its blockers, to weigh.
     divided = game._build_auto_damage_assignment(declining=offered)
     declined = [
@@ -158,12 +159,139 @@ def choose_combat_damage_assignment(game) -> tuple[dict, list[int]]:
             f"{game.permanent_at(active, slot).card.name} {KEEPS_DAMAGE_ON_BLOCKERS_LOG}"
         )
     return (
-        game._build_auto_damage_assignment(declining=declined),
+        _first_strikes_kept_alive(
+            game, game._build_auto_damage_assignment(declining=declined),
+        ),
         [
             game.permanent_at(active, slot).permanent_id
             for slot in offered if slot not in declined
         ],
     )
+
+
+def _first_strikes_kept_alive(game, assignment: dict) -> dict:
+    """*assignment* — the engine's default division, which kills as many
+    blockers as the power allows in slot order — with each first-striking
+    attacker's division in the first-strike damage step (CR 510.4) replaced
+    by one that **keeps it alive** where one exists
+    (:func:`_surviving_first_strike_division`).
+
+    The default does not ask which blockers would kill the attacker back:
+    Kitsune Blademaster (first strike, bushido 1: a 3/3 once blocked) blocked
+    by a 1/1 and a 3/3 killed the 1/1, put 2 on the 3/3, and died to it in the
+    regular step — the division the defender's own forecast
+    (``ai_declarations._gang_kills``: "the one that keeps it alive is the one
+    it makes") said it would not make."""
+    if not game.combat_attackers or game.combat_first_strike_done:
+        return assignment
+    if not game._first_strike_pass_pending():
+        return assignment
+    active = game.active_player_index
+    adjusted = dict(assignment)
+    for slot, division in assignment.items():
+        attacker = game.permanent_at(active, slot)
+        if attacker is None or len(division or {}) < 2:
+            continue
+        better = _surviving_first_strike_division(game, slot, attacker, division)
+        if better is not None:
+            adjusted[slot] = better
+    return adjusted
+
+
+def _surviving_first_strike_division(
+    game, slot: int, attacker, default: "dict | None" = None,
+) -> "dict | None":
+    """The division of a first-striking *attacker*'s combat damage among its
+    blockers that leaves it alive after the regular step, the most worth
+    (``ai_standing.permanent_worth``) destroyed among those — or None when no
+    division keeps it alive, the *default* division already does, it
+    tramples, or it strikes in no first step.
+
+    A blocker the first-strike damage destroys deals none in the regular step
+    (CR 510.4); a blocker with first strike or double strike deals its damage
+    beside the attacker's whatever the division, and one indestructible, or
+    whose damage would be prevented, cannot be taken out."""
+    from itertools import combinations
+
+    from .ai_compelled_blocks import STAYS, survives_destruction
+    from .ai_standing import permanent_worth
+
+    if not (
+        game._has_keyword(attacker, "first strike")
+        or game._has_keyword(attacker, "double strike")
+    ) or game._has_keyword(attacker, "trample"):
+        return None
+    defender = game.combat_attackers.get(slot)
+    if defender is None:
+        return None
+    blockers = [
+        (index, game.permanent_at(defender, index))
+        for index in game._attacker_all_blockers(slot)
+    ]
+    blockers = [(index, blocker) for index, blocker in blockers if blocker is not None]
+    power = combat_damage_assigned_by(attacker)
+    if len(blockers) < 2 or power <= 0:
+        return None
+    deathtouch = game._has_keyword(attacker, "deathtouch")
+    remaining = max(1, attacker.effective_toughness - attacker.damage_marked)
+
+    def strikes_first(blocker) -> bool:
+        return game._has_keyword(blocker, "first strike") or game._has_keyword(
+            blocker, "double strike",
+        )
+
+    def strikes_regular(blocker) -> bool:
+        return game._has_keyword(blocker, "double strike") or not strikes_first(blocker)
+
+    def dealt(blocker) -> "tuple[int, bool]":
+        amount = max(0, blocker.effective_power)
+        if amount and _would_be_prevented(game, blocker, attacker, amount):
+            return 0, False
+        return amount, bool(amount) and game._has_keyword(blocker, "deathtouch")
+
+    def survives(taken: set) -> bool:
+        total, lethal_touch = 0, False
+        for index, blocker in blockers:
+            amount, touch = dealt(blocker)
+            steps = int(strikes_first(blocker)) + int(
+                strikes_regular(blocker) and index not in taken
+            )
+            if steps and amount:
+                total += amount * steps
+                lethal_touch = lethal_touch or touch
+        return not lethal_touch and total < remaining
+
+    if default is not None and survives({
+        index for index, blocker in blockers
+        if (default.get(index) or 0) >= max(1, _lethal_damage(blocker, deathtouch))
+    }):
+        return None
+    takeable = []
+    for index, blocker in blockers:
+        if survives_destruction(game, blocker, dealt_by=(attacker,)) == STAYS:
+            continue
+        if _would_be_prevented(game, attacker, blocker, power):
+            continue
+        lethal = _lethal_damage(blocker, deathtouch)
+        if lethal > 0:
+            takeable.append((index, blocker, lethal))
+    best: "tuple[float, tuple] | None" = None
+    for size in range(len(takeable), 0, -1):
+        for chosen in combinations(takeable, size):
+            if sum(cost for _index, _blocker, cost in chosen) > power:
+                continue
+            if not survives({index for index, _blocker, _cost in chosen}):
+                continue
+            worth = sum(permanent_worth(blocker, now=False) for _i, blocker, _c in chosen)
+            if best is None or worth > best[0]:
+                best = (worth, chosen)
+    if best is None:
+        return None
+    division = {index: 0 for index, _blocker in blockers}
+    for index, _blocker, cost in best[1]:
+        division[index] = cost
+    division[best[1][0][0]] += power - sum(cost for _i, _b, cost in best[1])
+    return division
 
 
 def choose_combat_damage_announcement(game) -> dict:

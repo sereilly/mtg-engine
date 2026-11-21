@@ -60,3 +60,46 @@ def test_chub_toad_attacks_into_the_bears_its_trigger_beats(set_pool):
         set_pool("ICE")["Chub Toad"], set_pool("LEA")["Grizzly Bears"],
     )
     assert chosen == [0]
+
+
+def test_a_first_striker_blocked_by_two_kills_the_one_that_would_kill_it(set_pool):
+    """Kitsune Blademaster (2/2 first strike, bushido 1) blocked by a 1/1 and
+    a 3/3 is a 3/3 first striker: its three damage on the 3/3 leaves only the
+    1/1's one point coming back, and it lives. The engine's default division
+    kills the 1/1 first and puts two on the 3/3, which then kills it; the AI's
+    division is the one the defender's forecast (``_gang_kills``) expects."""
+    from engine.ai_combat import choose_combat_damage_announcement
+    from tests.helpers import _mk_creature_card, drive_combat
+
+    blademaster = Permanent(card=set_pool("CHK")["Kitsune Blademaster"])
+    small = Permanent(card=_mk_creature_card("Vanilla 1/1", 1, 1))
+    big = Permanent(card=_mk_creature_card("Vanilla 3/3", 3, 3))
+    for perm in (blademaster, small, big):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[blademaster], life=20),
+        PlayerState(name="P2", battlefield=[small, big], life=20),
+    ])
+    game._sync_control()
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, why = game.declare_attackers(0, [0], defending_player_index=1)
+    assert ok, why
+    game.advance_combat_phase()
+    ok, why = game.declare_blockers(1, {0: 0, 1: 0})
+    assert ok, why
+    for _ in range(4):
+        try:
+            drive_combat(game)
+            break
+        except AssertionError as stuck:
+            if "combat damage assignment" not in str(stuck):
+                raise
+            ok, why = game.resolve_combat_damage(0, **choose_combat_damage_announcement(game))
+            assert ok, why
+    assert game.is_on_battlefield(blademaster), game.log[-10:]
+    assert not game.is_on_battlefield(big)
+    assert game.is_on_battlefield(small)
