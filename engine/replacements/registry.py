@@ -288,6 +288,16 @@ DRAW_REVEALS_UNTIL_KIND = 21  # Abundance
 # which hands back a counter where this hands back a card. Declining leaves the
 # event for whatever is behind it.
 DRAW_FROM_EXILED_PILE = 23  # Parallel Thoughts
+# "If you would draw a card, look at the top three cards of your library
+# instead. Put one of those cards into your hand and the rest on the bottom of
+# your library in any order." (Tomorrow, Azami's Familiar.) A mandatory
+# consumer the drawing player's own permanent applies (CR 109.5: "you"), and
+# one that hands back a card of three for the one it takes - so with the
+# consumers the player set up for their own benefit, behind the two optional
+# ones that also hand back a card (a declined offer leaves the event to this)
+# and ahead of Pursuit of Knowledge, which hands back a counter. The order the
+# drawing player would choose, which CR 616.1e permits.
+DRAW_LOOKS_AND_KEEPS = 24  # Tomorrow, Azami's Familiar
 # Last of the draw replacements, and deliberately so. CR 616.1e gives the choice
 # to the affected player and the lowest order is the default they are taken to
 # make; every effect above this one is something the player armed for their own

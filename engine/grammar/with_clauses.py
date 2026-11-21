@@ -84,6 +84,7 @@ from .names import accept_name_comparison, accept_original_expansion
 from .readers import (_parse_keyword_list, _protection_quality,
                       accept_counter_kind)
 from .stream import TokenStream
+from .vocabulary import CARD_TYPES
 
 
 def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
@@ -373,6 +374,23 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
         if stream.accept_phrase("the", "chosen", "ability"):
             d.chosen_keyword = True
             return True
+        # "…an Aura card **with enchant creature**" (Tallowisp). The card's
+        # own enchant ability (CR 702.5a) named by its subject, read before the
+        # keyword list for the protection branch's reason: "enchant" is a
+        # keyword word, and the list would take it and strand the noun. One
+        # card-type noun, and only where the noun phrase ends behind it — a
+        # longer subject ("enchant creature you control") is a different
+        # ability, so it is left unread for the line to refuse rather than
+        # have its tail read as a narrowing of the card.
+        enchant_probe = stream.mark()
+        if stream.accept_word("enchant"):
+            noun = stream.peek_word()
+            if noun in CARD_TYPES or noun == "permanent":
+                stream.advance()
+                if stream.peek_word() is None:
+                    d.with_enchant = noun
+                    return True
+        stream.reset(enchant_probe)
         protection_probe = stream.mark()
         if stream.accept_phrase("protection", "from"):
             word = stream.peek_word()

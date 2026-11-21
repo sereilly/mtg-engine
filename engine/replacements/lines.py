@@ -42,7 +42,8 @@ from .permanents import (EXILE_UNCAST_CREATURE_TEXT, EXTRA_PLUS1_COUNTER_TEXT,
                          counters_instead_of_untap)
 from .redirects import (chosen_color_spell_redirect,
                         redirect_to_self_source_class)
-from .revealed_draws import (REVEALED_DRAW_TAXED_TEXT,
+from .revealed_draws import (LOOK_AND_KEEP_INSTEAD_OF_DRAW_TEXT,
+                             REVEALED_DRAW_TAXED_TEXT,
                              REVEAL_DRAW_UNLESS_PAID_TEXT,
                              REVEAL_TOP_INSTEAD_OF_DRAW_TEXT,
                              REVEAL_UNTIL_KIND_TEXT)
@@ -128,6 +129,11 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # three printed sentences, because the interceptor performs all three — the
     # reveal, the graveyard for a creature card and the draw for anything else.
     (REVEAL_TOP_INSTEAD_OF_DRAW_TEXT, ""),
+    # _look_and_keep_instead_of_drawing (Tomorrow, Azami's Familiar): the
+    # constant is both printed sentences, because the interceptor performs
+    # both - the look, and the kept card and the bottomed rest the second
+    # names (the look_top_pick prompt Impulse resolves through).
+    (LOOK_AND_KEEP_INSTEAD_OF_DRAW_TEXT, ""),
     # _reveal_until_kind_instead_of_drawing (Abundance): the constant is both
     # printed sentences, because the interceptor performs both — the choice and
     # the reveal-until, and the two destinations the second sentence names. A

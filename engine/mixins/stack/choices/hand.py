@@ -264,6 +264,13 @@ class HandChoicesMixin:
         any_colors = list(choice.data.get("any_colors") or ())
         if any_colors:
             narrowing["restrictions"] = {"any_colors": any_colors}
+        # "…a **Spirit or Arcane** card" (Psychic Spear): the fifth, likewise.
+        subtype_keys = {
+            key: list(choice.data[key])
+            for key in ("subtypes", "any_subtypes") if choice.data.get(key)
+        }
+        if subtype_keys:
+            narrowing.setdefault("restrictions", {}).update(subtype_keys)
         victim = self.players[victim_index]
         legal = [
             index
@@ -284,6 +291,7 @@ class HandChoicesMixin:
             card_types=card_types,
             exclude_supertypes=excluded_supertypes,
             any_colors=any_colors,
+            **subtype_keys,
             source_id=choice.data.get("source_id"),
             record=choice.data.get("record"),
             # The printed "up to" survives every answer: the picks after the

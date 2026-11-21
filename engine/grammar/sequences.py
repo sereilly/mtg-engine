@@ -816,7 +816,26 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             except GrammarError:
                 stream.reset(if_mark)
             else:
-                if isinstance(statement, ast.Sequence) and len(statement.steps) > 1:
+                if isinstance(statement, ast.CreateDelayedTrigger) and isinstance(
+                    condition, ast.SourceOnBattlefield
+                ):
+                    # "…you may return that card to the battlefield at the
+                    # beginning of the next end step **if Shirei is still on
+                    # the battlefield**." (Shirei, Shizo's Caretaker.) The
+                    # condition is the *delayed* ability's (CR 603.7, asked as
+                    # it resolves), not the creating one's: wrapped round the
+                    # creation it would be asked once, as the death trigger
+                    # resolves, and a source that left before the end step
+                    # would still return the card (the 2018-12-07 ruling says
+                    # it does not). Only the source's zone question is moved:
+                    # it is the one condition whose answer can change between
+                    # the two moments and that the delayed ability can still
+                    # ask (its source is frozen on the entry, CR 603.7d).
+                    statement = dataclasses.replace(
+                        statement,
+                        effect=ast.Conditional(condition, statement.effect),
+                    )
+                elif isinstance(statement, ast.Sequence) and len(statement.steps) > 1:
                     # "Reveal a card in your hand, **then put that card onto
                     # the battlefield if it has the same name as a
                     # permanent**." (Retraced Image.) Inside one sentence a

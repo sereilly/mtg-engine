@@ -294,6 +294,12 @@ def _lower_search_library(
         # nothing while the card reports supported — the dropped-rider bug the
         # deletion probe exists to catch, and did.
         restrictions.update(search_subtype_restriction(filt))
+    if filt.with_enchant is not None:
+        # "…an Aura card **with enchant creature**" (Tallowisp). The card's
+        # own printed enchant subject (CR 702.5a), which a card in a library
+        # carries on its face; emitted because it is honoured, for the
+        # subtype's reason one branch up.
+        restrictions["enchant"] = filt.with_enchant
     if filt.colors:
         # "a **blue** instant card" (Merchant Scroll). The card's own colour
         # (CR 202.2), which a card in a library has and a computed

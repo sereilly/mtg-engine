@@ -126,25 +126,59 @@ def test_chandra_heart_of_fire_ultimate_adds_no_mana_until_the_search_is_answere
 
 
 def test_chandra_flames_catalyst_minus_two_casts_it_then_exiles_it(set_pool):
-    """−2: the targeted graveyard card becomes castable, and the printed rider
-    routes it to exile instead of back to the graveyard when it leaves the
-    stack (CR 614.1a)."""
+    """−2: "You may cast target red instant or sorcery card from your
+    graveyard." The cast is made **while the ability resolves** (CR 608.2g),
+    offered to the controller as the ability's own prompt — it is not a
+    permission kept for later (BOK W1G10, Toshiro Umezawa's sentence: it
+    granted one lasting the rest of the game). The printed rider routes the
+    card to exile instead of back to the graveyard when it leaves the stack
+    (CR 614.1a)."""
+    from tests.helpers import settle
+
     pool = set_pool("M21")
     shock = pool["Shock"]
     game, walker = _walker_game(
         set_pool, "Chandra, Flame's Catalyst", graveyard=[shock],
     )
+    game.interactive_seats = {0}
     result = game.activate_permanent_ability(
         0, walker.card.name, ability_index=1,
         target_player_index=0, target_permanent_index=0,
     )
     assert result.supported, result.details
-    cast = game.cast_from_hand(0, "Shock", from_zone="graveyard", target_player_index=1)
-    assert cast.supported, cast.details
+    owed = settle(game, defaults=False)
+    assert owed is not None and owed.kind == "copy_cast"
+    assert owed.data["card_name"] == "Shock"
+    assert game.confirm_copy_cast(0, True, target_player_index=1)
+    settle(game)
     assert game.players[1].life == 18
     me = game.players[0]
     assert [card.name for card in me.exile] == ["Shock"]
     assert all(card.name != "Shock" for card in me.graveyard)
+
+
+def test_chandra_flames_catalyst_minus_two_declined_keeps_nothing_for_later(set_pool):
+    """Declined, the offer is gone with the resolution (CR 608.2g): the Shock
+    stays in the graveyard and cannot be cast from there afterwards."""
+    from tests.helpers import settle
+
+    pool = set_pool("M21")
+    game, walker = _walker_game(
+        set_pool, "Chandra, Flame's Catalyst", graveyard=[pool["Shock"]],
+    )
+    game.interactive_seats = {0}
+    assert game.activate_permanent_ability(
+        0, walker.card.name, ability_index=1,
+        target_player_index=0, target_permanent_index=0,
+    ).supported
+    owed = settle(game, defaults=False)
+    assert owed is not None and owed.kind == "copy_cast"
+    assert game.confirm_copy_cast(0, False)
+    settle(game)
+    assert [card.name for card in game.players[0].graveyard] == ["Shock"]
+    assert not game.cast_from_hand(
+        0, "Shock", from_zone="graveyard", target_player_index=1,
+    ).supported
 
 
 def test_chandra_flames_catalyst_minus_eight_waives_mana_costs_until_end_of_turn(set_pool):

@@ -29,7 +29,10 @@ SEARCH_RESTRICTIONS = frozenset(
     {"colors", "mana_value", "named", "named_among", "subtypes",
      # "Search your library for a **nonland** card" (Grim Reminder): the
      # restriction's ``exclude_types``, read beside the flat key below.
-     "excluded_types"}
+     "excluded_types",
+     # "…an Aura card **with enchant creature**" (Tallowisp): the
+     # restriction's ``enchant``, the card's own printed enchant subject.
+     "with_enchant"}
 )
 SEARCH_COMPARISONS = frozenset({"eq", "ge", "gt", "le", "lt"})
 
@@ -295,6 +298,19 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
         if not all(carries(subtype) for subtype in wanted_subtypes):
             return False
         if any_subtypes and not any(carries(subtype) for subtype in any_subtypes):
+            return False
+    # "…an Aura card **with enchant creature**" (Tallowisp). The subject of
+    # the card's own enchant ability (CR 702.5a), read off its printed text by
+    # the one reader of an enchant line (``enchant_targets``, which the cast
+    # picker, the cast gate and the grammar ask), and compared whole: "Enchant
+    # creature you control" and Animate Dead's "Enchant creature card in a
+    # graveyard" are other abilities, not "enchant creature". A card with no
+    # enchant line it can read has none to match.
+    wanted_enchant = restrictions.get("enchant")
+    if wanted_enchant is not None:
+        from .enchant_targets import card_enchant_subject
+
+        if card_enchant_subject(card.oracle_text) != wanted_enchant:
             return False
     named = restrictions.get("named")
     if named is not None and name_key(card.name) != name_key(named):

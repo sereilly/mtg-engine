@@ -559,7 +559,11 @@ def _action_copy_cast_confirm(session, req, seat_type):
     if choice is None:
         raise HTTPException(status_code=400, detail="no copy cast is offered to you")
     card_name = req.card_name or choice.data.get("card_name") or ""
-    announced = req.model_copy(update={"from_zone": "exile"})
+    # The graveyard offer (Toshiro Umezawa, ``copy_casts.FROM_GRAVEYARD_OF``)
+    # casts the card out of the graveyard holding it, its mana cost paid;
+    # every other offer casts out of exile.
+    zone = "graveyard" if choice.data.get("_from_graveyard_of") is not None else "exile"
+    announced = req.model_copy(update={"from_zone": zone})
 
     def perform(table):
         return _queue_spell_from_request(

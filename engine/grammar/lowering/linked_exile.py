@@ -49,7 +49,7 @@ from ...oracle_types import EXILED_BY_SEAT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    _amount_payload, _filter_payload, _restrictions_beyond,
+    _amount_payload, _describe_targets, _filter_payload, _restrictions_beyond,
     chargeable_card_filter,
 )
 from ._events import (EVENT_SUBJECT_PLAYER, EXILED_THIS_WAY_OBJECTS,
@@ -126,6 +126,15 @@ def _lower_exile_top_of_library(
                 "no event named {!r} freezes the seat 'that player' names".format(event),
                 node=node,
             )
+    elif kind in ("target_player", "target_opponent"):
+        # "{2}, {T}: **Target opponent** exiles the top card of their
+        # library. You may play that card this turn." (Ornate Kanzashi.) The
+        # chosen seat (CR 115.1) on the targets description every
+        # player-targeted effect carries - "opponent" is what the picker may
+        # offer (``opponents_only``) - and ``recipient: "target"`` so the
+        # handler reads it off the resolution rather than a frozen event.
+        _describe_targets(payload, node.player)
+        payload["recipient"] = "target"
     elif kind != "you":
         raise LoweringError(
             f"no handler exiles the top of {kind!r}'s library", node=node

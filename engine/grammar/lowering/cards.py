@@ -498,6 +498,24 @@ def _lower_draw(
                 "cost_sacrifice_characteristic": node.count.characteristic
             },
         }
+    elif isinstance(node.count, ast.RecordedCardManaValue):
+        # "Mill a card, then draw cards equal to **the milled card's mana
+        # value**." (Heed the Mists.) The printed mana value of the card an
+        # earlier step of this effect recorded, on the ``x_from_count`` spec
+        # Infernal Genesis' where-clause already travels — one evaluator, so
+        # the two spellings count alike, and nothing milled is zero (CR 107.2).
+        # With no producer the words name nothing and the draw would be zero
+        # on a card reporting itself supported.
+        if node.count.record not in produced:
+            raise LoweringError(
+                f"back-reference to {node.count.record!r} with no producer in "
+                "this effect",
+                node=node,
+            )
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: {"recorded_card_mana_value": node.count.record},
+        }
     elif isinstance(node.count, ast.ThatMuch):
         # "Target player discards two cards, then draws **as many cards as they
         # discarded this way**." (Forget.) The number is one an earlier step of

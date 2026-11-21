@@ -50,6 +50,16 @@ exile that holds it — its owner's, which need not be the caster's
 to exist afterwards and the spell is not one (it resolves to its owner's
 graveyard). The prompt, its answer and the AI's default are the copy offer's:
 one question ("cast this card from exile for free?") either way.
+
+**…and on a card in a graveyard, paid for** (:data:`FROM_GRAVEYARD_OF`):
+"Whenever a creature an opponent controls dies, you may cast target instant
+card from your graveyard. If that spell would be put into a graveyard, exile
+it instead." (Toshiro Umezawa; Chandra, Flame's Catalyst's −2.) With no stated
+duration the sentence is a cast during the resolution (CR 608.2g), not a
+lasting permission: the card itself, out of the caster's graveyard, its mana
+cost **paid** (Toshiro's 2005-02-01 ruling) under a permission carrying the
+exile rider (``exile_instead``), which the cast path stamps on the spell. The
+one offer here that is not free; the same prompt, answer and AI default.
 """
 
 from __future__ import annotations
@@ -77,17 +87,23 @@ def make_copy_in_exile(game, seat: int, card):
 
 def offer_permission(
     game, seat: int, copy, source_name: str, *, original: bool = False,
-    zone_seat: int | None = None,
+    zone_seat: int | None = None, zone: str = "exile", free: bool = True,
+    exile_instead: bool = False,
 ):
     """The grant the offer opens: *copy* out of *seat*'s exile, free of its
     mana cost, cast as a copy — or, *original*, the exiled card itself out of
-    *zone_seat*'s exile (its owner's), cast as itself."""
+    *zone_seat*'s exile (its owner's), cast as itself.
+
+    *zone*, *free* and *exile_instead* are the graveyard offer's
+    (:data:`FROM_GRAVEYARD_OF`): the card itself out of its owner's
+    graveyard, its mana cost paid, and "If that spell would be put into a
+    graveyard, exile it instead" stamped on the spell by the cast path."""
     from .cast_permissions import grant_permission
 
     return grant_permission(
-        game, player_index=seat, zone="exile", mode="cast", cards=[copy],
-        free=True, duration=COPY_CAST_OFFER, source_name=source_name,
-        cast_as_copy=not original,
+        game, player_index=seat, zone=zone, mode="cast", cards=[copy],
+        free=free, duration=COPY_CAST_OFFER, source_name=source_name,
+        cast_as_copy=not original, exile_instead=exile_instead,
         zone_player_index=zone_seat if original else None,
     )
 
@@ -109,6 +125,7 @@ def cease_to_exist(game, seat: int, copy) -> None:
 def arm_copy_cast(
     game, seat: int, card, source_name: str, *, one_of=None,
     from_hand_of: int | None = None, original: bool = False,
+    from_graveyard_of: int | None = None, exile_instead: bool = False,
 ) -> None:
     """Offer *seat* a cast of a copy of *card*.
 
@@ -136,7 +153,31 @@ def arm_copy_cast(
         data[ORIGINAL] = True
     if from_hand_of is not None:
         data[FROM_HAND_OF] = int(from_hand_of)
+    # *from_graveyard_of*: "you may cast target instant card from your
+    # graveyard. If that spell would be put into a graveyard, exile it
+    # instead." (Toshiro Umezawa; Chandra, Flame's Catalyst's −2.) The card
+    # itself, out of that seat's graveyard, during the resolution that
+    # allows it (CR 608.2g) — and its mana cost is **paid** (Toshiro's
+    # 2005-02-01 ruling: "You must still pay the mana cost"), so it is the
+    # one offer here that is not free.
+    if from_graveyard_of is not None:
+        data[ORIGINAL] = True
+        data[FROM_GRAVEYARD_OF] = int(from_graveyard_of)
+        if exile_instead:
+            data[EXILE_INSTEAD] = True
     game.arm_pending_choice("copy_cast", seat, **data)
+
+
+def arm_graveyard_cast(
+    game, seat: int, card, source_name: str, *, exile_instead: bool = False,
+) -> None:
+    """Offer *seat* a cast of *card* out of its own graveyard during this
+    resolution, paying its costs (CR 608.2g) — the offer
+    :func:`arm_copy_cast` makes with :data:`FROM_GRAVEYARD_OF`."""
+    arm_copy_cast(
+        game, seat, card, source_name, from_graveyard_of=seat,
+        exile_instead=exile_instead,
+    )
 
 
 #: The pending choice's key for the record its sibling offers share.
@@ -148,6 +189,20 @@ FROM_HAND_OF = "_from_hand_of"
 #: The pending choice's key saying the offer casts the exiled card **itself**,
 #: not a copy (Shell of the Last Kappa).
 ORIGINAL = "_original"
+
+#: The pending choice's key for the seat whose **graveyard** holds the card
+#: the offer casts itself, paying its mana cost (Toshiro Umezawa).
+FROM_GRAVEYARD_OF = "_from_graveyard_of"
+
+#: The graveyard offer's printed rider: "If that spell would be put into a
+#: graveyard, exile it instead" (the permission's ``exile_instead``).
+EXILE_INSTEAD = "_exile_instead"
+
+
+def _graveyard_seat(choice) -> int | None:
+    """The seat whose graveyard holds the offered card, or None."""
+    seat = choice.data.get(FROM_GRAVEYARD_OF)
+    return seat if isinstance(seat, int) else None
 
 
 def _what(choice) -> str:
@@ -200,6 +255,11 @@ def _still_there(game, choice) -> bool:
     hand_of = choice.data.get(FROM_HAND_OF)
     if isinstance(hand_of, int) and 0 <= hand_of < len(game.players):
         return any(held is card for held in game.players[hand_of].hand)
+    # A graveyard card that left is a new object (CR 400.7) the ability no
+    # longer names: nothing is cast.
+    graveyard_of = _graveyard_seat(choice)
+    if graveyard_of is not None and 0 <= graveyard_of < len(game.players):
+        return any(held is card for held in game.players[graveyard_of].graveyard)
     return _in_exile(game, card) is not None
 
 
@@ -212,6 +272,12 @@ def _gone_line(game, choice) -> str:
         return (
             f"{name} is no longer in {game.players[hand_of].name}'s hand, "
             "so no copy is made"
+        )
+    graveyard_of = _graveyard_seat(choice)
+    if graveyard_of is not None and 0 <= graveyard_of < len(game.players):
+        return (
+            f"{name} is no longer in {game.players[graveyard_of].name}'s "
+            "graveyard, so it is not cast"
         )
     return f"{name} is no longer exiled, so no copy is made"
 
@@ -240,6 +306,7 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
         perform=response.get("perform"),
         announcement=dict(response.get("announcement") or {}),
         original=bool(choice.data.get(ORIGINAL)),
+        **_graveyard_offer(choice),
     )
     outcome = response.get("outcome")
     if isinstance(outcome, list):
@@ -251,9 +318,22 @@ def resolve_copy_cast_offer(game, choice, response: dict) -> bool:
     return True
 
 
+def _graveyard_offer(choice) -> dict:
+    """The keywords :func:`_cast_a_copy` takes for the graveyard offer, or
+    none for every other one."""
+    graveyard_of = _graveyard_seat(choice)
+    if graveyard_of is None:
+        return {}
+    return {
+        "graveyard_of": graveyard_of,
+        "exile_instead": bool(choice.data.get(EXILE_INSTEAD)),
+    }
+
+
 def _cast_a_copy(
     game, seat: int, card, source_name: str, *, perform=None, announcement=None,
-    choose=None, original: bool = False,
+    choose=None, original: bool = False, graveyard_of: int | None = None,
+    exile_instead: bool = False,
 ):
     """Make the copy, cast it, and clean up whatever the cast did not take.
 
@@ -262,8 +342,19 @@ def _cast_a_copy(
     AI weighs the very object it would cast.
 
     *original* casts *card* itself out of the exile holding it (Shell of the
-    Last Kappa): no copy is made and none ceases to exist."""
-    if original:
+    Last Kappa): no copy is made and none ceases to exist.
+
+    *graveyard_of* casts *card* itself out of that seat's graveyard, its mana
+    cost paid (Toshiro Umezawa), under a permission carrying *exile_instead*."""
+    zone = "exile"
+    if graveyard_of is not None:
+        zone = "graveyard"
+        copy = card
+        permission = offer_permission(
+            game, seat, card, source_name, original=True, zone_seat=graveyard_of,
+            zone="graveyard", free=False, exile_instead=exile_instead,
+        )
+    elif original:
         copy = card
         permission = offer_permission(
             game, seat, card, source_name, original=True,
@@ -280,7 +371,7 @@ def _cast_a_copy(
                 return None
         if perform is None:
             keywords = dict(announcement or {})
-            keywords["from_zone"] = "exile"
+            keywords["from_zone"] = zone
             name = keywords.pop("card_name", None) or copy.name
 
             def perform(table):
@@ -289,14 +380,23 @@ def _cast_a_copy(
         result = perform(game)
     finally:
         retire_offer(game, permission)
-        if not original and any(held is copy for held in game.players[seat].exile):
+        if (
+            not original and graveyard_of is None
+            and any(held is copy for held in game.players[seat].exile)
+        ):
             cease_to_exist(game, seat, copy)
     if getattr(result, "supported", False):
-        what = card.name if original else f"a copy of {card.name}"
-        game.log.append(
-            f"{game.players[seat].name} cast {what} without paying its mana "
-            f"cost ({source_name})"
-        )
+        what = card.name if (original or graveyard_of is not None) else f"a copy of {card.name}"
+        if graveyard_of is not None:
+            game.log.append(
+                f"{game.players[seat].name} cast {what} from their graveyard "
+                f"({source_name})"
+            )
+        else:
+            game.log.append(
+                f"{game.players[seat].name} cast {what} without paying its mana "
+                f"cost ({source_name})"
+            )
     return result
 
 
@@ -365,6 +465,7 @@ def default_copy_cast_offer(game, choice) -> None:
         result = _cast_a_copy(
             game, seat, card, source_name, choose=choose,
             original=bool(choice.data.get(ORIGINAL)),
+            **_graveyard_offer(choice),
         )
         if getattr(result, "supported", False):
             _take_one_of(game, choice)

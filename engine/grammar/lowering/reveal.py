@@ -74,7 +74,7 @@ from ._common import (
     dropped_narrowings,
     search_slot,
 )
-from ._filters import chargeable_card_filter
+from ._filters import chargeable_card_filter, search_subtype_restriction
 from ._record_keys import CHOSEN_PLAYER, REVEALED_UNTIL_CARDS
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
@@ -316,9 +316,12 @@ def _lower_reveal_top_sorting_by_filter(
     # leaves where it is, on top of the library: neither the match zone nor
     # "the rest". The sort asks ``permanent_cards`` of every match.
     count = _amount_payload(node.count)
-    if not isinstance(count, int) or count <= 0:
+    # "Reveal the top **X** cards …" (Enshrined Memories): the cast's X, which
+    # the handler resolves (``resolve_amount``). X = 0 reveals nothing.
+    if count != "x" and (not isinstance(count, int) or count <= 0):
         raise LoweringError(
-            "the revealed pile is a fixed number of cards", node=node
+            "the revealed pile is a fixed number of cards or the spell's X",
+            node=node,
         )
     # "**Each player** reveals the top five cards of **their** library."
     # (Clear the Land.) Whose pile, and the only value beside the absent one:
@@ -747,7 +750,7 @@ def _lower_reveal_cards_from_hand(
 #: battlefield has instead of characteristics (CR 613.1).
 _REVEALED_HAND_FIELDS = frozenset(
     {"excluded_types", "is_card", "excluded_basic_lands", "card_types",
-     "excluded_supertypes"}
+     "excluded_supertypes", "subtypes"}
 )
 
 
@@ -1005,6 +1008,15 @@ def _lower_reveal_hand_and_choose(
         # it are: a phrase the production consumes and the payload drops is a
         # picker offering a Plains while the card says otherwise.
         payload["exclude_supertypes"] = list(node.filter.excluded_supertypes)
+    if node.filter.subtypes:
+        # "You choose a **Spirit or Arcane** card from it." (Psychic Spear.)
+        # A creature type or a spell type (CR 205.3m, 205.3k), read off the
+        # printed type line as every hidden-zone pick reads it — the search's
+        # subtype restriction (``search_subtype_restriction``: one subtype is
+        # ``subtypes``, the printed union ``any_subtypes``), so the picker,
+        # an answer's check and a re-armed pick ask one predicate. Emitted only
+        # when the card prints it, so Duress's payload stays byte-identical.
+        payload.update(search_subtype_restriction(node.filter))
     if node.filter.excluded_basic_lands:
         # Emitted only when the card prints it, so Duress's payload stays
         # byte-identical — and emitted at all, because a phrase the production

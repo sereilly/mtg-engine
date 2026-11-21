@@ -185,6 +185,13 @@ class ShuffleHandIntoLibrary:
     #: The seats also have to agree — "their … their" is one player per
     #: iteration, which two independent statements cannot promise.
     with_graveyard: bool = False
+    #: "Each player shuffles their hand, graveyard, **and all permanents they
+    #: own** into their library" (Sway of the Stars). A third pile in the same
+    #: one shuffle, for ``with_graveyard``'s reason: the permanents each player
+    #: *owns* (CR 108.3, not controls) leave the battlefield in one event
+    #: (CR 603.10a) and go to their owner's library, a token ceasing to exist
+    #: on the way (CR 111.8). Only beside ``with_graveyard``, the one printing.
+    with_permanents: bool = False
 
 
 @dataclass(frozen=True)

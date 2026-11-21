@@ -1147,6 +1147,35 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
     # copy offer's. Its exile is its owner's, which ``exile_seat`` already says.
     original = bool(choice.data.get("_original"))
     what = name if original else f"a copy of {name}"
+    # "You may cast target instant card from your graveyard. If that spell
+    # would be put into a graveyard, exile it instead." (Toshiro Umezawa.) The
+    # card itself out of a graveyard (``copy_casts.FROM_GRAVEYARD_OF``), during
+    # the resolution (CR 608.2g), its mana cost **paid** — so the client opens
+    # its cast dialog on that graveyard slot (``graveyard_seat`` /
+    # ``graveyard_index``) and lets the seat tap for mana first (the spec's
+    # ``also_answers``); ``free: false`` says the cost is not waived.
+    graveyard_of = choice.data.get("_from_graveyard_of")
+    graveyard_place: dict = {}
+    if isinstance(graveyard_of, int) and 0 <= graveyard_of < len(ctx.game.players):
+        graveyard_place = {
+            "graveyard_seat": graveyard_of,
+            "graveyard_index": next(
+                (
+                    index for index, held in
+                    enumerate(ctx.game.players[graveyard_of].graveyard)
+                    if held is card
+                ),
+                None,
+            ),
+            "free": False,
+            **({"exile_instead": True} if choice.data.get("_exile_instead") else {}),
+        }
+    prompt = (
+        f"Cast {what} from your graveyard ({choice.data.get('source_name', '')})?"
+        if graveyard_place else
+        f"Cast {what} without paying its mana cost "
+        f"({choice.data.get('source_name', '')})?"
+    )
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
@@ -1155,11 +1184,9 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
         "exile_seat": where[0],
         "exile_index": where[1],
         **hand_place,
+        **graveyard_place,
         **({"copy": False} if original else {}),
-        "prompt": (
-            f"Cast {what} without paying its mana cost "
-            f"({choice.data.get('source_name', '')})?"
-        ),
+        "prompt": prompt,
     }
 
 

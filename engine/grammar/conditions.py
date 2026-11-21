@@ -762,6 +762,14 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             # its own reading.
             if stream.accept_phrase("on", "the", "battlefield"):
                 return ast.SourceOnBattlefield(subject)
+            # "…if Shirei **is still on the battlefield**" (Shirei, Shizo's
+            # Caretaker). The same zone question: "still" says the object is
+            # the one the ability was created by, which CR 400.7 already makes
+            # the only object the source can name — one that left and came
+            # back is a new object, and is not on the battlefield as this one
+            # (the card's 2018-12-07 ruling).
+            if stream.accept_phrase("still", "on", "the", "battlefield"):
+                return ast.SourceOnBattlefield(subject)
             # "…**is an enchantment**" / "…**is a creature**" (the Hidden /
             # Opal / Veiled cycle). CR 205.2's card type asked of the source,
             # answered by CR 613 layer 4 rather than by the printed type line —

@@ -153,6 +153,13 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     # shuffle written as a statement after this one would shuffle it twice with
     # the hand's cards already down among the graveyard's.
     with_graveyard = bool(instruction.payload.get("with_graveyard"))
+    if instruction.payload.get("with_permanents"):
+        # "…their hand, graveyard, **and all permanents they own** into their
+        # library, then draws seven cards." (Sway of the Stars.)
+        _shuffle_whole_tables_into_libraries(
+            game, players, then_draw_count=then_draw_count,
+        )
+        return True, "resolved"
     for player in players:
         moved = len(player.hand)
         # Through the library seam, not a bare extend: CR 903.9b has no single
@@ -180,6 +187,77 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
         elif then_draw and moved:
             game._draw_with_replacements(player, moved)
     return True, "resolved"
+
+
+def _shuffle_whole_tables_into_libraries(game, players, *, then_draw_count) -> None:
+    """Sway of the Stars: "Each player shuffles their hand, graveyard, and all
+    permanents they own into their library, then draws seven cards."
+
+    One move per player over three piles, for ``with_graveyard``'s reason
+    (CR 701.24a: one shuffle). Which cards are in each hand and graveyard is
+    read **before** anything leaves the battlefield, so a permanent a CR 614
+    replacement sends to a graveyard on its way (``put_card_into_library``
+    asks) is not swept up with the pile it was never part of.
+
+    Every permanent a performing player **owns** (CR 108.3) leaves in one event
+    (CR 603.10a, ``leaving_together``), whoever controls it, for its owner's
+    library (CR 400.3); a token ceases to exist instead of arriving (CR 111.8,
+    the 2005-02-01 ruling — the library seam drops it). The spell itself is on
+    the stack and is no permanent (the 2013-07-01 ruling). Then each player in
+    turn shuffles and draws the printed number through the draw seam.
+    """
+    seats = {game.players.index(player) for player in players}
+    piles = {
+        game.players.index(player): (list(player.hand), list(player.graveyard))
+        for player in players
+    }
+    owned = _owned_permanents_into_libraries(game, seats)
+    for player in players:
+        seat = game.players.index(player)
+        hand, graveyard = piles[seat]
+        for card in hand:
+            # Through the hand seam (one copy, by identity).
+            if game.take_card_from_hand(player, card):
+                game.put_card_into_library(player, card)
+        for card in graveyard:
+            # By identity: two copies of a card are one ``CardDefinition``.
+            index = next(
+                (i for i, held in enumerate(player.graveyard) if held is card), None
+            )
+            if index is None:
+                continue
+            player.graveyard.pop(index)
+            game.put_card_into_library(player, card)
+        game.shuffle_library_of(player)
+        game.log.append(
+            f"{player.name} shuffled {len(hand)} card(s) from their hand, "
+            f"{len(graveyard)} from their graveyard and {owned[seat]} "
+            "permanent(s) they own into their library"
+        )
+        if then_draw_count is not None:
+            game._draw_with_replacements(player, int(then_draw_count))
+
+
+def _owned_permanents_into_libraries(game, seats: set) -> dict:
+    """Every permanent a seat in *seats* owns (CR 108.3), off the battlefield
+    in one event (CR 603.10a) and into its owner's library (CR 400.3) through
+    the seam that is told which permanent left (a token ceases to exist
+    there, CR 111.8). How many each seat's library took, by seat.
+
+    Its own function so the hand and graveyard cards the caller moves are
+    never read as battlefield exits (``test_leave_battlefield_seam``)."""
+    owned = {seat: 0 for seat in seats}
+    with game.entering_together(), game.leaving_together():
+        for perm in list(game.all_permanents()):
+            owner_index = game.owner_index_of(perm)
+            if owner_index not in seats or not game.is_on_battlefield(perm):
+                continue
+            owner = game.players[owner_index]
+            game.remove_from_battlefield(perm)
+            game._remove_aura_effects(perm)
+            game.put_card_into_library(owner, perm.card, from_battlefield=perm)
+            owned[owner_index] += 1
+    return owned
 
 
 @effect_handler("shuffle_graveyard_into_library")
