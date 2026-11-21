@@ -775,6 +775,22 @@ class TriggerTargetsMixin:
         candidates = self._trigger_candidates_by_relation(
             item, spec, chooser_index, candidates
         )
+        # A two-stage announcement already made (Yosei: the target player,
+        # then "up to five target permanents that player controls"): asked
+        # what the announcement could have named, the answer is both stages'
+        # lists — the seats of the first and the second's objects on the seat
+        # it recorded — or every permanent it stamped reads as one no list
+        # offered. Only for *announced*, the after-the-fact reader: the first
+        # stage's own prompt is the seat list alone.
+        if announced:
+            from ...oracle_types import ANNOUNCED_THAT_PLAYER
+
+            seat = (getattr(item, "choices", None) or {}).get(ANNOUNCED_THAT_PLAYER)
+            dependent = that_player_dependent_step(instruction)
+            if isinstance(seat, int) and dependent is not None:
+                candidates = list(candidates) + list(
+                    self._that_player_stage(item, dependent, seat)[1]
+                )
         return spec, chooser_index, candidates
 
     def _trigger_candidates_by_relation(
@@ -1167,25 +1183,12 @@ class TriggerTargetsMixin:
         chose.
         """
         from ...oracle_types import ANNOUNCED_THAT_PLAYER
-        from ...targeting import derive_instruction_spec
-        from ...text_changes import spell_text_card
 
         step = that_player_dependent_step(item.ability_instruction)
         if step is None:
             return None
         item.choices[ANNOUNCED_THAT_PLAYER] = seat
-        spec = dict(derive_instruction_spec([step]) or {})
-        spec["that_player_index"] = seat
-        # The card ``stack_targets._candidates`` enumerates the CR 608.2b
-        # re-check for, so the list offered now and the list re-asked as the
-        # ability resolves are one list.
-        candidates = self._enumerate_targets(
-            item.caster_index, spell_text_card(item), spec, for_cast=False,
-            ability_instruction=step,
-            source_permanent=item.source_permanent,
-            ability_source=item.source_permanent,
-            triggered=True,
-        )
+        spec, candidates = self._that_player_stage(item, step, seat)
         self._arm_trigger_target_choice(item, spec, item.caster_index, candidates)
         if not any(existing is item for existing in self.stack):
             # A dependent target the printed count owes, and nothing on that
@@ -1195,6 +1198,32 @@ class TriggerTargetsMixin:
             waiting.data.get("_trigger_item") is item for waiting in self.pending_choices
         )
         return owed or item.target_permanent_id is not None
+
+    def _that_player_stage(self, item: StackItem, step, seat: int) -> "tuple[dict, list]":
+        """``(spec, candidates)`` of a two-stage announcement's **second**
+        stage: the objects *step* targets on *seat*'s board, "that player"
+        being the target player the first stage chose.
+
+        One reader for the two moments it is asked: as the stage is offered
+        (:meth:`_announce_that_player_targets`) and when a reader asks what the
+        whole announcement could have named (:meth:`_trigger_target_candidates`
+        with *announced*). Enumerated for ``spell_text_card(item)``, the card
+        ``stack_targets._candidates`` re-asks CR 608.2b for, so the list
+        offered, the list judged and the list re-checked are one list.
+        """
+        from ...targeting import derive_instruction_spec
+        from ...text_changes import spell_text_card
+
+        spec = dict(derive_instruction_spec([step]) or {})
+        spec["that_player_index"] = seat
+        candidates = self._enumerate_targets(
+            item.caster_index, spell_text_card(item), spec, for_cast=False,
+            ability_instruction=step,
+            source_permanent=item.source_permanent,
+            ability_source=item.source_permanent,
+            triggered=True,
+        )
+        return spec, candidates
 
     def _stack_objects_offered(self, candidates) -> list:
         """The stack objects a list of ``_enumerate_stack_targets`` entries

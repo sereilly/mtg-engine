@@ -37,7 +37,8 @@ from engine import Game, PlayerState
 from engine.cast_costs import kicker_costs
 from engine.faces import compilation_units
 from engine.legality import targeting_instruction
-from engine.mixins.stack.trigger_targets import _target_is_up_to
+from engine.mixins.stack.trigger_targets import (_target_is_up_to,
+                                                 that_player_dependent_step)
 from engine.models import CardDefinition, Permanent
 from engine.named_counters import add_counters
 from engine.oracle import compile_card_oracle
@@ -385,9 +386,17 @@ def _announce(game, card, where, position, step, ability, source) -> bool:
 
 
 def _picker_offers(game, card, where, step, source) -> list:
-    """The announcement's own list of legal targets, as the picker reads it."""
+    """The announcement's own list of legal targets, as the picker reads it.
+
+    For a trigger announcing a target player and then "up to N target
+    permanents **that player** controls" (Yosei, the Morning Star), the "up
+    to" slot is the second stage's, on the board of the seat the first names
+    (``trigger_targets.that_player_dependent_step``): that is the list this
+    census's question is about, and the seat the census freezes is 1."""
     if where == "spell":
         return list(game.cast_target_spec(0, card, optional_cost_payments={}).get("valid_targets") or ())
+    if where == "trigger" and that_player_dependent_step(step) is not None:
+        step = that_player_dependent_step(step)
     spec = dict(derive_instruction_spec([step]) or {})
     if where == "trigger":
         spec.update(defending_player_index=1, that_player_index=1)
@@ -396,6 +405,31 @@ def _picker_offers(game, card, where, step, source) -> list:
         ability_instruction=targeting_instruction(step) if where == "activated" else step,
         source_permanent=source, ability_source=source, triggered=(where == "trigger"),
     )
+
+
+def _answer_the_owed_seat_stage(game, item) -> bool:
+    """Answer a two-stage trigger's **first** stage — the target player it
+    owes — with seat 1, so its "up to" stage is the prompt this census asks
+    about; True when one was answered.
+
+    "When Yosei dies, target player skips their next untap step. Tap up to
+    five target permanents that player controls." (CHK W1G3.) The player is a
+    printed "target" carried as a seat word rather than a ``targets``
+    description, so :func:`_owes_a_target_beside` does not see it; the trigger
+    asks for it first (``trigger_targets._announce_that_player_targets``) and
+    may not be answered with nobody, and its "up to" is the next prompt."""
+    if item is None or that_player_dependent_step(item.ability_instruction) is None:
+        return False
+    for prompt in list(game.pending_choices_of("trigger_target")):
+        if prompt.data.get("_trigger_item") is not item:
+            continue
+        offered = prompt.data.get("targets") or ()
+        seats = [entry.get("seat") for entry in offered if entry.get("kind") == "player"]
+        if not seats or len(seats) != len(offered):
+            return False
+        assert not prompt.data.get("up_to"), "the owed seat stage offers nobody"
+        return game.confirm_trigger_target(0, seat=1 if 1 in seats else seats[0])
+    return False
 
 
 def _unit_object(game, card, step):
@@ -445,6 +479,7 @@ def _drive(pool, unit, *, open_board: bool):
                 break
             game.resolve_top_of_stack()
     item = _unit_object(game, card, step if where != "spell" else None)
+    _answer_the_owed_seat_stage(game, item)
     for prompt in list(game.pending_choices_of("trigger_target")):
         if prompt.data.get("_trigger_item") is item:
             assert prompt.data.get("up_to"), f"{card.name}: the prompt cannot be answered with nobody"
@@ -645,6 +680,11 @@ def test_a_seat_asked_for_an_up_to_target_may_answer_nobody(_pool):
             prompt for prompt in game.pending_choices_of("trigger_target")
             if prompt.data["_trigger_item"].ability_instruction is step
         ]
+        if prompts and _answer_the_owed_seat_stage(game, prompts[0].data["_trigger_item"]):
+            prompts = [
+                prompt for prompt in game.pending_choices_of("trigger_target")
+                if prompt.data["_trigger_item"].ability_instruction is step
+            ]
         if not prompts:
             findings.append(f"{label}: no target was asked for beside legal targets")
             continue
