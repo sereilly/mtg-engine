@@ -154,6 +154,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.45",  # Bushido (CHK: 16 cards + Kenzo; ``engine/bushido.py``)
         "702.46",  # Soulshift (CHK: 12 cards; ``engine/soulshift.py``)
         "702.47",  # Splice onto Arcane (CHK: 15 cards; ``engine/splice.py``)
+        "702.49",  # Ninjutsu (BOK: 8 cards; ``engine/ninjutsu.py``)
         "702.108", # Prowess
         "702.111", # Menace
         # NOT 702.83 Exalted, for 701.43's reason: `engine/whenever_trigger_notes.py` cites
