@@ -16,7 +16,6 @@ counters on one), and the back-references "equal to …" reads.
 
 from __future__ import annotations
 
-from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
 from ..oracle_types import (CONDITION_DIFFERENCE, LIFE_LOST_THIS_WAY,
                             LIFE_LOST_WHEN_ENTERED, MANA_PAID_BY_SEAT,
                             SECRET_NUMBERS_BY_SEAT)
@@ -30,7 +29,8 @@ from .cost_records import (accept_counters_removed_for_cost,
                            accept_cost_channel_possessive,
                            accept_cost_characteristic_of)
 from .records import accept_damage_dealt_by_chosen_cast
-from .readers import accept_counter_kind, accept_source_reference
+from .readers import (accept_counter_kind, accept_granter_reference,
+                      accept_source_reference)
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
@@ -324,11 +324,10 @@ def accept_counters_on_granter(stream: TokenStream) -> "ast.CountersOnGranter | 
         token is not None
         and stream.accept_word("counter", "counters")
         and stream.accept_word("on")
-        and stream.accept_phrase(*GRANTER_PHRASE_HEAD)
     ):
-        number = stream.accept_kind(NUMBER)
-        if number is not None and stream.accept_phrase(*GRANTER_PHRASE_TAIL):
-            return ast.CountersOnGranter(token.text, int(number.text))
+        granter = accept_granter_reference(stream)
+        if granter is not None:
+            return ast.CountersOnGranter(token.text, granter)
     stream.reset(mark)
     return None
 

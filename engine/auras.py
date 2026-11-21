@@ -47,6 +47,7 @@ from .aura_grants import (
     _build_board_counted_penalty,
     aura_conditional_keyword_grants,
     _QUOTED_ABILITY_GRANT,
+    quoted_grant_abilities,
     quoted_grant_readable,
     aura_conditional_ability_grants,
     aura_keyword_grants,
@@ -671,8 +672,9 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     # line carrying an unreadable quote is unimplemented whichever reader
     # further down would also have liked the rest of it.
     quoted = _QUOTED_ABILITY_GRANT.match(normalized_line)
-    if quoted is not None and not quoted_grant_readable(
-        quoted.group("ability"), card_name
+    if quoted is not None and not all(
+        quoted_grant_readable(ability, card_name)
+        for ability in quoted_grant_abilities(quoted)
     ):
         return None
     for pattern, claim in _TEMPLATES:

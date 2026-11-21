@@ -654,7 +654,9 @@ class ActivationChecksMixin:
             from ...named_counters import counters_on
 
             kind = ability.cost.remove_counter
-            held = counters_on(permanent, kind)
+            # The source, or the permanent that granted the ability (Hankyu).
+            holder = self.counter_cost_holder(ability.cost, permanent)
+            held = counters_on(holder, kind) if holder is not None else 0
             wanted = ability.cost.remove_counter_count
             if wanted == "any":
                 # "Remove **any number of** charge counters from this artifact"

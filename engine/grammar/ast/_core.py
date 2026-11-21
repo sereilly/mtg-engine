@@ -719,6 +719,23 @@ class CountersOnGranter:
 
 
 @dataclass(frozen=True)
+class GranterRef:
+    """"{T}: Put an aim counter on **the permanent with id N that granted this
+    ability**" (Hankyu's quote, once it is the equipped creature's own text) —
+    the one permanent whose effect gave the source this ability (CR 201.5a),
+    named as a *recipient*.
+
+    Its own node rather than a :class:`TargetSpec` for the reason
+    :class:`CountersOnGranter` is its own: nothing is chosen and no noun phrase
+    describes it, so a lowering written for a target or for the source would
+    accept it and act on the wrong object. Only the lowerings that know the
+    node read it (the named-counter placement); every other one refuses it as
+    an unknown recipient.
+    """
+    permanent_id: int
+
+
+@dataclass(frozen=True)
 class LifePaidAsEntered:
     """"where X is **the life paid as this artifact entered**" (Phyrexian
     Processor) — the amount of life its controller chose to pay as a CR 614.1c

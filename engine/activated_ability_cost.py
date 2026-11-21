@@ -466,6 +466,15 @@ class ActivatedAbilityCost:
     #: attached to the permanent whose ability this is. Last for
     #: ``mill_cards``' stated reason.
     unattach_granter_id: int | None = None
+    #: "{T}, Remove all aim counters from **Hankyu**: …" The ability Hankyu
+    #: grants the creature it equips: the :attr:`remove_counter` above comes
+    #: off the permanent that granted the ability rather than off the source —
+    #: its ``permanent_id``, which ``bind_granter`` wrote into the quote in
+    #: place of its name (CR 201.5a). Counted, checked and charged exactly
+    #: where the source's counters are (``Game.counter_cost_holder``); None is
+    #: the source (or :attr:`remove_counter_filter`'s pick). Last for
+    #: ``mill_cards``' stated reason.
+    remove_counter_granter_id: int | None = None
 
     @property
     def is_loyalty(self) -> bool:

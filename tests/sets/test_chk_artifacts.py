@@ -569,4 +569,111 @@ def test_w2g3_kusari_gama_does_not_fire_on_damage_to_a_player(set_pool):
     assert their_bears.damage_marked == 0
     assert not any(line.startswith("Kusari-Gama dealt") for line in game.log)
 
+
+def _w2g3_aim(game, creature, ability_index=0, **announce):
+    creature.tapped = False
+    return _w2g3_activate(game, creature, ability_index=ability_index, **announce)
+
+
+def test_w2g3_hankyu_puts_aim_counters_on_itself_and_fires_what_it_removed(set_pool):
+    """"Equipped creature has '{T}: Put an aim counter on Hankyu' and '{T},
+    Remove all aim counters from Hankyu: This creature deals damage to any
+    target equal to the number of aim counters removed this way.'"
+
+    The name in the quote is the Equipment (CR 201.5a): three activations put
+    three aim counters on Hankyu — none on the Bears, none on a second,
+    unattached Hankyu — and the second ability takes all three off as its cost
+    and deals 3 to the Craw Wurm. The counters stay with the Equipment: moved
+    to another creature it fires what it carried, and fired empty it deals
+    nothing."""
+    from engine.named_counters import counters_on
+
+    game, mine, theirs = _w2g3_table(
+        set_pool, mine=["Hankyu", "Grizzly Bears", "Hankyu", "Grizzly Bears"],
+        theirs=["Craw Wurm"],
+    )
+    hankyu, bears, spare, other_bears = mine
+    wurm = theirs[0]
+    assert _w2g3_equip(game, hankyu, bears).supported
+    for _ in range(3):
+        assert _w2g3_aim(game, bears).supported
+    assert counters_on(hankyu, "aim") == 3
+    assert counters_on(bears, "aim") == 0 and counters_on(spare, "aim") == 0
+
+    assert _w2g3_aim(
+        game, bears, ability_index=1, target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    assert counters_on(hankyu, "aim") == 0
+    assert "Grizzly Bears dealt 3 damage to Craw Wurm" in game.log
+    assert wurm.damage_marked == 3
+
+    assert _w2g3_aim(game, bears).supported
+    assert _w2g3_equip(game, hankyu, other_bears).supported
+    assert counters_on(hankyu, "aim") == 1
+    assert _w2g3_aim(game, other_bears, ability_index=1, target_player_index=1).supported
+    assert game.players[1].life == 19
+    assert _w2g3_aim(game, other_bears, ability_index=1, target_player_index=1).supported
+    assert game.players[1].life == 19
+
+
+def test_w2g3_two_hankyus_on_one_creature_each_aim_their_own(set_pool):
+    """Two Hankyus on one creature grant four abilities, and each quote names
+    the Equipment that granted it — by id, not by the shared name — so the
+    second Hankyu's "put an aim counter" ability puts it on the second."""
+    from engine.named_counters import counters_on
+
+    game, mine, _theirs = _w2g3_table(
+        set_pool, mine=["Hankyu", "Hankyu", "Grizzly Bears"],
+    )
+    first, second, bears = mine
+    assert _w2g3_equip(game, first, bears).supported
+    assert _w2g3_equip(game, second, bears).supported
+    assert _w2g3_aim(game, bears, ability_index=2).supported
+    assert (counters_on(first, "aim"), counters_on(second, "aim")) == (0, 1)
+    assert _w2g3_aim(game, bears, ability_index=0).supported
+    assert (counters_on(first, "aim"), counters_on(second, "aim")) == (1, 1)
+
+
+def test_w2g3_hankyu_destroyed_in_response(set_pool):
+    """The abilities are independent of Hankyu once activated (CR 113.7a).
+    Destroyed in response to the aim ability, the counter has nowhere to go
+    (the Equipment is a new object in the graveyard, CR 400.7); destroyed in
+    response to the shot, whose cost already took its two counters, the shot
+    still deals 2."""
+    from engine.named_counters import counters_on
+
+    game, mine, _theirs = _w2g3_table(
+        set_pool, hand=["Shatter", "Shatter"],
+        mine=["Hankyu", "Grizzly Bears", "Hankyu"],
+    )
+    hankyu, bears, other = mine
+    assert _w2g3_equip(game, other, bears).supported
+    assert _w2g3_aim(game, bears).supported
+    bears.tapped = False
+    assert game.queue_permanent_ability(
+        0, "Grizzly Bears", permanent_index=_w2g3_slot(game, bears), ability_index=0,
+    ).supported
+    assert game.queue_from_hand(
+        0, "Shatter", target_permanent_ids=[other.permanent_id],
+    ).supported
+    _w2g3_settle(game)
+    assert not game.is_on_battlefield(other)
+    assert "Grizzly Bears: no valid permanent for a counter" in game.log
+
+    assert _w2g3_equip(game, hankyu, bears).supported
+    for _ in range(2):
+        assert _w2g3_aim(game, bears).supported
+    bears.tapped = False
+    assert game.queue_permanent_ability(
+        0, "Grizzly Bears", permanent_index=_w2g3_slot(game, bears),
+        ability_index=1, target_player_index=1,
+    ).supported
+    assert counters_on(hankyu, "aim") == 0
+    assert game.queue_from_hand(
+        0, "Shatter", target_permanent_ids=[hankyu.permanent_id],
+    ).supported
+    _w2g3_settle(game)
+    assert not game.is_on_battlefield(hankyu)
+    assert game.players[1].life == 18
+
 # ==== end W2G3 ====

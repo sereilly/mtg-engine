@@ -912,13 +912,20 @@ class ActivationChargesMixin:
             # what differs is only which permanent gives the counters up, which
             # is the whole of `remove_counter_filter` — the same arrangement the
             # placing twin makes below with `counter_cost_permanent`.
-            payer = counter_removal_permanent or permanent
+            # "{T}, Remove all aim counters from **Hankyu**": the permanent
+            # that granted the ability, read by the same answer the count above
+            # was (``counter_cost_holder``).
+            payer = (
+                counter_removal_permanent
+                or self.counter_cost_holder(ability.cost, permanent)
+            )
             # The kind the payer gives up: the printed one, or — "remove **a
             # counter**" — the one ``cost_counter_removal_kind`` settled above
             # the payment.
             kind = counter_removal_kind or ability.cost.remove_counter
-            remove_counters(payer, kind, counters_removed_for_cost)
-            if payer is not permanent:
+            if payer is not None:
+                remove_counters(payer, kind, counters_removed_for_cost)
+            if payer is not None and payer is not permanent:
                 self.log.append(
                     f"{payer.card.name} gave up {counters_removed_for_cost} "
                     f"{kind} counter(s) "

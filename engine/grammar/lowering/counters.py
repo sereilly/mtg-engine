@@ -43,7 +43,8 @@ from ._prevented_riders import (PREVENTION_SHIELD_RECORD,
                                 counts_prevented_damage,
                                 names_the_shielded_object)
 from ._sweeps import lower_counter_sweep
-from ._named_counters import (lower_named_block_pair_placement,
+from ._named_counters import (lower_granter_placement,
+                              lower_named_block_pair_placement,
                               lower_named_placement)
 from ._plus_one_counters import lower_plus_one_placement
 from ._counter_stores import lower_loyalty_counters
@@ -176,6 +177,11 @@ def _lower_put_counter(
     #: The trigger kind unfiltered by `whole_effect` — see the caller.
     trigger_event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
+    if isinstance(node.subject, ast.GranterRef):
+        # "{T}: Put an aim counter on **Hankyu**." (Hankyu's quote on the
+        # creature it equips.) Ahead of every branch below, each of which
+        # reads a noun phrase this recipient does not have.
+        return lower_granter_placement(node)
     if node.distributed:
         # "Distribute X +1/+1 counters among any number of target creatures."
         # (Spoils of War.) CR 601.2d's other half — the caster announces the
