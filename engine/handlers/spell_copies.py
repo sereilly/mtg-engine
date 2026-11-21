@@ -344,6 +344,12 @@ def _copy_reaim_is_one_slot(game: Game, copy: StackItem) -> bool:
 
     if copy.chosen_mode_index is not None or copy.chosen_modes:
         return False
+    # A copy of a spliced spell carries its segments' targets too (CR 707.10,
+    # the Uyo ruling), which the one-slot prompt cannot reach: it writes the
+    # host's scalar fields. So any spliced target sends the copy to the slot
+    # offer (``stack_targets.change_slots``), which knows each segment.
+    if any(chosen_targets(game, segment) for segment in getattr(copy, "spliced", ()) or ()):
+        return False
     chosen = chosen_targets(game, copy)
     # On the scalar fields that prompt writes. A divided spell's one target
     # rides its division (CR 115.7f keeps the share with it), which the
