@@ -1461,6 +1461,20 @@ def _seat_dealt_damage_by_source(game, seat, deed, source, results) -> bool:
     return seat in seats_dealt_damage_by(source)
 
 
+def _seat_dealt_damage_by_source_this_turn(game, seat, deed, source, results) -> bool:
+    # "Target player **dealt damage by this creature this turn** loses 1
+    # life." (Wicked Akuba.) The turn's damage ledger joined from the source
+    # permanent (by id: CR 400.7 makes one that left and came back a new
+    # object that dealt nothing) to the seat. No source in hand admits nobody.
+    if source is None:
+        return False
+    from ..damage_ledger import dealt_damage_to_seat_this_turn
+
+    return dealt_damage_to_seat_this_turn(
+        game, getattr(source, "permanent_id", None), seat
+    )
+
+
 def _seat_tapped_land_for_mana(game, seat, deed, source, results) -> bool:
     # "…each player **who tapped a land for mana this turn**" (Desolation).
     # The seat's own per-turn record, written at the one tap-for-mana seam
@@ -1581,6 +1595,9 @@ PLAYER_DEEDS: dict[str, PlayerDeedKind] = {
     "attacked_this_turn": PlayerDeedKind(False, True, _seat_attacked_this_turn),
     "dealt_damage_by_source": PlayerDeedKind(
         False, True, _seat_dealt_damage_by_source
+    ),
+    "dealt_damage_by_source_this_turn": PlayerDeedKind(
+        False, True, _seat_dealt_damage_by_source_this_turn
     ),
     "tapped_land_for_mana_this_turn": PlayerDeedKind(
         False, True, _seat_tapped_land_for_mana

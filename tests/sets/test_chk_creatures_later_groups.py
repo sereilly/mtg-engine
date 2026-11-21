@@ -266,6 +266,43 @@ def test_w1g8_kumano_names_itself(set_pool):
     assert _w1g8_zone_names(game, 1, "exile") == ["Llanowar Elves"]
 
 
+def test_w1g8_wicked_akuba_targets_only_a_player_it_damaged_this_turn(set_pool):
+    """"{B}: Target player dealt damage by this creature this turn loses 1
+    life." The narrowing is the picker's (CR 601.2c), read off the turn's
+    damage ledger from this Akuba to the seat."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    akuba = set_pool("CHK")["Wicked Akuba"]
+    ability = compile_card_oracle(akuba).activated_abilities[0]
+    assert derive_activation_spec(ability) == {
+        "kind": "player", "did": {"kind": "dealt_damage_by_source_this_turn"},
+    }
+    game, _, _ = _w1g8_table([akuba], [])
+    refused = game.activate_permanent_ability(0, "Wicked Akuba", target_player_index=1)
+    assert not refused.supported
+    assert game.players[1].life == 20
+
+    _w1g8_declare_attack(game, 0)
+    _w1g8_drive_combat(game)
+    assert game.players[1].life == 18
+    used = game.activate_permanent_ability(0, "Wicked Akuba", target_player_index=1)
+    assert used.supported, used.details
+    _w1g8_settle(game)
+    assert game.players[1].life == 17
+    # Its own controller was dealt nothing by it.
+    assert not game.activate_permanent_ability(
+        0, "Wicked Akuba", target_player_index=0
+    ).supported
+
+    # The window is the turn: the next one starts with an empty ledger.
+    game.start_turn(1)
+    _w1g8_settle(game)
+    assert not game.activate_permanent_ability(
+        0, "Wicked Akuba", target_player_index=1
+    ).supported
+
+
 def test_w1g8_the_dealt_damage_exile_reads_only_a_line_about_itself():
     """The subject is the card itself — "this creature" or its own name (CR
     201.5, the legend's short name included) — never another card's."""

@@ -343,12 +343,43 @@ def _lower_lose_life(
     produced: frozenset[str] = frozenset(),
     event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
+    if node.player.did is not None and node.player.kind in (
+        "target_player", "target_opponent",
+    ):
+        # "Target player **dealt damage by this creature this turn** loses 1
+        # life." (Wicked Akuba.) A *chosen* seat's narrowing is enforced while
+        # the target is chosen (CR 601.2c) — the picker's description carries
+        # it (``_targets._with_player_deed``, which refuses a record only the
+        # resolution writes), and the CR 608.2b re-check reads the same list.
+        # So the loss is lowered as the bare chosen seat's and its description
+        # is then written with the clause on it; a lowering that described no
+        # target would have nowhere to carry it, and refuses.
+        bare = _lower_lose_life(
+            dataclasses.replace(
+                node, player=dataclasses.replace(node.player, did=None)
+            ),
+            event, produced, event_subject,
+        )
+        if (
+            len(bare) != 1
+            or bare[0].kind != "target_loses_life"
+            or "targets" not in bare[0].payload
+        ):
+            raise LoweringError(
+                "this chosen seat's who-did narrowing has no picker "
+                "description to ride",
+                node=node,
+            )
+        payload = dict(bare[0].payload)
+        _describe_targets(payload, node.player)
+        return (dataclasses.replace(bare[0], payload=payload),)
     if node.player.did is not None and node.player.kind not in (
         "each_player", "each_opponent",
     ):
-        # A seat narrowing only the two looped subjects carry (below). On any
-        # other subject it would reach a handler that never reads it — a loss
-        # landing on a seat the clause excludes.
+        # A seat narrowing only the two looped subjects carry (below) and a
+        # chosen seat's picker (above). On any other subject it would reach a
+        # handler that never reads it — a loss landing on a seat the clause
+        # excludes.
         raise LoweringError(
             "only a looped life loss carries a who-did narrowing", node=node
         )
