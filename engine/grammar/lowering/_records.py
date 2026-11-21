@@ -542,6 +542,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # every "is it a …?" clause reads. A look and a reveal differ in who sees
     # the card, not in which object the pronoun behind them names.
     "look_at_target_library_top": "revealed_card",
+    "look_at_own_library_top": "revealed_card",
     # "…that player discards all the cards in their hand, then draws **that
     # many** cards." (Shocker.) How many the sweep actually binned, under the
     # key the counted discards already write — the printed sentence names no

@@ -93,6 +93,48 @@ def reorder_own_library_top(game: Game, instruction: OracleInstruction, context:
     return True, "pending_reorder_library"
 
 
+@effect_handler("look_at_own_library_top")
+def look_at_own_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{1}: Look at the top card of your library." (the Deceivers.)
+
+    The looker's own pile shown to the looker, and nothing more: the
+    ``reorder_library`` prompt every look here arms, with both freedoms off —
+    no order to choose (``may_reorder``, enforced where the prompt is
+    answered) and no shuffle — so the answer is only "seen". It is a prompt
+    rather than a log line because ``game.log`` is every seat's (CR 400.2: a
+    library is hidden, and the look shows the card to its controller alone),
+    and the prompt is the one place the looker is shown a card nobody else
+    is.
+
+    The single-card look writes the card it turned up under ``revealed_card``
+    for ``look_at_target_library_top``'s reason, so a sentence behind it
+    asking "if it's a … card" names that object.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    top_count = min(
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value),
+        len(caster.library),
+    )
+    if top_count <= 0:
+        game.log.append(
+            f"{caster.name} has no library to look at ({context.card.name})"
+        )
+        return True, "resolved"
+    if top_count == 1:
+        context.results["revealed_card"] = caster.library[0]
+    game.arm_pending_choice(
+        "reorder_library", seat,
+        target_index=seat, top_count=top_count, may_shuffle=False,
+        may_reorder=False,
+    )
+    game.log.append(
+        f"{caster.name} looks at the top {top_count} card(s) of their library"
+        f" ({context.card.name})"
+    )
+    return True, "pending_reorder_library"
+
+
 @effect_handler("target_reorders_caster_library_top")
 def target_reorders_caster_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"**That player** looks at the top three cards of your library, then puts

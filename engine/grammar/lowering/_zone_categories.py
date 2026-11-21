@@ -160,6 +160,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # so the same family.
     "reorder_target_library_top": "zones",
     "reorder_own_library_top": "zones",
+    # "Look at the top card of your library." (the Deceivers): the look
+    # above over the looker's own pile with neither freedom on.
+    "look_at_own_library_top": "zones",
     # "**That player** looks at the top three cards of your library, then puts
     # them back in any order." (Tahngarth's Glare.) The same prompt with the
     # seats the other way round — the chosen player looks, the controller's

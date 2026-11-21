@@ -619,6 +619,16 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
         cycled = parse_look_top_cycle_tail(stream, count)
         if cycled is not None:
             return cycled
+        # "{1}: **Look at the top card of your library.**" (the Champions of
+        # Kamigawa Deceivers.) The look and nothing behind it: the whole
+        # effect is what its controller learns. Read only where the printed
+        # line ends — a look with a sentence behind it is one of the tails
+        # below, whose next sentence binds the pile this one turned up, and a
+        # bare reading there would split that sentence off to name no cards.
+        if (stream.exhausted or (
+            stream.at_punct(".") and stream.peek(1) is None
+        )):
+            return ast.LookAtLibraryTop(count, owner)
         # The sentence break, printed either way. See the Truth and Diabolic
         # Vision start a new sentence; Browse runs the whole ability on as one
         # ("…of your library, put one of them into your hand, and exile the
