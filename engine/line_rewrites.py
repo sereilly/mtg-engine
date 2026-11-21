@@ -43,7 +43,9 @@ from .self_reference import expand_short_self_references
 _late = LateModules(__package__)
 
 
-def expand_modal_activated_lines(oracle_text: str) -> str:
+def expand_modal_activated_lines(
+    oracle_text: str, card_name: str | None = None,
+) -> str:
     """Rewrite '{cost}: Choose one —' + bullets into one ability line per
     bullet. Text without that shape is returned unchanged. Shared with
     engine.legality so target classification sees the same lines.
@@ -63,6 +65,10 @@ def expand_modal_activated_lines(oracle_text: str) -> str:
     is still taken from the raw text, because this rewrites text: re-rendering a
     parsed cost would be a second spelling of it, free to differ from the one
     ``mixins/stack/activation.py`` charges.
+
+    *card_name* is the card the text is printed on, for a head whose cost
+    names it in full ("Remove a charge counter from Umezawa's Jitte: Choose
+    one —"): the grammar reads that self-reference only knowing the name.
     """
     if "choose" not in (oracle_text or "").lower():
         return oracle_text
@@ -74,7 +80,7 @@ def expand_modal_activated_lines(oracle_text: str) -> str:
         # ":" and "choose" are both necessary for the grammar to read the line
         # as an activated modal head, so testing them first only skips work.
         if ":" in line and "choose" in line.lower() and (
-            _modal_head(line, grammar_ast.ActivatedAbilityNode) is not None
+            _modal_head(line, grammar_ast.ActivatedAbilityNode, card_name) is not None
         ):
             bullets = _bullets_after(lines, i)
             if bullets:
@@ -344,7 +350,7 @@ def expand_ability_lines(
     return expand_same_is_true_lines(
         expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
             expand_buyback_lines(
-                expand_equip_lines(expand_modal_activated_lines(oracle_text))
+                expand_equip_lines(expand_modal_activated_lines(oracle_text, card_name))
             )
         ))
     )

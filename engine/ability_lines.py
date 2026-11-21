@@ -130,7 +130,9 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     )
 
 
-def _modal_head(line: str, wrapper: type) -> "grammar_ast.ModalNode | None":
+def _modal_head(
+    line: str, wrapper: type, card_name: str | None = None,
+) -> "grammar_ast.ModalNode | None":
     """The modal head *line* is, read through the grammar — or None.
 
     *wrapper* is the ability-line node the head has to sit inside, and it is
@@ -151,8 +153,14 @@ def _modal_head(line: str, wrapper: type) -> "grammar_ast.ModalNode | None":
     count and the lowering refuses what the engine cannot carry out, so a head
     it declines is one this must not act on either — which is exactly what
     checking ``lowering_error`` says.
+
+    *card_name* is for a head whose **cost** names its own card in full:
+    "Remove a charge counter from Umezawa's Jitte: Choose one —". Read without
+    it, the cost's self-reference is a permanent nobody named, the grammar
+    refuses the head, and the bullets below it were left to the Equipment gate
+    as an unclaimed run.
     """
-    compiled = compile_grammar_line(line)
+    compiled = compile_grammar_line(line, card_name=card_name)
     if compiled.lowering_error is not None:
         return None
     node = compiled.node
