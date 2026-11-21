@@ -345,10 +345,18 @@ def _narrowing_flags(source: dict) -> dict:
     # ability" — and CR 608.2b, which re-asks this spec, could not call a
     # target turned face up in response illegal (Nosy Goblin's 2004-10-04
     # ruling).
+    #
+    # ``dealt_damage_this_turn`` (Crushing Pain: "…to target creature **that
+    # was dealt damage this turn**") for the same reason: the candidate's own
+    # turn record, and on a ``deal_damage`` spell no arm of
+    # ``_validate_cast_targets`` asked it, so an undamaged creature was a
+    # legal announcement and took the 6. (Fatal Blow's destroy arm and
+    # Opportunist's activation filter already asked it.)
     for key in (
         "exclude_colors", "exclude_types", "with_keywords",
         "untapped_only", "not_attacking",
         "face_down_only", "with_morph_ability",
+        "dealt_damage_this_turn",
     ):
         value = source.get(key)
         if value:

@@ -165,6 +165,44 @@ def test_w1g8_otherworldly_journey_returns_a_stolen_creature_to_its_owner(set_po
     assert [p.card.name for p in game.controlled_by(game.players[1])] == ["Grizzly Bears"]
     assert [p.card.name for p in game.controlled_by(game.players[0])] == []
 
+
+
+# --- Crushing Pain (drive list) -----------------------------------------------
+# "Crushing Pain deals 6 damage to target creature that was dealt damage this
+# turn." Supported on arrival and wrong: the narrowing rode the instruction's
+# filter, but a ``deal_damage`` cast is judged by the target spec alone, which
+# dropped it (``target_descriptions._narrowing_flags``) — an undamaged
+# creature was a legal announcement and took the 6 (CR 601.2c).
+
+
+def test_w1g8_crushing_pain_targets_only_a_creature_dealt_damage_this_turn(set_pool):
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    pain = set_pool("CHK")["Crushing Pain"]
+    shock = set_pool("LEA")["Lightning Bolt"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    assert derive_cast_spec(pain, compile_card_oracle(pain)) == {
+        "kind": "creature", "filter": {"dealt_damage_this_turn": True},
+    }
+    game, _, (wurm,) = _w1g8_table([], [craw], hand=[pain, shock])
+    refused = game.cast_from_hand(
+        0, "Crushing Pain", target_permanent_ids=[wurm.permanent_id]
+    )
+    assert not refused.supported
+    assert wurm.damage_marked == 0
+    assert "Crushing Pain" in _w1g8_zone_names(game, 0, "hand")
+
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[wurm.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert game.cast_from_hand(
+        0, "Crushing Pain", target_permanent_ids=[wurm.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert not game.is_on_battlefield(wurm)
+
 # ==== end w1g8 ======================================================
 
 
