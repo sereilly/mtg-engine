@@ -756,10 +756,10 @@ def _splice_price_choices(game: Game, seat: int, card, spliced, price) -> dict:
     """The ``price`` of one splice offer whose cost is not mana (see
     :func:`splice_offers`): the morph cost's choices, the graveyard cards an
     exile may take, and whether the price can be paid now."""
-    choices = clause_choices(game, seat, price)
+    asked = clause_choices(game, seat, price)
     if price.exile_graveyard_filter is not None:
         graveyard = game.players[seat].graveyard
-        choices["cost_graveyard"] = {
+        asked["cost_graveyard"] = {
             "count": price.exiled_from_graveyard(None),
             "choices": [
                 {"graveyard_index": slot, "name": graveyard[slot].name}
@@ -770,10 +770,10 @@ def _splice_price_choices(game: Game, seat: int, card, spliced, price) -> dict:
         seat, card, price, spell_hand_index=None,
         refused_as=f"{spliced.name} can't be spliced onto {card.name}",
     )
-    choices["payable"] = refusal is None
+    asked["payable"] = refusal is None
     if refusal is not None:
-        choices["refusal"] = refusal
-    return choices
+        asked["refusal"] = refusal
+    return asked
 
 
 def mark_mana_value_x(game: Game, spec: dict | None, instructions) -> dict | None:

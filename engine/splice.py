@@ -802,22 +802,29 @@ def pay_splice_costs(game: "Game", caster_index: int, host: "CardDefinition", pa
     free — so the spell's own costs' deterministic picks
     (``_pay_additional_costs``) take from the board the splice costs leave,
     which :func:`splice_cost_conflict` checked could pay them.
+
+    One cost, one event (CR 603.10a): every permanent the splice costs take
+    off the battlefield leaves together (``leaving_together``), and a
+    returned one's departure with them.
     """
-    for payment in payments or ():
-        slots = None
-        if payment.graveyard:
-            slots = [
-                slot for slot in (
-                    game.graveyard_index_of(stamp) for stamp in payment.graveyard
-                )
-                if slot is not None
-            ]
-        game._pay_alternative_cost(
-            caster_index, host, payment.price, None,
-            named_permanents=list(payment.permanents),
-            graveyard_slots=slots,
-            paying_for=f"splice {payment.name} onto {host.name}",
-        )
+    if not payments:
+        return
+    with game.entering_together(), game.leaving_together():
+        for payment in payments:
+            slots = None
+            if payment.graveyard:
+                slots = [
+                    slot for slot in (
+                        game.graveyard_index_of(stamp) for stamp in payment.graveyard
+                    )
+                    if slot is not None
+                ]
+            game._pay_alternative_cost(
+                caster_index, host, payment.price, None,
+                named_permanents=list(payment.permanents),
+                graveyard_slots=slots,
+                paying_for=f"splice {payment.name} onto {host.name}",
+            )
 
 
 def splice_cost_conflict(
