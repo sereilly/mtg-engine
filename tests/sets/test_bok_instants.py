@@ -292,6 +292,20 @@ def test_w1g5_shining_shoal_moves_x_points_of_the_chosen_source(set_pool, intera
     assert (bears.damage_marked, giant.damage_marked, wurm.damage_marked) == (1, 1, 2)
 
 
+def test_w1g5_mending_hands_shields_four_points_across_two_bolts(set_pool):
+    """"Prevent the next 4 damage that would be dealt to any target this
+    turn." (Supported on arrival; driven here.) Two Lightning Bolts at its
+    caster: 4 of the 6 are prevented."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(
+        set_pool, hand=[bok["Mending Hands"]],
+        opponent_hand=[lea["Lightning Bolt"]] * 2,
+    )
+    _w1g5_cast(game, 0, "Mending Hands", target_player_index=0)
+    _w1g5_cast(game, 1, "Lightning Bolt", target_player_index=0)
+    _w1g5_cast(game, 1, "Lightning Bolt", target_player_index=0)
+    assert game.players[0].life == 18, game.log
+
 # ==== end w1g5 ======================================================
 
 

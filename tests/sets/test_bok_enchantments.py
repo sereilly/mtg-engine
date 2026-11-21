@@ -139,6 +139,33 @@ def test_w1g5_ward_of_piety_moves_the_next_point_off_its_host(
                for line in game.log), game.log
 
 
+def test_w1g5_heart_of_light_stops_damage_to_and_by_its_host(set_pool):
+    """"Prevent all damage that would be dealt to and dealt by enchanted
+    creature." (Supported on arrival; driven here.) A Bolt at the enchanted
+    Hill Giant marks nothing, and blocked by the Bears neither deals the
+    other any damage."""
+    from tests.helpers import declare_attack, drive_combat
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(
+        set_pool, hand=[bok["Heart of Light"]], opponent_hand=[lea["Lightning Bolt"]],
+    )
+    giant = _w1g5_put(game, lea["Hill Giant"])
+    bears = _w1g5_put(game, lea["Grizzly Bears"], seat=1)
+    assert game.cast_from_hand(
+        0, "Heart of Light", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g5_settle(game)
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g5_settle(game)
+    assert giant.damage_marked == 0, game.log
+    declare_attack(game, 0, blocks={0: 0})
+    drive_combat(game)
+    assert giant.damage_marked == 0 and bears.damage_marked == 0, game.log
+    assert game.is_on_battlefield(bears) and game.is_on_battlefield(giant)
+
 # ==== end w1g5 ======================================================
 
 

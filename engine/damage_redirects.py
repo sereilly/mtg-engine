@@ -412,11 +412,17 @@ def source_keyed_redirects(game) -> list[DamageRedirect]:
     phrase about a permanent and would answer True for every key it could not
     test if handed a player.
 
+    Opal-Eye, Konda's Yojimbo prints the same sentence with a named taker
+    ("…that damage is dealt to Opal-Eye instead"), a record with
+    ``new_recipient`` set and ``to_source_controller`` off, found the same way.
+
     Turn order from the active player is not asked for here: the scan is over
     the seats in table order, and ``applicable_redirect`` takes the first record
-    whose source matches. Two such records over one event is a shape no card in
-    the pool prints; when one does, it wants CR 616.1e's choice put to the
-    affected player rather than this order reused.
+    whose source matches. Two such records over one event — Opal-Eye and a
+    Reflect Damage naming the same source — is one candidate, oldest first,
+    which is SET_PLAYBOOK's Known-gaps entry on two ``DamageRedirect`` records:
+    it wants CR 616.1e's choice put to the affected player rather than this
+    order reused.
     """
     return [
         record

@@ -203,4 +203,99 @@ def test_w1g5_heartless_hidetsugu_halves_each_life_total_rounded_down(
     _w1g5_activate(game, hidetsugu)
     assert [p.life for p in game.players] == [1, 4], game.log
 
+
+# The damage family's cards supported on arrival, each given a game.
+
+
+def test_w1g5_split_tail_miko_shields_two_points_of_a_bolt(set_pool):
+    """"{W}, {T}: Prevent the next 2 damage that would be dealt to any target
+    this turn." On the Bears, a Lightning Bolt marks 1."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(set_pool, opponent_hand=[lea["Lightning Bolt"]])
+    miko = _w1g5_put(game, bok["Split-Tail Miko"])
+    bears = _w1g5_put(game, lea["Grizzly Bears"])
+    _w1g5_activate(game, miko, target_permanent_ids=[bears.permanent_id])
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_settle(game)
+    assert bears.damage_marked == 1 and game.is_on_battlefield(bears), game.log
+
+
+def test_w1g5_kami_of_false_hope_fogs_the_combat(set_pool):
+    """"Sacrifice this creature: Prevent all combat damage that would be dealt
+    this turn." Sacrificed after an attack is declared, the attacker deals
+    nothing."""
+    from tests.helpers import declare_attack, drive_combat
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(set_pool)
+    kami = _w1g5_put(game, bok["Kami of False Hope"])
+    _w1g5_put(game, lea["Hill Giant"], seat=1)
+    declare_attack(game, 1)
+    _w1g5_activate(game, kami)
+    drive_combat(game)
+    assert game.players[0].life == 20 and not game.is_on_battlefield(kami), game.log
+
+
+def test_w1g5_damage_triggers_kami_of_the_honored_dead_and_shinka_gatekeeper(set_pool):
+    """"Whenever this creature is dealt damage, you gain that much life."
+    (Kami of the Honored Dead) and "Whenever this creature is dealt damage, it
+    deals that much damage to you." (Shinka Gatekeeper.) A Bolt at each: the
+    Kami's controller gains 3, the Gatekeeper's loses 3 — after it died, from
+    the last it knew (CR 603.10)."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(set_pool, opponent_hand=[lea["Lightning Bolt"]] * 2)
+    kami = _w1g5_put(game, bok["Kami of the Honored Dead"])
+    gatekeeper = _w1g5_put(game, bok["Shinka Gatekeeper"])
+    for victim in (kami, gatekeeper):
+        assert game.cast_from_hand(
+            1, "Lightning Bolt", target_permanent_ids=[victim.permanent_id],
+        ).supported
+        _w1g5_settle(game)
+    assert game.players[0].life == 20 + 3 - 3, game.log
+    assert kami.damage_marked == 3 and not game.is_on_battlefield(gatekeeper)
+
+
+def test_w1g5_frostling_and_takenos_cavalry_ping_creatures(set_pool):
+    """"Sacrifice this creature: It deals 1 damage to target creature."
+    (Frostling) kills a Llanowar Elves; "{T}: This creature deals 1 damage to
+    target attacking or blocking Spirit." (Takeno's Cavalry) is refused at a
+    Spirit that is not in combat and kills one that attacks."""
+    from tests.helpers import declare_attack
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(set_pool)
+    frostling = _w1g5_put(game, bok["Frostling"])
+    elves = _w1g5_put(game, lea["Llanowar Elves"], seat=1)
+    _w1g5_activate(game, frostling, target_permanent_ids=[elves.permanent_id])
+    assert not game.is_on_battlefield(elves) and not game.is_on_battlefield(frostling)
+    cavalry = _w1g5_put(game, bok["Takeno's Cavalry"])
+    spirit = _w1g5_put(game, bok["Frostling"], seat=1)
+    refused = game.activate_permanent_ability(
+        0, cavalry.card.name, permanent_index=game.battlefield_index_of(cavalry),
+        target_permanent_ids=[spirit.permanent_id],
+    )
+    assert not refused.supported and not cavalry.tapped
+    declare_attack(game, 1)
+    _w1g5_activate(game, cavalry, target_permanent_ids=[spirit.permanent_id])
+    assert not game.is_on_battlefield(spirit), game.log
+
+
+def test_w1g5_ronin_cliffrider_pings_each_defending_creature(set_pool):
+    """"Whenever this creature attacks, you may have it deal 1 damage to each
+    creature defending player controls." The Elves die, the Bears keep 1,
+    and the attacker's own creature is untouched."""
+    from tests.helpers import declare_attack, drive_combat
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(set_pool)
+    _w1g5_put(game, bok["Ronin Cliffrider"])
+    elves = _w1g5_put(game, lea["Llanowar Elves"], seat=1)
+    bears = _w1g5_put(game, lea["Grizzly Bears"], seat=1)
+    declare_attack(game, 0)
+    drive_combat(game)
+    assert not game.is_on_battlefield(elves) and bears.damage_marked == 1, game.log
+    assert game.players[1].life == 18, game.log
+
 # ==== end w1g5 ======================================================
