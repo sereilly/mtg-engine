@@ -33,6 +33,14 @@ from tests.regressions import test_ody_w2g2_zone_cast_census as zone
 ME, OPP = zone.ME, zone.OPP
 ROOT = Path(__file__).resolve().parents[2]
 
+#: Wail of the Nim's entwine is the larger cast where its damage has something
+#: of the opponent's to kill: an opposing 1/1 here. On the bare mirror board
+#: the two were 0.25 apart (13.75 against 13.50), and once the attack policy
+#: read a fight as the blocks do (CHK W2G2, ``ai_declarations._attack_block_score``)
+#: "Regenerate each creature you control" alone sends the whole board in and is
+#: worth more than paying {B} to tap a regenerated flyer of its own.
+WAIL_THEIRS = ("Llanowar Elves",)
+
 
 def _at_the_opponents_end_step(game) -> None:
     game.active_player_index = OPP
@@ -52,8 +60,12 @@ def test_every_candidate_of_an_entwined_cast_names_the_zone_bonus():
     and the entwined cast of both carry the bonus, the entwined cast wins, and
     the reading from the hand is the same reading less the bonus."""
     wail = zone.BY_NAME["Wail of the Nim"]
-    opened = explain_cast(zone.rig(wail, "graveyard_open", floating=zone.FLOATING), ME, wail)
-    held = explain_cast(zone.rig(wail, None, floating=zone.FLOATING), ME, wail)
+    opened = explain_cast(zone.rig(
+        wail, "graveyard_open", floating=zone.FLOATING, theirs=WAIL_THEIRS,
+    ), ME, wail)
+    held = explain_cast(zone.rig(
+        wail, None, floating=zone.FLOATING, theirs=WAIL_THEIRS,
+    ), ME, wail)
 
     for explanation, bonus in ((opened, EXPIRING_PERMISSION_BONUS), (held, 0.0)):
         scored = [c for c in explanation.candidates if c.score is not None]
@@ -150,7 +162,7 @@ def _census_board(speed: str):
     names = ["Wail of the Nim", "Sublime Epiphany", "Agonizing Demise",
              "Grizzly Bears", "Lightning Bolt"]
     first = zone.BY_NAME[names[0]]
-    game = zone.rig(first, "graveyard_open", floating=zone.FLOATING)
+    game = zone.rig(first, "graveyard_open", floating=zone.FLOATING, theirs=WAIL_THEIRS)
     for name in names:
         game.players[ME].hand.append(zone.BY_NAME[name])
     for name in names[1:]:

@@ -639,6 +639,17 @@ _SPEND_X = "an X spent only in black and/or red is sized short of what the pool 
 #: is a little less (-0.375). Both inside ``ai_scoring.HARM_FLOOR``, and the
 #: side reader does not weigh whose the returning counter is. Pinned at the
 #: CHK promotion rehearsal's full census (W2G2).
+#: Debt of Loyalty, "Regenerate target creature. You gain control of that
+#: creature if it regenerates this way.": aimed across the table, since the
+#: steal and not the regeneration decides the side (``UNPINNED``, kg3). Once
+#: the attack policy read a fight as the blocks do (CHK W2G2,
+#: ``ai_declarations._attack_block_score``), a shield on the caster's own Bear
+#: is an attack the Rival will not block (2.0) — a use the steal's side does
+#: not weigh; at the Rival, with nothing coming to destroy it, it is nothing.
+_SHIELD_FOR_AN_ATTACK = (
+    "a regeneration whose steal decides its side; on the caster's own attacker "
+    "the shield is an attack the blocker will not take"
+)
 _RETURNS_LARGER = (
     "an exile's side is the opponent's; the creature comes back with a +1/+1 "
     "counter, a hair dearer than the caster's own missed attack"
@@ -650,6 +661,7 @@ SMALLER: dict = {
     },
     ("Otherworldly Journey", None, "rival"): _RETURNS_LARGER,
     ("Otherworldly Journey", None, "wall"): _RETURNS_LARGER,
+    ("Debt of Loyalty", None, "rival"): _SHIELD_FOR_AN_ATTACK,
 }
 PRICED: dict = {}
 

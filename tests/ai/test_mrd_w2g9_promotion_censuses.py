@@ -36,6 +36,15 @@ from engine.oracle import compile_card_oracle
 from tests.helpers import _nosick, resolve_stack
 
 
+
+#: Wail of the Nim's entwine is the larger cast where its damage has something
+#: of the opponent's to kill: an opposing 1/1 here. On the bare mirror board
+#: the two were 0.25 apart (13.75 against 13.50), and once the attack policy
+#: read a fight as the blocks do (CHK W2G2, ``ai_declarations._attack_block_score``)
+#: "Regenerate each creature you control" alone sends the whole board in and is
+#: worth more than paying {B} to tap a regenerated flyer of its own.
+WAIL_THEIRS = ("Llanowar Elves",)
+
 def _table(cards, hand, mine, theirs, *, graveyard=(), pool=8) -> Game:
     me = PlayerState(
         name="Me", hand=[cards[name] for name in hand],
@@ -136,9 +145,9 @@ def test_wail_of_the_nim_is_entwined_from_an_opened_graveyard_as_from_hand():
     from tests.regressions import test_ody_w2g2_zone_cast_census as zone
 
     wail = zone.BY_NAME["Wail of the Nim"]
-    hand = zone.rig(wail, None, floating=zone.FLOATING)
+    hand = zone.rig(wail, None, floating=zone.FLOATING, theirs=WAIL_THEIRS)
     from_hand = zone.proposal(hand, wail)
-    opened = zone.rig(wail, "graveyard_open", floating=zone.FLOATING)
+    opened = zone.rig(wail, "graveyard_open", floating=zone.FLOATING, theirs=WAIL_THEIRS)
     from_yard = zone.proposal(opened, wail)
 
     assert from_hand is not None and from_yard is not None
@@ -161,7 +170,7 @@ def test_an_entwine_under_a_waiver_is_planned_as_the_entwine_alone():
     from tests.regressions import test_ody_w2g2_zone_cast_census as zone
 
     wail = zone.BY_NAME["Wail of the Nim"]
-    game = zone.rig(wail, "library_top_free", lands=["Swamp"] * 3)
+    game = zone.rig(wail, "library_top_free", lands=["Swamp"] * 3, theirs=WAIL_THEIRS)
     action = zone.proposal(game, wail)
 
     assert action is not None and action.from_zone == "library"
