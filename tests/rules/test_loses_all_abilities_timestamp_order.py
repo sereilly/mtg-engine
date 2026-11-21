@@ -46,6 +46,7 @@ from engine import Game, PlayerState
 from engine.aura_attachment import auras_attached_to
 from engine.card_loader import load_catalog
 from engine.faces import compilation_units, whole_card
+from engine.flip_cards import flip_permanent, is_flipped_face
 from engine.global_statics import global_statics_applying_to
 from engine.keywords import (ability_effects, derived_ability_lines,
                              derived_grants, granted_ability_lines)
@@ -170,16 +171,28 @@ def _records(permanent):
 
 def _cast(game, by_name, name, target=None) -> bool:
     # The whole card is what a hand holds; a half is cast out of it by name.
-    card = whole_card(by_name[name])
+    unit = by_name[name]
+    card = whole_card(unit)
+    # A flip card's bottom half is no spell (CR 710.2: in hand the card is its
+    # top half alone), so "Tobita, Master of Winds" is reached the way a game
+    # reaches it: the flip card cast by its own name, and its permanent flipped.
+    flipped = is_flipped_face(unit)
     game.players[0].hand.append(card)
     kwargs = {}
     if target is not None:
         kwargs["target_permanent_ids"] = [target.permanent_id]
-    result = game.cast_from_hand(0, name, **kwargs)
+    result = game.cast_from_hand(0, card.name if flipped else name, **kwargs)
     if not result.supported:
         game.take_card_from_hand(game.players[0], card)
         return False
     resolve_stack(game)
+    if flipped:
+        arrived = next(
+            (p for p in game.controlled_by(0) if p.card is card), None,
+        )
+        if arrived is None:
+            return False
+        flip_permanent(game, arrived)
     game._recompute_continuous_effects()
     return True
 

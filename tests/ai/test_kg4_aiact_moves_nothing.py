@@ -48,6 +48,12 @@ from tests.helpers import _nosick, stable_sample
 
 _CATALOG = load_catalog()
 _CARDS = {card.name: card for card in _CATALOG}
+# …and each compilation unit by its own name — the population ``_units``
+# walks, which a flip card's bottom half is (``faces.text_faces``, CR 710):
+# a board asking for an Autumn-Tail, Kitsune Sage places that bottom half,
+# and it enters as built (``flip_cards.forget_flip``). Never shadowing a card.
+for _unit in compilation_units(_CATALOG):
+    _CARDS.setdefault(_unit.name, _unit)
 _LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest") * 3
 
 #: The census floors: units examined, and proposals the chooser still makes
