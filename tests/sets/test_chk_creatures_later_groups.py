@@ -292,6 +292,29 @@ def test_w1g6_pious_kitsune_gains_per_counter_only_beside_eight_and_a_half_tails
         assert _w1g6_counters_on(kitsune, "devotion") == 1
         assert game.players[0].life == life + 1
 
+
+def test_w1g6_blood_speaker_trades_itself_for_a_demon_and_comes_back_for_it(set_pool):
+    """"At the beginning of your upkeep, you may sacrifice this creature. If
+    you do, search your library for a Demon card …": a person accepts and
+    finds Kuro, Pitlord. "Whenever a Demon you control enters, return this
+    card from your graveyard to your hand": casting Kuro brings the Speaker
+    back from the graveyard (CR 113.6m: the trigger functions there)."""
+    chk, lea = set_pool("CHK"), set_pool("LEA")
+    game = _w1g6_table(set_pool, interactive=(0,))
+    game.players[0].library = [lea["Forest"], chk["Kuro, Pitlord"], lea["Island"]]
+    _w1g6_put(game, chk["Blood Speaker"], 0)
+    game.start_turn(0)
+    _w1g6_settle(game, answers={
+        "optional_pay": lambda g, c: g.confirm_optional_pay(c.player_index, accept=True),
+    })
+    assert [c.name for c in game.players[0].hand] == ["Kuro, Pitlord"]
+    assert [c.name for c in game.players[0].graveyard] == ["Blood Speaker"]
+
+    game.interactive_seats = set()
+    _w1g6_cast(game, "Kuro, Pitlord")
+    assert [c.name for c in game.players[0].hand] == ["Blood Speaker"]
+    assert game.players[0].graveyard == []
+
 # ==== end w1g6 ======================================================
 
 
