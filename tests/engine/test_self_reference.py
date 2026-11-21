@@ -171,6 +171,16 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     half became a compilation unit (``faces.text_faces``); the bottom half is
     its own legendary text box, so its shortened name is the legend naming
     itself, and "Goka" is not a word the game uses to describe objects.
+
+    Betrayers of Kamigawa added three, each a legend with no comma in the name
+    naming itself by its first word (CR 201.5c): Iwamori of the Open Fist's
+    entry trigger ("When Iwamori enters, each opponent may put a legendary
+    creature card …"), Fumiko the Lowblood's numbered keyword ("Fumiko has
+    bushido X, where X is the number of attacking creatures"), and, on a flip
+    card's bottom half as Goka is, Jaraku the Interloper's cost ("Remove a ki
+    counter from Jaraku: Counter target spell unless its controller pays
+    {2}"). None of "Iwamori", "Fumiko" or "Jaraku" is a word the game uses
+    to describe objects, so the expansion is right to write the whole name.
     """
     changed = {
         card.name
@@ -202,4 +212,7 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Zo-Zu the Punisher",
         "Shimatsu the Bloodcloaked",
         "Goka the Unjust",
+        "Iwamori of the Open Fist",
+        "Fumiko the Lowblood",
+        "Jaraku the Interloper",
     }
