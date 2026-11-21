@@ -205,4 +205,96 @@ def test_w1g10_tomorrow_replaces_the_draw_step_draw(set_pool):
     assert len(alice.library) == library_before - 1
     assert any("instead of drawing (Tomorrow, Azami's Familiar)" in line for line in game.log)
 
+
+def _w1g10_toshiro_game(set_pool, *, graveyard=("Lightning Bolt",)):
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    return _w1g10_game(
+        mine=[bok["Toshiro Umezawa"]], hand=[lea["Terror"]],
+        graveyard=[lea[name] for name in graveyard],
+        theirs=[lea["Grizzly Bears"], lea["Hill Giant"]], island=lea["Island"],
+    )
+
+
+def _w1g10_graveyard_slot(owed, name, game, seat=0):
+    """The offered target slot naming the card *name* in *seat*'s graveyard."""
+    pile = game.players[seat].graveyard
+    return next(
+        target["graveyard_index"] for target in owed.data["targets"]
+        if target.get("kind") == "graveyard" and target.get("seat") == seat
+        and pile[target["graveyard_index"]].name == name
+    )
+
+
+def test_w1g10_toshiro_casts_an_instant_from_the_graveyard_as_it_resolves(set_pool):
+    """Toshiro Umezawa: "Whenever a creature an opponent controls dies, you may
+    cast target instant card from your graveyard. If that spell would be put
+    into a graveyard, exile it instead." Asked of a person. The Terror that
+    killed the Bears is already in the graveyard when the trigger chooses its
+    target (the 2011-01-01 ruling), beside the Lightning Bolt; Alice targets
+    the Bolt. The cast is made during the trigger's resolution (CR 608.2g):
+    the ability is still on the stack while the offer is owed, the Bolt goes
+    above it, kills the Hill Giant and is exiled instead of going to the
+    graveyard. The Giant's death triggers Toshiro again; Alice declines, and
+    the Terror stays where it is."""
+    game = _w1g10_toshiro_game(set_pool)
+    alice, bob = game.players
+    bears, giant = game.controlled_by(1)
+    game.interactive_seats = {0}
+    assert game.cast_from_hand(0, "Terror", target_permanent_ids=[bears.permanent_id]).supported
+    owed = _w1g10_settle(game, defaults=False)
+    assert owed.kind == "trigger_target"
+    offered = sorted(alice.graveyard[t["graveyard_index"]].name for t in owed.data["targets"])
+    assert offered == ["Lightning Bolt", "Terror"]
+    assert game.confirm_trigger_target(
+        0, seat=0, graveyard_index=_w1g10_graveyard_slot(owed, "Lightning Bolt", game),
+    )
+    owed = _w1g10_settle(game, defaults=False)
+    assert owed.kind == "copy_cast" and owed.data["card_name"] == "Lightning Bolt"
+    assert [item.card.name for item in game.stack] == ["Toshiro Umezawa"]
+    assert game.confirm_copy_cast(0, True, target_permanent_ids=[giant.permanent_id])
+    assert [item.card.name for item in game.stack][-1] == "Lightning Bolt"
+    owed = _w1g10_settle(game, defaults=False)
+    assert owed.kind == "trigger_target"
+    assert [card.name for card in alice.exile] == ["Lightning Bolt"]
+    assert [card.name for card in bob.graveyard] == ["Grizzly Bears", "Hill Giant"]
+    assert game.confirm_trigger_target(
+        0, seat=0, graveyard_index=_w1g10_graveyard_slot(owed, "Terror", game),
+    )
+    owed = _w1g10_settle(game, defaults=False)
+    assert owed.kind == "copy_cast"
+    assert game.confirm_copy_cast(0, False)
+    _w1g10_settle(game)
+    assert [card.name for card in alice.graveyard] == ["Terror"]
+    assert game.stack == []
+
+
+def test_w1g10_toshiros_cast_pays_the_mana_cost_and_is_not_kept_for_later(set_pool):
+    """"You must still pay the mana cost" (2005-02-01): a headless seat with no
+    untapped land cannot pay for the Bolt and casts nothing — and the offer is
+    not a lasting permission (CR 608.2g): once the trigger has resolved, the
+    Bolt cannot be cast from the graveyard later. With a Mountain untapped,
+    the Bolt is cast, the Mountain paying for it."""
+    lea = set_pool("LEA")
+    game = _w1g10_toshiro_game(set_pool)
+    alice = game.players[0]
+    bears, giant = game.controlled_by(1)
+    assert game.queue_from_hand(0, "Terror", target_permanent_ids=[bears.permanent_id]).supported
+    game.enforce_mana_costs = True
+    _w1g10_settle(game)
+    assert "Lightning Bolt" in [card.name for card in alice.graveyard]
+    assert game.is_on_battlefield(giant)
+    assert not game.cast_from_hand(
+        0, "Lightning Bolt", from_zone="graveyard", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    game._put_permanent_onto_battlefield(0, _W1G10Permanent(card=lea["Mountain"]), None)
+    game._sync_control()
+    game.enforce_mana_costs = False
+    alice.hand.append(lea["Terror"])
+    assert game.queue_from_hand(0, "Terror", target_permanent_ids=[giant.permanent_id]).supported
+    game.enforce_mana_costs = True
+    _w1g10_settle(game)
+    assert [card.name for card in alice.exile] == ["Lightning Bolt"]
+    land = next(p for p in game.controlled_by(0) if p.card.name == "Mountain")
+    assert land.tapped
+
 # ==== end w1g10 ======================================================

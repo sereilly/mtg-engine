@@ -356,6 +356,26 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         if chosen is None:
             game.log.append(f"{source_name}: no legal card in {caster.name}'s graveyard")
             return True, "resolved"
+        if duration is None and not payload.get("flashback"):
+            # "**You may cast** target instant card from your graveyard. If
+            # that spell would be put into a graveyard, exile it instead."
+            # (Toshiro Umezawa; Chandra, Flame's Catalyst's −2.) No stated
+            # duration, so no lasting permission: CR 608.2g — "If an effect
+            # specifically instructs or allows a player to cast a spell during
+            # resolution, they do so" — the cast is made now or not at all,
+            # its timing waived by the resolving ability and its mana cost
+            # paid (Toshiro's 2005-02-01 ruling). This granted a permission
+            # lasting the rest of the game, which let the card be cast at any
+            # later instant-speed moment; it is now the copy offer's prompt on
+            # the card itself (``copy_casts.arm_graveyard_cast``), answered
+            # inside the resolution that holds it on the stack.
+            from ..copy_casts import arm_graveyard_cast
+
+            arm_graveyard_cast(
+                game, caster_index, chosen, source_name,
+                exile_instead=bool(payload.get("exile_instead")),
+            )
+            return True, "resolved"
         spelling = payload.get("flashback")
         if spelling:
             # "Target sorcery card in your graveyard **gains flashback** until

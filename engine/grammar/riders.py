@@ -175,6 +175,14 @@ def _parse_exile_instead_rider(
             "if", "that", "spell", "would", "be", "put", "into", "your",
             "graveyard",
         )
+        # "If that spell would be put into **a** graveyard, exile it instead."
+        # (Toshiro Umezawa.) The same rider with CR 404.1's owner left to the
+        # rule: the card is the caster's own (it came from "your graveyard"),
+        # so "a graveyard" and "your graveyard" name one pile here.
+        or stream.accept_phrase(
+            "if", "that", "spell", "would", "be", "put", "into", "a",
+            "graveyard",
+        )
         or stream.accept_phrase(
             "if", "a", "spell", "cast", "this", "way", "would", "be", "put",
             "into", "a", "graveyard",

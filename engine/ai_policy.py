@@ -336,7 +336,14 @@ def _choose_exile_cast(
     if permission is None:
         return None
     pile_seat = getattr(permission, "zone_seat", player_index)
-    pile = game.players[pile_seat].exile
+    # The zone the permission opens: exile for every offer but the graveyard
+    # one, "cast target instant card from your graveyard" during a resolution
+    # (Toshiro Umezawa, ``copy_casts.FROM_GRAVEYARD_OF``), whose card is
+    # priced at its own mana cost.
+    zone = getattr(permission, "zone", "exile")
+    if zone not in ("exile", "graveyard"):
+        return None
+    pile = getattr(game.players[pile_seat], zone)
     index = next((i for i, card in enumerate(pile) if card is held), None)
     if index is None:
         return None
@@ -346,13 +353,13 @@ def _choose_exile_cast(
         with deliberating():
             for spell in castable_faces(held):
                 permitted = PermittedCast(
-                    zone="exile", owner_seat=pile_seat, index=index,
+                    zone=zone, owner_seat=pile_seat, index=index,
                     held=held, spell=spell, permission=permission,
                     alternative_cost=alternative_cost,
                 )
                 candidate = _priced_candidate(
                     game, player_index, spell, index,
-                    from_zone="exile", under=permitted,
+                    from_zone=zone, under=permitted,
                 )
                 if candidate is not None and _is_better_cast(candidate, best):
                     best = candidate
