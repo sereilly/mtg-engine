@@ -47,6 +47,107 @@ log), not instruction kinds alone.
 # ==== w1g5 ==========================================================
 # w1g5's tests go between this line and the "end w1g5" line.
 
+# Damage: unpreventable damage with a life-gain replacement, damage doubling,
+# redirection and two ordered dealings (CR 614, 615). Each test casts the
+# spell through the engine's entry point and reads the board after `settle`.
+
+import pytest as _w1g5_pytest
+
+from engine import Game as _W1G5Game
+from engine import PlayerState as _W1G5PlayerState
+from engine.models import Permanent as _W1G5Permanent
+from tests.helpers import settle as _w1g5_settle
+
+_W1G5_SEATS = [
+    _w1g5_pytest.param(set(), id="nobody-asked"),
+    _w1g5_pytest.param({0, 1}, id="interactive"),
+]
+
+
+def _w1g5_table(set_pool, interactive=(), *, hand=(), opponent_hand=()):
+    """Two seats on seat 0's first main phase, costs not enforced."""
+    lea = set_pool("LEA")
+    game = _W1G5Game(players=[
+        _W1G5PlayerState(
+            name=f"P{seat}", library=[lea["Island"]] * 20,
+            hand=list(hand) if seat == 0 else list(opponent_hand),
+        )
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    _w1g5_settle(game)
+    return game
+
+
+def _w1g5_put(game, card, seat=0):
+    permanent = _W1G5Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    return permanent
+
+
+def _w1g5_cast(game, seat, name, **announce):
+    result = game.cast_from_hand(seat, name, **announce)
+    assert result.supported, (result.details, game.log[-6:])
+    _w1g5_settle(game)
+    return result
+
+
+@_w1g5_pytest.mark.parametrize("interactive", _W1G5_SEATS)
+def test_w1g5_flames_of_the_blood_hand_unpreventable_and_no_life_gain(
+    set_pool, interactive,
+):
+    """"…deals 4 damage to target player or planeswalker. The damage can't
+    be prevented. If that player or that planeswalker's controller would
+    gain life this turn, that player gains no life instead." A Circle of
+    Protection: Red shield is spent on nothing (CR 615.12) and the player
+    takes all 4; their Healing Salve gains them nothing this turn (the
+    replacement, CR 614.1a), while the caster's own gain is untouched — and
+    next turn the target gains again."""
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    game = _w1g5_table(
+        set_pool, interactive, hand=[bok["Flames of the Blood Hand"]],
+        opponent_hand=[lea["Healing Salve"]] * 3,
+    )
+    circle = _w1g5_put(game, lea["Circle of Protection: Red"], seat=1)
+    result = game.activate_permanent_ability(
+        1, circle.card.name, permanent_index=game.battlefield_index_of(circle),
+    )
+    assert result.supported
+    _w1g5_settle(game)
+    _w1g5_cast(game, 0, "Flames of the Blood Hand", target_player_index=1)
+    assert game.players[1].life == 16, game.log
+    _w1g5_cast(game, 1, "Healing Salve", target_player_index=1)
+    assert game.players[1].life == 16, game.log
+    assert any("gains no life instead (Flames of the Blood Hand)" in line
+               for line in game.log), game.log
+    _w1g5_cast(game, 1, "Healing Salve", target_player_index=0)
+    assert game.players[0].life == 23, game.log
+    # CR 514.2: the record ends with the turn's cleanup step.
+    game.resolve_cleanup_step(0)
+    _w1g5_cast(game, 1, "Healing Salve", target_player_index=1)
+    assert game.players[1].life == 19, game.log
+
+
+def test_w1g5_flames_at_a_planeswalker_replaces_its_controllers_gains(set_pool):
+    """Aimed at a planeswalker, the 4 damage is dealt to it — Garruk,
+    Unleashed (loyalty 4) dies — and "that planeswalker's controller" is the
+    seat whose gains are replaced."""
+    bok, lea, m21 = set_pool("BOK"), set_pool("LEA"), set_pool("M21")
+    game = _w1g5_table(
+        set_pool, hand=[bok["Flames of the Blood Hand"]],
+        opponent_hand=[lea["Healing Salve"]],
+    )
+    walker = _w1g5_put(game, m21["Garruk, Unleashed"], seat=1)
+    _w1g5_cast(game, 0, "Flames of the Blood Hand",
+               target_permanent_ids=[walker.permanent_id])
+    assert game.players[1].life == 20, game.log
+    assert not game.is_on_battlefield(walker), game.log
+    _w1g5_cast(game, 1, "Healing Salve", target_player_index=1)
+    assert game.players[1].life == 20, game.log
+
 # ==== end w1g5 ======================================================
 
 

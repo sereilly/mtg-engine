@@ -68,6 +68,11 @@ from .shields import END_OF_TURN
 DAMAGE = "damage"
 #: One draw (CR 121.2).
 DRAW = "draw"
+#: One life gain (CR 119.10): "If that player … would gain life this turn,
+#: that player gains no life instead." (Flames of the Blood Hand.) The seat
+#: whose gains it replaces is ``affected_seat``, as for a draw; the substitute
+#: is no event (``replacements/life_gain``).
+LIFE_GAIN = "life_gain"
 #: "Damage can't be prevented this turn." (Flaring Pain.) Not a replacement at
 #: all — it takes CR 615's prevention away from every damage event it answers
 #: (CR 615.12), so no interceptor in ``engine/replacements/`` reads it. It is
@@ -97,7 +102,7 @@ class TurnReplacement:
     """One replacement effect a resolution created, sitting on its controller.
 
     seat               -- the seat controlling the effect (CR 109.5's "you")
-    event              -- DAMAGE, DRAW or DAMAGE_PREVENTION
+    event              -- DAMAGE, DRAW, LIFE_GAIN or DAMAGE_PREVENTION
     source_name        -- the card whose resolution created it, for the log
     key                -- this effect's identity (CR 614.5)
     combat_only        -- "would deal **combat** damage"
@@ -106,7 +111,8 @@ class TurnReplacement:
     at_least           -- "would deal **1 or more** damage"; 1 says nothing
     multiplier         -- "it deals **double** that damage instead"
     becomes            -- "it deals **2** damage … instead"
-    affected_seat      -- whose draws a DRAW record takes
+    affected_seat      -- whose draws a DRAW record takes, whose gains a
+                          LIFE_GAIN record replaces
     lifetime           -- END_OF_TURN; :func:`clear_turn_replacements` ends it
     """
 

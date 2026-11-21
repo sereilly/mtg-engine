@@ -89,6 +89,26 @@ class SetLifeTotal:
 
 
 @dataclass(frozen=True)
+class TurnLifeGainReplacement:
+    """"…deals 4 damage to target player or planeswalker. The damage can't be
+    prevented. **If that player or that planeswalker's controller would gain
+    life this turn, that player gains no life instead.**" (Flames of the Blood
+    Hand.)
+
+    CR 614.1a's replacement over a life gain (CR 119.10), created by a
+    resolving spell for the turn — the life-gain twin of
+    :class:`TurnDrawReplacement`, recorded the same way
+    (``engine/turn_replacements.py``). ``player`` is whose gains it replaces:
+    "that player" read back to the damage sentence's announced target (the
+    player, or the targeted planeswalker's controller), never a seat a later
+    redirect moves the damage to (ruling 2005-02-01). The substitute is fixed:
+    no event at all, Sulfuric Vortex's "gains no life instead".
+    """
+    player: PlayerRef
+    duration: Duration
+
+
+@dataclass(frozen=True)
 class DoubleLifeTotal:
     """"**Double target player's life total.**" (Beacon of Immortality.)
 

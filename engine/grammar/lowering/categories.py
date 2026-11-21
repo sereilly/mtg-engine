@@ -307,6 +307,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the handler, not about which switch gates the card.
     "set_life_total": "life",
     "exchange_life_totals": "life",
+    # "If that player … would gain life this turn, that player gains no life
+    # instead." (Flames of the Blood Hand.) A CR 614 replacement over a life
+    # gain, armed for the turn.
+    "arm_turn_life_gain_replacement": "life",
     "redistribute_life_totals": "life",
     # The ante zone (CR 407). Its own category rather than "zones": every
     # other member of that family moves an object between zones the ordinary
