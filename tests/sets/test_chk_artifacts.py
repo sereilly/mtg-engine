@@ -453,3 +453,84 @@ def test_w1g9_tatsumasa_comes_back_when_its_dragon_dies_and_not_otherwise(set_po
             assert names == [] and [c.name for c in alice.exile] == ["Tatsumasa, the Dragon's Fang"]
 
 # ==== end w1g9 ======================================================
+
+
+# ==== W2G4 ==========================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+from engine import Game as _W2G4Game, PlayerState as _W2G4PlayerState
+from engine.models import Permanent as _W2G4Permanent
+from tests.helpers import settle as _w2g4_settle
+
+
+def _w2g4_card(set_pool, name):
+    for code in ("CHK", "LEA"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w2g4_put(game, card, seat=0):
+    permanent = _W2G4Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w2g4_table(set_pool, *, hand=(), mine=(), theirs=(), library=None,
+                opponent_library=None, opponent_hand=(), interactive=()):
+    """Two seats on seat 0's first main phase, costs not enforced; *mine* /
+    *theirs* placed and not summoning sick."""
+    card = lambda name: _w2g4_card(set_pool, name)  # noqa: E731
+    game = _W2G4Game(players=[
+        _W2G4PlayerState(name="Alice", hand=[card(n) for n in hand],
+                         library=[card(n) for n in (library or ["Island"] * 12)]),
+        _W2G4PlayerState(name="Bob", hand=[card(n) for n in opponent_hand],
+                         library=[card(n) for n in (opponent_library or ["Island"] * 12)]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = {
+        seat: [_w2g4_put(game, card(name), seat) for name in names]
+        for seat, names in ((0, mine), (1, theirs))
+    }
+    game.start_turn(0)
+    _w2g4_settle(game)
+    return game, placed[0], placed[1]
+
+
+def test_w2g4_junkyo_bell_sacrifices_its_creature_under_its_own_name(set_pool):
+    """Junkyo Bell: "At the beginning of your upkeep, you may have target
+    creature you control get +X/+X until end of turn, where X is the number of
+    creatures you control. If you do, sacrifice that creature at the beginning
+    of the next end step." The "if you do" runs as the offer is answered, after
+    the trigger has left the stack; the delayed sacrifice it creates is the
+    Bell's (CR 603.7e: a triggered ability's delayed ability has that
+    ability's source), so the end step announces it as the Bell's — it was
+    announced as the sacrificed creature's own ("Grizzly Bears ability
+    resolved")."""
+    game, (bears, elves), _theirs = _w2g4_table(set_pool, mine=["Grizzly Bears", "Llanowar Elves"])
+    _w2g4_put(game, _w2g4_card(set_pool, "Junkyo Bell"))
+    game.start_turn(0)
+    _w2g4_settle(game)
+    # X = 2 creatures: the Bears is 4/4 or the Elves 3/3.
+    pumped = [
+        permanent for permanent, size in ((bears, (4, 4)), (elves, (3, 3)))
+        if (permanent.effective_power, permanent.effective_toughness) == size
+    ]
+    assert len(pumped) == 1, [(p.card.name, p.effective_power) for p in (bears, elves)]
+    [target] = pumped
+    survivor = elves if target is bears else bears
+    mark = len(game.log)
+    game.enter_turn_phase("ending")
+    _w2g4_settle(game)
+    assert sorted(p.card.name for p in game.controlled_by(0)) == sorted(
+        ["Junkyo Bell", survivor.card.name]
+    )
+    tail = game.log[mark:]
+    assert "Junkyo Bell ability resolved" in tail, tail
+    assert f"{target.card.name} ability resolved" not in tail, tail
+
+# ==== end W2G4 ======================================================
