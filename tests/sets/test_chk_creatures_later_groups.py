@@ -454,6 +454,61 @@ def test_w1g8_the_ai_blocks_with_a_tapped_creature_under_masako(set_pool):
     assert _w1g8_slot(game, 1, wurm) in blocks, blocks
 
 
+# --- Sosuke, Son of Seshiro ---------------------------------------------------
+# "Whenever a Warrior you control deals combat damage to a creature, destroy
+# that creature at end of combat." The creature dealt damage (the only thing
+# "that creature" can name beside "a Warrior"), destroyed by a delayed
+# triggered ability as the end of combat step begins (CR 603.7, 511.2).
+
+
+def test_w1g8_sosuke_destroys_what_a_warrior_hit_at_end_of_combat(set_pool):
+    sosuke = set_pool("CHK")["Sosuke, Son of Seshiro"]
+    ranger = set_pool("CHK")["Orochi Ranger"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    game, (_, scout), (wurm,) = _w1g8_table([sosuke, ranger], [craw])
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, why = game.declare_attackers(
+        0, [_w1g8_slot(game, 0, scout)], defending_player_index=1
+    )
+    assert ok, why
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: _w1g8_slot(game, 0, scout)})[0]
+    # In the combat damage step: dealt, not yet destroyed.
+    _w1g8_drive_combat(game, through="declare_blockers")
+    assert wurm.damage_marked == 3 and game.is_on_battlefield(wurm)
+    _w1g8_drive_combat(game)
+    assert not game.is_on_battlefield(wurm)
+    assert "Craw Wurm" in _w1g8_zone_names(game, 1, "graveyard")
+
+
+def test_w1g8_sosuke_ignores_a_non_warrior_and_an_opponents_warrior(set_pool):
+    sosuke = set_pool("CHK")["Sosuke, Son of Seshiro"]
+    ranger = set_pool("CHK")["Orochi Ranger"]
+    craw = set_pool("LEA")["Craw Wurm"]
+    giant = set_pool("LEA")["Hill Giant"]
+    # Sosuke itself is a Snake Warrior, so the non-Warrior is the Giant.
+    game, (_, hill), (wurm,) = _w1g8_table([sosuke, giant], [craw])
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(
+        0, [_w1g8_slot(game, 0, hill)], defending_player_index=1
+    )[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: _w1g8_slot(game, 0, hill)})[0]
+    _w1g8_drive_combat(game)
+    assert game.is_on_battlefield(wurm)
+
+    # The opponent's Warrior blocking seat 0's creature fires nothing.
+    game, (_, hill), (scout,) = _w1g8_table([sosuke, giant], [ranger])
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(
+        0, [_w1g8_slot(game, 0, hill)], defending_player_index=1
+    )[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: _w1g8_slot(game, 0, hill)})[0]
+    _w1g8_drive_combat(game)
+    assert game.is_on_battlefield(hill)
+
+
 def test_w1g8_the_dealt_damage_exile_reads_only_a_line_about_itself():
     """The subject is the card itself — "this creature" or its own name (CR
     201.5, the legend's short name included) — never another card's."""

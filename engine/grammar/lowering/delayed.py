@@ -49,6 +49,7 @@ from ._events import (_EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
                       _RECORDED_PERMANENTS,
                       _PERMANENTS_MADE_BY_THIS_EFFECT,
                       CHOSEN_PLAYER, CREATED_TOKEN, CREATED_TOKENS,
+                      DAMAGED_CREATURE_NAMED,
                       binds_block_pair,
                       damage_trigger_names_damaged_end)
 from ._common import (
@@ -638,7 +639,9 @@ def _lower_delayed_destroy(
     delayed = _lower_activated_delayed_destroy(node, produced, event, event_subject)
     if delayed is not None:
         return delayed
-    damaged = _lower_delayed_destroy_of_damaged(node, event, event_subject)
+    damaged = _lower_delayed_destroy_of_damaged(
+        node, event, event_subject, produced
+    )
     if damaged is not None:
         return damaged
     if not binds_block_pair(event, event_subject):
@@ -678,6 +681,7 @@ def _lower_delayed_destroy(
 
 def _lower_delayed_destroy_of_damaged(
     node: ast.Destroy, event: str | None, event_subject: object | None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...] | None:
     """"Whenever this creature deals damage to a creature, destroy **that
     creature** at end of combat." (Lowland Basilisk.)
@@ -700,8 +704,17 @@ def _lower_delayed_destroy_of_damaged(
     (Mangara's Equity) the words name the damager while the stamped id is the
     creature it hit. Read off the kind alone this would arm a destruction of the
     wrong end of the event.
+
+    "Whenever **a Warrior you control** deals combat damage to a creature,
+    destroy that creature at end of combat." (Sosuke.) A described damager
+    whose phrase "that creature" cannot name — the event says so
+    (``_events.DAMAGED_CREATURE_NAMED``) — so the words name the creature it
+    hit, as under the source's own damage.
     """
-    if not damage_trigger_names_damaged_end(event, event_subject):
+    if not (
+        damage_trigger_names_damaged_end(event, event_subject)
+        or (event == "damage_dealt" and DAMAGED_CREATURE_NAMED in produced)
+    ):
         return None
     spec = node.subject
     if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "that":
