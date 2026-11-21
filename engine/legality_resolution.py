@@ -1374,18 +1374,16 @@ class ResolutionTargetsMixin:
         all on one battlefield (:meth:`announced_target_seat` answers None for
         two), because the field is one seat.
         """
-        if item.ability_instruction is None and spliced_segments(item):
-            # Each segment of spliced text (CR 702.47d) records its own seat
-            # beside its own ids, and is settled as the spell it is part of.
-            return sum(
-                self._resettle_announced_target_seats(judged)
-                for judged in (item, *spliced_segments(item))
+        # Each segment of text spliced onto a spell (CR 702.47d) records its
+        # own seat beside its own ids, and is settled as the spell it is part
+        # of — by this method, asked of the segment (which carries none).
+        segments_moved = (
+            sum(
+                self.resettle_announced_target_seats(segment)
+                for segment in spliced_segments(item)
             )
-        return self._resettle_announced_target_seats(item)
-
-    def _resettle_announced_target_seats(self, item) -> int:
-        """:meth:`resettle_announced_target_seats` for one object — a spell,
-        an ability, or one segment of text spliced onto a spell."""
+            if item.ability_instruction is None else 0
+        )
         modes = tuple(getattr(item, "chosen_modes", ()) or ())
 
         def live_ids(holder) -> list:
@@ -1407,14 +1405,14 @@ class ResolutionTargetsMixin:
             )
             for holder in (item, *modes)
         ):
-            return 0
+            return segments_moved
         judged: list[tuple] = []
         if item.ability_instruction is not None:
             if not announced_by_a_choice(item):
-                return 0
+                return segments_moved
             verdicts = self.ability_target_verdicts(item, recorded_only=True)
             if not verdicts:
-                return 0
+                return segments_moved
             judged.append((item, [
                 (target.permanent_id, legal) for target, legal in verdicts
                 if target.kind == "permanent" and target.channel == "item"
@@ -1423,7 +1421,7 @@ class ResolutionTargetsMixin:
         else:
             card = spell_text_card(item)
             if card.primary_type not in ("instant", "sorcery"):
-                return 0
+                return segments_moved
             program = compile_card_oracle(card)
             for spec, holder, mode_index in self._resolving_announcements(item, program):
                 addresses: list = []
@@ -1454,4 +1452,4 @@ class ResolutionTargetsMixin:
             # object resolves (``bare_announcements.resolving_slots``), for a
             # spell, an activated and a triggered ability alike.
             moved += 1
-        return moved
+        return moved + segments_moved

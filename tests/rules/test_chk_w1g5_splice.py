@@ -22,6 +22,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.splice import splice_offer, spliced_text_card
@@ -329,7 +330,7 @@ def test_every_champions_splice_line_is_read_by_the_splice_reader(set_cards):
     the host's — the census floor is the fifteen printed (thirteen of them
     reported supported with the keyword dropped before this module)."""
     printed = [
-        card for card in set_cards("CHK")
+        card for card in compilation_units(set_cards("CHK"))
         if "Splice onto" in (card.oracle_text or "")
     ]
     assert len(printed) >= 15
