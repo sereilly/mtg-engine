@@ -663,6 +663,18 @@ def _parse_become_creature(
     """
     mark = stream.mark()
     stream.accept_word("a", "an")
+    # "…becomes a **legendary** 8/12 Spirit creature with trample" (Genju of
+    # the Realm). CR 205.4a's supertype, printed in front of the size where a
+    # type line prints it in front of the card types; checked against the
+    # vocabulary catalog rather than a literal, as ``_parse_becomes_supertype``
+    # checks its word. Carried onto the node and the record, never dropped.
+    supertypes: list[str] = []
+    while True:
+        supertype = stream.peek_word()
+        if supertype is None or supertype not in TYPE_LINE_SUPERTYPES:
+            break
+        stream.advance()
+        supertypes.append(supertype)
     # **Optional**, because one body in the pool prints no size at all: "…it
     # becomes an Illusion creature with power and toughness each equal to that
     # spell’s mana value." (Veiled Sentry.) A body with neither a printed P/T
@@ -975,6 +987,7 @@ def _parse_become_creature(
         replaces_types=not in_addition,
         pt_from_triggering_spell=pt_from_spell,
         protection_from_triggering_spell=protection_from_spell,
+        supertypes=tuple(supertypes),
     )
 
 

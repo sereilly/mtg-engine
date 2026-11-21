@@ -232,6 +232,9 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
                 # Shatter cannot reach and Titania's Song does not see.
                 card_types=["creature", *(animation.get("card_types") or ())],
                 subtypes=subtypes,
+                # "…a **legendary** 8/12 Spirit creature" (Genju of the
+                # Realm): CR 205.4a's supertype on the same record.
+                supertypes=list(animation.get("supertypes") or ()),
                 replace_card_types=replaces,
                 replace_subtypes=replaces and bool(subtypes),
                 # CR 613.7b: the stamp the effect was created with

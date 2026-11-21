@@ -862,6 +862,9 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     ("card_put_into_graveyard", "may"): "triggered_death",
     ("land_tapped_for_mana", "may"): "triggered_mana",
     ("attached_creature_dies", "may"): "triggered_death",
+    # The Genju cycle's "When enchanted Forest is put into a graveyard, you may
+    # return this card …": the row above for a host of any type.
+    ("attached_permanent_dies", "may"): "triggered_death",
     ("enters_battlefield", "may"): "triggered_etb",
     ("draws_card", "may"): "triggered_draw",
     ("end_step", "may"): "triggered_end_step",

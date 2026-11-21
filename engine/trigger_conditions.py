@@ -178,6 +178,20 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("gain_control_of_source",
      r"when you gain control of (?:this|it|the) ?\w* from another player"),
     ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
+    # "When **enchanted Forest is put into a graveyard**, you may return this
+    # card from your graveyard to your hand." (The Genju cycle.) The row above
+    # for a host of any type: CR 700.4's "dies" is "is put into a graveyard
+    # from the battlefield", and a permanent an Aura enchants can only be put
+    # there from the battlefield, so the printed sentence needs no source zone.
+    # Its own kind rather than a widening of the row above, because the fire
+    # site differs: a creature's death is announced by
+    # ``_fire_creature_dies_triggers`` and every permanent's by
+    # ``_fire_permanent_dies_triggers``, and a land never reaches the first.
+    # ``dying_attached`` is the printed noun, which the fire site holds the
+    # departed host to (CR 603.10a's look back) beside the attachment.
+    ("attached_permanent_dies",
+     r"when(?:ever)? (?:equipped|enchanted) (?P<dying_attached>[a-z]+) is put into "
+     r"a graveyard(?: from the battlefield)?"),
     # CR 701.26a's event with the one-shot trigger word (Blight: "**When**
     # enchanted land becomes tapped, destroy it"). Here for the reason
     # `attached_creature_dies` above is in both tables: which word a card

@@ -74,7 +74,7 @@ ANIMATE_UNTIL_END_OF_COMBAT = "animate_until_end_of_combat"
 _ANIMATION_PAYLOAD_KEYS = frozenset({
     "power", "toughness", "subtypes", "keywords", "card_types", "colors",
     "replaces_types", "granted_ability_lines", "pt_count",
-    "protection_from_triggering_spell_colors",
+    "protection_from_triggering_spell_colors", "supertypes",
 })
 
 
@@ -117,6 +117,12 @@ def _animation_record(payload: dict) -> dict:
         record["granted_at"] = next_timestamp()
     if payload.get("replaces_types"):
         record["replaces_types"] = True
+    if payload.get("supertypes"):
+        # "…a **legendary** 8/12 Spirit creature" (Genju of the Realm): CR
+        # 205.4a's supertype, added by the layer-4 collector beside the card
+        # types. Written only when printed, so every record before it is the
+        # same dict.
+        record["supertypes"] = list(payload["supertypes"])
     return record
 
 
@@ -398,6 +404,26 @@ def _animate_target(
     if target is None:
         game.log.append(f"{context.card.name}: no land to animate")
         return True, "resolved"
+    _animate_other_permanent(
+        game, target, instruction, context,
+        record_key=record_key, until_eot=until_eot, duration=duration,
+    )
+    return True, "resolved"
+
+
+def _animate_other_permanent(
+    game: Game,
+    target,
+    instruction: OracleInstruction,
+    context: OracleExecutionContext,
+    *,
+    record_key: str,
+    until_eot: bool,
+    duration: str,
+) -> None:
+    """Write an animation onto *target*, a permanent other than the source,
+    and log it — the targeted kinds' body and the enchanted host's, which
+    differ only in how the permanent was found."""
     payload = instruction.payload
     power, toughness = _animation_size(game, payload, context)
     set_base_pt(target, power, toughness, until_eot=until_eot)
@@ -410,6 +436,48 @@ def _animate_target(
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
         f"{duration} ({context.card.name})"
+    )
+
+
+@effect_handler("animate_enchanted_until_eot")
+def animate_enchanted_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{2}: Enchanted Forest becomes a 4/4 green Spirit creature until end of
+    turn. It's still a land." (The Genju cycle, CR 613 layers 4, 5, 6 and 7b.)
+
+    ``animate_target_until_eot``'s record on the permanent the source Aura is
+    attached to, found through ``attached_host``: the live attachment, or —
+    the Aura destroyed in response to its own activation — the one it was
+    last attached to (CR 608.2h; the ability exists independently of its
+    source, CR 113.7a). Nothing was targeted (CR 115.1), so nothing can make
+    the ability fizzle; a host that has left, or that no longer is what the
+    printed noun names (``host_filter``: a Forest an effect has made an
+    Island), is animated by nothing.
+
+    Activated again while the land is already a creature, the new record
+    replaces the old and the size is set again at a new timestamp — the
+    2009-10-01 ruling's "will override any effects that set its power and/or
+    toughness to a specific number", while a modifier (layer 7c) keeps
+    applying. Each activation's quoted ability is granted again (Genju of the
+    Fields' 2005-08-01 ruling: "it will have the triggered ability multiple
+    times").
+    """
+    from ..subject_filters import subject_matches
+    from ._targets import attached_host
+
+    source = context.source_permanent
+    host = attached_host(game, source)
+    described = instruction.payload.get("host_filter") or {}
+    if host is not None and described and not subject_matches(
+        game, host, described,
+        observer=game.controller_index_of(host), source=source,
+    ):
+        host = None
+    if host is None:
+        game.log.append(f"{context.card.name}: it enchants nothing to animate")
+        return True, "resolved"
+    _animate_other_permanent(
+        game, host, instruction, context,
+        record_key=ANIMATE_UNTIL_EOT, until_eot=True, duration="until end of turn",
     )
     return True, "resolved"
 

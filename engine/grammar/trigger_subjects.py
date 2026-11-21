@@ -192,6 +192,15 @@ _ATTACHED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # narrowing, as it is for every row here, and ``engine/trigger_conditions.py``
     # records it (``turned_attached``).
     (("is", "turned", "face", "up"), "permanent_turned_face_up"),
+    # "When enchanted Forest **is put into a graveyard**, you may return this
+    # card from your graveyard to your hand." (The Genju cycle.) CR 700.4's
+    # death of a host of any type — the same event "when enchanted creature
+    # dies" names for a creature — under ``engine/trigger_conditions.py``'s
+    # ``attached_permanent_dies``. The long spelling first, as everywhere here;
+    # no card prints it yet, and both mean the one event.
+    (("is", "put", "into", "a", "graveyard", "from", "the", "battlefield"),
+     "attached_permanent_dies"),
+    (("is", "put", "into", "a", "graveyard"), "attached_permanent_dies"),
 )
 
 

@@ -130,6 +130,53 @@ def _lower_become_creature(
         payload = _animation_payload(node)
         payload.update(described)
         return (OracleInstruction("animate_matching_until_eot", "", payload),)
+    # "{2}: **Enchanted Forest** becomes a 4/4 green Spirit creature until end
+    # of turn. It's still a land." (The Genju cycle.) The Aura's own activated
+    # ability (CR 303.4e: only the Aura's controller may activate it) about the
+    # permanent the Aura is attached to — the subject ``pump_enchanted_creature``
+    # and ``grant_regeneration_to_enchanted_creature`` already take, one verb
+    # over. Nothing is targeted (CR 115.1): the handler finds the host through
+    # the attachment record, last-known when the Aura has left (CR 608.2h).
+    #
+    # The printed noun ("Forest", "land") restates the Aura's own enchant
+    # restriction, so it is carried as the filter the host is held to as the
+    # ability resolves rather than dropped; any narrowing beyond the noun
+    # refuses. Only the turn-long window: the end-of-combat and indefinite
+    # records belong to the source and target kinds, and an Aura that printed
+    # one would be a sentence nobody has read.
+    if _is_enchanted(node.subject):
+        assert isinstance(node.subject, ast.TargetSpec)
+        _refuse_indefinite(node, "an enchanted permanent")
+        if node.until_end_of_combat:
+            raise LoweringError(
+                "an enchanted permanent's animation lasts until end of turn",
+                node=node,
+            )
+        if node.pt_from_triggering_spell or node.protection_from_triggering_spell:
+            raise LoweringError(
+                "an Aura's activated animation has no triggering spell to read",
+                node=node,
+            )
+        leftovers = _restrictions_beyond(
+            node.subject.filter, frozenset({"is_enchanted", "card_types", "subtypes"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the enchanted animation does not honour {leftovers[0]!r}",
+                node=node,
+            )
+        host = {
+            key: value for key, value in _filter_payload(node.subject.filter).items()
+            if key != "is_enchanted"
+        }
+        if untestable_filter_keys(host):
+            raise LoweringError(
+                "the enchanted animation cannot test this noun phrase", node=node
+            )
+        payload = _animation_payload(node)
+        if host:
+            payload["host_filter"] = host
+        return (OracleInstruction("animate_enchanted_until_eot", "", payload),)
     if not _is_target(node.subject):
         raise LoweringError(
             "an animation names the source, one target or a described set",
@@ -241,6 +288,11 @@ def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
         # byte-identical, and the absence means "the sentence kept the printed
         # types", which is exactly what those cards' retention clauses said.
         payload["replaces_types"] = True
+    if node.supertypes:
+        # "…a **legendary** 8/12 Spirit creature" (Genju of the Realm). CR
+        # 205.4a's supertype on the layer-4 record beside the card types; only
+        # emitted when printed, for ``colors``' reason.
+        payload["supertypes"] = list(node.supertypes)
     return payload
 
 
