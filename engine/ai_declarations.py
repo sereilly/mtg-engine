@@ -262,8 +262,18 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         if idx in chosen:
             continue
         attacker = player.battlefield[idx]
+        if leaves_before_it_could_block(game, attacker):
+            # It is gone before the next turn's combat whatever happens here
+            # (`leaves_before_it_could_block`), so a block that kills it takes
+            # nothing the seat was keeping: it attacks.
+            chosen.append(idx)
+            continue
+        # The fight each block would be, read as the defender reads it
+        # (`_attack_block_score`: `ai_compelled_blocks.fight_outcome`, the
+        # block's own triggers included) — bushido's +2/+2 on the block, a
+        # first strike, a regeneration shield.
         best_defender_score = max(
-            _score_block_pair(blocker, attacker) for blocker in opponent_blockers
+            _attack_block_score(game, blocker, attacker) for blocker in opponent_blockers
         )
         # Attack when the best possible block is not clearly profitable for the opponent.
         if best_defender_score <= _permanent_value(attacker):
@@ -295,6 +305,61 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         )
 
     return sorted(chosen)
+
+
+#: The delayed events that fire before the attacking seat's turn is over —
+#: an effect armed for one of them is gone by the time the creature could
+#: block (``delayed_triggers.DELAYED_EVENTS``).
+_THIS_TURNS_LEAVING_EVENTS = frozenset({
+    "next_end_of_combat", "next_end_step", "controllers_next_end_step",
+    "next_cleanup_step",
+})
+#: What such an effect does to its bound permanent that takes it off the
+#: battlefield.
+_LEAVING_KINDS = frozenset({
+    "sacrifice_bound_permanent", "exile_bound_permanent", "destroy_bound_permanent",
+    "return_bound_permanent_to_hand",
+})
+#: A printed end-step trigger that sacrifices its own creature (Ball
+#: Lightning's "At the beginning of the end step, sacrifice this creature").
+_END_STEP_CONDITIONS = frozenset({"end_step", "end_step_self"})
+
+
+def leaves_before_it_could_block(game: Game, creature: Permanent) -> bool:
+    """Whether *creature*, attacking on its controller's turn, leaves the
+    battlefield before that turn ends — so it never blocks, and nothing a
+    block takes from it was the seat's to keep.
+
+    A delayed ability bound to it for this turn's end of combat, end step or
+    cleanup (CR 603.7: "Sacrifice it at the beginning of the next end step" —
+    Kiki-Jiki's hasty copy, Through the Breach's and Sneak Attack's creature),
+    or its own printed end-step trigger that sacrifices it with no condition
+    (Ball Lightning). Kiki-Jiki was the card that showed it: the copy was
+    held home from a Craw Wurm it trades with nothing for, so the rehearsal
+    of the activation read a token sacrificed at the end step and nothing
+    else, and the seat never activated the ability (CHK W1G8)."""
+    from .trigger_utils import matching_triggers
+
+    permanent_id = getattr(creature, "permanent_id", None)
+    controller = game.controller_index_of(creature)
+    for delayed in getattr(game, "delayed_triggers", ()) or ():
+        if (
+            delayed.bound_permanent_id == permanent_id
+            and delayed.event in _THIS_TURNS_LEAVING_EVENTS
+            and (delayed.event != "controllers_next_end_step"
+                 or delayed.controller_index == controller)
+            and delayed.instruction is not None
+            and delayed.instruction.kind in _LEAVING_KINDS
+        ):
+            return True
+    return any(
+        trigger.instruction is not None
+        and trigger.instruction.kind == "sacrifice_self"
+        and not trigger.condition.payload
+        for trigger in matching_triggers(
+            creature.effective_card, condition_kinds=_END_STEP_CONDITIONS,
+        )
+    )
 
 
 def _attacks_its_held_trick_wins(
@@ -1165,9 +1230,37 @@ def _estimated_unblocked_damage(
     return total
 
 
-def _score_block_pair(blocker: Permanent, attacker: Permanent) -> float:
-    blocker_kills = blocker.effective_power >= attacker.effective_toughness
-    attacker_kills = attacker.effective_power >= blocker.effective_toughness
+def _attack_block_score(game: Game, blocker: Permanent, attacker: Permanent) -> float:
+    """`_score_block_pair` for the attack: what *blocker* blocking *attacker*
+    is worth to the defender, with who destroys whom read off the fight the
+    blocks themselves read (``ai_compelled_blocks.fight_outcome``) rather than
+    off the printed bodies.
+
+    The bodies were all the attack asked, so a creature whose block trigger
+    wins its fight stayed home: Samurai Enforcers' bushido 2 makes it a 6/6
+    the moment a Shivan Dragon blocks it (CR 702.45a), and the seat declined
+    the attack the blocks would have lost (CHK W1G2); Chub Toad's "Whenever
+    this creature blocks or becomes blocked, it gets +2/+2" the same. The
+    defender's side has read the fight this way since LGN
+    (`_block_loses_its_blocker`), so the two now agree about one fight."""
+    blocker_dies, attacker_dies = fight_outcome(game, attacker, blocker)
+    return _score_block_pair(
+        blocker, attacker, blocker_kills=attacker_dies, attacker_kills=blocker_dies,
+    )
+
+
+def _score_block_pair(
+    blocker: Permanent, attacker: Permanent, *,
+    blocker_kills: "bool | None" = None, attacker_kills: "bool | None" = None,
+) -> float:
+    """What *blocker* blocking *attacker* is worth to the defender. Who
+    destroys whom is the printed bodies' power against toughness unless the
+    caller read the fight itself (*blocker_kills*, *attacker_kills*:
+    `_attack_block_score`)."""
+    if blocker_kills is None:
+        blocker_kills = blocker.effective_power >= attacker.effective_toughness
+    if attacker_kills is None:
+        attacker_kills = attacker.effective_power >= blocker.effective_toughness
 
     attacker_value = _permanent_value(attacker)
     blocker_value = _permanent_value(blocker)

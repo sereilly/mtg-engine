@@ -799,7 +799,15 @@ def _tutor_score(game: Game, player_index: int, card: CardDefinition) -> float:
 
 
 def _permanent_value(permanent: Permanent) -> float:
-    return permanent.effective_power * 1.4 + permanent.effective_toughness * 1.1 + float(permanent.card.cmc)
+    # The mana value through CR 613's accessor, as the body is (CR 707.2: a
+    # copy's mana value is the copied object's): read off the printed card, a
+    # blank that became an Urborg Phantom was worth three less than the
+    # Phantom, and its shielded attack stayed home where the Phantom's went
+    # (CHK W2G2, the effective-card census).
+    return (
+        permanent.effective_power * 1.4 + permanent.effective_toughness * 1.1
+        + float(permanent.effective_card.cmc or 0)
+    )
 
 
 def _choose_target_for_spell(

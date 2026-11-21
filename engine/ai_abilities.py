@@ -117,9 +117,8 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
     It is asked after the turn's casts have tapped what they needed, so the
     land it taps is one nothing else this main phase wanted.
 
-    A tapped or summoning-sick permanent is passed over, except **at instant
-    speed** (``_AT_INSTANT_SPEED``, every proposal rehearsed): there only its
-    {T} abilities are (CR 107.5, 602.5a) — an attacker's "{1}: …" is not.
+    A tapped or summoning-sick permanent's {T} abilities are passed over
+    (CR 107.5, 602.5a), at either speed — an attacker's "{1}: …" is not.
 
     **It is a main phase's chooser, asked only at sorcery speed**: the seat's
     own main phase with an empty stack, by the simulator's
@@ -138,14 +137,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
 
     best: ActivationAction | None = None
     set_aside = _ACTIVATIONS_SET_ASIDE.get()
-    at_instant_speed = _AT_INSTANT_SPEED.get()
     # One deliberation: every land ability weighed here is rehearsed against
     # the same table with nothing activated.
     with deliberating():
         for permanent_index, permanent in enumerate(player.battlefield):
+            # Tapped or summoning sick, only its {T} abilities are out of
+            # reach (CR 602.5a, CR 302.6) — at either speed. The main phase
+            # passed such a permanent over whole, so Wicked Akuba's "{B}:
+            # Target player dealt damage by this creature this turn loses 1
+            # life", which only an attack opens and the attack taps, was never
+            # activated in the main phase after it (CHK W1G8). Every such
+            # proposal is rehearsed here as any other is (`_moves_something`).
             held = permanent.tapped or game._is_summoning_sick(permanent)
-            if held and not at_instant_speed:
-                continue
             # Stripped of its abilities (CR 305.7): the engine refuses each.
             if game.lost_abilities_refusal(permanent) is not None:
                 continue
@@ -164,6 +167,17 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
                     game, player_index, permanent_index, permanent,
                     ability, ability_index,
                 )
+                # …and at sorcery speed only for what **outlasts the turn**
+                # (`_land_ability_worth`: a lasting reading above nothing, the
+                # fight read through first): a tapped or sick creature is in no
+                # fight of this turn, and a pump on one read as moving
+                # something — its "once each turn" record — so a Basking
+                # Rootwalla was pumped the turn it arrived (TOR, seed 7).
+                if (
+                    candidate is not None and held and not _AT_INSTANT_SPEED.get()
+                    and _land_ability_worth(game, player_index, candidate) is None
+                ):
+                    candidate = None
                 if candidate is not None and (
                     best is None or candidate.score > best.score
                 ):
@@ -304,6 +318,13 @@ def _activation_candidate(
         if ability.cost.discard_cards and ability.cost.sacrifice_filter is None
         else None
     )
+    # **And a discard the effect reads** (CHK W2G2): "{2}{U}, Discard a card:
+    # Counter target spell if it has the same mana value as the discarded
+    # card." (Hisoka, Minamo Sensei.) The card that makes the counter work is
+    # named (`_discard_its_counter_reads`), and the instant-speed caller's
+    # rehearsal says whether the spell is worth the card.
+    if madness_discard is None and ability.cost.discard_cards and ability.cost.sacrifice_filter is None:
+        madness_discard = _discard_its_counter_reads(game, player_index, ability)
     sacrifice_weighed = _sacrifice_is_weighed(ability.cost)
     if (ability.cost.sacrifice_filter is not None and not sacrifice_weighed) or (
         ability.cost.discard_cards and madness_discard is None
@@ -1189,6 +1210,48 @@ def _madness_discard_index(
     from .ai_prompt_picks import discard_order
 
     return discard_order(game, seat, payable, None)[0] if payable else None
+
+
+def _discard_its_counter_reads(game: Game, seat: int, ability) -> int | None:
+    """The hand position a "Discard a card" cost takes where the ability's
+    counter reads the discarded card — "Counter target spell if it has the
+    same mana value as the discarded card" (Hisoka, Minamo Sensei;
+    ``counter_conditions.COUNTER_CONDITION_COST_RECORDS``) — or None.
+
+    The spell is the one the ability's bare announcement names, the top of
+    the stack, and only where another seat cast it: the card is the one of
+    that spell's mana value (CR 202.3e, the stack object's own reader) the
+    seat least wants to lose (``ai_prompt_picks.discard_order``). Choosing
+    which card to discard was not wired, so the AI never activated Hisoka:
+    the default first card counters nothing (CHK W1G7)."""
+    from .ai_prompt_picks import discard_order
+    from .counter_conditions import (COUNTER_CONDITION_COST_RECORDS,
+                                     counter_condition_key)
+    from .subject_filters import card_matches_any
+    from .targeting import stack_object_mana_value
+
+    cost = ability.cost
+    if cost.discard_cards != 1 or cost.discard_at_random or cost.discard_whole_hand:
+        return None
+    instruction = ability.instruction
+    payload = getattr(instruction, "payload", None) or {}
+    if COUNTER_CONDITION_COST_RECORDS.get(
+        counter_condition_key(str(payload.get("only_if") or "")) or ""
+    ) != "discarded_for_cost":
+        return None
+    if not game.stack:
+        return None
+    spell = game.stack[-1]
+    if spell.caster_index == seat or getattr(spell, "ability_instruction", None) is not None:
+        return None
+    wanted = stack_object_mana_value(spell)
+    hand = game.players[seat].hand
+    matching = [
+        index for index, card in enumerate(hand)
+        if int(getattr(card, "cmc", 0) or 0) == wanted
+        and card_matches_any(card, cost.discard_filters, game=game, owner=seat)
+    ]
+    return discard_order(game, seat, matching, None)[0] if matching else None
 
 
 #: Life a seat keeps back when it pays life for an ability of its own

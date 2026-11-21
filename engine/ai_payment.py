@@ -408,14 +408,19 @@ def _cost_for(
     card: CardDefinition,
     x_value: int | None,
     extra_generic: int = 0,
+    extra_pips: "dict[str, int] | None" = None,
 ) -> dict[str, int]:
     """What *player* actually pays for *card* — CR 601.2f, increases then
     reductions, through the same three functions the cast path calls.
 
     *extra_generic* is a generic surcharge the cast will carry that no
-    registered modifier states — today the commander tax (CR 903.8), which the
-    cast path adds to its own ``extra_generic_tax`` the same way. Zero for
-    every hand cast.
+    registered modifier states — the commander tax (CR 903.8), and the generic
+    of a splice cost (CR 702.47a, ``ai_splice``) — which the cast path adds to
+    its own ``extra_generic_tax`` the same way. Zero for every other hand
+    cast. *extra_pips* is the coloured half of the same: a splice cost's
+    ``{R}`` joins the cast path's ``extra_pip_tax`` before the reductions,
+    because a reduction applies to the total cost, splice costs included
+    (Long-Forgotten Gohei's ruling).
 
     The seat is threaded rather than assumed. This used to pass 0 with a comment
     saying no registered modifier depended on it, which was true while every one
@@ -440,6 +445,10 @@ def _cost_for(
     # AI prices a spell to decide whether it can cast it — priced without the
     # pip it proposes a cast the rules then refuse, every turn, forever.
     pips, _pip_names = spell_symbol_tax(game, seat, card)
+    if extra_pips:
+        pips = dict(pips or {})
+        for symbol, amount in extra_pips.items():
+            pips[symbol] = pips.get(symbol, 0) + amount
     # With the X being priced: a reduction narrowed by the spell's mana value
     # (Krosan Drover) counts it, as the cast path does once X is announced
     # (CR 202.3e).

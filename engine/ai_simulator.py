@@ -159,6 +159,14 @@ class SimulationReport:
     #: card was cast, it resolved, nothing was refused. A report whose only
     #: key is 0 over a pool that prints modal spells is that coming back.
     modal_casts: Counter[int] = field(default_factory=Counter)
+    #: Cards **spliced** onto the spells cast (CR 702.47a), by the spell they
+    #: were spliced onto — one per card revealed. **Empty in every run before
+    #: CHK's wave 2**: the policy cast each splice card alone, spending it, and
+    #: never once added its text to an Arcane spell it was casting anyway —
+    #: and the run read exactly as clean as it does now (``ai_splice``). A
+    #: run pinning splice cards and Arcane spells that reads empty is that
+    #: coming back.
+    spliced_casts: Counter[str] = field(default_factory=Counter)
     #: Spells cast — and lands played — from a zone **other than the hand**
     #: (CR 601.3), by the zone: ``"graveyard"`` (flashback, CR 702.34a;
     #: Yawgmoth's Will), ``"exile"`` (an Elkin Bottle's card), ``"library"``
@@ -592,9 +600,12 @@ def _play_one_cast(
     report.log_lines.append(
         f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} "
         f"-> {result.details}{named}{_zone_named(cast_action)}"
+        f"{_splices_named(cast_action)}"
     )
     if result.supported:
         report.modal_casts.update(index for index, _label in modes_named)
+        if cast_action.splice_cards:
+            report.spliced_casts[card_to_cast.name] += len(cast_action.splice_cards)
         if cast_action.from_zone != "hand":
             report.casts_from_zones[cast_action.from_zone] += 1
     if not result.supported:
@@ -641,6 +652,14 @@ def _zone_named(cast_action) -> str:
     if cast_action.from_zone == "hand":
         return ""
     return f" [from {cast_action.from_zone}]"
+
+
+def _splices_named(cast_action) -> str:
+    """`` [2 spliced]`` for a cast that spliced cards onto its spell (CR
+    702.47a; the game's own log names them), nothing otherwise — after the
+    outcome, like the zone, so every other line reads as it always did."""
+    count = len(getattr(cast_action, "splice_cards", None) or ())
+    return f" [{count} spliced]" if count else ""
 
 
 def _modes_named(card: CardDefinition, cast_action) -> list[tuple[int, str]]:
@@ -1045,6 +1064,7 @@ def _answer_priority(
     report.log_lines.append(
         f"G{game_index} T{turn} {game.players[seat].name} cast {card.name} "
         f"-> {result.details} [{when}]{named}{_zone_named(action)}"
+        f"{_splices_named(action)}"
     )
     if not result.supported:
         report.refused_instant_casts[f"{card.name}: {result.details}"] += 1
@@ -1054,6 +1074,8 @@ def _answer_priority(
     report.casts_before_blocks += act.window == "declare_attackers"
     report.casts_on_opponents_turn += act.off_turn
     report.modal_casts.update(index for index, _label in modes_named)
+    if action.splice_cards:
+        report.spliced_casts[card.name] += len(action.splice_cards)
     if action.from_zone != "hand":
         report.casts_from_zones[action.from_zone] += 1
     return True

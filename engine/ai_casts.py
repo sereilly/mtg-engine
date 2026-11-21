@@ -50,7 +50,9 @@ from .ai_weighed_cast import (
 from .ai_target_sides import activation_target_side, ability_target_side
 from .ai_rehearsal import deliberating
 from .ai_entwine import entwined_cast
+from .ai_splice import spliced_cast
 from .ai_valuation import (
+    OFFER_ADDS,
     OFFER_ALTERS,
     OFFER_ENTWINES,
     OFFER_KICKS,
@@ -371,6 +373,13 @@ def _times_worth_taking(
         # Burst hit a second target — and a seat that cannot spare the price
         # simply casts the spell unkicked: the announcements run down to `{}`,
         # so declining here is never a card left in hand.
+        if offer.buys == OFFER_ADDS and getattr(offer.price, "sacrifice_any_number", False):
+            # "You may sacrifice any number of Spirits" counted by the effect
+            # (Devouring Rage, Devouring Greed): taken, and how many — none
+            # included, which is the offer declined — is weighed where the
+            # cast is built (`ai_sacrifice_victims.cast_naming_its_sacrifices`,
+            # the cheapest to lose first, each set rehearsed).
+            return 1
         if offer.buys not in (OFFER_RETURNS_SPELL, OFFER_KICKS):
             return 0
         return 1 if _buyback_price_is_worth_paying(
@@ -544,7 +553,30 @@ def _best_of_the_modes(
 ) -> CastAction | None:
     """`_cast_candidate_in_each_mode`'s choice, under the permission it
     settled on: the best single mode, every mode at once for "choose one or
-    more", or the entwined cast where it beats the best mode."""
+    more", or the entwined cast where it beats the best mode — with the cards
+    in hand worth splicing onto it (CR 702.47a, `ai_splice.spliced_cast`)."""
+    chosen = _best_of_the_modes_unspliced(
+        game, player_index, card, hand_index,
+        from_zone=from_zone, extra_generic=extra_generic, under=under,
+    )
+    if chosen is None:
+        return None
+    # Under the permission the cast was weighed under, for the entwine's
+    # reason: the price, the rehearsal's trip out of the pile and the zone's
+    # bonus all read it, so the two scores compare.
+    with casting_under(under):
+        spliced = spliced_cast(
+            game, player_index, card, chosen,
+            from_zone=from_zone, extra_generic=extra_generic,
+        )
+    return spliced if spliced is not None and spliced.score > chosen.score else chosen
+
+
+def _best_of_the_modes_unspliced(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int, *,
+    from_zone: str, extra_generic: int, under: "PermittedCast | None",
+) -> CastAction | None:
+    """`_best_of_the_modes` before anything is spliced onto it."""
     best: CastAction | None = None
     built: list[CastAction] = []
     modes = _modes_weighed(game, player_index, card)

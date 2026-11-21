@@ -708,6 +708,45 @@ def chosen_number_bounds_flip_run(card: CardDefinition, instruction) -> bool:
     )
 
 
+#: The steps behind a chosen number that count the cards **with the chosen
+#: name** in a revealed library: "Target player reveals their library. If that
+#: library contains exactly the chosen number of cards with the chosen name,
+#: Mindblaze deals 8 damage to that player."
+_NAMED_LIBRARY_COUNTERS = frozenset({"reveal_library"})
+
+
+def chosen_number_counts_a_named_library(card: CardDefinition, instruction) -> bool:
+    """Whether the number *instruction* chooses is held against the count of
+    cards with a chosen name in a library a later step reveals (Mindblaze) —
+    :func:`chosen_number_bounds_flip_run`'s question about another sentence.
+    The default every other chosen number takes counts mana values on the
+    board (``_most_telling_mana_value``, Void's), which for Mindblaze named
+    "exactly three copies" of a card a forty-card deck holds once (CHK W1G7)."""
+    return _a_later_step_reads_the_name(card, instruction, _NAMED_LIBRARY_COUNTERS)
+
+
+def named_library_count_guess(game, context, seat: int, low: int, high) -> int:
+    """The number a seat nobody asks names for "exactly the chosen number of
+    cards with the chosen name" in the target's library (Mindblaze): the real
+    count where that library is the chooser's own — a player built their own
+    deck, and CR 401.2 hides only which card is where — and one where it is
+    another player's, a hidden zone (CR 400.2) whose likeliest count of any
+    card it holds at all, in a limited deck, is one. Held to the printed
+    range."""
+    from .search_filters import name_key
+
+    target = getattr(context, "target", None)
+    count = 1
+    if target is game.players[seat]:
+        named = str(context.results.get("chosen_card_name") or "").strip()
+        if named:
+            count = sum(
+                1 for card in target.library if name_key(card.name) == name_key(named)
+            )
+    count = max(low, count)
+    return count if high is None else min(high, count)
+
+
 def secret_number_highest_pays(card: CardDefinition) -> bool:
     """Whether the numbers *card*'s players name in secret are paid for by
     **the highest** — "Each player with the highest number loses that much
@@ -1150,6 +1189,7 @@ __all__ = [
     "chosen_creature_type_side",
     "color_most_worth_sweeping",
     "chosen_name_is_read_off_the_targets_library",
+    "chosen_number_counts_a_named_library",
     "denied_graveyard_pile",
     "DiscardPayoff",
     "discard_pays_its_cause",
@@ -1160,6 +1200,7 @@ __all__ = [
     "graveyard_denial_order",
     "graveyard_price_order",
     "linked_exile_returns_to_battlefield",
+    "named_library_count_guess",
     "reads_what_its_cost_exiled",
     "pick_is_taken_from_its_controller",
     "pick_is_tested_for_a_shared_color",

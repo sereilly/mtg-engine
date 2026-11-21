@@ -35,7 +35,9 @@ Each is read from the compiled program the tap runs, never a name list:
   Mine, and Relic Bind, whose damage another seat aims and is priced as aimed
   at the tapper), and for a land the tap seam's own reading of "whenever a
   player taps a land for mana" (Manabarbs, Overabundance, Price of Glory's
-  intervening "if", Storm Cauldron's return to the hand);
+  intervening "if", Storm Cauldron's return to the hand, and Forbidden
+  Orchard's "target opponent creates a 1/1 … token", priced at the token's
+  power and toughness);
 * **its standing text about being tapped**: "doesn't untap during your untap
   step" (Mana Vault, the Monoliths, Forsaken City), and a trigger that hurts
   while it is tapped (Mana Vault's draw step);
@@ -343,7 +345,32 @@ def _trigger_harm(game, instruction, controller: int, tapper: int, source, tappe
             # An Aura spending a counter each time its host is tapped (Orcish
             # Mine's ore, whose last destroys the land).
             harm += 1
+        elif step.kind == "create_token" and payload.get("recipient_players") in _TO_AN_OPPONENT:
+            # "Whenever you tap this land for mana, target opponent creates a
+            # 1/1 colorless Spirit creature token." (Forbidden Orchard.) A
+            # creature handed to the other side of the table: priced at its
+            # power and toughness, one point each — a 1/1 at two, a body that
+            # attacks and blocks against the tapper on every later turn.
+            harm += _token_for_an_opponent_price(payload)
     return harm
+
+
+#: A ``create_token`` recipient that is never the tapping player.
+_TO_AN_OPPONENT = frozenset({"target_opponent", "each_opponent"})
+
+
+def _token_for_an_opponent_price(payload) -> int:
+    """What a token made for another seat costs the tapper: its power plus
+    its toughness for a creature (at least one), one for anything else,
+    times how many are made."""
+    count = payload.get("count", 1)
+    count = count if isinstance(count, int) and count > 0 else 1
+    power, toughness = payload.get("power"), payload.get("toughness")
+    if isinstance(power, int) and isinstance(toughness, int):
+        each = max(1, max(0, power) + max(0, toughness))
+    else:
+        each = 1
+    return each * count
 
 
 def _stays_tapped_harm(game, permanent, seat: int) -> int:

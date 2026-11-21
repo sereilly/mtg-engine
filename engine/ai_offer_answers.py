@@ -522,6 +522,16 @@ def offer_declines_into_more_cards(entry: dict) -> bool:
     decline = _branch_hand_yield(declined)
     if decline <= 0:
         return False
+    # …and never into draws the library cannot cover: a draw from an empty
+    # library loses at the next state-based check (CR 704.5b), so a Petals of
+    # Insight cast over an empty library declined into three draws and lost
+    # where taking the offer bottoms nothing and returns the card (CHK W2G2).
+    caster = getattr(entry.get("_context"), "caster", None)
+    draws = _branch_hand_yield(
+        [step for step in declined if getattr(step, "kind", None) == "draw_controller_cards"]
+    )
+    if caster is not None and draws > len(getattr(caster, "library", ()) or ()):
+        return False
     return decline > _branch_hand_yield(entry.get("_on_accept"))
 
 

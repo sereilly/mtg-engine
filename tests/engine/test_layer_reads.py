@@ -560,7 +560,7 @@ _PRINTED_MANA_VALUE = re.compile(r"\.card\.cmc\b")
 PRINTED_MANA_VALUE_BASELINE: dict[str, int] = {
     "ai_cast_gates.py": 1,
     "ai_foreign_activations.py": 2,
-    "ai_scoring.py": 1,
+    # ai_scoring.py: 0 since CHK W2G2 (`_permanent_value` reads effective_card).
 }
 
 

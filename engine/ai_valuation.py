@@ -1418,7 +1418,8 @@ def _payload_names(value, key: str) -> bool:
     return isinstance(payload, dict) and _payload_names(payload, key)
 
 
-def _what_an_offer_buys(card: CardDefinition, key: str) -> str:
+def _what_an_offer_buys(card: CardDefinition, key: str, price=None) -> str:
+    from .ai_sacrifice_victims import counts_its_sacrifices
     from .cast_costs import buyback_paid, kicked
     from .entwine import entwine_offered
 
@@ -1431,6 +1432,16 @@ def _what_an_offer_buys(card: CardDefinition, key: str) -> str:
         return OFFER_KICKS
     program = compile_card_oracle(card)
     if _payload_names(tuple(program.instructions), key):
+        return OFFER_ADDS
+    if getattr(price, "sacrifice_any_number", False) and counts_its_sacrifices(
+        tuple(program.instructions),
+    ):
+        # "As an additional cost to cast this spell, you may sacrifice any
+        # number of Spirits. … For each Spirit sacrificed this way, that
+        # creature gets an additional +3/+0" (Devouring Rage, Devouring
+        # Greed): the effect counts what the offer ate, so paying it is a
+        # larger spell, never a different one — and "any number" is zero
+        # too, so the offer taken with nothing named is the offer declined.
         return OFFER_ADDS
     return OFFER_ALTERS
 
@@ -1458,7 +1469,7 @@ def cast_offers(card: CardDefinition) -> tuple[CastOffer, ...]:
         if cost.optional_key is not None:
             offers.append(CastOffer(
                 key=cost.optional_key,
-                buys=_what_an_offer_buys(card, cost.optional_key),
+                buys=_what_an_offer_buys(card, cost.optional_key, cost),
                 price=cost,
                 from_zone=cost.from_zone,
             ))

@@ -585,10 +585,26 @@ _OWN_DAMAGE_FOR_LIFE = (
     "its side is the opponent's (it stops what its target deals); the life "
     "from its own walled attacker's prevented damage is a use that side does not weigh"
 )
+#: Candles' Glow (CHK), "Prevent the next 3 damage that would be dealt to any
+#: target this turn. You gain life equal to the damage prevented this way.":
+#: a shield, so its side is the caster's own (``ai_target_sides``). On the
+#: wall board its own Bear's attack is the only damage there is, and a shield
+#: on the opposing 0/4 Wall it hits turns those two points into two life
+#: (1.0) — a use the shield's side does not weigh, Awe Strike's from the
+#: other end. Pinned at the CHK promotion rehearsal (W2G2).
+_SHIELD_ACROSS_FOR_LIFE = (
+    "a shield's side is the caster's own; on the opposing Wall its own attacker "
+    "damages, the prevented damage is life"
+)
 HELD: dict = {
     ("Awe Strike", None, "wall"): _OWN_DAMAGE_FOR_LIFE,
     ("About Face", None, "wall"): _SWITCH,
     ("Transmutation", None, "wall"): _SWITCH,
+    # Strange Inversion (CHK): "Switch target creature's power and toughness
+    # until end of turn" — About Face's shape (W2G2, the CHK promotion
+    # rehearsal's full census).
+    ("Strange Inversion", None, "wall"): _SWITCH,
+    ("Candles' Glow", None, "wall"): _SHIELD_ACROSS_FOR_LIFE,
     ("Afflict", None, "open"): _OWN_ONLY,
     ("Afflict", None, "lethal"): _OWN_ONLY,
     ("Ice", None, "open"): _OWN_ONLY,
@@ -614,18 +630,51 @@ LOSSES: dict = {}
 #: one cast of it — one damage to its own caster, one life back — leaves
 #: nothing; the fight has nothing to do with the X.
 _SPEND_X = "an X spent only in black and/or red is sized short of what the pool pays"
+#: Otherworldly Journey (CHK), "Exile target creature. At the beginning of
+#: the next end step, return that card to the battlefield under its owner's
+#: control with a +1/+1 counter on it.": aimed across the table, as an exile
+#: is (``ai_target_sides.spell_target_side``), the opposing creature misses
+#: the fight and comes back a size larger (-0.5); on the caster's own Bear
+#: the counter it comes back with is the caster's, and the attack it misses
+#: is a little less (-0.375). Both inside ``ai_scoring.HARM_FLOOR``, and the
+#: side reader does not weigh whose the returning counter is. Pinned at the
+#: CHK promotion rehearsal's full census (W2G2).
+#: Debt of Loyalty, "Regenerate target creature. You gain control of that
+#: creature if it regenerates this way.": aimed across the table, since the
+#: steal and not the regeneration decides the side (``UNPINNED``, kg3). Once
+#: the attack policy read a fight as the blocks do (CHK W2G2,
+#: ``ai_declarations._attack_block_score``), a shield on the caster's own Bear
+#: is an attack the Rival will not block (2.0) — a use the steal's side does
+#: not weigh; at the Rival, with nothing coming to destroy it, it is nothing.
+_SHIELD_FOR_AN_ATTACK = (
+    "a regeneration whose steal decides its side; on the caster's own attacker "
+    "the shield is an attack the blocker will not take"
+)
+_RETURNS_LARGER = (
+    "an exile's side is the opponent's; the creature comes back with a +1/+1 "
+    "counter, a hair dearer than the caster's own missed attack"
+)
 SMALLER: dict = {
     **{
         ("Soul Burn", None, board): _SPEND_X
         for board in ("after", "bare", "open", "rival", "sick", "wall")
     },
+    ("Otherworldly Journey", None, "rival"): _RETURNS_LARGER,
+    ("Otherworldly Journey", None, "wall"): _RETURNS_LARGER,
+    ("Debt of Loyalty", None, "rival"): _SHIELD_FOR_AN_ATTACK,
 }
 PRICED: dict = {}
 
 SWEPT = ALWAYS | {
     key[0] for pins in (HELD, IDLE, LOSSES, SMALLER, PRICED) for key in pins
 }
-assert SWEPT <= set(POOL), sorted(SWEPT - set(POOL))
+#: A pin may name a card of a **measured** set (``modes._MODAL_POOL`` reads
+#: both manifest roles), so its rows are written at the set's promotion
+#: rehearsal and read the same on either side of the promotion; outside it
+#: the card is in no population and its pins are simply not reached.
+assert SWEPT <= set(POOL) | set(modes._MODAL_POOL), sorted(
+    SWEPT - set(POOL) - set(modes._MODAL_POOL)
+)
 
 
 # -- the tests ------------------------------------------------------------------
