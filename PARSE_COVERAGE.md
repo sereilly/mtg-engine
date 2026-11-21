@@ -12,6 +12,58 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **702**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**18 unclaimed sentence(s) across 18 supported card(s).**
+
+- **Blessed Breath**
+  - `splice onto arcane {w}`
+- **Consuming Vortex**
+  - `splice onto arcane {3}{u}`
+- **Dampen Thought**
+  - `splice onto arcane {1}{u}`
+- **Desperate Ritual**
+  - `splice onto arcane {1}{r}`
+- **Glacial Ray**
+  - `splice onto arcane {1}{r}`
+- **Hideous Laughter**
+  - `splice onto arcane {3}{b}{b}`
+- **Kodama's Might**
+  - `splice onto arcane {g}`
+- **Lifted by Clouds**
+  - `splice onto arcane {1}{u}`
+- **Long-Forgotten Gohei**
+  - `arcane spells you cast cost {1} less to cast`
+- **Night Dealings**
+  - `whenever a source you control deals damage to another player, put that many theft counters on this enchantment`
+- **Orochi Hatchery**
+  - `{5}, {t}: create a 1/1 green snake creature token for each charge counter on this artifact`
+- **Psychic Puppetry**
+  - `splice onto arcane {u}`
+- **Sift Through Sands**
+  - `if you've cast a spell named peer through depths and a spell named reach through mists this turn, you may search your library for a card named the unspeakable, put it onto the battlefield, then shuffle`
+- **Soulless Revival**
+  - `splice onto arcane {1}{b}`
+- **Strange Inversion**
+  - `splice onto arcane {1}{r}`
+- **Swirl the Mists**
+  - `all instances of color words in the text of spells and permanents are changed to the chosen color word`
+- **Through the Breach**
+  - `splice onto arcane {2}{r}{r}`
+- **Wear Away**
+  - `splice onto arcane {3}{g}`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
