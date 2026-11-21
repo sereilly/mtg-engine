@@ -62,6 +62,8 @@ from engine.ai_abilities import choose_activation_action
 from engine.aura_attachment import attach_aura
 from engine.mixins.stack.cast_target_validation import aura_enchant_noun
 from engine.copies import become_copy
+from engine.faces import whole_card
+from engine.flip_cards import flip_permanent, is_flipped_face
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.ai import test_ai_mode_chooser_census as modes
@@ -170,7 +172,19 @@ def board(card, placement: str) -> "tuple[Game, Permanent] | None":
         subject = put(card)
     elif placement == "copied":
         subject = put(BLANK)
-        become_copy(subject, Permanent(card=card))
+        if is_flipped_face(card):
+            # A flip card's bottom half (CR 710): a copy takes the copiable
+            # values of the card, "as modified by the copy's status" (CR
+            # 707.3), and never the original's flipped status (CR 707.2) — so
+            # a plain copy of a flipped Dokai, Weaver of Life is a Budoka
+            # Gardener (``copies.become_copy`` copies the unflipped card). The
+            # copy that has the bottom half's abilities is a copy of the flip
+            # card that is itself flipped: CR 707.3's Tomoya becoming
+            # Stabwhisker, CR 110.5c's Dimir Doppelganger.
+            become_copy(subject, Permanent(card=whole_card(card)))
+            flip_permanent(game, subject)
+        else:
+            become_copy(subject, Permanent(card=card))
     else:
         # What it may be attached to: an "enchant land" Aura goes on a land.
         noun = aura_enchant_noun(card) or "creature"
