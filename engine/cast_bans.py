@@ -435,10 +435,21 @@ def _a_nontoken_permanent_is_named(game: "Game", wanted: str) -> bool:
 #: acting is the active player. No exception for mana abilities: the sentence
 #: names none, and CR 605.1a's exception is a thing *other* cards print
 #: (Faith's Fetters) rather than a rule about restrictions in general.
+#:
+#: "Players can cast spells only during their own turns." (Dosan the Falling
+#: Leaf.) The casting half alone: the sentence names no ability, so only the
+#: cast gate reads it (its ruling, 2004-12-01: "Dosan's ability only stops
+#: players from casting spells. It doesn't stop activated or triggered
+#: abilities") — which actions a line binds is the reader's answer, and each
+#: gate asks for its own.
 _GLOBAL_PLAY_TIMING = re.compile(
-    r"^players can cast spells and activate abilities only during their own "
-    r"turns$"
+    r"^players can cast spells(?P<activate> and activate abilities)? only "
+    r"during their own turns$"
 )
+
+#: The two actions :func:`global_play_timing` is asked about.
+CAST = "cast"
+ACTIVATE = "activate"
 
 #: The claim name the support gate and ``engine/grammar/registries.py`` use for
 #: the row above. Its own, not ``"cast_restrictions"``: that claim says *when
@@ -507,8 +518,10 @@ def combat_play_ban(game: "Game") -> tuple[str, str] | None:
 
 
 @lru_cache(maxsize=None)
-def global_play_timing_line(line: str) -> bool:
-    """Whether *line* is the board-wide own-turn-only restriction.
+def global_play_timing_line(line: str) -> frozenset[str] | None:
+    """The actions *line* restricts to their own turns, when it is the
+    board-wide own-turn-only restriction, else None: :data:`CAST` and
+    :data:`ACTIVATE` for City of Solitude, :data:`CAST` alone for Dosan.
 
     One reader, three callers, exactly as :func:`global_cast_ban_line` has:
     ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
@@ -516,11 +529,17 @@ def global_play_timing_line(line: str) -> bool:
     restriction that is claimed and not enforced is an enchantment that reports
     supported while every player keeps playing on every turn.
     """
-    return _GLOBAL_PLAY_TIMING.match(line.strip().lower().rstrip(".")) is not None
+    match = _GLOBAL_PLAY_TIMING.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    return frozenset({CAST, ACTIVATE}) if match.group("activate") else frozenset({CAST})
 
 
-def global_play_timing(game: "Game", actor_index: int) -> str | None:
-    """The name of a permanent forbidding *actor_index* from acting now, or None.
+def global_play_timing(
+    game: "Game", actor_index: int, action: str = CAST
+) -> str | None:
+    """The name of a permanent forbidding *actor_index* from *action* now
+    (:data:`CAST` or :data:`ACTIVATE`), or None.
 
     Every battlefield and no seat comparison against the permanent's own
     controller: the sentence names nobody, so it binds its controller too — on
@@ -535,7 +554,7 @@ def global_play_timing(game: "Game", actor_index: int) -> str | None:
         return None
     for _seat, permanent in game.permanents_with_controller():
         for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
-            if global_play_timing_line(raw_line):
+            if action in (global_play_timing_line(raw_line) or ()):
                 return permanent.card.name
     return None
 

@@ -125,6 +125,47 @@ def test_w1g8_shisato_sacrifices_a_snake_at_its_controllers_upkeep(set_pool):
     assert not game.is_on_battlefield(hunter)
     assert shisato in game.players[0].graveyard
 
+
+# --- Dosan the Falling Leaf ---------------------------------------------------
+# "Players can cast spells only during their own turns." CR 601.3a on every
+# battlefield's seats alike (its controller too), casting alone: the ruling
+# (2004-12-01) — "It doesn't stop activated or triggered abilities."
+
+
+def test_w1g8_dosan_stops_casting_on_another_players_turn(set_pool):
+    from engine.cast_prohibitions import cast_prohibition
+
+    dosan = set_pool("CHK")["Dosan the Falling Leaf"]
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    game, _, _ = _w1g8_table([], [dosan], hand=[bolt], opponent_hand=[bolt])
+    # Seat 0's own turn: its instant is cast.
+    assert cast_prohibition(game, 0, bolt) is None
+    # On seat 0's turn the Dosan's own controller is bound as well.
+    refused = game.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
+    assert not refused.supported
+    assert "another player's turn" in refused.details
+    assert game.players[0].life == 20
+    assert [card.name for card in game.players[1].hand] == ["Lightning Bolt"]
+
+    game.active_player_index = 1
+    refused = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert not refused.supported
+    assert [card.name for card in game.players[0].hand] == ["Lightning Bolt"]
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g8_settle(game)
+    assert game.players[0].life == 17
+
+
+def test_w1g8_dosan_leaves_activated_abilities_alone(set_pool):
+    dosan = set_pool("CHK")["Dosan the Falling Leaf"]
+    sorcerer = set_pool("LEA")["Prodigal Sorcerer"]
+    game, _, _ = _w1g8_table([sorcerer], [dosan])
+    game.active_player_index = 1
+    used = game.activate_permanent_ability(0, "Prodigal Sorcerer", target_player_index=1)
+    assert used.supported, used.details
+    _w1g8_settle(game)
+    assert game.players[1].life == 19
+
 # ==== end w1g8 ======================================================
 
 

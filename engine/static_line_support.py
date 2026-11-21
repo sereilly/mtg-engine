@@ -539,9 +539,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # whole static half is this sentence reported "text too complex" for the one
     # line the engine could enforce end to end. Asked of the reader that
     # enforces it, so the claim cannot outlive the ban.
-    from .cast_bans import chosen_name_ban_line, own_cast_ban_line
+    from .cast_bans import (chosen_name_ban_line, global_play_timing_line,
+                            own_cast_ban_line)
 
     if own_cast_ban_line(normalized) is not None:
+        return True
+    # "Players can cast spells only during their own turns." (Dosan the
+    # Falling Leaf.) City of Solitude's own-turn restriction, casting half
+    # alone, enforced off the board by the cast gate (`cast_prohibitions`'s
+    # `global_play_timing` row) through the reader asked here.
+    if global_play_timing_line(normalized) is not None:
         return True
     # "Spells with the chosen name can't be cast." (Meddling Mage.) The same
     # CR 601.3 prohibition keyed on a name the permanent recorded as it entered,

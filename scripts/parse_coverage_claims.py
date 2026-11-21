@@ -416,9 +416,10 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # printed sentence read by `cast_bans.global_play_timing` from both
     # `mixins/stack/casting.py` and `mixins/stack/activation_checks.py`, so it gets one
     # channel asking that one reader: a claim split over two would be free to
-    # survive the removal of either gate.
+    # survive the removal of either gate. Dosan's casting-only spelling is
+    # the same reader's, binding the cast gate alone.
     ("cast_bans.py (board-wide own-turn window)",
-     lambda s: global_play_timing_line(s)),
+     lambda s: global_play_timing_line(s) is not None),
     # The same two gates over a **phase** instead of a turn — "During combat,
     # players can't cast instant spells or activate abilities that aren't mana
     # abilities." (Hand to Hand.) One channel for the same reason the row above
