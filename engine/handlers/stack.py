@@ -106,6 +106,28 @@ def exile_target_spell(game: Game, instruction: OracleInstruction, context: Orac
         # that fires every upkeep about a card nobody exiled.
         game.log.append(f"{context.card.name}: that spell is no longer on the stack")
         return True, "resolved"
+    # "Exile target **instant or sorcery** spell **that targets you**." (Shell
+    # of the Last Kappa.) The printed narrowings, asked of the chosen spell
+    # here as the counter's handler asks its own, through the same readers —
+    # the picker and CR 608.2b ask them too, and a handler that trusted them
+    # would exile whatever a caller that skipped the gate handed it.
+    card_types = instruction.payload.get("card_types")
+    if card_types and not _spell_is_one_of(
+        spell_text_card(target), card_types, game=game, seat=target.caster_index,
+    ):
+        game.log.append(
+            f"{context.card.name}: {target.card.name} is not "
+            f"{' or '.join(card_types)}, cannot exile it"
+        )
+        return True, "resolved"
+    if instruction.payload.get("targets_you") and not spell_targets_seat(
+        game, target, game.seat_index(context.caster),
+    ):
+        game.log.append(
+            f"{context.card.name}: {target.card.name} does not target "
+            f"{context.caster.name}, cannot exile it"
+        )
+        return True, "resolved"
     for index, item in enumerate(game.stack):
         # By identity: ``StackItem`` compares by value, so two copies of one
         # spell aimed at one player are equal and ``list.remove`` would take the
