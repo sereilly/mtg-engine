@@ -476,6 +476,7 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_turned_face_up",
      r"whenever (?P<turned_subject>(?:a|an|another) [^,]+?) is turned face up"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
+    ("one_or_more_creatures_block", r"whenever one or more creatures block"),
     ("one_or_more_deal_combat_damage",
      r"whenever one or more (?P<damagers_subjects>.+?) deal combat damage to a player"),
     ("counters_put_on_creature",

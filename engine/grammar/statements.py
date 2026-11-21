@@ -58,6 +58,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders,
                       _parse_sacrifice_expansion_permanents,
+                      parse_passive_each_sacrifice,
                       parse_create_token_with_stated_pt,
                       _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
                       _parse_shuffle_hand_into_library, _parse_shuffle_library,
@@ -345,6 +346,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     expansion_sacrifice = _parse_sacrifice_expansion_permanents(stream)
     if expansion_sacrifice is not None:
         return expansion_sacrifice
+    # "Each blocking creature is sacrificed by its controller." (Tide of
+    # War.) The same passive verb over an ordinary noun phrase, read here for
+    # the same reason as the expansion's.
+    passive_sacrifice = parse_passive_each_sacrifice(stream)
+    if passive_sacrifice is not None:
+        return passive_sacrifice
     # "Shuffle your graveyard into your library." (Feldon's Cane.) Read here
     # rather than as a verb in the subject-verb reader: the sentence has no
     # object noun phrase at all — it names two zones — so there is nothing for

@@ -361,6 +361,41 @@ def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement 
     return ast.SacrificeExpansionPermanents(set_code)
 
 
+def parse_passive_each_sacrifice(stream: TokenStream) -> ast.Statement | None:
+    """``Each blocking creature is sacrificed by its controller.`` (Tide of
+    War, both halves: "each blocking creature", "each blocked creature".)
+
+    The passive spelling of "each player sacrifices all <noun> they control":
+    every permanent the noun phrase names, each sacrificed by the player who
+    controls it (CR 701.21a). So it is that sentence's node —
+    :class:`ast.Sacrifice` over every seat with the noun narrowed to the
+    sacrificing seat's own permanents (``controller: that_player``) — and
+    lowers through the one sacrifice lowering, rather than a node of its own.
+
+    A noun that already names a controller ("each creature **you control**")
+    refuses: the passive's "its controller" would then be a second, possibly
+    different, seat. Golgothian Sylex's expansion phrase is read first by its
+    own production.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("each"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("is", "sacrificed", "by", "its", "controller"):
+        stream.reset(mark)
+        return None
+    if filt.controller is not None:
+        raise stream.error("the passive sacrifice's noun names no controller")
+    return ast.Sacrifice(
+        ast.PlayerRef("each_player"),
+        ast.TargetSpec("all", dataclasses.replace(filt, controller="that_player")),
+    )
+
+
 def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     """``Destroy this artifact at the beginning of the next end step.`` /
     ``Return this artifact to its owner's hand at the beginning of the next end
