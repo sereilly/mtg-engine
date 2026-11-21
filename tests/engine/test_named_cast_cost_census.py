@@ -38,14 +38,17 @@ from tests.helpers import _nosick
 
 #: What the caster holds. Wide on purpose and no wider: every printed cost
 #: phrase in the pool ("a creature", "a green creature", "a Goblin", "a blue
-#: permanent", "an artifact", "a land", "X Swamps", "five lands") finds one
-#: more payer than it takes — so a list that is too long can be named — and a
-#: near miss that cannot pay it.
+#: permanent", "an artifact", "a land", "X Swamps", "five lands", "any number
+#: of Spirits") finds one more payer than it takes — so a list that is too
+#: long can be named — and a near miss that cannot pay it. The three Spirits
+#: are Devouring Rage's and Devouring Greed's (CHK): an "any number of" set is
+#: probed at two, so a larger set needs a third.
 _BOARD = (
     "Forest", "Forest", "Island", "Swamp", "Swamp", "Swamp", "Mountain", "Plains",
     "Grizzly Bears", "Hill Giant", "Llanowar Elves",
     "Mons's Goblin Raiders", "Mons's Goblin Raiders",
     "Merfolk of the Pearl Trident", "Merfolk of the Pearl Trident",
+    "Lantern Kami", "Lantern Kami", "Kami of Ancient Law",
     "Sol Ring", "Clockwork Beast", "Crusade",
 )
 
@@ -54,7 +57,7 @@ _BOARD = (
 #: spell needs as its second target.
 _FAR_BOARD = (
     "Forest", "Swamp", "Grizzly Bears", "Mons's Goblin Raiders",
-    "Merfolk of the Pearl Trident", "Sol Ring",
+    "Merfolk of the Pearl Trident", "Lantern Kami", "Sol Ring",
 )
 
 #: The verbs a chosen-permanent additional cost prints, with the field each
