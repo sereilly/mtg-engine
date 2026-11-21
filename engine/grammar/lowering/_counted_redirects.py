@@ -27,8 +27,8 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (_REST_OF_TURN, _amount_payload, _describe_targets,
-                      _filter_payload, _is_source, _is_you,
-                      _names_several_targets)
+                      _filter_payload, _is_enchanted, _is_source, _is_you,
+                      _names_several_targets, _restrictions_beyond)
 
 
 def _lower_next_damage_redirect(
@@ -88,6 +88,32 @@ def _lower_next_damage_redirect(
         # ``new_recipient`` has carried a player since it was written — so
         # the same handler, told which end takes it (``taker``).
         return _with_controller_taking(_lower_next_damage_redirect_to_taker(node))
+    if _is_enchanted(node.to):
+        # "{1}{W}: The next 1 damage that would be dealt to **enchanted
+        # creature** this turn is dealt to any target instead." (Ward of
+        # Piety.) Zhalfirin Crusader's sentence printed on an Aura: the
+        # protected end is the permanent the ability's source is attached to
+        # rather than the source itself (CR 303.4e: the Aura's controller
+        # activates it, whoever controls the host), so it is the same record
+        # armed on the host — ``protects: attached``, read through
+        # ``attached_host`` at resolution. Read ahead of the two-target branch
+        # below, which would take the host for a second announced target.
+        leftover = _restrictions_beyond(
+            node.to.filter, frozenset({"card_types", "is_enchanted"})
+        )
+        if leftover:
+            raise LoweringError(
+                "a redirect off the enchanted permanent cannot narrow by: "
+                + ", ".join(leftover),
+                node=node,
+            )
+        (instruction,) = _lower_next_damage_redirect_from_source(node)
+        return (
+            OracleInstruction(
+                instruction.kind, instruction.value,
+                {**instruction.payload, "protects": "attached"},
+            ),
+        )
     if not _is_source(node.new_recipient) and not _is_source(node.to):
         # "The next X damage that would be dealt to **target creature,
         # planeswalker, or player** this turn is dealt to **another target

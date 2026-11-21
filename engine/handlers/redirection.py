@@ -30,8 +30,8 @@ from ..damage_redirects import DamageRedirect, SharedNextTime, add_redirect
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ._amounts import resolve_amount
 from ._filters import permanent_matches_filter
-from ._targets import (divided_target_permanent, resolve_target_permanent,
-                       resolve_target_slots)
+from ._targets import (attached_host, divided_target_permanent,
+                       resolve_target_permanent, resolve_target_slots)
 from .prevention import chosen_shield_source
 from .registry import effect_handler
 
@@ -814,6 +814,17 @@ def redirect_next_damage_from_source_until_eot(
 
     card_name = getattr(context.card, "name", "")
     protected = context.source_permanent
+    if instruction.payload.get("protects") == "attached":
+        # "…dealt to **enchanted creature** this turn is dealt to any target
+        # instead." (Ward of Piety.) The record hangs off the permanent the
+        # Aura is attached to — read through ``attached_host``, the one
+        # accessor for that relation (CR 608.2h: an Aura gone in response is
+        # read as it last was) — and on nothing when it is attached to
+        # nothing.
+        protected = attached_host(game, context.source_permanent)
+        if protected is None:
+            game.log.append(f"{card_name}: nothing is enchanted to protect")
+            return True, "resolved"
     if protected is None or not game.is_on_battlefield(protected):
         game.log.append(f"{card_name}: its own source is gone")
         return True, "resolved"
