@@ -930,11 +930,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             from ..counter_conditions import counter_condition_holds
 
             if not counter_condition_holds(
-                str(only_if), game, target, game.players.index(context.caster)
+                str(only_if), game, target, game.players.index(context.caster),
+                context,
             ):
+                condition = str(only_if)
                 game.log.append(
                     f"{card.name}: {target.card.name} would not "
-                    f"{str(only_if).replace('it would ', '')}, cannot counter"
+                    f"{condition.replace('it would ', '')}, cannot counter"
+                    if condition.startswith("it would ") else
+                    f"{card.name}: {target.card.name} fails \"{condition}\", "
+                    "cannot counter"
                 )
                 return True, "resolved"
         # "counter target artifact spell **you control**" (Goblin Artisans),
@@ -1323,6 +1328,22 @@ def _redirect_countered_card(
         game._bin_spell_card(
             owner, countered.card, exile_instead=True,
             verb=f"was countered by {card.name} and exiled",
+        )
+        return
+    if destination == "library_chosen_end":
+        # "…on **your choice of the top or bottom** of its owner's library."
+        # (Hinder.) The counterspell's controller picks the end (its ruling,
+        # 2020-08-07: "Hinder's controller, not necessarily the controller of
+        # the countered spell"), through the prompt Ether Well's tuck asks —
+        # the move is the answer, so the card goes to one end once, never to
+        # one and then the other.
+        chooser = (
+            game.players.index(counterer) if counterer in game.players
+            else countered.owner_index
+        )
+        game.arm_library_end_choice(
+            chooser, None, countered.owner_index, None,
+            card=countered.card, card_name=card.name,
         )
         return
     if destination == "hand":

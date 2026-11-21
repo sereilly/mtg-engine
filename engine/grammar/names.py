@@ -97,6 +97,13 @@ def parse_card_name(stream: TokenStream) -> str:
     while not stream.exhausted:
         if stream.at_punct(".") or stream.at_word(*_NAME_STOPS):
             break
+        # "…cast a spell named Reach Through Mists **this turn**" (Sift
+        # Through Sands): the window behind a name in a cast record. The
+        # phrase, not the word — no card in the pool has "this" in its name
+        # (checked against every set file), and the two words together are a
+        # clause that can only end one.
+        if stream.at_word("this") and stream.peek_word(1) == "turn":
+            break
         if stream.at_punct(","):
             mark = stream.mark()
             stream.advance()

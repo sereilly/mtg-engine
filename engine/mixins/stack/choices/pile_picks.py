@@ -64,16 +64,44 @@ class PileChoicesMixin:
         fate = str(choice.data.get("fate", "graveyard"))
         other_fate = choice.data.get("other_fate")
         chooser = self.players[choice.player_index].name
+        # "Target opponent chooses **two** of those cards." (Gifts Ungiven.) A
+        # chain of one-card answers over the same pile, for the reason
+        # ``_resolve_look_top_pick`` chains its picks: the pile is still named
+        # by the positions this prompt showed, and nothing moves until the last
+        # answer — "the chosen cards" and "the rest" are one split of it.
+        chosen = [*(choice.data.get("_chosen") or ()), card]
+        remaining = int(choice.data.get("remaining", 1) or 1)
+        if remaining > 1:
+            self.discard_pending_choice(choice)
+            self.log.append(f"{chooser} chose {card.name} ({remaining - 1} more to choose)")
+            data = {
+                key: value for key, value in choice.data.items()
+                if key in (
+                    "card_name", "revealer_index", "cards", "fate",
+                    "from_zone", "other_fate", "_cards",
+                )
+            }
+            self.arm_pending_choice(
+                "opponent_picks_revealed", choice.player_index,
+                **data,
+                legal_indices=[
+                    slot for slot in (legal if legal is not None else range(len(cards)))
+                    if slot != index
+                ],
+                remaining=remaining - 1,
+                _chosen=chosen,
+            )
+            return True
         # "Exile that card and **put the other one into your hand**."
         # (Phyrexian Grimoire.) The pick and what it left behind are one answer,
         # so both halves move here — the pile is only nameable while this prompt
         # is holding it. Absent for every library printing, where CR 701.20b
-        # leaves the rest where they were.
+        # leaves the rest of what was revealed where it was.
         # One event: whatever the pile sends to the battlefield enters together
         # (CR 603.6a).
         with self.entering_together():
             for shown in cards:
-                if shown is card:
+                if any(shown is picked for picked in chosen):
                     target_zone = fate
                 elif other_fate:
                     target_zone = str(other_fate)

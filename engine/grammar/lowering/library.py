@@ -370,6 +370,19 @@ def _lower_look_at_library_top(
     # is chosen, so the rearrange is the whole effect and the other two offers
     # refuse.
     if node.player.kind == "you":
+        # "{1}: Look at the top card of your library." (the Deceivers.) The
+        # look with no offer at all: its controller is shown the cards and
+        # nothing moves. Its own kind for the reason ``reorder_own_library_top``
+        # is — the targeted look is registered as choosing a player — and not
+        # that kind with a flag, because a rearrangement handed to a card that
+        # only looks is a freedom the card does not give.
+        if not (node.may_reorder or node.may_shuffle or node.may_bottom):
+            return (
+                OracleInstruction(
+                    "look_at_own_library_top", "",
+                    {"amount": _amount_payload(node.count)},
+                ),
+            )
         if not node.may_reorder or node.may_shuffle or node.may_bottom:
             raise LoweringError(
                 "the own-library look only rearranges what it saw", node=node

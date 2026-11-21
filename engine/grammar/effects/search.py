@@ -205,6 +205,15 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # (Land Tax). A counted search, read here so the count and the destinations
     # are parsed together — they are the same fact, one entry per find, and a
     # count read without them is a search that finds three and places one.
+    #
+    # "…for **up to four cards with different names and reveal them. Target
+    # opponent chooses two of those cards.** …" (Gifts Ungiven.) Intuition's
+    # pile under a ceiling, tried first because the counted tail below raises
+    # on the clause after the noun; non-consuming on refusal.
+    if stream.at_word("up"):
+        gifts = _accept_search_reveal_opponent_chooses(stream, graveyard)
+        if gifts is not None:
+            return gifts
     if stream.accept_phrase("up", "to"):
         count = parse_amount(stream)
         if isinstance(count, ast.ThatMuch) or (
@@ -1072,8 +1081,8 @@ def _parse_counted_search(
 #: would be a different spell with nothing to notice the difference. A word
 #: outside them refuses the line rather than lowering onto a fate nothing
 #: carries out.
-_PICKED_SEARCH_FATES: dict[str, str] = {"hand": "hand"}
-_REST_SEARCH_FATES: dict[str, str] = {"graveyard": "graveyard"}
+_PICKED_SEARCH_FATES: dict[str, str] = {"hand": "hand", "graveyard": "graveyard"}
+_REST_SEARCH_FATES: dict[str, str] = {"graveyard": "graveyard", "hand": "hand"}
 
 
 def _accept_search_reveal_opponent_chooses(
@@ -1104,6 +1113,16 @@ def _accept_search_reveal_opponent_chooses(
     if graveyard:
         return None
     mark = stream.mark()
+    # "Search your library for **up to four cards with different names** and
+    # reveal them. Target opponent chooses **two of those cards**. Put **the
+    # chosen cards** into your graveyard and the rest into your hand." (Gifts
+    # Ungiven.) Intuition's four sentences with three words changed, each a
+    # parameter of the same procedure rather than a second one: a ceiling
+    # where Intuition prints a floor (CR 701.23d), a relation across the finds
+    # (no two share a name, CR 201.2), and a pick of two. Read here so the
+    # node carries all three; a printing that kept any one of Intuition's
+    # spellings beside another's keeps refusing on the word that differs.
+    up_to = stream.accept_phrase("up", "to")
     try:
         count = parse_amount(stream)
     except GrammarError:
@@ -1112,17 +1131,22 @@ def _accept_search_reveal_opponent_chooses(
     if not isinstance(count, ast.Fixed) or count.value < 2:
         stream.reset(mark)
         return None
-    try:
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    # A bare quantity and nothing else: CR 701.23c's "undefined quality" and
-    # CR 701.23b's "stated quality" are different searches from this one, and
-    # the floor below is only right for a search that names no quality at all.
-    if not filt.is_card or filt != ast.ObjectFilter(is_card=True):
-        stream.reset(mark)
-        return None
+    distinct_names = False
+    if stream.accept_phrase("cards", "with", "different", "names"):
+        distinct_names = True
+    else:
+        try:
+            filt = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        # A bare quantity and nothing else: CR 701.23c's "undefined quality"
+        # and CR 701.23b's "stated quality" are different searches from this
+        # one, and the floor below is only right for a search that names no
+        # quality at all.
+        if not filt.is_card or filt != ast.ObjectFilter(is_card=True):
+            stream.reset(mark)
+            return None
     if not stream.accept_phrase("and", "reveal", "them"):
         stream.reset(mark)
         return None
@@ -1130,13 +1154,34 @@ def _accept_search_reveal_opponent_chooses(
         stream.reset(mark)
         return None
     chooser = parse_player_ref(stream)
-    if chooser is None or not stream.accept_phrase("chooses", "one"):
+    if chooser is None or not stream.accept_word("chooses"):
         stream.reset(mark)
         return None
+    # "chooses **one**" (Intuition) or "chooses **two of those cards**"
+    # (Gifts Ungiven): how many of the found cards the chooser names. The
+    # singular names "that card" behind it and the plural "the chosen cards",
+    # and each is held to its own pronoun below.
+    if stream.accept_word("one"):
+        picks = 1
+    else:
+        try:
+            chosen = parse_amount(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if (
+            not isinstance(chosen, ast.Fixed) or chosen.value < 2
+            or chosen.value >= count.value
+            or not stream.accept_phrase("of", "those", "cards")
+        ):
+            stream.reset(mark)
+            return None
+        picks = chosen.value
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("put", "that", "card", "into", "your"):
+    named = ("that", "card") if picks == 1 else ("the", "chosen", "cards")
+    if not stream.accept_phrase("put", *named, "into", "your"):
         stream.reset(mark)
         return None
     fate = stream.peek_word()
@@ -1148,7 +1193,9 @@ def _accept_search_reveal_opponent_chooses(
         stream.reset(mark)
         return None
     rest = stream.peek_word()
-    if rest not in _REST_SEARCH_FATES:
+    # The two halves go to opposite zones — that is what the choice decides,
+    # and a printing sending both to one place would be a choice of nothing.
+    if rest not in _REST_SEARCH_FATES or rest == fate:
         stream.reset(mark)
         return None
     stream.advance()
@@ -1170,4 +1217,7 @@ def _accept_search_reveal_opponent_chooses(
         count, chooser,
         fate=_PICKED_SEARCH_FATES[fate],
         other_fate=_REST_SEARCH_FATES[rest],
+        up_to=up_to,
+        distinct_names=distinct_names,
+        pick_count=picks,
     )

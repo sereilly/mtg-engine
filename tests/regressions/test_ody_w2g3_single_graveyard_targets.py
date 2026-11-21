@@ -85,7 +85,13 @@ _PICKED_AT_RESOLUTION_BEFORE = {
 #: graveyard"), which the old derivation would have left to the resolution
 #: prompt exactly as it left the five — so the backwards census names it beside
 #: them, and the forward one holds it to the same announcement.
-_SINGLE_GRAVEYARD_SINCE = {("Rats' Feast", "cast")}
+#: Champions of Kamigawa's Rag Dealer ("{2}{B}, {T}: Exile up to three target
+#: cards from a single graveyard") joined at that set's ingest the same way,
+#: and was driven at its wave 1 (W1G7): the picker offers both piles with
+#: ``single_graveyard`` set, a split or a fourth slot is refused, the three
+#: read back off the stack, and a card exiled in response is not replaced
+#: (``tests/sets/test_chk_creatures_later_groups.py``).
+_SINGLE_GRAVEYARD_SINCE = {("Rats' Feast", "cast"), ("Rag Dealer", "activated 0")}
 
 #: A sweep that examined nothing looks exactly like one that found nothing.
 _LINES_FLOOR = 7_500

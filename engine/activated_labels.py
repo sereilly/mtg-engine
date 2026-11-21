@@ -567,6 +567,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # a different hidden zone.
     "graveyard_top_to_library": "activated_look",
     "look_at_target_library_top": "activated_look",
+    # "{1}: Look at the top card of your library." (the Deceivers): the same
+    # look over its controller's own pile.
+    "look_at_own_library_top": "activated_look",
     # Thelonite Druid's "Forests you control become 2/3 creatures until end of
     # turn. They're still lands", beside `animate_target_until_eot` and the two
     # type changes above: CR 205 is what a permanent *is*, which is the bucket

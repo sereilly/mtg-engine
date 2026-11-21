@@ -860,6 +860,7 @@ class OptionalPayChoicesMixin:
                                            offered_untap_changes_nothing)
         from ....ai_offer_answers import (chained_toll_declined, copy_offer_answer,
                                     offer_buys_own_drawback,
+                                    offer_declines_into_more_cards,
                                     offer_purchase_settled_against,
                                     returned_aura_lands_on_wrong_side)
 
@@ -966,6 +967,16 @@ class OptionalPayChoicesMixin:
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "
                 "(the count it makes would leave their cards behind)"
+            )
+        # …and a free offer whose "otherwise" is the purchase rather than a
+        # penalty: declining puts more cards in hand than taking it (Petals
+        # of Insight's draw three against the spell back in hand,
+        # `ai_offer_answers.offer_declines_into_more_cards`).
+        elif floating is not None and offer_declines_into_more_cards(entry):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(declining puts more cards in hand)"
             )
         # **A trade this policy can price on both sides is weighed, not
         # refused or taken by rule** (`ai_offer_answers.offer_trade_is_worth_taking`:

@@ -316,6 +316,15 @@ def test_w2g6_where_a_chosen_name_is_looked_for_is_read_off_the_next_sentence(_w
         # hand**." The chooser's own hand, Cursed Scroll's zone — so the name
         # a seat nobody asks takes is read off the cards it holds.
         "Liar's Pendulum": "hand",
+        # Champions of Kamigawa (W1G7): "Choose a nonland card name. Search
+        # target player's graveyard, hand, and library for all cards with that
+        # name and exile them." (Cranial Extraction) and "…Target player
+        # reveals their library. If that library contains exactly the chosen
+        # number of cards with the chosen name, …" (Mindblaze). The target's
+        # zones, no zone of the chooser's own — Predict's answer, held in the
+        # mill test's census as "the target's library".
+        "Cranial Extraction": None,
+        "Mindblaze": None,
     }
 
     invented = _mk_card(

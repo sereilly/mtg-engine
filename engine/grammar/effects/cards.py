@@ -508,6 +508,16 @@ def _parse_reveal_hand(
     random_from_hand = _parse_random_card_from_hand(stream, player)
     if random_from_hand is not None:
         return random_from_hand
+    # "Target player reveals **their library**." (Mindblaze.) The whole of
+    # the other hidden zone shown, nothing moved (CR 701.20a/b); read here
+    # where the verb is dispatched, and only where the clause ends with it —
+    # what the sentences behind it ask of the library is theirs to say.
+    library_mark = stream.mark()
+    if stream.accept_phrase("their", "library") and (
+        stream.exhausted or stream.at_punct(".")
+    ):
+        return ast.RevealLibrary(player)
+    stream.reset(library_mark)
     if not (
         (stream.accept_word("their") or stream.accept_word("your"))
         and stream.accept_word("hand")

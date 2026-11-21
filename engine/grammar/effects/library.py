@@ -69,12 +69,15 @@ def _parse_look_pick_tail(
 ) -> ast.Statement:
     """"You may reveal a <filter> card from among them and put it into your
     hand. Put the rest on the bottom of your library in a random order."
+    (Garruk's Harbinger; "…in any order", Commune with Nature and Peer Through
+    Depths.)
 
     Both sentences, because they describe one looked-at pile: "them" is what the
     look turned up and "the rest" is exactly what is left after the pick. Every
     word of the second is required — "in a random order" is a stated shuffle and
-    "in any order" leaves the cards as they lay, and a card that said one while
-    the engine did the other would differ only in a place no test looks.
+    "in any order" is the looker's to arrange (CR 401.4), and a card that said
+    one while the engine did the other would differ only in a place no test
+    looks.
     """
     if not already_split and not stream.accept_punct("."):
         raise stream.error("expected the reveal sentence after the look")
@@ -92,11 +95,23 @@ def _parse_look_pick_tail(
         raise stream.error("expected the sorting sentence after the reveal")
     for word in (
         "put", "the", "rest", "on", "the", "bottom", "of", "your", "library",
-        "in", "a", "random", "order",
+        "in",
     ):
         stream.expect_word(word)
+    # "…in **any** order" (Commune with Nature, Peer Through Depths) beside
+    # Garruk's Harbinger's "in **a random** order": both spellings read, each
+    # to the order it states — the first is the looker's freedom (CR 401.4,
+    # asked of an interactive seat by the bottom-order offer), the second a
+    # shuffle nobody chooses.
+    if stream.accept_word("any"):
+        rest_order = "any"
+    else:
+        for word in ("a", "random"):
+            stream.expect_word(word)
+        rest_order = "random"
+    stream.expect_word("order")
     return ast.LookTopPickToHand(
-        count, filters=filters, optional=True, rest_order="random",
+        count, filters=filters, optional=True, rest_order=rest_order,
     )
 
 
@@ -188,6 +203,38 @@ def _parse_look_top_offer_pick_tail(
             count, pick_destination="library_bottom",
             rest_destination="library_top",
         ),
+        looked_at_top=count,
+    )
+
+
+def _accept_look_top_offer_bottom(
+    stream: TokenStream, count: "ast.Amount"
+) -> "ast.May | None":
+    """``You may put those cards on the bottom of your library in any
+    order.`` (Petals of Insight.)
+
+    The offer over the whole looked-at pile, read where the look is for
+    :func:`_parse_look_top_offer_pick_tail`'s reason — "those cards" are
+    exactly what the first sentence turned up — and returned as the plain
+    :class:`ast.May` it is, with the look carried as ``looked_at_top`` so the
+    seat decides having seen the cards. The branches behind it ("If you do,
+    …" / "Otherwise, …") are not read here: they are the sequence's own
+    riders on an offer (``control_flow._attach_if_you_do``,
+    ``_attach_otherwise``), and any statement may stand in them.
+
+    Declines without consuming, so every other tail opening on "you" keeps
+    its own reading and refusal site.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "you", "may", "put", "those", "cards", "on", "the", "bottom", "of",
+        "your", "library", "in", "any", "order",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.May(
+        actor=ast.PlayerRef("you"),
+        action=ast.PutRevealedCardsOnBottom(looked_at=count),
         looked_at_top=count,
     )
 
@@ -619,6 +666,16 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
         cycled = parse_look_top_cycle_tail(stream, count)
         if cycled is not None:
             return cycled
+        # "{1}: **Look at the top card of your library.**" (the Champions of
+        # Kamigawa Deceivers.) The look and nothing behind it: the whole
+        # effect is what its controller learns. Read only where the printed
+        # line ends — a look with a sentence behind it is one of the tails
+        # below, whose next sentence binds the pile this one turned up, and a
+        # bare reading there would split that sentence off to name no cards.
+        if (stream.exhausted or (
+            stream.at_punct(".") and stream.peek(1) is None
+        )):
+            return ast.LookAtLibraryTop(count, owner)
         # The sentence break, printed either way. See the Truth and Diabolic
         # Vision start a new sentence; Browse runs the whole ability on as one
         # ("…of your library, put one of them into your hand, and exile the
@@ -645,6 +702,9 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
             offered = _parse_look_top_offer_pick_tail(stream, count)
             if offered is not None:
                 return offered
+            bottomed = _accept_look_top_offer_bottom(stream, count)
+            if bottomed is not None:
+                return bottomed
             return _parse_look_pick_tail(stream, count, already_split=True)
         # "Exile four of them at random, **then** put the rest on top of your
         # library in any order." (Orcish Librarian.) Nothing is picked and

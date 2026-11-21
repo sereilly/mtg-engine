@@ -125,13 +125,21 @@ def _accept_seat_cast_record(stream: TokenStream) -> "ast.Condition | None":
     """
     mark = stream.mark()
     referent = None
-    for words, name in _CAST_RECORD_SEATS.items():
+    # "If **you've** cast a spell named Peer Through Depths …" (Sift Through
+    # Sands.) The perfect is the same record over the same window as the
+    # simple past ("this turn" bounds both), so it is a spelling of the seat
+    # "you" with the verb behind it — never negated, because "you've didn't"
+    # is no English.
+    perfect = stream.accept_word("you've")
+    if perfect:
+        referent = "you"
+    for words, name in () if perfect else _CAST_RECORD_SEATS.items():
         if stream.accept_phrase(*words):
             referent = name
             break
     if referent is None:
         return None
-    negated = bool(stream.accept_word("didn't"))
+    negated = False if perfect else bool(stream.accept_word("didn't"))
     if not negated and not stream.accept_word("cast"):
         stream.reset(mark)
         return None
@@ -147,11 +155,31 @@ def _accept_seat_cast_record(stream: TokenStream) -> "ast.Condition | None":
     # creature card" is not a cast, and reading it as one would answer a
     # question the sentence does not ask.
     spell = _accept_cast_spell_phrase(stream)
-    if spell is None or not stream.accept_phrase("this", "turn"):
+    # "…cast a spell named Peer Through Depths **and a spell named Reach
+    # Through Mists** this turn" (Sift Through Sands): two casts the one
+    # window bounds, each its own question of the record — so every one must
+    # hold (``EveryOf``), and "a spell named X and a spell named Y" is never
+    # one spell bearing both names. Only the positive sign: "didn't cast X and
+    # Y" is ambiguous between neither and not both.
+    spells = [spell] if spell is not None else []
+    while spells and not negated:
+        joined = stream.mark()
+        if not stream.accept_word("and"):
+            break
+        another = _accept_cast_spell_phrase(stream)
+        if another is None:
+            stream.reset(joined)
+            break
+        spells.append(another)
+    if not spells or not stream.accept_phrase("this", "turn"):
         # The seat is read and the record is not: some other sentence about the
         # same player, left whole for the branch that can read it.
         stream.reset(mark)
         return None
+    if len(spells) > 1:
+        return ast.EveryOf(tuple(
+            ast.SeatCastSpellThisTurn(referent, negated, each) for each in spells
+        ))
     return ast.SeatCastSpellThisTurn(referent, negated, spell)
 
 

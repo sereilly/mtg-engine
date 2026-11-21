@@ -29,6 +29,214 @@ log), not instruction kinds alone.
 # ==== w1g7 ==========================================================
 # w1g7's tests go between this line and the "end w1g7" line.
 
+from engine import Game as _W1G7Game
+from engine import PlayerState as _W1G7PlayerState
+from engine.models import Permanent as _W1G7Permanent
+from tests.helpers import settle as _w1g7_settle
+
+
+def _w1g7_table(set_pool, *, hand=(), library=None, opponent_library=None,
+                opponent_hand=(), mine=(), theirs=(), interactive=()):
+    """Two seats on seat 0's first main phase, costs off; libraries top
+    first. Names resolve in CHK first, then the older sets the tests use."""
+    pools = [set_pool(code) for code in ("CHK", "LEA", "MRD", "TMP")]
+
+    def named(name):
+        for pool in pools:
+            if name in pool:
+                return pool[name]
+        raise KeyError(name)
+
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(
+            "P0", hand=[named(n) for n in hand],
+            library=[named(n) for n in (library or ["Forest"] * 10)],
+        ),
+        _W1G7PlayerState(
+            "P1", hand=[named(n) for n in opponent_hand],
+            library=[named(n) for n in (opponent_library or ["Island"] * 10)],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _W1G7Permanent(card=named(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+    game.start_turn(0)
+    _w1g7_settle(game)
+    return game
+
+
+def _w1g7_names(cards):
+    return [card.name for card in cards]
+
+
+def test_w1g7_peer_through_depths_takes_an_instant_or_sorcery(set_pool):
+    game = _w1g7_table(
+        set_pool, hand=["Peer Through Depths"],
+        library=["Forest", "Grizzly Bears", "Lightning Bolt", "Wrath of God",
+                 "Craw Wurm", "Island"],
+        interactive={0},
+    )
+    assert game.cast_from_hand(0, "Peer Through Depths").supported
+    asked = _w1g7_settle(game, defaults=False)
+    assert asked.kind == "look_top_pick"
+    offered = game.live_look_top_candidates(asked)
+    assert [game.players[0].library[i].name for i in offered] == [
+        "Lightning Bolt", "Wrath of God",
+    ]
+    assert not game.confirm_look_top_pick(0, 1)          # a creature card
+    assert game.confirm_look_top_pick(0, 3)
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[0].hand) == ["Wrath of God"]
+    library = _w1g7_names(game.players[0].library)
+    assert library[0] == "Island"
+    assert sorted(library[1:]) == sorted(
+        ["Forest", "Grizzly Bears", "Lightning Bolt", "Craw Wurm"]
+    )
+
+
+def _w1g7_hinder_a_bolt(set_pool, interactive):
+    game = _w1g7_table(
+        set_pool, hand=["Hinder"], opponent_hand=["Lightning Bolt"],
+        opponent_library=["Island", "Swamp"], interactive=interactive,
+    )
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    assert game.cast_from_hand(0, "Hinder", target_stack_index=0).supported
+    return game
+
+
+def test_w1g7_hinder_puts_the_countered_card_on_the_end_its_caster_picks(set_pool):
+    """Its ruling (2020-08-07): Hinder's controller chooses the end."""
+    for to_bottom, expected in (
+        (False, ["Lightning Bolt", "Island", "Swamp"]),
+        (True, ["Island", "Swamp", "Lightning Bolt"]),
+    ):
+        game = _w1g7_hinder_a_bolt(set_pool, interactive={0, 1})
+        asked = _w1g7_settle(game, defaults=False)
+        assert asked.kind == "library_end_choice" and asked.player_index == 0
+        assert asked.data["moved_name"] == "Lightning Bolt"
+        _w1g7_settle(game, answers={
+            "library_end_choice":
+                lambda g, c: g.confirm_library_end_choice(c.player_index, to_bottom),
+        })
+        assert _w1g7_names(game.players[1].library) == expected
+        assert game.players[1].graveyard == []
+        assert game.players[0].life == 20          # the Bolt was countered
+        assert _w1g7_names(game.players[0].graveyard) == ["Hinder"]
+
+
+def _w1g7_sift_after(set_pool, casts):
+    game = _w1g7_table(
+        set_pool, hand=[*casts, "Sift Through Sands", "Lightning Bolt"],
+        library=["Forest", "Island", "The Unspeakable", "Swamp", "Mountain",
+                 "Plains", "Island", "Forest"],
+    )
+    for name in casts:
+        assert game.cast_from_hand(0, name).supported
+        _w1g7_settle(game)
+    assert game.cast_from_hand(0, "Sift Through Sands").supported
+    _w1g7_settle(game)
+    return game
+
+
+def test_w1g7_sift_through_sands_finds_the_unspeakable_after_both_spells(set_pool):
+    game = _w1g7_sift_after(set_pool, ["Peer Through Depths", "Reach Through Mists"])
+    assert [p.card.name for p in game.all_permanents()] == ["The Unspeakable"]
+    assert "The Unspeakable" not in _w1g7_names(game.players[0].library)
+
+
+def test_w1g7_sift_through_sands_needs_both_names_cast_this_turn(set_pool):
+    """Either spell alone answers one half of the record and not the other:
+    the draw and the discard happen, the search does not."""
+    for casts in ([], ["Peer Through Depths"], ["Reach Through Mists"]):
+        game = _w1g7_sift_after(set_pool, casts)
+        assert list(game.all_permanents()) == [], casts
+        assert "The Unspeakable" in _w1g7_names(game.players[0].library) + _w1g7_names(
+            game.players[0].hand
+        ) + _w1g7_names(game.players[0].graveyard), casts
+        assert any("drew 2 card(s)" in line for line in game.log)
+
+
+_W1G7_GIFTS_LIBRARY = [
+    "Lightning Bolt", "Lightning Bolt", "Grizzly Bears", "Craw Wurm",
+    "Dark Ritual", "Forest", "Island",
+]
+
+
+def _w1g7_gifts(set_pool, interactive):
+    game = _w1g7_table(
+        set_pool, hand=["Gifts Ungiven"], library=_W1G7_GIFTS_LIBRARY,
+        interactive=interactive,
+    )
+    assert game.cast_from_hand(0, "Gifts Ungiven", target_player_index=1).supported
+    return game
+
+
+def _w1g7_find(game, names):
+    library = _w1g7_names(game.players[0].library)
+    return game.resolve_pending_choice("search_library", 0, picks=[
+        {"zone": "library", "index": library.index(name)} for name in names
+    ])
+
+
+def test_w1g7_gifts_ungiven_the_opponent_splits_four_different_names(set_pool):
+    game = _w1g7_gifts(set_pool, interactive={0, 1})
+    asked = _w1g7_settle(game, defaults=False)
+    assert asked.kind == "search_library" and asked.data["up_to"]
+    # "with different names": two Lightning Bolts are refused, nothing moves.
+    library = _w1g7_names(game.players[0].library)
+    assert not game.resolve_pending_choice("search_library", 0, picks=[
+        {"zone": "library", "index": 0}, {"zone": "library", "index": 1},
+    ])
+    assert _w1g7_names(game.players[0].library) == library
+    assert _w1g7_find(game, ["Lightning Bolt", "Grizzly Bears", "Craw Wurm", "Dark Ritual"])
+    asked = _w1g7_settle(game, defaults=False)
+    assert asked.kind == "opponent_picks_revealed" and asked.player_index == 1
+    assert asked.data["cards"] == ["Lightning Bolt", "Grizzly Bears", "Craw Wurm", "Dark Ritual"]
+    assert game.confirm_opponent_picks_revealed(1, 0)
+    asked = _w1g7_settle(game, defaults=False)
+    # The second of two picks, the first one no longer on offer.
+    assert asked.kind == "opponent_picks_revealed" and asked.data["legal_indices"] == [1, 2, 3]
+    assert not game.confirm_opponent_picks_revealed(1, 0)
+    assert game.confirm_opponent_picks_revealed(1, 3)
+    _w1g7_settle(game)
+    player = game.players[0]
+    assert _w1g7_names(player.hand) == ["Grizzly Bears", "Craw Wurm"]
+    assert _w1g7_names(player.graveyard) == ["Lightning Bolt", "Dark Ritual", "Gifts Ungiven"]
+    assert sorted(_w1g7_names(player.library)) == ["Forest", "Island", "Lightning Bolt"]
+
+
+def test_w1g7_gifts_ungiven_finding_two_puts_both_in_the_graveyard(set_pool):
+    """Its ruling (2017-03-14): with one or two found, the opponent must
+    choose them for the graveyard — so nobody is asked."""
+    game = _w1g7_gifts(set_pool, interactive={0, 1})
+    _w1g7_settle(game, defaults=False)
+    assert _w1g7_find(game, ["Lightning Bolt", "Craw Wurm"])
+    assert _w1g7_settle(game, defaults=False) is None
+    player = game.players[0]
+    assert player.hand == []
+    assert _w1g7_names(player.graveyard) == ["Lightning Bolt", "Craw Wurm", "Gifts Ungiven"]
+
+
+def test_w1g7_gifts_ungiven_at_seats_nobody_asks(set_pool):
+    game = _w1g7_gifts(set_pool, interactive=())
+    _w1g7_settle(game)
+    player = game.players[0]
+    found = _w1g7_names(player.hand) + _w1g7_names(player.graveyard)[:-1]
+    assert len(player.hand) == 2 and len(found) == 4
+    assert len(set(found)) == 4                         # four different names
+    assert _w1g7_names(player.graveyard)[-1] == "Gifts Ungiven"
+
+
+def test_w1g7_hinder_at_a_seat_nobody_asks_buries_the_card(set_pool):
+    game = _w1g7_hinder_a_bolt(set_pool, interactive=())
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[1].library) == ["Island", "Swamp", "Lightning Bolt"]
+    assert game.players[0].life == 20
+
 # ==== end w1g7 ======================================================
 
 

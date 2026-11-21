@@ -133,6 +133,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The same zone made public one card at a time, and the same category for
     # that reason.
     "reveal_random_card_from_hand": "zones",
+    # "Target player reveals their library." (Mindblaze.) The hand reveal's
+    # twin one hidden zone over, so the same family.
+    "reveal_library": "zones",
     # "…discards it unless they pay 1 life." The offer and its declined branch
     # are one instruction because the branch acts on a card only the offer knows
     # — the same reason `unless_player_pays` carries its own unpaid steps.
@@ -160,6 +163,9 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # so the same family.
     "reorder_target_library_top": "zones",
     "reorder_own_library_top": "zones",
+    # "Look at the top card of your library." (the Deceivers): the look
+    # above over the looker's own pile with neither freedom on.
+    "look_at_own_library_top": "zones",
     # "**That player** looks at the top three cards of your library, then puts
     # them back in any order." (Tahngarth's Glare.) The same prompt with the
     # seats the other way round — the chosen player looks, the controller's

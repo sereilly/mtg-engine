@@ -83,7 +83,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              NAMED_CARD_GUESS,
                              DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, PUT_INTO_HAND_THIS_WAY,
-                             REVEALED_HAND_CARDS,
+                             REVEALED_HAND_CARDS, REVEALED_LIBRARY_CARDS,
                              REVEALED_BY_SEAT, REVEALED_THIS_WAY,
                              REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
@@ -542,6 +542,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # every "is it a …?" clause reads. A look and a reveal differ in who sees
     # the card, not in which object the pronoun behind them names.
     "look_at_target_library_top": "revealed_card",
+    "look_at_own_library_top": "revealed_card",
     # "…that player discards all the cards in their hand, then draws **that
     # many** cards." (Shocker.) How many the sweep actually binned, under the
     # key the counted discards already write — the printed sentence names no
@@ -776,6 +777,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # was shown, for the sentence that narrows it — see
     # ``oracle_types.REVEALED_HAND_CARDS``.
     "reveal_hand": REVEALED_HAND_CARDS,
+    "reveal_library": REVEALED_LIBRARY_CARDS,
     # "**Choose a number greater than 0 and a color.** … If that opponent
     # reveals exactly **the chosen number** of cards of **the chosen color**,
     # you draw a card." (Scrying Glass.) Two steps, two records — see

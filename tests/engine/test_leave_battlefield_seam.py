@@ -59,6 +59,11 @@ _NOT_A_BATTLEFIELD_EXIT = {
     # (CR 701.6a), so its card was never on a battlefield to leave one, and
     # there is no permanent for the seam to name.
     ("handlers/stack.py", "_redirect_countered_card"),
+    # "…put that card on your choice of the top or bottom of its owner's
+    # library instead of into that player's graveyard" (Hinder): the same
+    # countered card as the row above, put where its counterspell's
+    # controller answered — a spell's card in no zone, never a permanent.
+    ("mixins/stack/choices/library.py", "_put_countered_card_on_library_end"),
     # The *graveyard* branch of ``shuffle_source_card_into_library``, which is
     # ``return_source_card_to_owners_hand``'s row two spellings up with a
     # different destination: "shuffle **it** into its owner's library"

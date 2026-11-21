@@ -47,7 +47,7 @@ _MASS_LAND_DESTRUCTION = frozenset({
 
 
 def _would_destroy_a_land_you_control(
-    game: "Game", spell: "StackItem", observer: int
+    game: "Game", spell: "StackItem", observer: int, context=None,
 ) -> bool:
     """Whether *spell* resolving would destroy a land seat *observer* controls.
 
@@ -130,10 +130,48 @@ def _instruction_kinds(instructions) -> frozenset[str]:
     return frozenset(step.kind for step in _flatten(instructions))
 
 
+def _same_mana_value_as_the_discarded_card(
+    game: "Game", spell: "StackItem", observer: int, context=None,
+) -> bool:
+    """"Counter target spell **if it has the same mana value as the discarded
+    card**." (Hisoka, Minamo Sensei.)
+
+    The discarded card is the one the ability's own cost ate (CR 601.2h,
+    602.2b), which by resolution is one card among everything in that
+    graveyard (CR 400.7) — so it is read off the payment's record
+    (``discarded_for_cost``) on the resolution context, never looked for. The
+    spell's mana value is the stack object's (CR 202.3e: an X spell's X
+    counts), through the one reader the counter flow already uses. No record —
+    a discard that ate nothing — holds false: the counter declines rather than
+    fire for a card nobody discarded.
+    """
+    from .targeting import stack_object_mana_value
+
+    discarded = list(
+        (getattr(context, "choices", None) or {}).get("discarded_for_cost") or ()
+    )
+    if len(discarded) != 1:
+        return False
+    card = discarded[0]
+    return stack_object_mana_value(spell) == int(getattr(card, "cmc", 0) or 0)
+
+
 #: The printed conditions a counter may carry, as the sentence a card prints
 #: (lowercased, no trailing stop) mapped to the predicate that answers it.
+#: Each predicate takes ``(game, spell, observer, context)`` — the resolution
+#: context, for a condition about what the counter's own cost recorded.
 COUNTER_CONDITIONS: dict[str, Callable[..., bool]] = {
     "it would destroy a land you control": _would_destroy_a_land_you_control,
+    "it has the same mana value as the discarded card":
+        _same_mana_value_as_the_discarded_card,
+}
+
+#: The rows above that read a record the ability's **cost** wrote, as row ->
+#: the record. The lowering demands it of the ability (``produced``): on a
+#: spell or an ability that discarded nothing the words name no card, and the
+#: counter would decline forever while the card compiled clean.
+COUNTER_CONDITION_COST_RECORDS: dict[str, str] = {
+    "it has the same mana value as the discarded card": "discarded_for_cost",
 }
 
 
@@ -149,7 +187,7 @@ def counter_condition_key(sentence: str) -> str | None:
 
 
 def counter_condition_holds(
-    key: str, game: "Game", spell: "StackItem", observer: int
+    key: str, game: "Game", spell: "StackItem", observer: int, context=None,
 ) -> bool:
     """Whether the condition named by *key* holds for *spell* right now.
 
@@ -160,7 +198,7 @@ def counter_condition_holds(
     predicate = COUNTER_CONDITIONS.get(key)
     if predicate is None:
         return False
-    return predicate(game, spell, observer)
+    return predicate(game, spell, observer, context)
 
 
 def _key(sentence: str) -> str:

@@ -398,13 +398,23 @@ def _parse_countered_destination(
     if stream.accept_word("on"):
         # "on top of" / "on the bottom of" — one zone, two places in it, which
         # is the pair the library seam takes rather than two destinations.
-        stream.accept_word("the")
-        if stream.accept_word("top"):
-            position = "top"
-        elif stream.accept_word("bottom"):
-            position = "bottom"
+        # "on **your choice of the top or bottom** of its owner's library"
+        # (Hinder.) One zone, both of its ends, and the counterspell's
+        # controller picks which (its ruling, 2020-08-07) — a third position
+        # word rather than a second production, because everything around it
+        # is Memory Lapse's sentence.
+        if stream.accept_phrase(
+            "your", "choice", "of", "the", "top", "or", "bottom"
+        ):
+            position = "chosen"
         else:
-            raise stream.error("expected 'top' or 'bottom' of the library")
+            stream.accept_word("the")
+            if stream.accept_word("top"):
+                position = "top"
+            elif stream.accept_word("bottom"):
+                position = "bottom"
+            else:
+                raise stream.error("expected 'top' or 'bottom' of the library")
         stream.expect_word("of")
     elif stream.accept_phrase("onto", "the", "battlefield"):
         # "…put that card **onto the battlefield under your control** instead

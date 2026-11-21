@@ -173,6 +173,7 @@ from .mana import (
 from .library import (
     PutExiledPileOnLibrary,
     PutRevealedCardsOnBottom,
+    RevealLibrary,
     RevealUntil,
     LookAtHand,
     LookAtFaceDown,
@@ -376,7 +377,7 @@ Effect = Union[
     BoundPermanentActivationBan,
     TargetingBan,
     PlayWithTopRevealed,
-    RevealTop, RevealUntil, PutRevealedCardsOnBottom, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
+    RevealTop, RevealUntil, PutRevealedCardsOnBottom, RevealLibrary, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, RevealChosenHandCards, PutIteratedCardOnLibrary,
     KeepChosenDiscardRest,
     ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,

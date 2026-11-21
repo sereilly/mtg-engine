@@ -58,7 +58,8 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WA
                              COUNTERED_SPELL_THIS_WAY, DISCARDED_THIS_WAY,
                              MILLED_THIS_WAY, NAMED_CARD_GUESS,
                              PUT_INTO_HAND_THIS_WAY,
-                             REVEALED_HAND_CARDS, SECRET_NUMBERS_BY_SEAT)
+                             REVEALED_HAND_CARDS, REVEALED_LIBRARY_CARDS,
+                             SECRET_NUMBERS_BY_SEAT)
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -686,6 +687,33 @@ def lower_record_condition(
                 node=condition,
             )
         return {"kind": "revealed_chosen_color_count", "op": condition.op}
+    if isinstance(condition, ast.RevealedLibraryChosenNameCount):
+        # "**If that library contains exactly the chosen number of cards with
+        # the chosen name**, Mindblaze deals 8 damage to that player."
+        # Scrying Glass's three producers with the name for the colour and a
+        # library reveal for the hand — all demanded, for that clause's
+        # reason: each one missing answers the branch the same way forever on
+        # a card that reports itself supported.
+        missing = sorted(
+            {CHOSEN_NUMBER_THIS_WAY, "chosen_card_name", REVEALED_LIBRARY_CARDS}
+            - set(produced)
+        )
+        if missing:
+            raise LoweringError(
+                "'that library contains exactly the chosen number of cards with "
+                "the chosen name' with no "
+                + " and no ".join(
+                    {
+                        CHOSEN_NUMBER_THIS_WAY: "number chosen",
+                        "chosen_card_name": "name chosen",
+                        REVEALED_LIBRARY_CARDS: "library revealed",
+                    }[key]
+                    for key in missing
+                )
+                + " before it in this effect",
+                node=condition,
+            )
+        return {"kind": "revealed_library_chosen_name_count", "op": condition.op}
     if isinstance(condition, ast.ChosenNameMilledThisWay):
         # Two producers, both demanded: a back-reference names its producers or
         # refuses. Without the name the comparison is against nothing and

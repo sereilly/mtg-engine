@@ -123,6 +123,34 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+@effect_handler("reveal_library")
+def reveal_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player reveals their library." (Mindblaze.)
+
+    :func:`reveal_hand`'s step over the other hidden zone: every card shown to
+    every player (CR 701.20a, through ``record_reveal``, the feed the web layer
+    reads) and nothing moved (CR 701.20b). What was shown is written as cards
+    under ``revealed_library_cards`` — even an empty library, for the hand
+    record's reason: an absent key is a back-reference with no producer, a
+    different thing from a reveal that showed nothing. The log counts the
+    cards rather than listing a whole library; the feed names them.
+    """
+    from ..oracle_types import REVEALED_LIBRARY_CARDS
+
+    victim = context.target if context.target in game.players else None
+    if victim is None:
+        context.results[REVEALED_LIBRARY_CARDS] = []
+        game.log.append(f"{context.card.name}: no player to reveal a library")
+        return True, "resolved"
+    seat = game.players.index(victim)
+    context.results[REVEALED_LIBRARY_CARDS] = list(victim.library)
+    game.record_reveal(seat, [card.name for card in victim.library])
+    game.log.append(
+        f"{victim.name} reveals their library ({len(victim.library)} card(s))"
+    )
+    return True, "resolved"
+
+
 @effect_handler("reveal_hand_and_choose")
 def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target opponent reveals their hand. You choose a noncreature, nonland

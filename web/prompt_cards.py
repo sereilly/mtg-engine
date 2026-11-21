@@ -170,6 +170,13 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         # find") until the answer is one the resolver will take, instead of
         # sending an under-find to be refused whole.
         payload["min_picks"] = ctx.game._search_floor(choice)
+        # "…up to four cards **with different names**" (Gifts Ungiven): a
+        # relation across the picks that ``legal_indices`` cannot say — each
+        # Lightning Bolt is legal and two of them together are not — so it
+        # rides beside it for the dialog to refuse a second card of a name
+        # already picked; the engine refuses such an answer whole either way.
+        if (choice.data.get("restrictions") or {}).get("distinct_names"):
+            payload["distinct_names"] = True
     # "a land card **of each basic land type**" (Gaea's Balance); "a creature
     # card, a land card, and a noncreature, nonland card" (Guided Passage). One
     # find per printed description. `legal_indices` is the union of them, which
@@ -663,6 +670,12 @@ def _opponent_picks_revealed(ctx: PromptContext, choices: list) -> dict:
         # handed over ("held") — so the client's sentence says so rather than
         # "from the top of their library" for every printing.
         "from_zone": str(choice.data.get("from_zone", "library")),
+        # "Target opponent chooses **two** of those cards." (Gifts Ungiven.)
+        # How many picks are still owed, this one included: the engine asks a
+        # chain of one-card answers, re-armed after each with the slot taken
+        # out of ``legal_indices``, so the client answers one index at a time
+        # either way and may say "1 of 2".
+        "remaining": int(choice.data.get("remaining", 1) or 1),
     }
 
 
@@ -1243,7 +1256,10 @@ def _library_end_choice(ctx: PromptContext, choices: list) -> dict:
 
     The permanent is still on the battlefield while this is owed — the move is
     what the answer performs — so the card being moved is named rather than
-    pointed at by a zone position that does not exist yet.
+    pointed at by a zone position that does not exist yet. Hinder ("put that
+    card on your choice of the top or bottom of its owner's library") asks the
+    same question of a countered spell's card, which is in no zone until the
+    answer: the same fields, ``card_name`` the counterspell's.
     """
     choice = choices[0]
     return {

@@ -779,7 +779,16 @@ def chosen_name_own_zone(card: CardDefinition, instruction) -> str | None:
 #: a card. If a card with the chosen name was milled this way…" (Predict;
 #: Foreshadow says "target opponent"). Whose library that is, is settled by
 #: the announcement, so this is half an answer and the game supplies the rest.
-_TARGET_LIBRARY_NAME_READERS = frozenset({"mill_target_player"})
+#:
+#: Champions of Kamigawa's two read the same library whole: "Target player
+#: reveals their library. If that library contains exactly the chosen number
+#: of cards with the chosen name, …" (Mindblaze) and "Search target player's
+#: graveyard, hand, and library for all cards with that name and exile them"
+#: (Cranial Extraction) — the target's hidden zones, its graveyard the public
+#: evidence of what they hold, so the same answer.
+_TARGET_LIBRARY_NAME_READERS = frozenset({
+    "mill_target_player", "reveal_library", "strip_cards_with_chosen_name",
+})
 
 
 def chosen_name_is_read_off_the_targets_library(card: CardDefinition, instruction) -> bool:

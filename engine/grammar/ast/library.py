@@ -572,6 +572,17 @@ class SearchRevealOpponentChooses:
     #: and a card that swapped them would be a different spell entirely.
     fate: str = "hand"
     other_fate: str = "graveyard"
+    #: "Search your library for **up to** four cards …" (Gifts Ungiven): a
+    #: ceiling, where Intuition's bare number is CR 701.23d's floor.
+    up_to: bool = False
+    #: "…four cards **with different names**" (Gifts Ungiven): a relation
+    #: across the finds — no two share a name (CR 201.2) — which no one card's
+    #: filter can say, so it is carried beside the count and the search
+    #: resolver asks it of the answer as a whole.
+    distinct_names: bool = False
+    #: How many of the found cards the chooser names: "chooses one"
+    #: (Intuition), "chooses **two of those cards**" (Gifts Ungiven).
+    pick_count: int = 1
 
 
 @dataclass(frozen=True)
@@ -903,9 +914,35 @@ class PutRevealedCardsOnBottom:
     find and everything before it — going to the other end of it, in an order
     its owner chooses (CR 401.4). Its own sentence and its own node because it
     is printed *after* the sentences that read the found card, and CR 608.2c
-    performs them in the order printed. No fields: the pile is the run's
-    record and the library is the one it came out of.
+    performs them in the order printed. The pile is the run's record and the
+    library is the one it came out of.
     """
+
+    #: "Look at the top three cards of your library. You may put **those
+    #: cards** on the bottom of your library in any order." (Petals of
+    #: Insight.) The same move over a pile a *look* turned up rather than a
+    #: run: nothing records it, because a look moves nothing — the pile is the
+    #: top *looked_at* cards of the library, still where the look found them.
+    #: None is the run's pile.
+    looked_at: "Amount | None" = None
+
+@dataclass(frozen=True)
+class RevealLibrary:
+    """``Target player reveals their library.`` (Mindblaze.)
+
+    CR 701.20a over a whole library: every card in it shown to every player,
+    and nothing moved (CR 701.20b) — so the sentence behind it ("if that
+    library contains exactly …") reads the cards the reveal recorded, and a
+    shuffle after it ("Then that player shuffles") is its own sentence.
+
+    Its own node rather than a widening of :class:`RevealHand`: a hand reveal
+    is the first half of a discard family (Amnesia, Rag Man) whose readers
+    all mean a hand, and the record each writes is read by different
+    sentences. Guided Passage reveals the *caster's* library inside a fused
+    pick and stays that node.
+    """
+    player: PlayerRef
+
 
 @dataclass(frozen=True)
 class PutExiledPileOnLibrary:

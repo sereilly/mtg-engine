@@ -184,12 +184,30 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
                     if game._move_picked_pile_card(caster, card, from_zone, str(other_fate)):
                         game.log.append(f"{card.name} goes to the {other_fate}")
         return True, "resolved"
+    # "Target opponent chooses **two** of those cards." (Gifts Ungiven.) How
+    # many the chooser names, a chain of one-card answers. Where the pile
+    # holds no more cards than that, every card is chosen and nobody is
+    # asked — the card's ruling (2017-03-14): "If you find one or two cards,
+    # your opponent must choose for them to be put into your graveyard, even
+    # if they don't want to."
+    pick_count = int(instruction.payload.get("pick_count", 1) or 1)
+    if pick_count > 1 and len(legal) <= pick_count:
+        fate = str(instruction.payload.get("fate", "graveyard"))
+        with game.entering_together():
+            for index, card in enumerate(revealed):
+                to_zone = fate if index in legal else other_fate
+                if to_zone and game._move_picked_pile_card(
+                    caster, card, from_zone, str(to_zone)
+                ):
+                    game.log.append(f"{card.name} goes to the {to_zone}")
+        return True, "resolved"
     game.arm_pending_choice(
         "opponent_picks_revealed", opponent_index,
         card_name=context.card.name if context.card is not None else "",
         revealer_index=caster_index,
         cards=[card.name for card in revealed],
         legal_indices=legal,
+        **({"remaining": pick_count} if pick_count > 1 else {}),
         fate=str(instruction.payload.get("fate", "graveyard")),
         from_zone=from_zone,
         # "…and put **the other one** into your hand." What the pick did *not*
@@ -816,8 +834,16 @@ def put_revealed_cards_on_bottom(game: Game, instruction: OracleInstruction, con
     ``offer_library_bottom_order`` — the seam every "in any order" bottom
     reaches.
     """
-    pile = list(context.results.get(REVEALED_UNTIL_CARDS) or ())
     player = context.caster
+    # "…You may put **those cards** on the bottom of your library in any
+    # order." (Petals of Insight.) A looked-at pile: the top N cards, still
+    # where the look found them (the offer that carried the look holds
+    # priority, so nothing moved them in between).
+    looked_at = instruction.payload.get("looked_at")
+    if looked_at:
+        pile = list(player.library[:int(looked_at)])
+    else:
+        pile = list(context.results.get(REVEALED_UNTIL_CARDS) or ())
     moved: list = []
     for card in pile:
         for index, held in enumerate(player.library):
@@ -829,8 +855,9 @@ def put_revealed_cards_on_bottom(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     player.library.extend(moved)
     game.log.append(
-        f"{player.name} put {len(moved)} revealed card(s) on the bottom of "
-        "their library"
+        f"{player.name} put {len(moved)} "
+        + ("looked-at" if looked_at else "revealed")
+        + " card(s) on the bottom of their library"
     )
     game.offer_library_bottom_order(player, len(moved))
     return True, "resolved"
