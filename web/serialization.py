@@ -36,7 +36,7 @@ from engine.oracle import compile_card_oracle
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.targeting import derive_cast_spec
 from engine.target_roles import recorded_role_seats
-from engine.text_changes import changed_words, spell_text_card
+from engine.text_changes import changed_words, spell_text_card, spell_text_of
 
 from .offers import (_offered_mana, cast_mana_offer, cast_x_payable, splice_offers,
                      tap_mana_split, text_change_offer)
@@ -1256,11 +1256,15 @@ def _serialize_stack_item(item, game: Game) -> dict:
         ],
         # CR 702.47: the cards spliced onto this spell (revealed, so public),
         # in the order their texts happen, each with the text it added and
-        # the targets that text chose. Empty for every other object.
+        # the targets that text chose. Empty for every other object. The text
+        # is what the spell **says** (CR 612): the gained text with any text
+        # change made to the spell folded on (Sleight of Mind on the host
+        # changes its gained text too), through the fold the resolution runs
+        # the segment by (``splice.spliced_steps``), never the printed read.
         "spliced": [
             {
                 "name": name,
-                "text": segment.card.oracle_text,
+                "text": spell_text_of(segment.card, item.text_change_effects).oracle_text,
                 "targets": _stack_item_targets(segment, game),
             }
             for name, segment in zip(segment_names(item), spliced_segments(item))
