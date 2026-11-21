@@ -164,6 +164,13 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     "Shimatsu" is a word the game uses to describe objects, so the expansion
     is right to write the whole name. (Its comma-named legends — Godo,
     Kumano, Iname, Hikari — are read by the comma rule.)
+
+    And a third, on a flip card's bottom half (CR 710.1b): Goka the Unjust,
+    Initiate of Blood flipped, reads "{T}: Goka deals 4 damage to target
+    creature that was dealt damage this turn." Seen once a flip card's bottom
+    half became a compilation unit (``faces.text_faces``); the bottom half is
+    its own legendary text box, so its shortened name is the legend naming
+    itself, and "Goka" is not a word the game uses to describe objects.
     """
     changed = {
         card.name
@@ -194,4 +201,5 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
         "Bladewing the Risen",
         "Zo-Zu the Punisher",
         "Shimatsu the Bloodcloaked",
+        "Goka the Unjust",
     }
