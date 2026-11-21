@@ -226,7 +226,9 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # bare cast or activation is handed a legal slot by the picker today, so
     # nothing in the pool reached the fallback without them; this is the third
     # reader agreeing with the other two, not a repair.)
-    for key in ("graveyard_mana_value", "graveyard_excluded_types"):
+    # …and "target **legendary** creature card" (Goryo's Vengeance), the
+    # supertype on the key the picker hands the same predicate.
+    for key in ("graveyard_mana_value", "graveyard_excluded_types", "supertypes"):
         if instruction.payload.get(key):
             spec[key] = instruction.payload[key]
     if spec:

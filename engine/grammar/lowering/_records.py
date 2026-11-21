@@ -68,6 +68,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERED_ABILITY_SOURCE,
                              COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
+                             COUNTERED_SPELL_SPLICED_NAMES,
                              COUNTERED_SPELL_THIS_WAY,
                              COUNTERS_REMOVED, DESTROYED_TARGET_COUNTERS,
                              DISCARDED_BY_SEAT,
@@ -196,6 +197,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
         # strip reads both: the name says what to look for and the seat says
         # whose zones to look in.
         COUNTERED_SPELL_NAME,
+        # …and what was spliced onto it (Minamo's Meddling) — see
+        # ``oracle_types.COUNTERED_SPELL_SPLICED_NAMES``.
+        COUNTERED_SPELL_SPLICED_NAMES,
     ),
     # "…**That permanent's** activated abilities can't be activated this
     # turn." (Interdict.) See ``oracle_types.COUNTERED_ABILITY_SOURCE``.

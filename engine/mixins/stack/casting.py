@@ -47,7 +47,7 @@ from ...classifier import classify_card
 from ...cost_modifiers import (cost_reduction_for_cast, spell_cost_tax,
                                spell_life_tax, spell_symbol_tax)
 from ...self_cost_modifiers import self_per_target_tax
-from ...splice import announce_splices, spliced_permanents
+from ...splice import announce_splices, splice_cost_conflict, spliced_permanents
 from ...target_keywords import (ANTE, GRAVEYARD, announced_slot,
                                 cast_target_zone)
 from ...game_types import as_target_slots, SimulationResult
@@ -702,9 +702,17 @@ class SpellCastingMixin:
         # (``splice.announce_splices``). Its costs join the total as
         # additional costs (CR 601.2f) — before the reductions below, which
         # apply to the whole (Long-Forgotten Gohei's ruling).
-        spliced, splice_cost, splice_names, splice_refusal = announce_splices(
+        # A splice cost that is not mana ("Tap an untapped white creature you
+        # control") has what pays it settled here too, and is paid below the
+        # mana hinge with the cast's other costs (``splice.pay_splice_costs``).
+        spliced, splice_cost, splice_names, splice_payments, splice_refusal = announce_splices(
             self, caster_index, card, splice_cards,
             spell_hand_index=hand_index if from_zone == "hand" else None,
+            spell_graveyard_slot=(
+                hand_index
+                if from_zone == "graveyard" and source_seat == caster_index
+                else None
+            ),
         )
         if splice_refusal is not None:
             return refuse(card.name, classification.effect_kind, splice_refusal)
@@ -1213,6 +1221,18 @@ class SpellCastingMixin:
         if isinstance(costs_checked, SimulationResult):
             return costs_checked
         owed, resolved_x_value, spell_graveyard_slot = costs_checked
+        # …and the spell's own costs beside its splice costs, which each gate
+        # above asked of the whole board alone (CR 601.2h: one total cost).
+        splice_conflict = splice_cost_conflict(
+            self, caster_index, card, splice_payments,
+            cast_costs=cast_costs, optional_paid=optional_paid,
+            cost_permanent_ids=cost_permanent_ids,
+            chosen_alternative=chosen_alternative,
+            alternative_permanents=alternative_permanents, imposed=owed,
+            x_value=resolved_x_value,
+        )
+        if splice_conflict is not None:
+            return refuse(card.name, classification.effect_kind, splice_conflict)
 
         # CR 601.2g–h: the mana payment, or the waiver. Measured across for
         # the CR 106.6 riders its mana carried (``engine/mana_riders.py``).
@@ -1251,6 +1271,7 @@ class SpellCastingMixin:
             owed=owed, permission=permission,
             resolved_x_value=resolved_x_value, source_seat=source_seat,
             source_zone=source_zone, spell_graveyard_slot=spell_graveyard_slot,
+            splice_payments=splice_payments,
         )
 
         # CR 601.2i: the spell is put on the stack, and is cast.

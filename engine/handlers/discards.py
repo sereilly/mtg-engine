@@ -19,14 +19,15 @@ from __future__ import annotations
 import random
 from typing import TYPE_CHECKING
 
-from ..counted_names import cards_sharing_a_name
-from ..oracle_types import (DISCARDED_BY_SEAT, DISCARDED_CARDS_BY_SEAT,
+from ..counted_names import card_answers_to_name, cards_sharing_a_name
+from ..oracle_types import (COUNTERED_SPELL_CONTROLLER_ACTOR,
+                            DISCARDED_BY_SEAT, DISCARDED_CARDS_BY_SEAT,
                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..resumption import ask_in_turn_order, run_resumable
 from ._amounts import per_recipient_amount, resolve_amount
 from ._filters import _card_matches_filter
-from ._targets import frozen_that_player_seat
+from ._targets import frozen_that_player_seat, stack_target_controller_seat
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -645,7 +646,35 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             game.log.append(f"{context.card.name}: no recorded player, no discard")
             return True, "resolved"
         victim = game.players[frozen]
+    elif instruction.payload.get("who") == COUNTERED_SPELL_CONTROLLER_ACTOR:
+        # "Counter target spell. **That spell's controller** reveals their
+        # hand, then discards …" (Minamo's Meddling.) The seat the counter step
+        # recorded; with none, nobody was named and nothing is discarded.
+        recorded = stack_target_controller_seat(game, context, recorded_only=True)
+        if recorded is None:
+            game.log.append(f"{context.card.name}: no spell was countered, no discard")
+            return True, "resolved"
+        victim = game.players[recorded]
     filters = instruction.payload.get("filter") or {}
+    # "…discards each card **with the same name as a card spliced onto that
+    # spell**." (Minamo's Meddling.) The names the counter step froze as it
+    # chose its spell (CR 702.47e strips them once it leaves the stack), any
+    # one of which a card may answer to (CR 201.2a). **No name means no
+    # discard**, for the chosen name's reason below: a spell nothing was
+    # spliced onto names no card, never every card.
+    spliced_names: "tuple[str, ...] | None" = None
+    names_key = instruction.payload.get("names_from")
+    if names_key is not None:
+        spliced_names = tuple(
+            str(name) for name in (context.results.get(str(names_key)) or ())
+            if str(name).strip()
+        )
+        if not spliced_names:
+            game.log.append(
+                f"{context.card.name}: nothing was spliced onto that spell, so "
+                "nothing is discarded"
+            )
+            return True, "resolved"
     # "…discards all cards **of that color**." (Persecute.) CR 608.2d's choice,
     # made by the sentence in front of this one and read out of the scratchpad
     # rather than off a permanent — the card that prints it is a sorcery and
@@ -769,6 +798,11 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             )
             if excused is not None:
                 spare.pop(excused)
+                continue
+            if spliced_names is not None and not any(
+                card_answers_to_name(held, name, zone="hand")
+                for name in spliced_names
+            ):
                 continue
             if _card_matches_filter(held, filters, game=game, owner=victim):
                 doomed.append(index)

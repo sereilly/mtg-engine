@@ -121,6 +121,21 @@ def _best_splice_of(
     heading = f"splicing {spliced.name} (hand #{hand_index})" + (
         f" after {len(chosen)} already spliced" if chosen else ""
     )
+    if offer.price is not None:
+        # "Splice onto Arcane—Sacrifice two Mountains" (Betrayers of
+        # Kamigawa). This chooser prices a splice in mana only (the buyback
+        # rule, ``_splice_mana_is_spare``); a price paid in permanents, cards
+        # or an opponent's life is weighed by nothing here yet, so it is not
+        # proposed rather than taken for free.
+        with cast_trace.attempt(
+            game, player_index, card, variant="spliced",
+            from_zone=from_zone, zone_index=current.hand_index,
+        ):
+            cast_trace.note(heading)
+            return cast_trace.dropped(
+                f"{spliced.name}'s splice cost is not mana "
+                f"({offer.price.describe()}): this chooser prices mana only"
+            )
     weighed = _splice_answers_and_plan(
         game, player_index, card, current, chosen, hand_index, spliced, offered,
         extra_generic=extra_generic,

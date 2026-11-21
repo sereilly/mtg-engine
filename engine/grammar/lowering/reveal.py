@@ -56,6 +56,8 @@ import dataclasses
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_HAND_CARDS_BY_SEAT,
+                             COUNTERED_SPELL_CONTROLLER,
+                             COUNTERED_SPELL_CONTROLLER_ACTOR,
                              LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, SACRIFICED_CARD_TYPES,
@@ -750,7 +752,8 @@ _REVEALED_HAND_FIELDS = frozenset(
 
 
 def _lower_reveal_hand(
-    node: ast.RevealHand, event: str | None = None
+    node: ast.RevealHand, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Target player **reveals their hand**" (CR 701.20), on its own.
 
@@ -788,6 +791,18 @@ def _lower_reveal_hand(
     # ability's own controller.
     if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
         return (OracleInstruction("reveal_hand", "", {"who": "damaged_player"}),)
+    # "Counter target spell. **That spell's controller** reveals their hand,
+    # …" (Minamo's Meddling.) The seat the counter step recorded as it chose
+    # its spell (``COUNTERED_SPELL_CONTROLLER``, last-known information: by
+    # this sentence the spell is a card with no controller, CR 109.4) — read
+    # through the one reader of that seat (``stack_target_controller_seat``),
+    # and admitted only behind a step that wrote it.
+    if node.player.kind == "that_player" and COUNTERED_SPELL_CONTROLLER in produced:
+        return (
+            OracleInstruction(
+                "reveal_hand", "", {"who": COUNTERED_SPELL_CONTROLLER_ACTOR},
+            ),
+        )
     if node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler reveals {node.player.kind!r}'s hand", node=node

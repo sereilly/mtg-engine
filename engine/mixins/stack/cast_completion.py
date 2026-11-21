@@ -40,7 +40,7 @@ from ...mana_combination import MANA_COMBINATION
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
 from ...mana_riders import apply_cast_riders
-from ...splice import segment_names
+from ...splice import pay_splice_costs, segment_names
 from ...sunburst import MANA_SPENT_TO_CAST
 from ...target_keywords import ANTE_INDEX
 from ...target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLE_SEATS
@@ -54,7 +54,7 @@ class CastCompletionMixin:
         cost_graveyard_indices, cost_hand_cards, cost_permanent_ids,
         cost_permanent_index, from_zone, hand_index, held, life_owed,
         life_taxing_names, optional_paid, owed, permission, resolved_x_value,
-        source_seat, source_zone, spell_graveyard_slot,
+        source_seat, source_zone, spell_graveyard_slot, splice_payments=(),
     ):
         """Every cost but the mana, paid at one moment once the mana payment
         has gone through (CR 601.2h), so nothing here refuses.
@@ -84,6 +84,14 @@ class CastCompletionMixin:
             self.take_card_from_exile(source_seat, held)
         else:
             del source_zone[hand_index]
+        # The splice costs that are not mana (CR 702.47a) — the creature
+        # tapped, the Mountains sacrificed, the cards exiled, the opponent's
+        # life gained — paid first of the costs below, in the order CR 601.2h
+        # leaves free, with what the announcement settled
+        # (``splice.pay_splice_costs``): the spell's own costs' default picks
+        # then take from the board those leave, which
+        # ``splice.splice_cost_conflict`` checked can pay them.
+        pay_splice_costs(self, caster_index, card, splice_payments)
         # Now, and not before: the spell is no longer in the hand, so it cannot
         # be discarded to pay for itself, and the creature it eats is gone from
         # the battlefield before the spell is on the stack.

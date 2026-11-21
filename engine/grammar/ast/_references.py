@@ -670,6 +670,15 @@ class ObjectFilter:
     # linked ability (CR 607.2a) — answered by ``subject_matches`` from the
     # source it is handed, unlike the event and record spellings above.
     shares_name_with_exiled_card: bool = False
+    # "…discards each card **with the same name as a card spliced onto that
+    # spell**." (Minamo's Meddling.) The names of the cards spliced onto a
+    # spell an earlier step of this effect countered (CR 702.47a) — a set the
+    # counter froze into the resolution's scratchpad
+    # (``oracle_types.COUNTERED_SPELL_SPLICED_NAMES``), so, like the record
+    # spelling above, the key travels to the handler, which resolves the
+    # names and then matches. No matcher answers it, so every other reader
+    # refuses the phrase rather than dropping it.
+    name_spliced_onto_spell: bool = False
     # "…all other creatures **that share a color with it**" (Spreading
     # Plague). CR 105.2's relation against the object a pronoun names, which no
     # matcher can answer for ``name_from_event``'s reason: ``subject_matches``

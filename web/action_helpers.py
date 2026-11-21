@@ -190,16 +190,25 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
             ids = list(choice.permanent_ids) if choice.permanent_ids else (
                 [choice.permanent_id] if choice.permanent_id is not None else None
             )
-            for permanent_id in ids or ():
+            cost_ids = list(choice.cost_permanent_ids or ()) or None
+            for permanent_id in [*(ids or ()), *(cost_ids or ())]:
                 if game.find_permanent_by_id(permanent_id) is None:
                     raise HTTPException(status_code=404, detail=_GONE)
-            splice_cards.append({
+            entry = {
                 "hand_index": choice.hand_index,
                 "target_player_index": choice.target_seat,
                 "target_permanent_ids": ids,
                 "target_graveyard_indices": choice.graveyard_indices,
                 "target_stack_index": _engine_stack_index(choice.target_stack_index),
-            })
+            }
+            # A splice cost that is not mana: what pays it (the offer's
+            # ``price``), forwarded only when named, so an entry for a mana
+            # splice reads as it always did.
+            if cost_ids is not None:
+                entry["cost_permanent_ids"] = cost_ids
+            if choice.cost_graveyard_indices is not None:
+                entry["cost_graveyard_indices"] = list(choice.cost_graveyard_indices)
+            splice_cards.append(entry)
     # The cast's target in the engine's zone keywords (`wire_target_keywords`):
     # its ids — the list, the one, or a cast's ``permanent_id`` (which names
     # its target) — else the old slot fields, read in the zone the spell names

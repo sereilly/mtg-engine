@@ -875,6 +875,20 @@ def _lower_return_to_zone(
         and filt.supertypes
     ):
         gated = dataclasses.replace(gated, supertypes=())
+    # "Return target **legendary** creature card from your graveyard to the
+    # battlefield." (Goryo's Vengeance.) The same supertype one destination
+    # over, on the same key (``supertypes``), which the reanimation's payload,
+    # its picker (``payload_target_specs._reanimation_spec``) and its handler
+    # hand to ``graveyard_card_matches``. Scoped to the unattached
+    # reanimation, so the Aura one beside it keeps its own gate.
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+        and node.attached_to is None
+        and filt.supertypes
+    ):
+        gated = dataclasses.replace(gated, supertypes=())
     # "…return target card **named Groffskithur** from your graveyard to your
     # hand." (Groffskithur.) The printed name, lifted for the colour's reason
     # above: it travels as ``graveyard_named`` and the picker, the cast gate
@@ -1160,6 +1174,10 @@ def _lower_return_to_zone(
                         "conjunction", node=node,
                     )
                 payload["graveyard_subtypes"] = list(filt.subtypes)
+            # "target **legendary** creature card" (Goryo's Vengeance), lifted
+            # out of the blanket refusal above; emitted only when printed.
+            if filt.supertypes:
+                payload["supertypes"] = list(filt.supertypes)
             # "…**If the creature would leave the battlefield, exile it instead
             # of putting it anywhere else.**" (Dreams of the Dead.) Folded onto
             # the move by the parse, because the permanent it applies to does

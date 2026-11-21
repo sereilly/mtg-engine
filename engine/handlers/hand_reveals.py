@@ -28,7 +28,8 @@ import random
 from typing import TYPE_CHECKING
 
 from ..linked_exile import until_leaves_has_ended
-from ..oracle_types import (HAND_EXILES_BY_CHOOSER, REVEALED_HAND_CARDS,
+from ..oracle_types import (COUNTERED_SPELL_CONTROLLER_ACTOR,
+                            HAND_EXILES_BY_CHOOSER, REVEALED_HAND_CARDS,
                             REVEALED_HAND_SEAT)
 # The runtime class. The bare name is a TYPE_CHECKING-only import below, and
 # the handlers here *build* instructions for an optional payment's branches.
@@ -38,7 +39,7 @@ from ..resumption import run_resumable
 from ..search_filters import search_matches
 from ._amounts import resolve_amount
 from ._filters import _card_matches_filter
-from ._targets import frozen_that_player_seat
+from ._targets import frozen_that_player_seat, stack_target_controller_seat
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -101,6 +102,17 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
             game.log.append(f"{context.card.name}: no recorded player, no reveal")
             return True, "resolved"
         victim = game.players[frozen]
+    elif instruction.payload.get("who") == COUNTERED_SPELL_CONTROLLER_ACTOR:
+        # "Counter target spell. **That spell's controller** reveals their
+        # hand, …" (Minamo's Meddling.) The seat the counter step recorded as
+        # it chose its spell; with none recorded, nobody was named and no hand
+        # is shown, for the damaged player's reason above.
+        recorded = stack_target_controller_seat(game, context, recorded_only=True)
+        if recorded is None:
+            context.results[REVEALED_HAND_CARDS] = []
+            game.log.append(f"{context.card.name}: no spell was countered, no reveal")
+            return True, "resolved"
+        victim = game.players[recorded]
     else:
         victim = context.target if context.target is not None else context.caster
     seat = next(

@@ -436,6 +436,14 @@ class SpliceChoice(BaseModel):
     # your graveyard") by its place in the pile, as a cast names one.
     graveyard_indices: list[int] | None = Field(default=None, max_length=8)
     target_stack_index: int | None = Field(default=None, ge=0)
+    # What pays a splice cost that is **not mana** (CR 601.2b; the offer's
+    # ``price``): the permanents its sacrifice / return / tap takes, by id
+    # ("Tap an untapped white creature you control", "Sacrifice two
+    # Mountains"), and the cards its graveyard exile takes, by place in the
+    # pile ("Exile four cards from your graveyard"). Absent is the
+    # deterministic pick; named, exactly the printed count (CR 601.2h).
+    cost_permanent_ids: list[int] | None = Field(default=None, max_length=8)
+    cost_graveyard_indices: list[int] | None = Field(default=None, max_length=8)
 
 
 class GameActionRequest(BaseModel):

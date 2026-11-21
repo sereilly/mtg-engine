@@ -211,6 +211,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["name_from_recorded_card"] = True
     if self.shares_name_with_exiled_card:
         payload["shares_name_with_exiled_card"] = True
+    if self.name_spliced_onto_spell:
+        payload["name_spliced_onto_spell"] = True
     if self.shares_color_with_it:
         # Emitted so a gate can *see* it: the key is outside every testable
         # set, so a lowering that does not lift it out and resolve the pronoun
