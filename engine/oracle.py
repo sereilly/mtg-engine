@@ -66,6 +66,7 @@ from .flashback import (FLASHBACK_CLAIM, flashback_x_unannounced,
                         unread_flashback_line)
 from .fading import unread_fading_line
 from .modular import unread_modular_line
+from .soulshift import unread_soulshift_line
 from .sunburst import unread_sunburst_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (unread_alternative_cost_sentence,
@@ -475,6 +476,18 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented modular ability: {unread_modular}",
+            normalized_text,
+        )
+    # …and a **soulshift** line the CR 702.46a rewrite could not read
+    # (``engine/soulshift.py``) — "Soulshift X", a bare "Soulshift" — for
+    # modular's reason: on a noncreature card whose other line compiles the
+    # keyword would otherwise be dropped in silence.
+    unread_soulshift = unread_soulshift_line(oracle_text)
+    if unread_soulshift is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented soulshift ability: {unread_soulshift}",
             normalized_text,
         )
     # …and a **sunburst** line the CR 702.44a rewrite could not read

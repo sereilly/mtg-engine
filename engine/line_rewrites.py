@@ -36,6 +36,7 @@ from .entwine import expand_entwine_lines
 from .fading import expand_fading_lines
 from .late_modules import LateModules
 from .modular import expand_modular_lines
+from .soulshift import expand_soulshift_lines
 from .sunburst import expand_sunburst_lines
 from .self_reference import expand_short_self_references
 
@@ -213,6 +214,12 @@ def expand_ability_lines(
       "Modular—Sunburst" (CR 702.44c) becomes the same pair with CR 702.44c's
       count: "…enters with a +1/+1 counter on it for each color of mana spent
       to cast it."
+    * a **soulshift** keyword line becomes the triggered ability CR 702.46a
+      says it means — "When this permanent is put into a graveyard from the
+      battlefield, you may return target Spirit card with mana value N or less
+      from your graveyard to your hand." (``engine/soulshift.py``). From there
+      it is an ordinary dies trigger over Gravedigger's graveyard return, none
+      of which knows the word.
     * a **sunburst** keyword line becomes the entry replacement CR 702.44a
       says it means — "If this object is entering as a creature, … it enters
       with a +1/+1 counter on it for each color of mana spent to cast it.
@@ -274,6 +281,11 @@ def expand_ability_lines(
     # the "put into a graveyard from the battlefield" trigger), one line each
     # (``engine/modular.py``). Read by none of the rewrites around it.
     oracle_text = expand_modular_lines(oracle_text)
+    # CR 702.46a's, modular's shape with one line out: a soulshift keyword
+    # line becomes the rule's own "put into a graveyard from the battlefield"
+    # trigger returning a Spirit card (``engine/soulshift.py``). Read by none
+    # of the rewrites around it.
+    oracle_text = expand_soulshift_lines(oracle_text)
     # CR 702.44a's, modular's shape with one line out: a sunburst keyword line
     # becomes the rule's own entry replacement, both of its sentences on one
     # line because the second is the first one's "otherwise"
