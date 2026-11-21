@@ -180,6 +180,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     "grant_regeneration_to_target_creature": "activated_regenerate",
     "grant_self_flying_until_eot": "activated_pump",
     "grant_target_flying_until_eot": "activated_pump",
+    # Hisoka's Guard: "Target creature you control other than this creature
+    # has shroud for as long as this creature remains tapped" — a keyword
+    # grant, labelled as the other grants are.
+    "grant_target_keyword_while_source_tapped": "activated_pump",
     "hurricane_damage": "activated_damage",
     "look_at_target_hand": "activated_look",
     "mill_target_player": "activated_mill",

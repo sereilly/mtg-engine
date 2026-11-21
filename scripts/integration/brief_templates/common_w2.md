@@ -52,6 +52,6 @@ Then your group's `BRIEF.md`. The pile your brief is cut from is
 
 ## Memory
 
-About 35–43 GB of commit is free; three agents plus the integrator's gates.
+{{MEMORY}}, shared by {{N_GROUPS_WORD}} agents plus the integrator's gates.
 Keep wave 1's rules: pytest serially, one heavy process at a time, `-n 2` only
 for the one `tests/engine` run.

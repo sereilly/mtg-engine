@@ -358,7 +358,7 @@ def group_skeleton(code: str, low: str, round_: str, group: str, spec: dict) -> 
     ])
 
 
-def write_wave_two(code: str, low: str, name: str, args) -> int:
+def write_wave_two(code: str, low: str, name: str, args, groups: dict, memory: str) -> int:
     """The wave-2 common brief: wave 1's rules hold, with the changes the
     template states; the base link and its reds are filled, the summary of
     what wave 1 left is the integrator's (a TODO)."""
@@ -369,6 +369,8 @@ def write_wave_two(code: str, low: str, name: str, args) -> int:
         reds = [l.strip() for l in args.base_reds.read_text(encoding="utf-8").splitlines() if l.strip()]
     fills = {
         "{{SET_NAME}}": name, "{{CODE}}": code, "{{code}}": low,
+        "{{N_GROUPS_WORD}}": _number(len(groups)),
+        "{{MEMORY}}": memory,
         "{{W2_BASE}}": args.w2_base or "TODO: the gated link",
         "{{BASE_REDS}}": "\n".join(f"  - {r}" for r in reds) or "  - none known",
         "{{W1_SUMMARY}}": ("TODO: what wave 1 landed and declined, and what wave 2 takes "
@@ -405,13 +407,16 @@ def main(argv: list[str]) -> int:
     base_branch = args.base_branch or f"{round_}/base"
     groups = json.loads(args.groups.read_text(encoding="utf-8"))
     name = set_name(code)
-    if args.wave == 2:
-        return write_wave_two(code, low, name, args)
     memory = args.memory
     if not memory:
         gb = free_commit_gb()
         memory = (f"About **{gb:.0f} GB of commit is free** as this brief is written" if gb else
                   "TODO: free commit memory (GB)")
+    if args.wave == 2:
+        # The wave's own count and the machine's memory, as wave 1's brief
+        # has them: the template said "35–43 GB … three agents" (Darksteel's
+        # machine) until Kamigawa's wave 2 ran four agents on ~21 GB.
+        return write_wave_two(code, low, name, args, groups, memory)
     base_commit = git("rev-parse", "--short=9", base_branch) or "TODO"
     fills = {
         "{{SET_NAME}}": name, "{{CODE}}": code, "{{code}}": low,

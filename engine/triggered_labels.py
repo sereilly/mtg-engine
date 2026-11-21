@@ -587,6 +587,19 @@ TRIGGERED_LABELS: dict[str, str] = {
     # claim about the payload rather than about what the ability does to the
     # turn.
     "skip_next_phase": "triggered_turn",
+    # --- Champions of Kamigawa, at its wave-1 rehearsal ---------------------
+    # The promotion rehearsal's label census named nine triggered abilities
+    # whose kinds had activated rows only (or none); each takes the activated
+    # table's word in the triggered family. Shisato's "that player skips their
+    # next untap step" beside `skip_next_phase` (the step is payload). A flip
+    # (CR 710.2, the ten flip cards' top halves) is a change of the
+    # permanent's characteristics, as an animation is.
+    "skip_next_step": "triggered_turn",
+    "flip_self": "triggered_characteristic",
+    "animate_target_until_eot": "triggered_characteristic",
+    "animate_self_until_eot": "triggered_pump",
+    "target_cant_block_until_eot": "triggered_restriction",
+    "gain_control_of_target": "triggered_control",
     # --- Odyssey, at its promotion ------------------------------------------
     # Battle of Wits and Chance Encounter: "At the beginning of your upkeep,
     # if <you have 200 or more cards in your library / this enchantment has
