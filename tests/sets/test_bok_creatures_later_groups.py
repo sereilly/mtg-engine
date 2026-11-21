@@ -22,6 +22,98 @@ log), not instruction kinds alone.
 
 # ==== w1g6 ==========================================================
 # w1g6's tests go between this line and the "end w1g6" line.
+#
+# Characteristics and numbered keywords: two soulshift instances on one line
+# (CR 702.46b), soulshift / bushido X counted, protection from a quality or
+# from the colours among your permanents, switching every creature's P/T,
+# and a target bounded by an announced X.
+from engine import Game as _W1G6Game, PlayerState as _W1G6PlayerState
+from engine.models import Permanent as _W1G6Permanent
+from tests.helpers import drive_combat as _w1g6_drive_combat
+from tests.helpers import settle as _w1g6_settle
+
+
+def _w1g6_put(game, seat, card, *, sick=False):
+    permanent = _W1G6Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    if not sick:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w1g6_table(set_pool, *, hand=(), mine=(), theirs=(), graveyard=(),
+                interactive=(), mana=False):
+    lea = set_pool("LEA")
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="Alice", hand=list(hand), graveyard=list(graveyard),
+                         library=[lea["Island"]] * 10),
+        _W1G6PlayerState(name="Bob", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = mana
+    game.interactive_seats = set(interactive)
+    placed = [_w1g6_put(game, 0, card) for card in mine]
+    placed += [_w1g6_put(game, 1, card) for card in theirs]
+    game.start_turn(0)
+    _w1g6_settle(game)
+    return game, placed
+
+
+def _w1g6_names(cards):
+    return sorted(card.name for card in cards)
+
+
+def test_w1g6_forked_branch_garami_soulshifts_twice(set_pool):
+    """"Soulshift 4, soulshift 4": two instances, each its own dies trigger
+    (CR 702.46b; the 2005-02-01 ruling: "both soulshift abilities trigger").
+    A seat nobody asks names a different Spirit card for each, so both come
+    back; Body of Jukai (mana value 9) is never offered."""
+    bok = set_pool("BOK")
+    game, (garami,) = _w1g6_table(
+        set_pool, hand=[set_pool("LEA")["Terror"]], mine=[bok["Forked-Branch Garami"]],
+        graveyard=[bok["Gnarled Mass"], bok["Traproot Kami"], bok["Body of Jukai"]],
+    )
+    assert game.queue_from_hand(
+        0, "Terror", target_permanent_ids=[garami.permanent_id],
+    ).supported
+    _w1g6_settle(game)
+    assert sum("Forked-Branch Garami triggered (died)" in line for line in game.log) == 2
+    assert _w1g6_names(game.players[0].hand) == ["Gnarled Mass", "Traproot Kami"], game.log
+    assert "Body of Jukai" in _w1g6_names(game.players[0].graveyard)
+
+
+def test_w1g6_forked_branch_garami_each_instance_asks_its_own_target(set_pool):
+    """An interactive seat is asked once per instance. Naming the same card
+    twice is legal (the ruling: "both abilities can attempt to return just
+    one Spirit"), and then the second does not resolve (CR 608.2b)."""
+    bok = set_pool("BOK")
+    game, (garami,) = _w1g6_table(
+        set_pool, hand=[set_pool("LEA")["Terror"]], mine=[bok["Forked-Branch Garami"]],
+        graveyard=[bok["Gnarled Mass"], bok["Traproot Kami"]], interactive=(0,),
+    )
+    assert game.queue_from_hand(
+        0, "Terror", target_permanent_ids=[garami.permanent_id],
+    ).supported
+    asked = 0
+    while True:
+        prompt = _w1g6_settle(game, defaults=False, answers={
+            "optional_pay": lambda g, c: g.confirm_optional_pay(0, accept=True),
+        })
+        if prompt is None:
+            break
+        assert prompt.kind == "trigger_target", prompt
+        assert sorted(t["name"] for t in prompt.data["targets"]) == [
+            "Gnarled Mass", "Traproot Kami",
+        ]
+        mass = next(t for t in prompt.data["targets"] if t["name"] == "Gnarled Mass")
+        assert game.confirm_trigger_target(
+            0, seat=mass["seat"], graveyard_index=mass["graveyard_index"],
+        )
+        asked += 1
+    assert asked == 2
+    assert _w1g6_names(game.players[0].hand) == ["Gnarled Mass"], game.log
+    assert "Traproot Kami" in _w1g6_names(game.players[0].graveyard)
+    assert any("608.2b" in line for line in game.log), game.log
 
 # ==== end w1g6 ======================================================
 

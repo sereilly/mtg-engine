@@ -24,8 +24,13 @@ is classified. From there nothing downstream knows the word:
   would be offered itself, which is what the rule's own words allow. With no
   Spirit card to name the ability is removed from the stack (CR 603.3d).
 
-**CR 702.46b** (several instances each trigger separately) needs nothing here:
-two printed lines are two sentences, two triggers.
+**CR 702.46b** (several instances each trigger separately): two printed lines
+are two sentences, two triggers; and **one line printing a run of instances**
+— "Soulshift 4, soulshift 4" (Forked-Branch Garami), CR 702.1's comma-joined
+keyword list — is rewritten to one rules-text line per instance, so it is two
+triggers too, each choosing its own target (its 2005-02-01 ruling: "both
+soulshift abilities trigger"). Its reminder text's "up to two target Spirit
+cards" is not the rule; the CR's two instances are.
 
 **N is a numeral**, as the reminder text prints it and as the grammar reads a
 mana value ceiling ("mana value 3 or less"). A line the shape test admits but
@@ -59,8 +64,12 @@ _SOULSHIFT_LINE = re.compile(r"^soulshift\s+(?P<count>\d+)$", re.IGNORECASE)
 #: Any line that *is* a soulshift keyword line, readable or not — "Soulshift
 #: X", a bare "Soulshift". The keyword and at most one argument, and nothing
 #: after, so a sentence that merely mentions the word is never mistaken for
-#: the keyword line.
-_SOULSHIFT_SHAPE = re.compile(r"^soulshift(?:\s+\S+)?\s*\.?$", re.IGNORECASE)
+#: the keyword line — or a comma-joined run of such instances ("Soulshift 4,
+#: soulshift 4"), so a run with one unreadable member is still the gate's.
+_SOULSHIFT_SHAPE = re.compile(
+    r"^soulshift(?:\s+[^\s,]+)?(?:\s*,\s*soulshift(?:\s+[^\s,]+)?)*\s*\.?$",
+    re.IGNORECASE,
+)
 
 _REMINDER = re.compile(r"\([^)]*\)")
 
@@ -84,12 +93,28 @@ def is_soulshift_line(line: str) -> bool:
     return _SOULSHIFT_SHAPE.match(_stripped(line)) is not None
 
 
+def soulshift_counts(line: str) -> tuple[int, ...] | None:
+    """The printed N of every soulshift instance on one line — one for
+    "Soulshift 3", two for "Soulshift 4, soulshift 4" — or None when *line*
+    is not a line of soulshift instances this module can rewrite (every
+    comma-separated item must be one, or the line is left as printed)."""
+    items = _stripped(line).rstrip(".").split(",")
+    counts: list[int] = []
+    for item in items:
+        match = _SOULSHIFT_LINE.match(item.strip())
+        if match is None:
+            return None
+        counts.append(int(match.group("count")))
+    return tuple(counts)
+
+
 def expand_soulshift_line(line: str) -> str | None:
-    """The CR 702.46a rules text for one printed soulshift line, or None."""
-    count = soulshift_count(line)
-    if count is None:
+    """The CR 702.46a rules text for one printed soulshift line, or None —
+    one rules-text line per instance the line prints (CR 702.46b)."""
+    counts = soulshift_counts(line)
+    if counts is None:
         return None
-    return SOULSHIFT_RULES_TEXT.format(count=count)
+    return "\n".join(SOULSHIFT_RULES_TEXT.format(count=count) for count in counts)
 
 
 def expand_soulshift_lines(oracle_text: str) -> str:
@@ -122,5 +147,6 @@ __all__ = [
     "expand_soulshift_lines",
     "is_soulshift_line",
     "soulshift_count",
+    "soulshift_counts",
     "unread_soulshift_line",
 ]
