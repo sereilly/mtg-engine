@@ -65,9 +65,9 @@ scripts named below are in `scripts/integration/`, run from Git Bash with
   at Fifth Dawn 30–40 GB stayed free, enough for seven wave-1 agents beside
   the `-n 4` Phase 1 full pass and four wave-2 agents beside the gates; at
   Champions of Kamigawa 21–25 GB stayed free all session (the owner's work
-  held the rest of 93 GB), and nine wave-1 agents ran beside a `-n 3` Phase 1
+  held the rest of 93 GB): nine wave-1 agents ran beside a `-n 3` Phase 1
   full pass (1h29m), and four wave-2 agents beside `-n 4` gates with the
-  wave-1 groups resumed for follow-ups beside those, with no memory death. A
+  wave-1 groups resumed for follow-ups beside them — no memory death. A
   tool an agent runs counts by its processes: `sim_fingerprint`'s default
   four workers, at seven groups snapshotting together, is ~40 GB, so briefs
   ask for `--workers 1`.
@@ -939,9 +939,10 @@ provides?* Three sweeps, in order of blast radius:
    it gates Phase 4 absolutely and decides whether the set is one session or
    ten. Two layouts are the precedents: a split card's face is a card
    (`engine/faces.py`), and a flip card is its top half everywhere, a flipped
-   permanent's card substituted by its bottom half as morph's face-down blank
-   is (`engine/flip_cards.py`) — read which shape a new layout is before
-   choosing, by what `.card.name` and the zone seams would have to answer. A
+   permanent's card being its bottom half, substituted as morph's face-down
+   blank is (`engine/flip_cards.py`) — read which shape a new layout is
+   before choosing, by what `.card.name` and the zone seams would have to
+   answer. A
    new layout owes the face-blind census before its promotion, and then the
    censuses that build boards from its faces (Phase 4).
 2. **Keywords.** Diff the set's keyword lines against
