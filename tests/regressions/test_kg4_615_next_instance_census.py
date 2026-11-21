@@ -112,6 +112,12 @@ _DRIVEN = {
     # board in another module is named "<path>::<board>".
     "Awe Strike": "tests/rules/test_mrd_w1g12_awe_strike.py::"
                   "test_awe_strike_prevents_a_double_blocked_attackers_whole_dealing",
+    # Betrayers of Kamigawa, W1G5. "The next time a source of your choice
+    # would deal damage this turn, that damage is dealt to Opal-Eye
+    # instead": Reflect Damage's recipientless redirect with a named taker,
+    # so a sweep hands it every chunk of one dealing.
+    "Opal-Eye, Konda's Yojimbo": "tests/rules/test_bok_w1g5_damage.py::"
+                                 "test_opal_eye_takes_a_whole_sweep_from_the_chosen_source",
 }
 
 #: Source-keyed "next time" cards in both roles when this was written (53).

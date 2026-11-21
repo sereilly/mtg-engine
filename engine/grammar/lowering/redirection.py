@@ -784,12 +784,24 @@ def _lower_spell_damage_redirect(
                 "target",
                 node=node,
             )
-        if (
+        # "…that damage is dealt to **Opal-Eye** instead." (Opal-Eye, Konda's
+        # Yojimbo.) Reflect Damage's sentence with the taker named rather
+        # than derived: the permanent whose ability this is, which the
+        # handler already has and nothing needs to choose. Every other taker
+        # still refuses below.
+        onto_source = _is_source(node.new_recipient)
+        if not onto_source and (
             not isinstance(node.new_recipient, ast.PlayerRef)
             or node.new_recipient.kind != "that_player"
         ):
             raise LoweringError(
                 "no handler resolves this redirect's new recipient", node=node
+            )
+        if node.chooser is not None or node.combat_only or node.optional:
+            raise LoweringError(
+                "a chosen-source redirect with no recipient names no other "
+                "chooser, combat scope or offer",
+                node=node,
             )
         if node.duration.kind not in _REST_OF_TURN:
             raise LoweringError(
@@ -809,7 +821,8 @@ def _lower_spell_damage_redirect(
             OracleInstruction(
                 "redirect_damage_from_chosen_source_until_eot", "",
                 {"uses": 1, "any_recipient": True,
-                 "new_recipient": "source_controller"},
+                 "new_recipient": "source" if onto_source
+                 else "source_controller"},
             ),
         )
     spec = node.dealt_by

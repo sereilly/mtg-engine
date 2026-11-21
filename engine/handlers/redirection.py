@@ -133,6 +133,33 @@ def redirect_damage_until_eot(
         # off, exactly as a class-scoped one does, and
         # `damage_redirects.source_keyed_redirects` is what finds it again.
         moved_source = chosen_shield_source(game, context)
+        named = getattr(getattr(moved_source, "card", moved_source), "name", None)
+        if payload.get("new_recipient") == "source":
+            # "…that damage is dealt to **Opal-Eye** instead." (Opal-Eye,
+            # Konda's Yojimbo.) The same record with its taker named: the
+            # permanent whose ability this is. Fixed here rather than derived,
+            # and CR 614.9's liveness rule is ``live_recipient``'s — if the
+            # Yojimbo has left the battlefield or stopped being a creature by
+            # the time the damage would be dealt, the effect does nothing.
+            taker = context.source_permanent
+            if taker is None or not game.is_on_battlefield(taker):
+                game.log.append(f"{card_name}: its own source is gone")
+                return True, "resolved"
+            add_redirect(
+                caster,
+                DamageRedirect(
+                    new_recipient=taker,
+                    source=moved_source,
+                    uses=payload.get("uses"),
+                    any_recipient=True,
+                    source_name=card_name or None,
+                ),
+            )
+            game.log.append(
+                f"{card_name}: the next damage {named or 'any source'} would "
+                f"deal this turn is dealt to {taker.card.name} instead"
+            )
+            return True, "resolved"
         add_redirect(
             caster,
             DamageRedirect(
@@ -144,7 +171,6 @@ def redirect_damage_until_eot(
                 source_name=card_name or None,
             ),
         )
-        named = getattr(getattr(moved_source, "card", moved_source), "name", None)
         game.log.append(
             f"{card_name}: the next damage {named or 'any source'} would deal "
             "this turn is dealt to its controller instead"
