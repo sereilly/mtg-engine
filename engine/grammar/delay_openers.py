@@ -311,6 +311,15 @@ def parse_leaves_battlefield_delay(stream: TokenStream) -> tuple[str, bool, str,
         stream.reset(mark)
         return None
     watched = _parse_watched_object(stream)
+    # "Return Tatsumasa to the battlefield under its owner's control **when
+    # that token dies**." (Tatsumasa, the Dragon's Fang.) The same watched
+    # object with CR 700.4's narrower event — put into a graveyard from the
+    # battlefield, which a bounce or an exile is not — so it is the existing
+    # ``bound_permanent_dies`` key (Reincarnation's), announced by the death
+    # scans for whichever permanent the entry was bound to. One-shot and
+    # unexpiring for this opener's reason below.
+    if watched is not None and stream.accept_word("dies"):
+        return ("bound_permanent_dies", True, "until_it_triggers", False, watched)
     if watched is None or not stream.accept_phrase("leaves", "the", "battlefield"):
         stream.reset(mark)
         return None

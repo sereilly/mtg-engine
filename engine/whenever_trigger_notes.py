@@ -503,6 +503,16 @@ then refusing the effect. The empty named group is this table's marker
 idiom: present in the groupdict exactly when this row matched, carrying
 no text of its own to re-read.
 '''),
+    ('creature_attacks', 'first_attack_each_turn', r'''
+"Whenever Godo attacks **for the first time each turn**, untap it and all
+Samurai you control. After this phase, there is an additional combat
+phase." (Godo, Bandit Warlord.) The same event again, narrowed by the
+attacker's own history: the declare-attackers step counts each creature's
+declarations this turn (``attacks_this_turn``, swept at cleanup) and
+`_fire_creature_attacks_triggers` lets the marker through only on the
+first — so the extra combat Godo makes does not make another. Above the
+bare row for "alone"'s reason: its words are a strict prefix of these.
+'''),
     ('creature_blocks', 'blocks (?P<blocked_subject>(?:an?|another) [^,]+)', r'''
 "…blocks **a creature with flying**" (Snarespinner) narrows the source's
 own block trigger by what it blocked. Before the bare form, which is its
@@ -890,6 +900,16 @@ a trigger firing on a strictly larger set, the direction no census sees.
 
 The bare "a land" row first and the land-type row after it, for the
 reason the "a player" pair above is ordered that way.
+'''),
+    ('land_tapped_for_mana', 'tap this', r'''
+"Whenever you tap **this land** for mana, target opponent creates a 1/1
+colorless Spirit creature token." (Forbidden Orchard.) The second-person
+seat again, and a land named by the source's own reference: the empty
+``tapped_self`` group is tested at the tap seam against the watching
+permanent itself (``_land_tap_trigger_fires``), so the Orchard watches its
+own taps and no other land's. Dropped, it would hand an opponent a Spirit
+for every land its controller tapped. After the land-type row, whose
+"an?" cannot read "this", and before the passive subject row.
 '''),
     ('land_tapped_for_mana', '.+?) is tapped', r'''
 "Whenever **a land an opponent controls** is tapped for mana" (Mana Web).

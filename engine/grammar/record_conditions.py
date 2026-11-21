@@ -81,7 +81,8 @@ from .seat_records import (_accept_seat_cast_record,
                            _accept_seat_damage_record,
                            _accept_seat_land_record)
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES, COLOR_WORDS, NUMBER_WORDS
+from .vocabulary import (CARD_TYPES, COLOR_WORDS, NUMBER_WORDS,
+                         TYPE_LINE_SUPERTYPES)
 
 
 def _accept_it_is(stream: TokenStream, *, negated: bool) -> bool:
@@ -509,6 +510,20 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         coloured = _accept_colour_run(stream, negated=negated)
         if coloured is not None:
             return coloured
+        # "…**As long as it's legendary**, it gets an additional +2/+2."
+        # (Tenza, Godo's Maul.) A bare supertype (CR 205.4a) where the colour
+        # above is a bare colour: an adjective with no head noun, which the
+        # noun parser below would refuse. Taken only as the whole predicate —
+        # the clause ends after it — and as the same filter node a "legendary
+        # creature card" phrase builds, so every reader decides for itself
+        # whether a supertype is a question it can ask (the Aura-host test
+        # does; the revealed-card and target-type tests refuse it by name).
+        supertype = stream.peek_word()
+        if supertype in TYPE_LINE_SUPERTYPES and stream.peek_word(1) is None:
+            stream.advance()
+            return ast.RevealedCardIs(
+                ast.ObjectFilter(supertypes=(supertype,)), negated=negated,
+            )
         stream.accept_word("a", "an")
         try:
             revealed_filter = parse_object_filter(stream)

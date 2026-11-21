@@ -24,7 +24,7 @@ from ..oracle import compile_card_oracle
 from ..oracle_types import X_FROM_COUNT
 from ..trigger_utils import (bound_event_object, combatant_subject_context,
                              matching_triggers)
-from ..turn_state import record_attacked_seat, record_attack
+from ..turn_state import ATTACKS_THIS_TURN, record_attacked_seat, record_attack
 
 
 class DeclareAttackersStepMixin:
@@ -265,6 +265,13 @@ class DeclareAttackersStepMixin:
                 self.become_tapped(attacker)
                 self._turn_face_up(attacker)
             attacker.metadata["attacked_this_turn"] = True
+            # …and **how many times** it has, which "attacks for the first
+            # time each turn" (Godo, Bandit Warlord) asks: the turn mark above
+            # is still set in a second combat phase and cannot tell the first
+            # declaration from the next. Swept with it at cleanup.
+            attacker.metadata[ATTACKS_THIS_TURN] = (
+                int(attacker.metadata.get(ATTACKS_THIS_TURN, 0)) + 1
+            )
             # The **per-combat** half of the same record, the mirror of the
             # ``blocked_this_combat`` mark the blockers step writes and
             # ``end_combat`` sweeps. "…if this creature attacked or blocked
@@ -890,6 +897,16 @@ class DeclareAttackersStepMixin:
                 # somebody else is declared and this announcement is CR 508.1's
                 # one moment.
                 if "attacks_alone" in trig.condition.payload and len(attacker_indices) != 1:
+                    continue
+                # "Whenever Godo attacks **for the first time each turn**"
+                # (Godo, Bandit Warlord). The declaration count the loop above
+                # stamped (``ATTACKS_THIS_TURN``): this declaration is the
+                # first exactly when it is the one counted — so the extra
+                # combat phase Godo's own ability adds announces nothing.
+                if (
+                    "first_attack_each_turn" in trig.condition.payload
+                    and int(permanent.metadata.get(ATTACKS_THIS_TURN, 0)) != 1
+                ):
                     continue
                 pushed = self._stack_push(
                     StackItem(

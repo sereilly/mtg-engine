@@ -474,7 +474,13 @@ def _returning_from_exile(instruction: OracleInstruction) -> OracleInstruction:
         return value
 
     payload = {key: walk(value) for key, value in instruction.payload.items()}
-    if instruction.kind == "return_self_from_graveyard":
+    # "{6}, Exile Tatsumasa: … **Return Tatsumasa to the battlefield under its
+    # owner's control** when that token dies." (Tatsumasa, the Dragon's Fang.)
+    # The battlefield self-return's own handler reads the same ``from`` key
+    # (Anurid Brushhopper's), and read unzoned it looked in the graveyards.
+    if instruction.kind in (
+        "return_self_from_graveyard", "return_source_card_to_battlefield",
+    ):
         payload["from"] = "exile"
     return OracleInstruction(instruction.kind, instruction.value, payload)
 

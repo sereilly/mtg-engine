@@ -275,6 +275,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever enchanted (?P<combatant_attached>[a-z]+) attacks"),
     ("creature_attacks",
      r"whenever this creature attacks (?P<attacks_alone>)alone"),
+    ("creature_attacks",
+     r"whenever this creature attacks (?P<first_attack_each_turn>)for the first time each turn"),
     ("creature_attacks",            r"whenever this creature attacks"),
     ("creature_blocks",
      r"whenever this creature blocks (?P<blocked_subject>(?:an?|another) [^,]+)"),
@@ -379,6 +381,8 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_tapped_for_mana",
      r"whenever you(?P<tapped_by_you>) tap an? "
      r"(?P<tapped_land_subtype>[a-z]+) for mana"),
+    ("land_tapped_for_mana",
+     r"whenever you(?P<tapped_by_you>) tap this(?P<tapped_self>) land for mana"),
     ("land_tapped_for_mana",
      r"whenever (?P<tapped_land_subject>an? .+?) is tapped for mana"),
     ("spell_cast",

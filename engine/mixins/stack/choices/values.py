@@ -1105,7 +1105,9 @@ class ValueChoicesMixin:
                 self, choice.data.get("source"), str(choice.data.get("record") or "")
             )
         note = str(choice.data.get("note") or "")
-        restricted = f" (spendable only on {spend_only})" if spend_only else ""
+        from ....mana_riders import spend_note
+
+        restricted = spend_note(spend_only, f" (spendable only on {spend_only})")
         # In mana symbols, as the producer's own line is: the colour asked for
         # is the choice this answers, and "produced 1 R mana" printed its
         # record rather than the mana.

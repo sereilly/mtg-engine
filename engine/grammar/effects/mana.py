@@ -550,6 +550,15 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         symbol = token.text.strip("{}")
         if symbol.isdigit() or symbol in ("T", "Q", "X"):
             raise stream.error(f"unsupported mana symbol {token.text!r}")
+        if isinstance(count, ast.ThatMuch):
+            # "Sacrifice any number of lands, then add **that much {C}**."
+            # (Mana Seism.) A counted single symbol whose count is a quantity
+            # an earlier step of this effect recorded — one pip, multiplied by
+            # the record (``per_each_recorded``, Metalworker's "for each card
+            # revealed this way" field), whose producer the lowering names.
+            return ast.AddMana(
+                ((symbol, 1),), source_text=_clause(), per_each_recorded=count,
+            )
         amount = count.value if isinstance(count, ast.Fixed) else 0
         if amount <= 0:
             raise stream.error("expected a fixed number of mana symbols")

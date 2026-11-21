@@ -82,6 +82,14 @@ class ManaRestriction:
     #: signature guessed by introspection is a signature that silently stops
     #: being guessed right.
     reads_parameter: bool = False
+    #: A CR 106.6 **rider** rather than a restriction: "If that mana is spent
+    #: on an instant or sorcery spell, that spell can't be countered."
+    #: (Boseiju, Who Shelters All.) The mana may pay for anything — its row
+    #: admits every payment — and what spending it *does* is
+    #: ``engine/mana_riders.py``'s, keyed by this row's key. A bucket of its
+    #: own all the same, because only a bucket can say afterwards which units
+    #: a payment took (:func:`debit_restricted_mana`'s attribution).
+    rider: bool = False
 
 
 def _type_line(obj) -> str:
@@ -109,6 +117,17 @@ def _casting_an_instant_or_sorcery(purpose: "PaymentPurpose") -> bool:
 
 def _casting_an_artifact(purpose: "PaymentPurpose") -> bool:
     return purpose.kind == CAST and "artifact" in _type_line(purpose.card)
+
+
+def _casting_a_legendary_spell(purpose: "PaymentPurpose") -> bool:
+    """"Spend this mana only to cast legendary spells." (Untaidake, the Cloud
+    Keeper.) A spell with the legendary supertype (CR 205.4d), whatever its
+    card type: a legendary creature, artifact, enchantment or sorcery alike. Read off the type line's supertypes — the words before the
+    dash — so a subtype spelled "Legendary" (none is) could not answer."""
+    if purpose.kind != CAST:
+        return False
+    supertypes = _type_line(purpose.card).split("—", 1)[0].split()
+    return "legendary" in supertypes
 
 
 def _paying_cumulative_upkeep(purpose: "PaymentPurpose") -> bool:
@@ -184,6 +203,14 @@ def _activating_an_artifact_ability(purpose: "PaymentPurpose") -> bool:
     return "artifact" in _type_line(source)
 
 
+def _any_payment(purpose: "PaymentPurpose") -> bool:
+    """A rider's mana (:attr:`ManaRestriction.rider`): spendable on anything a
+    payment with a purpose pays for, which is every payment this engine
+    makes — the rider says what happens *if* it is spent on a given spell,
+    not what it may be spent on (CR 106.6)."""
+    return True
+
+
 def _artifact_spell_or_artifact_ability(purpose: "PaymentPurpose") -> bool:
     """"Spend this mana only to cast artifact spells **or** activate abilities
     of artifacts." (Vedalken Engineer.)
@@ -217,6 +244,12 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
         # the direction the anchoring note above is about.
         re.compile(r"^spend this mana only to cast artifact spells\.?$"),
         ManaRestriction("artifact", _casting_an_artifact),
+    ),
+    (
+        # Untaidake, the Cloud Keeper: a supertype rather than a card type,
+        # and the same kind of row — a class of spell the mana may pay for.
+        re.compile(r"^spend this mana only to cast legendary spells\.?$"),
+        ManaRestriction("legendary", _casting_a_legendary_spell),
     ),
     (
         # Adarkar Unicorn, Snowfall. The first clause in the pool that names a
@@ -271,10 +304,37 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
             reads_parameter=True,
         ),
     ),
+    # The two CR 106.6 riders Champions of Kamigawa's legendary lands print —
+    # the rule's second kind of mana, "an additional effect that affects the
+    # spell … that mana is spent on". Rows here because the grammar's rider
+    # attach (``grammar/riders._attach_spend_only``) asks this one matcher of
+    # the sentence after an "Add …", and because the units need a bucket; the
+    # effect each has is ``engine/mana_riders.py``'s, under the same key.
+    (
+        re.compile(
+            r"^if that mana is spent on an instant or sorcery spell, that "
+            r"spell can't be countered\.?$"
+        ),
+        ManaRestriction(
+            "rider_uncounterable_instant_or_sorcery", _any_payment, rider=True,
+        ),
+    ),
+    (
+        re.compile(r"^if that mana is spent on a creature spell, it gains haste\.?$"),
+        ManaRestriction("rider_haste_creature", _any_payment, rider=True),
+    ),
 )
 
 #: The keys above, for a reader that needs the set rather than a lookup.
 RESTRICTION_KEYS = frozenset(r.key for _pattern, r in _PATTERNS)
+#: The keys whose rows are riders (:attr:`ManaRestriction.rider`).
+RIDER_KEYS = frozenset(r.key for _pattern, r in _PATTERNS if r.rider)
+
+
+def is_rider_key(key: "str | None") -> bool:
+    """Whether a bucket *key* holds a rider's mana rather than restricted
+    mana — the log's note and the payment's attribution tell them apart."""
+    return bool(key) and str(key).partition(PARAMETER)[0] in RIDER_KEYS
 
 
 def mana_restriction_for(sentence: str) -> ManaRestriction | None:
@@ -385,7 +445,9 @@ __all__ = [
     "ManaRestriction",
     "PaymentPurpose",
     "RESTRICTION_KEYS",
+    "RIDER_KEYS",
     "debit_restricted_mana",
+    "is_rider_key",
     "mana_restriction_for",
     "restriction_admits",
     "spendable_restricted_mana",

@@ -29,7 +29,8 @@ from ..land_mana_swaps import (production_snapshot, source_wide_swap,
                                substitute_production)
 from ..game_types import OracleExecutionContext
 from ..replacements import apply_replacements
-from ..trigger_utils import iter_triggered_abilities
+from ..mana_abilities import requires_a_target
+from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 
 #: Every instruction kind ``_resolve_tapped_land_trigger_step`` has an arm for.
@@ -379,6 +380,27 @@ class LandTappedForManaMixin:
         ):
             if not self._land_tap_trigger_fires(trig, perm, player_index, land):
                 continue
+            # "Whenever you tap this land for mana, **target opponent** creates
+            # a 1/1 colorless Spirit creature token." (Forbidden Orchard.) An
+            # ability that requires a target is not a mana ability (CR 605.1b,
+            # 605.5a): it uses the stack, and is put there the ordinary way.
+            # Inside a cast's payment the enqueue is deferred until the spell
+            # is on the stack (``deferring_triggers``; CR 601.2c: such
+            # abilities "wait to be put on the stack until the spell has
+            # finished being cast"), so it goes on above that spell, and the
+            # reason the arms below resolve inline does not apply to it.
+            if requires_a_target(trig.instruction):
+                watcher = self.controller_index_of(perm)
+                if watcher is not None:
+                    self._enqueue_triggered_batch([make_trigger_event(
+                        watcher, perm, trig,
+                        trigger_context={
+                            "event_subject_player": player_index,
+                            "event_subject_controller": player_index,
+                            "event_subject_permanent_id": land.permanent_id,
+                        },
+                    )])
+                continue
             # "…that player adds one mana of any type that land produced.
             # **That land doesn't untap during its controller's next untap
             # step.**" (Winter's Night.) One trigger whose effect is two
@@ -503,6 +525,11 @@ class LandTappedForManaMixin:
             watcher = self.controller_index_of(perm)
             if watcher is None or player_index != watcher:
                 return False
+        # "Whenever you tap **this land** for mana" (Forbidden Orchard): the
+        # watching permanent's own taps, and no other land's. By identity —
+        # the land tapped is the permanent whose ability this is.
+        if trig.condition.payload.get("tapped_self") is not None and land is not perm:
+            return False
         described = trig.condition.payload.get("tapped_land_filter")
         if described:
             from ..subject_filters import subject_matches

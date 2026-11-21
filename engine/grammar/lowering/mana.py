@@ -25,7 +25,7 @@ from ._common import (
     _targets_payload,
 )
 from ._events import (_DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_PLAYERS,
-                      _RECORDED_PERMANENTS)
+                      _RECORDED_PERMANENTS, _back_reference_payload)
 from ._amounts import (OPPONENTS_SCOPE, count_filter_on_frozen_seat,
                        count_spec, recorded_count_spec, x_offset_amount)
 from ._cost_records import (SACRIFICED_FOR_COST, UNTAPPED_FOR_COST,
@@ -351,7 +351,21 @@ def _lower_add_mana(
             # re-written here. With no reveal in front of it the words name
             # nothing and the spec would answer 0, which is a Metalworker that
             # reports supported and adds no mana at all.
-            spec = recorded_count_spec(node.per_each_recorded, produced, node)
+            recorded = node.per_each_recorded
+            if isinstance(recorded, ast.ThatMuch) and recorded.source is None:
+                # "…then add **that much** {C}." (Mana Seism.) A bare
+                # back-reference names no producer, so the one reader that
+                # decides where one lives says which — the single quantity a
+                # step of this effect produced (the sacrifice's count) — and
+                # anything else (a trigger's number, two candidates) refuses.
+                bound = _back_reference_payload(recorded, produced, event)
+                if "amount_from" not in bound:
+                    raise LoweringError(
+                        "'that much' mana names a quantity no step of this "
+                        "effect produced", node=node,
+                    )
+                recorded = dataclasses.replace(recorded, source=bound["amount_from"])
+            spec = recorded_count_spec(recorded, produced, node)
             if spec is None:
                 raise LoweringError(
                     "a mana multiplier per recorded unit names its producer",

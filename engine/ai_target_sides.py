@@ -1307,6 +1307,7 @@ def host_effect_by_the_moment(instruction: OracleInstruction | None) -> bool:
 HOST_LOSING_KINDS = frozenset({
     "destroy_attached_permanent",
     "sacrifice_attached_permanent",
+    "exile_attached_permanent",
     "give_control_of_attached_to_player",
 })
 

@@ -34,6 +34,7 @@ from ...game_types import first_target_id, single_slot
 from ...models import Permanent
 from ...oracle import compile_card_oracle
 from ...prevention.shields import carry_spell_shields_onto_permanent
+from ...mana_riders import apply_resolution_riders
 from ...sunburst import MANA_SPENT_TO_CAST
 from ...text_changes import carry_spell_text_changes
 
@@ -163,6 +164,9 @@ class PermanentSpellResolutionMixin:
         mana_spent = (choices or {}).get(MANA_SPENT_TO_CAST)
         if mana_spent:
             permanent.metadata[MANA_SPENT_TO_CAST] = dict(mana_spent)
+        # Hall of the Bandit Lord's "it gains haste" (CR 106.6), with no
+        # duration: the spell's rider becomes the permanent's.
+        apply_resolution_riders(self, permanent, choices)
         cost_discards = (choices or {}).get("discarded_for_cost") or ()
         if len(cost_discards) == 1:
             permanent.metadata[CAST_COST_DISCARD_MANA_VALUE] = int(

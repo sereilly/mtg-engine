@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
+from ..oracle_types import (LAST_TARGET_CONTROLLER, X_FROM_COUNT,
+                            X_FROM_COUNT_PER_RECIPIENT)
 from ._amounts import count_from_payload, per_recipient_amount
 from ..resumption import ask_in_turn_order
 from ._filters import seats_matching_deed
@@ -166,6 +167,12 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         from ._targets import attached_host
 
         exclude = attached_host(game, context.source_permanent)
+    if instruction.payload.get("exclude_destroyed_target"):
+        # "Destroy target land. If that land was legendary, its controller
+        # sacrifices **another** land of their choice." (Feast of Worms.) The
+        # land the destroy in front of this chose, by identity: gone, it
+        # excludes nothing; indestructible, it is not its own sacrifice.
+        exclude = context.results.get("destroyed_target")
     who = instruction.payload.get("who")
     if who is None:
         payers = [caster_index]
@@ -241,6 +248,17 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         seat = (context.trigger_context or {}).get("event_subject_controller")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return False, "no seat was frozen for 'that creature's controller'"
+        payers = [seat]
+    elif who == LAST_TARGET_CONTROLLER:
+        # "Destroy target land. If that land was legendary, **its controller**
+        # sacrifices another land of their choice." (Feast of Worms.) The seat
+        # the destroy in front of this step froze as it removed the land
+        # (CR 608.2h) — by now a card in a graveyard, which CR 108.4 gives no
+        # controller. Nothing recorded is nobody asked, for the reason the
+        # frozen-seat branches above give.
+        seat = context.results.get(LAST_TARGET_CONTROLLER)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "nothing was destroyed to name 'its controller'"
         payers = [seat]
     elif who == "defending_player":
         # "Whenever this creature becomes blocked, **defending player**

@@ -106,6 +106,13 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         # banding lands — through the text table — and this round trip did not,
         # so the grammar's reading of any supertyped anthem refused.
         supertypes=filt.supertypes,
+        # "Creatures that share a color / a creature type **with equipped
+        # creature**…" (Konda's Banner.) The two relations to the source's
+        # host, carried for the round trip's reason.
+        shares_color_with_attached_host=filt.shares_color_with_attached_host,
+        shares_creature_type_with_attached_host=(
+            filt.shares_creature_type_with == "attached_host"
+        ),
     )
 
 
@@ -128,6 +135,10 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "chosen_creature_type": lord.chosen_creature_type,
         "excluded_colors": lord.excluded_colors,
         "supertypes": lord.supertypes,
+        "shares_color_with_attached_host": lord.shares_color_with_attached_host,
+        "shares_creature_type_with": (
+            "attached_host" if lord.shares_creature_type_with_attached_host else None
+        ),
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]

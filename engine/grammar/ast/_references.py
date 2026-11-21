@@ -683,6 +683,13 @@ class ObjectFilter:
     # this position has one at all — is the lowering's to decide, and a
     # lowering not written for the field refuses it by name.
     shares_color_with_it: bool = False
+    #: "Creatures **that share a color with equipped creature** get +1/+1."
+    #: (Konda's Banner.) The colour relation above with its far end printed:
+    #: the permanent the ability's source is attached to (CR 301.5a, 303.4a).
+    #: Read by the anthem path (``lord_buffs.LordBuffFilter``), whose matcher
+    #: holds the source; emitted as an untestable key everywhere else, so a
+    #: lowering not written for it refuses the phrase by name.
+    shares_color_with_attached_host: bool = False
     #: "…target permanent another player controls **that shares a card type
     #: with it**" (Confusion in the Ranks). The colour relation above over
     #: CR 205.2a's card types, and unanswerable by a matcher for the same

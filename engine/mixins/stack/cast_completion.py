@@ -39,6 +39,7 @@ from ...game_types import (
 from ...mana_combination import MANA_COMBINATION
 from ...oracle import compile_card_oracle
 from ...oracle_types import _COLOR_WORD_TO_SYMBOL
+from ...mana_riders import apply_cast_riders
 from ...sunburst import MANA_SPENT_TO_CAST
 from ...target_keywords import ANTE_INDEX
 from ...target_roles import ANNOUNCED_TARGET_CONTROLLERS, ROLE_SEATS
@@ -176,6 +177,7 @@ class CastCompletionMixin:
         role_graveyard_stamps, role_seats, sacrificed_for_cost, source_seat,
         target_permanent_ids, target_permanent_index, target_player_index,
         target_stack_item, x_mana_spent, mana_spent_to_cast=None,
+        mana_riders=(),
     ):
         """The spell put on the stack, and cast (CR 601.2i).
 
@@ -395,6 +397,12 @@ class CastCompletionMixin:
         # unchanged.
         if mana_spent_to_cast:
             spell_item.choices[MANA_SPENT_TO_CAST] = dict(mana_spent_to_cast)
+        # The CR 106.6 riders the payment drew on (Boseiju's "that spell
+        # can't be countered", Hall of the Bandit Lord's haste): written on
+        # the object before it is pushed, so nothing that sees it on the stack
+        # sees it without them (``engine/mana_riders.py``).
+        if mana_riders:
+            apply_cast_riders(self, spell_item, mana_riders)
         if ante_index is not None:
             spell_item.choices[ANTE_INDEX] = ante_index
         self._stack_push(spell_item)

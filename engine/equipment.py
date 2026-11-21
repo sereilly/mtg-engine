@@ -337,6 +337,80 @@ def cant_be_equipped_by_own_text(permanent: "Permanent") -> bool:
     return any(self_cant_be_equipped_line(line) for line in text.splitlines())
 
 
+#: "Konda's Banner can be attached only to a legendary creature." The
+#: Equipment's own restriction on what it may equip — CR 301.5b's "an object
+#: that can't be equipped by it", printed by the *Equipment* where Goblin
+#: Brawler's line above is printed by the creature. The subject is the card's
+#: own name or "this Equipment" / "this artifact"; the noun phrase is the
+#: grammar's (``phrases.parse_subject_filter``), asked of the creature by
+#: ``subject_matches``, so "a legendary creature" means here what it means on
+#: every other line — through the layers (CR 205.4: a creature an effect made
+#: legendary qualifies, and one that stopped being legendary does not).
+_ATTACH_ONLY_TO = re.compile(r"^(?P<subject>.+?) can be attached only to (?P<noun>an? .+)$")
+
+
+def attach_only_to_filter(line: str, card_name: str | None = None) -> dict | None:
+    """The filter payload a printed "<this> can be attached only to <noun
+    phrase>" line restricts its permanent's attachment to, or None.
+
+    None as well for a noun phrase carrying a narrowing ``subject_matches``
+    cannot test: a restriction the matcher would ignore attaches to a
+    strictly larger set than the card prints. Read by the support gate
+    (``auras.aura_continuous_claim``), the grammar's registry claim and
+    :func:`attach_only_to_refusal`, so the claim and the enforcement are one
+    reading.
+    """
+    match = _ATTACH_ONLY_TO.match(_line_text(line or ""))
+    if match is None:
+        return None
+    subject = match.group("subject")
+    own = (card_name or "").strip().lower()
+    if subject not in ("this equipment", "this artifact", "this permanent") and (
+        not own or subject != own
+    ):
+        return None
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import untestable_filter_keys
+
+    filt = parse_subject_filter(match.group("noun"))
+    if filt is None or filt.is_source:
+        return None
+    payload = filt.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload
+
+
+def attach_only_to_refusal(
+    game: "Game", equipment: "Permanent", creature: "Permanent"
+) -> str | None:
+    """Why *creature* is not something *equipment*'s own "can be attached only
+    to …" line allows (CR 301.5b), or None. Read off the Equipment's
+    effective text (CR 707.2: a copy carries it; a text change can take it
+    away)."""
+    card = getattr(equipment, "effective_card", None) or getattr(equipment, "card", None)
+    text = getattr(card, "oracle_text", "") or ""
+    if "attached only to" not in text:
+        return None
+    from .subject_filters import subject_matches
+
+    name = getattr(card, "name", "") or ""
+    for line in text.splitlines():
+        wanted = attach_only_to_filter(line, name)
+        if wanted is None:
+            continue
+        if not subject_matches(
+            game, creature, wanted,
+            observer=game.controller_index_of(equipment), source=equipment,
+        ):
+            return (
+                f"{equipment.card.name} can be attached only to "
+                f"{line.split('attached only to', 1)[1].strip().rstrip('.')} "
+                "(CR 301.5b)"
+            )
+    return None
+
+
 def equip_target_refusal(
     game: "Game", equipment: "Permanent", creature: "Permanent"
 ) -> str | None:
@@ -432,6 +506,16 @@ def _equip_refusal(
         )
     if not chosen_as_target and cant_be_equipped_by_own_text(creature):
         return f"{creature.card.name} can't be equipped (CR 301.5b)"
+    # "Konda's Banner can be attached only to a legendary creature." The
+    # Equipment's own half of CR 301.5b, held back from the picker for the
+    # Brawler line's reason: the equip ability still targets "target creature
+    # you control", which a non-legendary creature is, and the Banner then
+    # doesn't move (CR 301.5b). The resolution, the CR 704.5n sweep (a
+    # creature that stops being legendary sheds it) and the AI's planner ask.
+    if not chosen_as_target:
+        restricted = attach_only_to_refusal(game, equipment, creature)
+        if restricted is not None:
+            return restricted
     return None
 
 
@@ -655,6 +739,8 @@ __all__ = [
     "BECOMES_UNATTACHED",
     "EQUIP_RULES_TEXT",
     "announce_unattached",
+    "attach_only_to_filter",
+    "attach_only_to_refusal",
     "attach_equipment",
     "attachment_target_refusal",
     "cant_be_equipped_by_own_text",

@@ -673,6 +673,29 @@ def evaluate_record_condition(
             for entry in paid
         )
 
+    if kind == "dead_card_is":
+        # "…return that card to the battlefield under your control **if it's
+        # a Samurai card**." (Oathkeeper, Takeno's Daisho.) The card the death
+        # scan froze into the trigger's context (CR 603.10), asked as the card
+        # it is now — a card in a graveyard, read off its printed type line
+        # with its owner's off-battlefield statics (``_card_matches_filter``;
+        # the card's 2004-12-01 ruling asks the card's type, not the
+        # creature's). Nothing frozen is no card, and no card is not a Samurai.
+        card = (context.trigger_context or {}).get("dead_card")
+        if card is None:
+            return bool(payload.get("negated"))
+        owner = next(
+            (
+                seat for seat, player in enumerate(game.players)
+                if any(held is card for held in player.graveyard)
+            ),
+            None,
+        )
+        holds = _card_matches_filter(
+            card, payload.get("filter") or {}, game=game, owner=owner,
+        )
+        return holds != bool(payload.get("negated"))
+
     if kind == "cost_object_was":
         # "…**if the exiled creature was a Thrull**" (Soul Exchange). The object
         # the *cost* ate (CR 601.2b / 602.2b), which left its zone before the

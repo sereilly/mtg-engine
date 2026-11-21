@@ -347,6 +347,16 @@ class LordBuffFilter:
     # would shrink every creature on the board — the Evincar's own black team
     # included.
     excluded_colors: tuple[str, ...] = ()
+    # "Creatures **that share a color with equipped creature** get +1/+1." /
+    # "…**that share a creature type with equipped creature**…" (Konda's
+    # Banner.) A relation to the permanent the buff's *source* is attached to
+    # (CR 301.5f), which ``_lord_buff_matches`` holds and nothing else does —
+    # so a flag each, answered there through the layers (CR 105.2's colour
+    # intersection, CR 205.3m's creature types). An unattached source reaches
+    # nothing: nothing shares a colour with nothing, and a dropped narrowing
+    # would pump every creature on the board.
+    shares_color_with_attached_host: bool = False
+    shares_creature_type_with_attached_host: bool = False
 
 
 @dataclass(frozen=True)
@@ -1094,6 +1104,12 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
     # same exclusion (``buff_creatures_global``'s ``exclude_colors``).
     if buff.filter.excluded_colors:
         payload["exclude_colors"] = list(buff.filter.excluded_colors)
+    # Konda's Banner's two relations to the source's host, emitted only when
+    # printed for the byte-identical reason above.
+    if buff.filter.shares_color_with_attached_host:
+        payload["shares_color_with_attached_host"] = True
+    if buff.filter.shares_creature_type_with_attached_host:
+        payload["shares_creature_type_with_attached_host"] = True
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -1141,6 +1157,12 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             chosen_land_type=bool(payload.get("chosen_land_type")),
             chosen_creature_type=bool(payload.get("chosen_creature_type")),
             excluded_colors=tuple(payload.get("exclude_colors") or ()),
+            shares_color_with_attached_host=bool(
+                payload.get("shares_color_with_attached_host")
+            ),
+            shares_creature_type_with_attached_host=bool(
+                payload.get("shares_creature_type_with_attached_host")
+            ),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

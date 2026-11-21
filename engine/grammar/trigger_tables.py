@@ -195,6 +195,11 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # Listed all the same, because a word left unclaimed here refuses the whole
     # line and the effect behind it goes with it.
     ("creature_attacks", ("this", "creature", "attacks", "alone")),
+    # "attacks **for the first time each turn**" (Godo, Bandit Warlord) — the
+    # same event narrowed by the attacker's own history this turn, carried
+    # as payload by the condition table for the reason "alone" is.
+    ("creature_attacks",
+     ("this", "creature", "attacks", "for", "the", "first", "time", "each", "turn")),
     ("creature_attacks", ("this", "creature", "attacks")),
     # The bare joined sentence (Spitting Slug), above both halves it is a
     # strict prefix of: matching "this creature blocks" first would leave

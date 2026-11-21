@@ -73,7 +73,7 @@ from ..deck_construction import CLAIM as DECK_CONSTRUCTION_CLAIM
 from ..deck_construction import any_number_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
-from ..equipment import self_cant_be_equipped_line
+from ..equipment import attach_only_to_filter, self_cant_be_equipped_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..object_creature_types import (EVERY_CREATURE_TYPE_CLAIM,
                                      every_creature_type_line)
@@ -595,6 +595,11 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # ask — so there is nothing to lower. Not a targeting restriction (the
     # card's 2004-12-01 ruling), which is why no target reader asks it.
     if self_cant_be_equipped_line(line):
+        return "equipment"
+    # …and its other half, printed by the Equipment: "Konda's Banner can be
+    # attached only to a legendary creature." Read off the Equipment's text by
+    # the same predicate (``equipment.attach_only_to_refusal``).
+    if attach_only_to_filter(line, card_name) is not None:
         return "equipment"
 
     # engine/deck_construction.py -- "A deck can have any number of cards named

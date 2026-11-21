@@ -277,6 +277,22 @@ def is_mana_ability(ability) -> bool:
     )
 
 
+def requires_a_target(instruction) -> bool:
+    """Whether any step of *instruction* requires a target — CR 605.1's "it
+    doesn't require a target" asked alone, by the same reading
+    :func:`is_mana_ability` asks it with (a ``targets`` payload, or a target
+    named as a payload value at any depth). For a triggered ability that
+    could never be a mana ability anyway: "Whenever you tap this land for
+    mana, target opponent creates a 1/1 colorless Spirit creature token"
+    (Forbidden Orchard) uses the stack (CR 605.5a)."""
+    if instruction is None or not hasattr(instruction, "kind"):
+        return False
+    return any(
+        (step.payload or {}).get("targets") or _names_a_target(step.payload)
+        for step in (instruction, *_every_nested_step(instruction))
+    )
+
+
 def moves_a_library_card(instruction) -> bool:
     """Whether resolving *instruction* moves a card to or from a library, as
     far as CR 605.1a's fourth criterion is concerned: any step it carries out
@@ -446,5 +462,6 @@ __all__ = [
     "INTRINSIC_LAND_MANA_ABILITY", "LIBRARY_MOVING_COSTS", "LIBRARY_SAFE_ZONE_KINDS",
     "MANA_PRODUCING_KINDS", "answer_color_choices", "carries_an_offer",
     "has_nonmana_activated_ability", "is_mana_ability", "moves_a_library_card",
+    "requires_a_target",
     "steps_carried_out_now",
 ]

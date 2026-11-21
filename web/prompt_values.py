@@ -516,6 +516,13 @@ RESTRICTED_MANA_WORDS = {
     ),
     "not_cast": "This mana can't be spent to cast spells.",
     "last_card_exiled_with_source": "Spend this mana only to cast the last card exiled with its source.",
+    "legendary": "Spend this mana only to cast legendary spells.",
+    # CR 106.6's riders (``engine/mana_riders.py``): spendable on anything, so
+    # the words say what spending it does rather than what it may pay for.
+    "rider_uncounterable_instant_or_sorcery": (
+        "If this mana is spent on an instant or sorcery spell, that spell can't be countered."
+    ),
+    "rider_haste_creature": "If this mana is spent on a creature spell, it gains haste.",
 }
 
 
