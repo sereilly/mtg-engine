@@ -447,6 +447,61 @@ def test_w1g4_genju_of_the_fields_gains_life_once_per_activation(set_pool):
     assert game.players[1].life == 18, game.log
     assert game.players[0].life == 24, game.log
 
+
+# --- Supported on arrival, driven -------------------------------------------
+
+def test_w1g4_blessing_of_leeches_regenerates_and_bleeds_its_controller(set_pool):
+    """{0}: the enchanted Bears survives a Bolt, tapped (CR 701.19); its
+    controller loses 1 life at their own upkeep and not at the opponent's."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, ["Blessing of Leeches", "Lightning Bolt"], mine=["Grizzly Bears"],
+    )
+    bears = mine[0]
+    result = game.cast_from_hand(
+        0, "Blessing of Leeches", target_player_index=0,
+        target_permanent_ids=[bears.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g4_settle(game)
+    assert game.activate_permanent_ability(0, "Blessing of Leeches").supported
+    _w1g4_settle(game)
+    bolt = game.cast_from_hand(
+        0, "Lightning Bolt", target_player_index=0, target_permanent_ids=[bears.permanent_id],
+    )
+    assert bolt.supported, bolt.details
+    _w1g4_settle(game)
+    assert game.is_on_battlefield(bears) and bears.tapped, game.log
+    _w1g4_end_turn(game, 0)
+    game.start_turn(1)
+    _w1g4_settle(game)
+    assert game.players[0].life == 20
+    _w1g4_end_turn(game, 1)
+    game.start_turn(0)
+    _w1g4_settle(game)
+    assert game.players[0].life == 19, game.log
+
+
+@_w1g4_pytest.mark.parametrize("demon", [False, True])
+def test_w1g4_mark_of_the_oni_leaves_at_end_step_without_a_demon(set_pool, demon):
+    """"At the beginning of the end step, if you control no Demons, sacrifice
+    this Aura": without one the stolen Bears goes home; a Lord of the Pit
+    keeps it."""
+    game, _mine, theirs = _w1g4_table(
+        set_pool, ["Mark of the Oni"], mine=["Lord of the Pit"] if demon else [],
+        theirs=["Grizzly Bears"],
+    )
+    bears = theirs[0]
+    result = game.cast_from_hand(
+        0, "Mark of the Oni", target_player_index=1, target_permanent_ids=[bears.permanent_id],
+    )
+    assert result.supported, result.details
+    _w1g4_settle(game)
+    assert game.controller_index_of(bears) == 0
+    game.resolve_end_step(0)
+    _w1g4_settle(game)
+    assert game.controller_index_of(bears) == (0 if demon else 1), game.log
+    assert ("Mark of the Oni" in _w1g4_names(game.players[0].graveyard)) is not demon
+
 # ==== end w1g4 ======================================================
 
 

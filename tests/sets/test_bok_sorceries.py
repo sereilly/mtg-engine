@@ -109,6 +109,28 @@ def test_w1g4_twist_allegiance_swaps_untaps_and_hastes_both_boards(set_pool):
     assert game.controller_index_of(mine[0]) == 0
     assert not game._has_keyword(theirs[0], "haste")
 
+
+def test_w1g4_sosukes_summons_comes_back_for_a_nontoken_snake(set_pool):
+    """Two Snake tokens; a second Summons' token Snakes do not return the
+    first ("nontoken"); a nontoken Snake entering returns each copy waiting
+    in the graveyard (one trigger per copy, CR 113.6k: it functions there)."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, ["Sosuke's Summons", "Sosuke's Summons"],
+    )
+    game.players[0].hand.append(set_pool("CHK")["Orochi Sustainer"])
+    assert game.cast_from_hand(0, "Sosuke's Summons").supported
+    _w1g4_settle(game)
+    snakes = [p for p in game.controlled_by(0) if p.card.name == "Snake Token"]
+    assert len(snakes) == 2 and all(p.has_type("snake") for p in snakes)
+    assert game.cast_from_hand(0, "Sosuke's Summons").supported
+    _w1g4_settle(game)
+    names = lambda cards: [c.name for c in cards]  # noqa: E731
+    assert names(game.players[0].graveyard) == ["Sosuke's Summons"] * 2, game.log
+    assert game.cast_from_hand(0, "Orochi Sustainer").supported
+    _w1g4_settle(game)
+    assert names(game.players[0].hand) == ["Sosuke's Summons"] * 2, game.log
+    assert names(game.players[0].graveyard) == []
+
 # ==== end w1g4 ======================================================
 
 
