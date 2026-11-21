@@ -31,6 +31,7 @@ from engine.mana_combination import ANY_COLOR_SYMBOLS
 from engine.mana_could_produce import (ability_colors_on_offer, lands_could_produce,
                                        types_that_land_could_produce)
 from engine.models import Permanent
+from engine.named_counters import counters_on
 from engine.noted_mana import noted_mana
 from engine.oracle import compile_card_oracle
 from engine.oracle_types import x_spend_colors_from_text
@@ -653,17 +654,37 @@ def ability_x_payable(game: Game, seat: int, perm: Permanent, ability) -> dict |
     {X} — priced by the activation path's own ``Game.activation_mana_charge``
     (a tax, a reduction, "Spend only red mana on X") — or None for an ability
     whose cost has none, or whose X the card defines or the cost spends in
-    something other than mana (counters, CR 606.6's loyalty)."""
+    something other than mana (CR 606.6's loyalty) — except "Remove X <kind>
+    counters from this <permanent>", an X its controller announces and the
+    source's counters bound (``counter_bound``)."""
     line = (getattr(ability, "source_line", None) or "").lower()
+    # "{1}, **Remove X ki counters** from this creature: …" (Betrayers of
+    # Kamigawa's ki Baku): an X its controller announces (CR 107.3a via
+    # 602.2b) and pays in counters off the source, so no X beyond what the
+    # source holds is payable (CR 118.3) whatever the mana says. The mana
+    # beside it is priced as for any X; ``counter_bound`` names the store, so
+    # the X prompt can say what bounds it.
+    cost = getattr(ability, "cost", None)
+    held: int | None = None
+    if (
+        str(getattr(cost, "remove_counter_count", "") or "").lower() == "x"
+        and getattr(cost, "remove_counter_filter", None) is None
+    ):
+        held = counters_on(perm, str(cost.remove_counter))
     # The cost clause's own {X} (the activation path's reading), and not one
     # the card defines (Voodoo Doll's pin counters, CR 601.2b).
-    if "{x}" not in line.split(":", 1)[0] or cost_x_is_defined(ability.source_line or ""):
+    if held is None and (
+        "{x}" not in line.split(":", 1)[0]
+        or cost_x_is_defined(ability.source_line or "")
+    ):
         return None
     colors = x_spend_colors_from_text(getattr(ability, "source_line", None) or "")
     purpose = PaymentPurpose(ACTIVATE, source=perm)
     priced: dict[int, list] = {}
 
     def prices(x: int):
+        if held is not None and x > held:
+            return []
         if x not in priced:
             charge = game.activation_mana_charge(seat, perm, ability, x_value=x)
             priced[x] = [] if isinstance(charge, str) else [charge[0]]
@@ -671,7 +692,12 @@ def ability_x_payable(game: Game, seat: int, perm: Permanent, ability) -> dict |
 
     if not prices(0):
         return None
-    return _x_payable_by(game, seat, prices, purpose, colors)
+    payable = _x_payable_by(game, seat, prices, purpose, colors)
+    if held is not None:
+        payable["pool"] = min(payable["pool"], held)
+        payable["board"] = min(payable["board"], held)
+        payable["counter_bound"] = {"kind": str(cost.remove_counter), "count": held}
+    return payable
 
 
 def ability_price(game: Game, seat: int, perm: Permanent, ability) -> str | None:

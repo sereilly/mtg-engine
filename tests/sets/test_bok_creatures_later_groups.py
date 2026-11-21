@@ -214,6 +214,29 @@ def test_w1g8_blademane_baku_gets_two_power_per_counter_its_cost_removed(set_poo
     assert blade.effective_power == 1
 
 
+def test_w1g8_the_wire_bounds_a_removal_x_by_the_counters_held(set_pool):
+    """A person's X prompt for "{1}, Remove X ki counters from this
+    creature: …" is sized by the server (``web/offers.ability_x_payable``):
+    the counters the Baku holds bound it whatever the mana says, and
+    ``counter_bound`` names the store; with {1} unpayable nothing is."""
+    from engine.named_counters import add_counters
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import usable_activated_abilities
+    from web.offers import ability_x_payable
+
+    bok = set_pool("BOK")
+    game, (blade,) = _w1g8_table([bok["Blademane Baku"]], [])
+    add_counters(blade, "ki", 2)
+    (ability,) = usable_activated_abilities(compile_card_oracle(blade.card))
+    game.players[0].mana_pool["C"] = 5
+    payable = ability_x_payable(game, 0, blade, ability)
+    assert payable["pool"] == 2 and payable["board"] == 2
+    assert payable["counter_bound"] == {"kind": "ki", "count": 2}
+    game.players[0].mana_pool["C"] = 0
+    payable = ability_x_payable(game, 0, blade, ability)
+    assert payable["pool"] == 0 and payable["board"] == 0
+
+
 def test_w1g8_for_each_counter_removed_needs_a_removal_cost():
     """The leading "For each counter removed," counts the ability's own
     removal cost; on an ability whose cost removes nothing the words name
