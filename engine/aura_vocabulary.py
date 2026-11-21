@@ -125,11 +125,23 @@ def _build_type_addition_grant() -> re.Pattern[str]:
 _TYPE_ADDITION_GRANT = _LazyPattern(_build_type_addition_grant)
 
 
-def _build_creature_type_set() -> re.Pattern[str]:
+def creature_type_alternation() -> str:
+    """CR 205.3m's creature types as one regex alternation, longest first (so
+    a two-word type is never read as its first word)."""
     from .grammar.vocabulary import CREATURE_TYPES
 
-    subtypes = "|".join(sorted(map(re.escape, CREATURE_TYPES), key=len, reverse=True))
-    return re.compile(rf"^{_ATTACHED} creature is an? (?P<subtype>{subtypes})$")
+    return "|".join(sorted(map(re.escape, CREATURE_TYPES), key=len, reverse=True))
+
+
+def _build_creature_type_set() -> re.Pattern[str]:
+    subtypes = creature_type_alternation()
+    # "…is a **Demon Spirit**" (Oni Possession): one or more creature types,
+    # each held to the list — the whole run is captured and split by
+    # ``aura_grants.aura_creature_type_sets`` through the same alternation.
+    return re.compile(
+        rf"^{_ATTACHED} creature is an? "
+        rf"(?P<subtype>(?:{subtypes})(?: (?:{subtypes}))*)$"
+    )
 
 
 #: "Enchanted creature **is a Flagbearer**." (Coalition Flag.) The sentence
@@ -143,6 +155,10 @@ def _build_creature_type_set() -> re.Pattern[str]:
 #: condition never reads as this one; the type is held to CR 205.3m's list for
 #: ``_TYPE_ADDITION_GRANT``'s reason — a made-up word would be claimed here and
 #: then set nothing.
+#:
+#: "Enchanted creature is a **Demon Spirit**." (Oni Possession.) The same
+#: sentence setting two creature types at once; both replace what the creature
+#: had (CR 205.1a, "the new subtype(s)").
 _CREATURE_TYPE_SET = _LazyPattern(_build_creature_type_set)
 
 

@@ -41,6 +41,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              exile_any_number_on_enter,
                              entry_sacrifice_requirement,
                              sacrifice_any_number_on_enter,
+                             sacrifice_on_enter_counter_kind,
                              sacrifice_all_on_enter, discards_hand_on_enter,
                              CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
                              chooses_color_on_enter,
@@ -61,6 +62,7 @@ from ..enter_effects import (ENTERED_BATTLEFIELD_TURN,
                              choose_number_on_enter, pay_any_life_on_enter,
                              enters_with_pt_counters, kicked_entry,
                              enters_with_named_counter,
+                             enters_with_named_counter_if_cast,
                              enters_with_counters_per_color_spent,
                              SUNBURST_COUNTER,
                              LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER)
@@ -763,11 +765,18 @@ class PermanentStateMixin:
                 permanent.metadata["sacrificed_as_entered"] = 0
             # "Any number" of nothing is zero, already recorded — and arming a
             # prompt over an empty board would ask a question with one answer.
+            # "…Shimatsu enters with **that many +1/+1 counters** on it."
+            # The same answer buying counters rather than a defined size:
+            # placed where the count is recorded, before the permanent the
+            # prompt holds back enters (CR 614.12a).
             if candidates:
                 self.arm_forced_sacrifice(
                     caster_index, len(candidates), filter=offered,
                     reason=f"{permanent.card.name} enters",
                     up_to=True, count_onto=permanent,
+                    counters_onto=sacrifice_on_enter_counter_kind(
+                        raw_line, permanent.effective_card.name
+                    ),
                 )
             break
 
@@ -954,6 +963,20 @@ class PermanentStateMixin:
             placed = enters_with_named_counter(
                 raw_line, permanent.effective_card.name
             )
+            if placed is None:
+                # "…enters with a divinity counter on it **if you cast it from
+                # your hand**" (the Myojin, CR 614.1c): the same placement,
+                # only on a permanent the resolving spell stamped as cast from
+                # that zone. Every other road (a reanimation, a blink, "put
+                # onto the battlefield from your hand") leaves no stamp.
+                conditional = enters_with_named_counter_if_cast(
+                    raw_line, permanent.effective_card.name
+                )
+                if (
+                    conditional is not None
+                    and permanent.metadata.get("cast_from_zone") == conditional[2]
+                ):
+                    placed = conditional[:2]
             if placed is not None:
                 count, counter = placed
                 add_named_counters(permanent, counter, count)

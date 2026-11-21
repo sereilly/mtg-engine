@@ -216,6 +216,15 @@ def discard_whole_hand(
         return (
             OracleInstruction("discard_hand", "", {"who": "each_player"}),
         )
+    # "Remove a divinity counter from Myojin of Night's Reach: **Each
+    # opponent** discards their hand." The branch above with the controller
+    # left out — every living seat but the one controlling the effect (CR
+    # 102.2), the same loop with one seat fewer, so the same instruction with
+    # a fourth ``who``.
+    if node.player.kind == "each_opponent":
+        return (
+            OracleInstruction("discard_hand", "", {"who": "each_opponent"}),
+        )
     # "…**target opponent** discards their hand." (Brink of Madness.) The
     # same emptying aimed at a seat the *announcement* chose (CR 601.2c /
     # 603.3d) rather than at one an event froze, so it is the same

@@ -660,6 +660,9 @@ _DAMAGE_RECIPIENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("a", "player", "or", "planeswalker"), "a player or planeswalker"),
     (("a", "player"), "a player"),
     (("an", "opponent"), "an opponent"),
+    # "…deals damage to **another player**" (Night Dealings): every player but
+    # the ability's controller — the "you" row read the other way round.
+    (("another", "player"), "another player"),
     (("a", "planeswalker"), "a planeswalker"),
     # "…deals combat damage to **defending player**" (Electryte). The seat the
     # attack was declared against (CR 506.2), which is a relation to the

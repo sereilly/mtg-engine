@@ -134,7 +134,38 @@ class _Watch:
         return named == self.card.name and (text or "") == (self.text or "")
 
 
-def _drive(game, by_name, kind: str) -> None:
+def _entering_for(game, by_name, trig) -> Permanent:
+    """What the entry is made with: a Shivan Dragon — a creature with mana
+    value 6 that is a Dragon, what most stamped entry conditions in the pool
+    name (the Dragon Auras' "a creature with mana value 6 or greater",
+    Bladewing's Thrall's "a Dragon") — unless the trigger's own filter asks for
+    something else (Blood Speaker's "a Demon you control"), when it is the
+    first pool creature that answers it, asked of seat 0's board."""
+    from engine.subject_filters import subject_matches
+
+    described = (trig.condition.payload or {}).get("enterer_filter") if trig else None
+
+    def answers(card) -> bool:
+        if not described:
+            return True
+        probe = Permanent(card=card)
+        game.players[0].battlefield.append(probe)
+        game._sync_control()
+        try:
+            return subject_matches(game, probe, described, observer=0)
+        finally:
+            game.remove_from_battlefield(probe)
+
+    if answers(by_name["Shivan Dragon"]):
+        return Permanent(card=by_name["Shivan Dragon"])
+    found = next(
+        card for card in by_name.values()
+        if card.primary_type == "creature" and answers(card)
+    )
+    return Permanent(card=found)
+
+
+def _drive(game, by_name, kind: str, trig=None) -> None:
     """Make the trigger event of *kind* happen with seat 0 active."""
     if kind == "upkeep_self":
         game.start_turn(0)
@@ -142,13 +173,8 @@ def _drive(game, by_name, kind: str) -> None:
         game.start_turn(0)
         game.resolve_end_step(0)
     elif kind == "matching_permanent_enters":
-        # A creature with mana value 6 that is a Dragon: what each stamped
-        # entry condition in the pool names (the Dragon Auras' "a creature
-        # with mana value 6 or greater", Bladewing's Thrall's "a Dragon").
         game.start_turn(0)
-        game._put_permanent_onto_battlefield(
-            0, Permanent(card=by_name["Shivan Dragon"]), None
-        )
+        game._put_permanent_onto_battlefield(0, _entering_for(game, by_name, trig), None)
     else:  # pragma: no cover - the census's own completeness
         raise AssertionError(f"no way to drive {kind!r}: add it to _drive")
 
@@ -191,7 +217,7 @@ def test_no_trigger_that_functions_elsewhere_fires_from_the_battlefield():
             game.place_plus1_counters(permanent, 3)
         game.stack.clear()
         watch = _Watch(game, card, trig)
-        _drive(game, by_name, trig.condition.kind)
+        _drive(game, by_name, trig.condition.kind, trig)
         assert any(
             held.card is card for held in game.all_permanents()
         ), f"{card.name} left the battlefield: the census asked nothing of it"
@@ -227,7 +253,7 @@ def test_every_trigger_that_functions_from_a_graveyard_still_fires_there():
             game.resolve_end_step(0)
         else:
             watch = _Watch(game, card, trig)
-            _drive(game, by_name, trig.condition.kind)
+            _drive(game, by_name, trig.condition.kind, trig)
         examined += 1
         if not watch.collected:
             silent.append((card.name, trig.condition.kind))

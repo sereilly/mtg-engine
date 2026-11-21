@@ -67,6 +67,10 @@ _NAME_STOPS = (
 # comma was where it stopped), and the condition was left with no comma to
 # close on. A title's second half is an apposition, never a verb phrase:
 # checked against every set file, no card name has any of these after a comma.
+#: The battlefield clause a named subject's condition prints ("a creature named
+#: X **is on the battlefield**"), read as a phrase by :func:`parse_card_name`.
+_ZONE_CLAUSE_STOP = ("is", "on", "the", "battlefield")
+
 _AFTER_COMMA_STOPS = (
     "a", "an", "another", "this",
     "create", "draw", "destroy", "exile", "return", "sacrifice", "tap",
@@ -103,6 +107,13 @@ def parse_card_name(stream: TokenStream) -> str:
         # (checked against every set file), and the two words together are a
         # clause that can only end one.
         if stream.at_word("this") and stream.peek_word(1) == "turn":
+            break
+        # "…if a creature named Eight-and-a-Half-Tails **is on the
+        # battlefield**, …" (Pious Kitsune). The zone clause behind a named
+        # subject, as a whole phrase rather than a bare "is" stop: the four
+        # words end the name where the condition's verb begins, and no card
+        # name in the pool holds them (checked against every set file).
+        if stream.words_from(0)[:4] == _ZONE_CLAUSE_STOP:
             break
         if stream.at_punct(","):
             mark = stream.mark()

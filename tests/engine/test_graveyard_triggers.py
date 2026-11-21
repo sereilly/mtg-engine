@@ -179,13 +179,42 @@ def _arm_offered_price(game: Game, seat: int, card, instruction, pool) -> None:
         game.players[seat].graveyard[:0] = [fodder] * int(price.get("count", 1))
 
 
-#: The permanent an entry announcement is armed with: a Dragon with mana value
-#: 6, which is what every entry-triggered graveyard ability in the pool asks
-#: for (Bladewing's Thrall's "a Dragon", the Scourge Dragon Auras' "a creature
-#: with mana value 6 or greater"). Asserted against each trigger's own filter
-#: before it is used, so a card asking for something else fails loudly here
-#: rather than reading as one that never fired.
+#: The permanent an entry announcement is armed with first: a Dragon with mana
+#: value 6, which is what most entry-triggered graveyard abilities in the pool
+#: ask for (Bladewing's Thrall's "a Dragon", the Scourge Dragon Auras' "a
+#: creature with mana value 6 or greater"). A trigger asking for something
+#: else is armed with the first pool card that answers its own filter (Blood
+#: Speaker's "a Demon you control": a Demon), and the filter is asserted
+#: before the entry, so a card whose filter nothing in the pool answers fails
+#: loudly here rather than reading as one that never fired.
 _ENTERING = "Shivan Dragon"
+
+
+def _entering_card_for(game: Game, seat: int, described):
+    """The card the entry is armed with: :data:`_ENTERING` when it answers
+    *described*, else the first pool creature that does, else
+    :data:`_ENTERING` (and the assertion behind it names the trigger)."""
+    from engine.subject_filters import subject_matches
+
+    def answers(candidate) -> bool:
+        probe = Permanent(card=candidate)
+        game.players[seat].battlefield.append(probe)
+        game._sync_control()
+        try:
+            return subject_matches(game, probe, described, observer=seat)
+        finally:
+            game.remove_from_battlefield(probe)
+
+    pool = _pool()
+    if answers(pool[_ENTERING]):
+        return pool[_ENTERING]
+    return next(
+        (
+            candidate for candidate in pool.values()
+            if candidate.primary_type == "creature" and answers(candidate)
+        ),
+        pool[_ENTERING],
+    )
 
 
 def _run_step(game: Game, seat: int, condition_kind: str, card, trig=None) -> None:
@@ -200,15 +229,15 @@ def _run_step(game: Game, seat: int, condition_kind: str, card, trig=None) -> No
         # one entry seam does, for every road onto the battlefield.
         from engine.subject_filters import subject_matches
 
-        entering = Permanent(card=_pool()[_ENTERING])
         described = (trig.condition.payload or {}).get("enterer_filter")
+        entering = Permanent(card=_entering_card_for(game, seat, described))
         game.players[seat].battlefield.append(entering)
         game._sync_control()
         admitted = subject_matches(game, entering, described, observer=seat)
         game.remove_from_battlefield(entering)
         assert admitted, (
-            f"{card.name}: this guard's entering {_ENTERING} does not answer "
-            f"{described!r}; arm the entry with a permanent that does"
+            f"{card.name}: this guard's entering {entering.card.name} does not "
+            f"answer {described!r}; arm the entry with a permanent that does"
         )
         game._put_permanent_onto_battlefield(seat, Permanent(card=entering.card), None)
     else:

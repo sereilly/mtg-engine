@@ -302,6 +302,11 @@ def _change_creature_type_word(
 @effect_handler("recolor_target_from_text")
 def recolor_target_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     symbol = str(instruction.payload.get("target_color", ""))
+    # "…becomes white **until end of turn**" (Eight-and-a-Half-Tails): the
+    # turn-long slot of either half, which the cleanup sweep ends; the Laces
+    # print no duration and keep the indefinite write.
+    until_eot = bool(instruction.payload.get("until_eot"))
+    said_until = " until end of turn" if until_eot else ""
     # "Target spell or permanent becomes [color]" — a spell on the stack is a
     # legal target (the Lace cards). Recolor it via the stack item's color
     # override — its own key, never ``new_color``: that one is what the spell
@@ -318,10 +323,10 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
         ):
             game.log.append(f"{context.card.name}: no valid spell to recolour")
             return True, "resolved"
-        recolor_spell(context.stack_target, symbol)
+        recolor_spell(context.stack_target, symbol, until_eot=until_eot)
         game.log.append(
             f"{context.stack_target.card.name} (on the stack) became "
-            f"{_colour_said(symbol)}"
+            f"{_colour_said(symbol)}{said_until}"
         )
         return True, "resolved"
     # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
@@ -350,11 +355,16 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     recoloured = resolve_target_permanent(
         game, context, player=context.target, predicate=lambda p: True,
     ) if symbol else None
-    changed = game._apply_color_override(recoloured, symbol) if symbol else False
+    if until_eot:
+        changed = recoloured is not None and bool(symbol)
+        if changed:
+            change_color(recoloured, symbol, until_eot=True)
+    else:
+        changed = game._apply_color_override(recoloured, symbol) if symbol else False
     # Who did it and to what, as the Lace's spell-side line above says it:
     # "Changed target color" named neither the card nor the permanent.
     game.log.append(
-        f"{recoloured.card.name} became {_colour_said(symbol)} "
+        f"{recoloured.card.name} became {_colour_said(symbol)}{said_until} "
         f"({context.card.name})"
         if changed and recoloured is not None
         else f"{context.card.name}: no valid permanent to recolor"

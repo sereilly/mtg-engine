@@ -597,6 +597,22 @@ def _stamp_token_count(
             )
         payload["count"] = {"source_record": REGENERATED_THIS_TURN}
         return payload["count"]
+    if isinstance(node.per_counter, ast.CountersOnSource):
+        # "{5}, {T}: Create a 1/1 green Snake creature token **for each charge
+        # counter on this artifact**." (Orochi Hatchery.) The source's own
+        # pile, read live off the permanent at resolution (CR 608.2h) through
+        # the one evaluator every other "counters on this <noun>" amount uses
+        # (``x_from_count``'s ``source_counters``: Smokestack's sacrifice,
+        # Cephalid Vandal's mill) — the branch below says why the event
+        # subject's pile is a different record and keeps its own node.
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a per-counter token count multiplies one token, not several",
+                node=node,
+            )
+        payload["count"] = "x"
+        payload["x_from_count"] = {"source_counters": node.per_counter.kind}
+        return payload["count"]
     if node.per_counter is not None:
         # "…**for each fungus counter on that creature**" (Sporogenesis). A
         # pile of counters rather than a set of objects, a game-wide tally or a

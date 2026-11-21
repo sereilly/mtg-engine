@@ -76,6 +76,15 @@ _TRIGGER_KINDS_REQUIRING_THE_WORD = frozenset({
 #: back by identity (``<stem>_includes_source``), which
 #: ``tests/regressions/test_w1g7_own_death_and_self_union.py`` holds.
 _UNION_WITH_SOURCE = re.compile(r"\bthis \w+ or another\b", re.I)
+#: A seat phrase a trigger row reads as one fixed word and its event filter
+#: enforces by value, keyed by the payload entry that records it: "…deals
+#: damage to **another player**" (Night Dealings) is ``damage_recipient:
+#: "another player"``, tested in ``event_filters._DAMAGE_RECIPIENT_TESTS``
+#: (a player not the trigger's controller). Only the phrase is set aside; any
+#: other "another" on the same line still owes an exclusion key.
+_SEAT_PHRASES_ENFORCED_BY_VALUE = {
+    ("damage_recipient", "another player"): re.compile(r"\banother player\b", re.I),
+}
 
 
 def _keys(value, out: set) -> set:
@@ -115,7 +124,12 @@ def another_census():
                 )
         for ability in program.triggered_abilities:
             raw = ability.condition.raw_text if ability.condition else ""
-            if _ANOTHER.search(raw or "") and not _UNION_WITH_SOURCE.search(raw):
+            asked = raw or ""
+            payload = ability.condition.payload if ability.condition else {}
+            for (key, value), phrase in _SEAT_PHRASES_ENFORCED_BY_VALUE.items():
+                if (payload or {}).get(key) == value:
+                    asked = phrase.sub("", asked)
+            if _ANOTHER.search(asked) and not _UNION_WITH_SOURCE.search(raw):
                 keys = set(ability.condition.payload) | _keys(
                     ability.condition.payload, set()
                 )

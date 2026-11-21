@@ -40,6 +40,7 @@ from .aura_vocabulary import (
     _CREATURE_TYPE_SET,
     _line_text,
     _keyword_alternation,
+    creature_type_alternation,
 )
 
 
@@ -916,7 +917,12 @@ def aura_creature_type_sets(oracle_text: str) -> tuple[str, ...]:
     for raw_line in oracle_text.split("\n"):
         match = _CREATURE_TYPE_SET.match(_line_text(raw_line))
         if match is not None:
-            found.append(match.group("subtype"))
+            # "…is a Demon Spirit" (Oni Possession): every type of the run,
+            # split by the alternation the pattern matched it with, so a
+            # two-word type stays one type.
+            found.extend(
+                re.findall(rf"(?:{creature_type_alternation()})(?= |$)", match.group("subtype"))
+            )
     return tuple(found)
 
 
