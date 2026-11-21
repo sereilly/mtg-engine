@@ -158,7 +158,11 @@ def _dealt_damage_exilers(game, payload: dict) -> list:
         return []
     found: list = []
     seen: set[int] = set()
-    for source in [*game.all_permanents(), *game.departed_in_this_event()]:
+    # The battlefield, what the same departure event already took off it, and
+    # the dying creature itself (a sacrifice or a targeted destruction takes
+    # it off before the move) - the walk Samurai of the Pale Curtain's
+    # would-die exile makes over the same event.
+    for source in [*game.all_permanents(), *game.departed_in_this_event(), dying]:
         if source.permanent_id is None or source.permanent_id in seen:
             continue
         seen.add(source.permanent_id)

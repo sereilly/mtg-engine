@@ -226,6 +226,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # fighters the ability's own source is does not change that.
     "target_fights_target": "activated_damage",
     "source_bites_target": "activated_damage",
+    # "Target creature deals damage to itself equal to its power." (Kiku,
+    # Night's Flower.) The bite with one creature at both ends.
+    "target_bites_itself": "activated_damage",
     "target_loses_life": "activated_damage",
     # Granting a keyword until end of turn, to the source, a target or the team.
     # `activated_pump` already holds the flying grants and the P/T setters, and
