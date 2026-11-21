@@ -81,7 +81,7 @@ from tests.helpers import settle as _w1g9_settle
 
 
 def _w1g9_card(set_pool, name):
-    for code in ("BOK", "LEA", "LGN", "CHK", "5DN"):
+    for code in ("BOK", "LEA", "LGN", "CHK", "5DN", "MRD"):
         pool = set_pool(code)
         if name in pool:
             return pool[name]
@@ -433,6 +433,121 @@ def test_w1g9_neko_te_does_nothing_for_an_unequipped_damager(set_pool):
     tim.tapped = False
     assert _w1g9_activate(game, tim, target_player_index=1).supported
     assert game.players[1].life == 19
+
+# Shuriken: 'Equipped creature has "{T}, Unattach Shuriken: Shuriken deals 2
+# damage to target creature. That creature's controller gains control of
+# Shuriken unless it was unattached from a Ninja."' The quote is folded onto
+# the creature with the Equipment's name bound to its id (CR 201.5a): the
+# Equipment is the dealer (``biter: "granter"``), the hand-over moves the
+# Equipment (``give_control_of_granter_to_player``), and the condition reads
+# what the unattach cost took it off (``unattached_from_for_cost``).
+
+
+def _w1g9_throw(game, bearer, target):
+    """Activate the creature's granted Shuriken ability at *target*."""
+    from engine.oracle import compile_card_oracle
+
+    abilities = compile_card_oracle(bearer.effective_card).activated_abilities
+    index = next(
+        i for i, ability in enumerate(abilities)
+        if "unattach" in (ability.source_line or "").lower()
+    )
+    return _w1g9_activate(
+        game, bearer, ability_index=index, target_permanent_ids=[target.permanent_id],
+    )
+
+
+def _w1g9_test_ninja(game, seat=0):
+    """A vanilla 'Creature — Human Ninja' for seat 0: every printed Ninja on
+    this base carries ninjutsu, which another group implements."""
+    from tests.helpers import _mk_card
+
+    ninja = _W1G9Permanent(card=_mk_card("W1G9 Ninja", "Creature — Human Ninja"))
+    game._put_permanent_onto_battlefield(seat, ninja, None)
+    ninja.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return ninja
+
+
+def test_w1g9_shuriken_thrown_from_a_non_ninja_changes_hands(set_pool):
+    """The equipped Grizzly Bears taps and unattaches Shuriken (CR 701.3d);
+    *Shuriken* deals the 2 damage (the log names it, CR 608.2h), and Bob, the
+    damaged Hill Giant's controller, gains control of it (CR 611.2a: untimed)."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Shuriken", "Grizzly Bears"], theirs=["Hill Giant"],
+    )
+    shuriken, bears = mine
+    giant = theirs[0]
+    assert _w1g9_equip(game, shuriken, bears).supported
+    assert _w1g9_throw(game, bears, giant).supported
+    assert "Shuriken dealt 2 damage to Hill Giant" in game.log
+    assert giant.damage_marked == 2
+    assert bears.tapped
+    assert shuriken.metadata.get("attached_to") is None
+    assert game.controller_index_of(shuriken) == 1
+    assert "Bob gains control of Shuriken" in game.log
+
+
+def test_w1g9_shuriken_thrown_from_a_ninja_stays(set_pool):
+    """Unattached from a Ninja, Shuriken deals its damage and stays with its
+    controller."""
+    game, mine, theirs = _w1g9_table(set_pool, mine=["Shuriken"], theirs=["Hill Giant"])
+    shuriken = mine[0]
+    giant = theirs[0]
+    ninja = _w1g9_test_ninja(game)
+    assert _w1g9_equip(game, shuriken, ninja).supported
+    assert _w1g9_throw(game, ninja, giant).supported
+    assert giant.damage_marked == 2
+    assert game.controller_index_of(shuriken) == 0
+    assert shuriken.metadata.get("attached_to") is None
+
+
+def test_w1g9_shuriken_deals_the_damage_as_the_equipment(set_pool):
+    """The dealer is the Equipment (CR 120.7), not the creature: Tel-Jilad
+    Chosen's protection from artifacts prevents the damage (CR 702.16e). The
+    target was legal — the ability's source is the Bears, a green creature —
+    and the hand-over still happens, as it is not conditioned on damage."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, mine=["Shuriken", "Grizzly Bears"], theirs=["Tel-Jilad Chosen"],
+    )
+    shuriken, bears = mine
+    chosen = theirs[0]
+    assert _w1g9_equip(game, shuriken, bears).supported
+    assert _w1g9_throw(game, bears, chosen).supported
+    assert chosen.damage_marked == 0
+    assert game.controller_index_of(shuriken) == 1
+
+
+def test_w1g9_shuriken_destroyed_in_response_still_deals_its_damage(set_pool):
+    """CR 608.2h: the object the ability says deals the damage deals it as it
+    last existed — Shuriken, Shattered with the ability on the stack, still
+    deals 2; there is no Shuriken left for Bob to gain control of."""
+    game, mine, theirs = _w1g9_table(
+        set_pool, hand=["Shatter"], mine=["Shuriken", "Grizzly Bears"],
+        theirs=["Hill Giant"],
+    )
+    shuriken, bears = mine
+    giant = theirs[0]
+    assert _w1g9_equip(game, shuriken, bears).supported
+    from engine.oracle import compile_card_oracle
+
+    abilities = compile_card_oracle(bears.effective_card).activated_abilities
+    index = next(
+        i for i, ability in enumerate(abilities)
+        if "unattach" in (ability.source_line or "").lower()
+    )
+    assert game.queue_permanent_ability(
+        0, "Grizzly Bears", permanent_index=_w1g9_slot(game, bears),
+        ability_index=index, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert shuriken.metadata.get("attached_to") is None
+    assert game.queue_from_hand(
+        0, "Shatter", target_permanent_ids=[shuriken.permanent_id],
+    ).supported
+    _w1g9_settle(game)
+    assert not game.is_on_battlefield(shuriken)
+    assert giant.damage_marked == 2
+    assert "Shuriken dealt 2 damage to Hill Giant" in game.log
 
 # ==== end w1g9 ======================================================
 

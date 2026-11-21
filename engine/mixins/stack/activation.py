@@ -945,6 +945,9 @@ class AbilityActivationMixin:
                             tap_cost_permanents[0] if tap_cost_permanents else None
                         ),
                         "tapped_set_for_cost": list(tap_cost_permanents),
+                        # The unattach cost's two ends (Shuriken): see the
+                        # queued path below.
+                        **self._unattach_cost_records(ability, permanent),
                         "discarded_for_cost": (
                             list(discard_cost_cards)
                             + (
@@ -1122,6 +1125,12 @@ class AbilityActivationMixin:
                     # the whole set, for a phrase that names every one of them
                     # (``handlers/_chosen.shared_creature_type_anchors``).
                     "tapped_set_for_cost": list(tap_cost_permanents),
+                    # "{T}, **Unattach Shuriken**: … unless **it was unattached
+                    # from a Ninja**." What CR 701.3d's unattach cost took off
+                    # what — the Equipment and the permanent it was attached
+                    # to — carried for the effect to read back (CR 608.2h),
+                    # as every other channel here is.
+                    **self._unattach_cost_records(ability, permanent),
                     # …and what its discard cost ate, for the same reason and
                     # on the same channel: "If the discarded card was a land
                     # card" (Land's Edge) is asked once the card is already in
@@ -1203,6 +1212,21 @@ class AbilityActivationMixin:
             activated_ability_item=self.stack[-1] if self.stack else None,
         )
         return SimulationResult(permanent.card.name, True, ability.effect_kind, "queued")
+    def _unattach_cost_records(self, ability, permanent) -> dict:
+        """The records a paid "Unattach <Equipment>" cost leaves (CR 701.3d):
+        the Equipment it unattached (``unattached_for_cost``) and the
+        permanent it came off (``unattached_from_for_cost``) — the activating
+        permanent, which the cost gate required it to be attached to
+        (``activation_payment``). Empty for every other cost, so a choices
+        dict carries the keys only where something was unattached."""
+        granter_id = getattr(ability.cost, "unattach_granter_id", None)
+        if granter_id is None:
+            return {}
+        return {
+            "unattached_for_cost": self.permanent_by_id(granter_id),
+            "unattached_from_for_cost": permanent,
+        }
+
     def _chosen_mana_color(self, mana_color: str | None) -> str | None:
         """The colour an activation announced, or None where it named none.
 

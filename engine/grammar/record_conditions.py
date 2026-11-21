@@ -448,6 +448,23 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
                 pass
     stream.reset(cost_mark)
 
+    # "…That creature's controller gains control of Shuriken **unless it was
+    # unattached from a Ninja**." (Shuriken's quote, on the creature it
+    # equips.) The same question about a *cost* channel as the clause above,
+    # asked of the unattach cost (CR 701.3d; CR 602.2b's payment): not what
+    # the cost ate but what it took the Equipment **off**. "It" is the
+    # Equipment the cost unattached — the one object an unattach cost names —
+    # so the words name the channel, and the noun after "from" is what the
+    # record is asked.
+    unattached_mark = stream.mark()
+    if stream.accept_phrase("it", "was", "unattached", "from"):
+        stream.accept_word("a", "an")
+        try:
+            return ast.CostObjectWas("unattached_from", parse_object_filter(stream))
+        except GrammarError:
+            pass
+    stream.reset(unattached_mark)
+
     # "Return target card from your graveyard to your hand **if it shares a
     # card type with the card exiled this way**." (Holistic Wisdom.) The cost
     # channel again, compared with the guarded effect's own target rather than

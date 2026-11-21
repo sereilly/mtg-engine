@@ -132,6 +132,20 @@ class DealDamage:
     # (``lowering.damage._with_foreign_dealer``). Set by
     # ``phrases.mark_causative``.
     causative: bool = False
+    # "{T}, Unattach Shuriken: **Shuriken** deals 2 damage to target creature."
+    # (Shuriken's quote, folded onto the equipped creature.) The dealer is the
+    # one permanent that granted the ability — written by
+    # ``granted_abilities.bind_granter`` as "the permanent with id N that
+    # granted this ability" (CR 201.5a) — and N is that permanent's id. CR
+    # 608.2h: the object the ability says does something is the one that does
+    # it, so the damage is the Equipment's (CR 120.7), not the creature's.
+    #
+    # Its own field rather than a new kind of ``source``: every lowering reads
+    # ``source`` as a noun phrase or None, and one of them handed another node
+    # would either crash or read it as the ability's own source. A field nobody
+    # knows is read by one post-condition (``lowering.damage._with_granter_dealer``),
+    # which refuses any shape it cannot stamp the dealer onto.
+    granter_dealer: int | None = None
 
 
 @dataclass(frozen=True)

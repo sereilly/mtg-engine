@@ -39,6 +39,7 @@ from ..records import (_parse_for_each_this_way, parse_for_each_milled_this_way,
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
 from ..nouns import parse_object_filter
+from ..readers import accept_granter_reference
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 
@@ -332,10 +333,20 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 # Move.) The object an earlier sentence chose, read by the
                 # back-reference the imperative spelling reads first
                 # (``_parse_gain_control``), so the two positions agree.
-                what = _parse_that_object(stream) or parse_recipient(stream)
+                #
+                # "That creature's controller gains control of **Shuriken**"
+                # on the creature Shuriken equips: the granter, once
+                # ``granted_abilities.bind_granter`` has written the relation
+                # (CR 201.5a). Its own node, which only the lowering that knows
+                # it reads (``control_changes._lower_granter_given_away``).
+                granter = accept_granter_reference(stream)
+                what = (
+                    ast.GranterRef(granter) if granter is not None
+                    else _parse_that_object(stream) or parse_recipient(stream)
+                )
             except GrammarError:
                 what = None
-            if isinstance(what, ast.TargetSpec):
+            if isinstance(what, (ast.TargetSpec, ast.GranterRef)):
                 return ast.GainControl(what, "indefinite", gained_by=subject)
         stream.reset(control_mark)
 

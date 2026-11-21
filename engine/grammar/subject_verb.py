@@ -42,7 +42,7 @@ from .conjuncts import (_with_attack_conjunct, _with_cant_be_conjunct,
 from .imperatives import parse_imperative
 from .nouns import parse_object_filter
 from .player_verbs import parse_player_subject_verb
-from .readers import accept_until_source_leaves
+from .readers import accept_granter_reference, accept_until_source_leaves
 from .records import accept_player_deed
 from .references import _parse_further_subjects, parse_recipient
 from .stream import TokenStream
@@ -133,6 +133,30 @@ def _relative_to_enchanted_creature(first, further):
 RECORD_DESCRIBED_SEATS = frozenset({"revealed_fewest"})
 
 
+def _granter_dealt_damage(stream: TokenStream) -> "ast.DealDamage | None":
+    """"**Shuriken** deals 2 damage to target creature." on the creature it
+    equips — "the permanent with id N that granted this ability deals …" once
+    ``granted_abilities.bind_granter`` has written the relation (CR 201.5a).
+
+    The granter is the dealer (CR 608.2h: the object the ability says does
+    something does it), carried on :attr:`ast.DealDamage.granter_dealer`. Only
+    in front of the damage verb: a granter reference opening any other
+    sentence is a subject no verb table here reads, and declining leaves it to
+    fail by name. Returns None with the cursor unmoved for anything else.
+    """
+    mark = stream.mark()
+    granter = accept_granter_reference(stream)
+    if granter is None:
+        return None
+    if not stream.at_word("deals", "deal"):
+        stream.reset(mark)
+        return None
+    dealt = _parse_damage(stream, None)
+    if not isinstance(dealt, ast.DealDamage):
+        raise stream.error("a granter deals damage in one plain dealing")
+    return dataclasses.replace(dealt, granter_dealer=granter)
+
+
 def parse_subject_verb(
     stream: TokenStream,
     carried_subject: ast.Recipient | None = None,
@@ -195,6 +219,8 @@ def parse_subject_verb(
             raise stream.error("expected a subject")
         stream.last_subject = ast.PlayerRef("owner")
         return moved
+    elif (granted := _granter_dealt_damage(stream)) is not None:
+        return granted
     else:
         # "**That creature** deals damage equal to its power to …" (Hunter's
         # Edge): a back-reference to the object the *previous sentence* chose.
