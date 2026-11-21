@@ -205,12 +205,6 @@ def _graveyard_seat(choice) -> int | None:
     return seat if isinstance(seat, int) else None
 
 
-def offer_is_free(choice) -> bool:
-    """Whether the offer waives the mana cost: every offer but the graveyard
-    one, whose card is cast for its costs."""
-    return _graveyard_seat(choice) is None
-
-
 def _what(choice) -> str:
     """How the log names what the offer casts: the card, or a copy of it."""
     name = getattr(choice.data.get("_card"), "name", "the card")
