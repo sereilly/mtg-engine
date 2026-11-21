@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**453 / 664 tracked rules covered (68%)** — 3813 tests, 0 unannotated.
+**455 / 665 tracked rules covered (68%)** — 3822 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [505. Main Phase](#505-main-phase) | 3/6 | 50% |
 | [506. Combat Phase](#506-combat-phase) | 7/8 | 87% |
 | [507. Beginning of Combat Step](#507-beginning-of-combat-step) | 1/2 | 50% |
-| [508. Declare Attackers Step](#508-declare-attackers-step) | 4/8 | 50% |
+| [508. Declare Attackers Step](#508-declare-attackers-step) | 5/8 | 62% |
 | [509. Declare Blockers Step](#509-declare-blockers-step) | 4/4 | 100% |
 | [510. Combat Damage Step](#510-combat-damage-step) | 4/4 | 100% |
 | [511. End of Combat Step](#511-end-of-combat-step) | 3/3 | 100% |
@@ -89,7 +89,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 20/20 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 44/44 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 45/45 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
 | [704. State-Based Actions](#704-state-based-actions) | 8/8 | 100% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -249,7 +249,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **113.3** There are four general categories of abilities: *(4 tests, subrules bc)*
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
-- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(22 tests, subrules bgjkm)*
+- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(23 tests, subrules bgjkm)*
 - [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(11 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
@@ -473,7 +473,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **306.5** Loyalty is a characteristic only planeswalkers have. *(6 tests, subrules abcd)*
 - [x] **306.6** Planeswalkers can be attacked. (See rule 508, “Declare Attackers Step.”) *(1 tests)*
 - [x] **306.7** Previously, planeswalkers were subject to a redirection effect that allowed a player to have nonc... *(1 tests)*
-- [x] **306.8** Damage dealt to a planeswalker results in that many loyalty counters being removed from it. *(1 tests)*
+- [x] **306.8** Damage dealt to a planeswalker results in that many loyalty counters being removed from it. *(2 tests)*
 - [x] **306.9** If a planeswalker’s loyalty is 0, it’s put into its owner’s graveyard. (This is a state-based act... *(1 tests)*
 
 ### 307. Sorceries
@@ -492,7 +492,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(21 tests, subrules a)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(45 tests, subrules a)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(46 tests, subrules a)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -624,10 +624,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(65 tests, subrules abcdfhjk)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(66 tests, subrules abcdfhjk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
-- [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
+- [x] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe... *(2 tests, subrules d)*
 - [x] **508.5** If an ability of an attacking creature refers to a defending player, or a spell or ability refers... *(3 tests, subrules a)*
 - [ ] **508.6** A player is “attacking [a player]” if the first player controls a creature that is attacking the ...
 - [ ] **508.7** Some cards allow a player to reselect which player, planeswalker, or battle a creature is attacking.
@@ -635,7 +635,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(118 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(121 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(9 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(19 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -645,7 +645,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(93 tests, subrules abcde)*
 - [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(22 tests)*
 - [x] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
-- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(17 tests)*
+- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(18 tests)*
 
 ### 511. End of Combat Step
 
@@ -671,7 +671,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(362 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(364 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(33 tests, subrules ac)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
@@ -921,6 +921,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.46** Soulshift *(7 tests, subrules ab)*
 - [x] **702.47** Splice *(24 tests, subrules abcde)*
 - [x] **702.48** Offering *(8 tests, subrules abc)*
+- [x] **702.49** Ninjutsu *(7 tests, subrules abc)*
 - [x] **702.108** Prowess *(3 tests, subrules a)*
 - [x] **702.111** Menace *(5 tests, subrules ab)*
 

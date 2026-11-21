@@ -63,7 +63,7 @@ Held at this rate, supporting the 26,113-card release line would need about **18
 | 5DN | 165 | 165 (100.0%) | 0 (0.0%) | 274 | 0 (0.0%) | 0 | 0.0 |
 | CHK | 291 | 291 (100.0%) | 0 (0.0%) | 464 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| BOK *(measured)* | 165 | 125 (75.8%) | 0 (0.0%) | 224 | 0 (0.0%) | 0 | 0.0 |
+| BOK *(measured)* | 165 | 133 (80.6%) | 0 (0.0%) | 243 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **7021** | **7021 (100.0%)** | **45 (0.6%)** | **11134** | **41 (0.4%)** | **49** | **0.7** |
 
 *(measured)* — BOK are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
