@@ -557,6 +557,42 @@ def test_w1g2_pale_curtain_reaches_lands_artifacts_and_tokens_not_discards(set_p
         c for c in game.players[0].hand if c.name == "Grizzly Bears"))
     assert "Grizzly Bears" in [c.name for c in game.players[0].graveyard]
 
+
+@_w1g2_pytest.mark.parametrize("interactive, pick_curtain", [
+    ((), False), ((0,), False), ((0,), True),
+])
+def test_w1g2_pale_curtain_contends_with_firestorm_phoenix(set_pool, interactive, pick_curtain):
+    """Two replacements for one death (CR 616.1): Firestorm Phoenix's "return
+    it to its owner's hand instead" and the Samurai's exile. A seat nobody
+    asks applies the Phoenix's first — the order its controller would choose,
+    and after it nothing is going to a graveyard — and a person is asked
+    (``effect_order``) and may name either."""
+    game = _w1g2_table(set_pool, interactive=interactive,
+                       hands=((), [set_pool("LEA")["Terror"]]))
+    _w1g2_put(game, set_pool("CHK")["Samurai of the Pale Curtain"], 0)
+    phoenix = _w1g2_put(game, set_pool("LEG")["Firestorm Phoenix"], 0)
+    game.active_player_index = game.priority_player_index = 1
+    assert game.cast_from_hand(
+        1, "Terror", target_permanent_ids=[phoenix.permanent_id]
+    ).supported
+    if interactive:
+        owed = _w1g2_settle(game, defaults=False)
+        assert owed is not None and owed.kind == "effect_order", owed
+        options = owed.data["options"]
+        wanted = next(
+            index for index, label in enumerate(options)
+            if ("Exile this permanent" in label) == pick_curtain
+        )
+        assert game.resolve_pending_choice("effect_order", 0, option_index=wanted)
+    _w1g2_settle(game)
+    names = lambda zone: [c.name for c in zone]  # noqa: E731
+    if pick_curtain:
+        assert names(game.players[0].exile) == ["Firestorm Phoenix"]
+    else:
+        assert names(game.players[0].hand) == ["Firestorm Phoenix"]
+        assert names(game.players[0].exile) == []
+    assert "Firestorm Phoenix" not in names(game.players[0].graveyard)
+
 # ==== end w1g2 ======================================================
 
 

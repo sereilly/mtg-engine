@@ -209,7 +209,9 @@ def _applies_permanent_graveyard_exile(game, payload: dict) -> bool:
     "would_die", EXILE_PERMANENT_INSTEAD_OF_GRAVEYARD,
     applies=_applies_permanent_graveyard_exile,
     sources=_permanent_graveyard_exile_sources,
-    label="Exile it instead of putting it into a graveyard",
+    # Worded apart from Disintegrate's option, which contends on the same
+    # event: two options one player may be asked between are never alike.
+    label="Exile this permanent instead (it would be put into a graveyard)",
 )
 def _exile_permanent_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
     """Samurai of the Pale Curtain: "If a permanent would be put into a
