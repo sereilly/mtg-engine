@@ -971,4 +971,11 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # a permanent is turned face up, you may draw a card", Aphetto
     # Runecaster) — the same bucket, because it is the same event.
     ("permanent_turned_face_up", "may"): "triggered_face_up",
+    # --- Betrayers of Kamigawa, wave 1 --------------------------------------
+    # Lifegift: "Whenever a land enters, you may gain 1 life." Ankh of
+    # Mishra's own condition (its fire site, ``_process_land_enters``), with a
+    # `may` on it for the first time — a condition-blind `may` falls back to
+    # `spell_pattern`, a leaf's bucket too, so the condition names the moment:
+    # a land entering, which is ("matching_permanent_enters", "may")'s word.
+    ("land_enters", "may"): "triggered_etb",
 }
