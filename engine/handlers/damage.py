@@ -227,7 +227,8 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         granter_id = instruction.payload.get("granter_id")
         dealer = game.permanent_by_id(granter_id) if isinstance(granter_id, int) else None
         if dealer is None:
-            recorded = (context.choices or {}).get("unattached_for_cost")
+            choices = context.choices or {}
+            recorded = choices.get("unattached_for_cost")
             if isinstance(recorded, Permanent) and recorded.permanent_id == granter_id:
                 dealer = recorded
         if dealer is None:

@@ -1219,13 +1219,13 @@ class AbilityActivationMixin:
         permanent, which the cost gate required it to be attached to
         (``activation_payment``). Empty for every other cost, so a choices
         dict carries the keys only where something was unattached."""
+        choices: dict = {}
         granter_id = getattr(ability.cost, "unattach_granter_id", None)
         if granter_id is None:
-            return {}
-        return {
-            "unattached_for_cost": self.permanent_by_id(granter_id),
-            "unattached_from_for_cost": permanent,
-        }
+            return choices
+        choices["unattached_for_cost"] = self.permanent_by_id(granter_id)
+        choices["unattached_from_for_cost"] = permanent
+        return choices
 
     def _chosen_mana_color(self, mana_color: str | None) -> str | None:
         """The colour an activation announced, or None where it named none.
