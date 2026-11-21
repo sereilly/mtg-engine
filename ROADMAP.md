@@ -1,11 +1,10 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **6,739** unique cards — forty-two sets,
+Target: grow the card pool from **7,021** unique cards — forty-three sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
 USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/APC/ODY/TOR/JUD/ONS/LGN/SCG/8ED/MRD/
-DST/5DN/M21, all shipped and all supported — to the full release line:
+DST/5DN/CHK/M21, all shipped and all supported — to the full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
-<!-- chk integrator: promotion -->
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
 records thirteen sets in the release line with zero new cards, and seven are
@@ -1970,8 +1969,12 @@ machinery with a gate of its own, idiom 46). Nine wave-1 groups landed 135
 with no hook and declined the other seven with their parts named; wave 2's
 four took those seven in two groups — Swirl the Mists ships with its
 targeting read off the printed text (CR 601.2c, SET_PLAYBOOK's Known gaps) —
-beside the client in a browser and the AI pile.
-<!-- chk integrator: promotion -->
+beside the client in a browser and the AI pile. It promoted on 2026-11-21:
+the promotion's full pass found two reds, both full-only AI censuses
+misreading a right choice (Captain's Maneuver's seeded game, moved by the
+fight-reading attack; Sensei's Divining Top escaping to its library top),
+fixed in the tests; the wrong-end insert turned only the printing-order
+guard red.
 Run on 2026-11-12, with Fifth Dawn promoting, it answers **Champions of
 Kamigawa** (CHK, 2004-10-01, 291 cards, 283 new by the release line's count
 — re-measure against this pool), the earliest unshipped set by release
@@ -2240,7 +2243,7 @@ a wave is five parallel worktree groups integrated serially.
 | MRD | 291 | 72.5% (211 read supported; 27 of them hollow: entwine, affinity, imprint) | 2 waves (twelve groups landed 103 of 107 with no hook; then nine: Mindslaver, Liar's Pendulum and Shared Fate, Second Sunrise and the graveyard's arrival seam, the wave-close census reds, the client, two engine piles, the AI pile, the rehearsal's inventories) + 4 follow-ups (the seam's Tempest Efreet red a full gate found, the client's second round, the rehearsal's second batch, the promotion's full-pass census reds) |
 | DST | 165 | 65.5% (108 read supported; 6 of them hollow) | 2 waves (nine groups landed all 63 with no hook and no decline; then three: the client in a browser, the AI pile with the promotion's last red, the engine pile with the whenever table's notes) + 2 follow-ups (the rehearsal's census reds, both in the censuses) |
 | 5DN | 165 | 69.1% (114 read supported; 8 of them dropping a line, 6 of those sunburst) | 2 waves (seven groups landed all 60 with no hook and no decline, and found a 61st supported while doing nothing; then four: that card with the engine pile, the client in a browser, the AI pile, the legend rule end to end) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds, each one commit on the chain tip) |
-| CHK | 291 | 57.4% (167 read supported; 18 of them carrying unclaimed or hollow text, 13 of those splice dropped; 282 new to the pool) | 2 waves (nine groups landed 135 of the 142 with no hook, flip cards and three keywords among them; then four: the last seven cards in two groups, the client in a browser, the AI pile) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds: one commit each from six wave-1 groups on the chain tip, and the integrator's label rows) <!-- chk integrator: promotion --> |
+| CHK | 291 | 57.4% (167 read supported; 18 of them carrying unclaimed or hollow text, 13 of those splice dropped; 282 new to the pool) | 2 waves (nine groups landed 135 of the 142 with no hook, flip cards and three keywords among them; then four: the last seven cards in two groups, the client in a browser, the AI pile) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds: one commit each from six wave-1 groups on the chain tip, and the integrator's label rows) + 2 the final rehearsal found (Dokai's copy in the activation census, CR 707.3; Kenzo's double strike in the gang forecast and the Skirk Volcanist board) + 1 the promotion's full pass found (two full-only censuses reading right AI choices) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2255,27 +2258,23 @@ hooks added across 335 cards — and around twenty already-shipped cards found
 mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
-<!-- chk integrator: promotion -->
 **Where the pool stands** (regenerate rather than trust these; read
-2026-11-12 for Fifth Dawn's promotion — the membership with the set read as
-shipped, `MTG_PROMOTE=5DN`; the grammar and hook numbers off the promotion
-preview's `--accept`s; the rest off the trackers before it): 6,739 unique
-cards over 42 sets, 9,613 printings, 100% supported. Grammar parses 89.7%
-of lines, lowers 89.2% and executes 62.0% (`GRAMMAR_COVERAGE.md`; the pool
-row's execution moved down 0.1 on membership alone — Fifth Dawn's own lines
-parse at 85.7%). **0.7%** of supported cards carry a name-keyed hook — 45 cards, 49
-entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection that
-implies for the release line has fallen from 1,195 hand-written entries to
-**190**, across twenty-nine consecutive sets that added no hook (Mirrodin's
-268 new cards, Darksteel's 162 and Fifth Dawn's 163 added none). That is
-the measure moving the way the architecture needs it to.
-Parse coverage: 6,574 of the 6,576 cards shipped before Fifth Dawn fully
-claimed, 2 acknowledged, **0 unclaimed**, and Fifth Dawn's 165 fully claimed
-(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker (444
-of 655 tracked rules, 3,735 tests, before the legend rule's).
-`CARD_VERIFICATION.md` is a log, not a target: 1,007 passed (694 in-game,
-313 auto), 74 equivalent, 0 failed, 5,495 untested, Fifth Dawn's cards not
-yet in it.
+2026-11-21 off the trackers at Champions of Kamigawa's promotion,
+`chk/int-fu9`): 7,021 unique cards over 43 sets, 9,904 printings, 100%
+supported. Grammar parses 89.5% of lines, lowers 89.0% and executes 62.0%
+(`GRAMMAR_COVERAGE.md`; the pool row's parse and lowering moved down 0.2 on
+membership alone — Champions of Kamigawa's own lines parse at 84.6%).
+**0.6%** of supported cards carry a name-keyed hook — 45 cards, 49 entries in
+6 registries (`HOOK_RELIANCE.md`) — and the projection that implies for the
+release line has fallen from 1,195 hand-written entries to **182**, across
+thirty consecutive sets that added no hook (Mirrodin's 268 new cards,
+Darksteel's 162, Fifth Dawn's 163 and Champions of Kamigawa's 282 added
+none). That is the measure moving the way the architecture needs it to.
+Parse coverage: 7,019 cards fully claimed, 2 acknowledged, **0 unclaimed**
+(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker (452
+of 663 tracked rules, 3,797 tests). `CARD_VERIFICATION.md` is a log, not a
+target: 1,065 passed (736 in-game, 329 auto), 80 equivalent, 0 failed, 5,876
+untested, before Champions of Kamigawa's Phase 5 recordings.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
