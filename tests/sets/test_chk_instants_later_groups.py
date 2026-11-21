@@ -418,3 +418,172 @@ def test_w1g8_crushing_pain_targets_only_a_creature_dealt_damage_this_turn(set_p
 # w1g9's tests go between this line and the "end w1g9" line.
 
 # ==== end w1g9 ======================================================
+
+
+# ==== W2G3 ====
+# W2G3's tests: Reweave.
+
+from engine import Game as _W2G3Game, PlayerState as _W2G3PlayerState
+from engine.models import Permanent as _W2G3Permanent
+from tests.helpers import settle as _w2g3_settle
+
+
+def _w2g3_card(set_pool, name):
+    for code in ("CHK", "LEA", "ATQ"):
+        pool = set_pool(code)
+        if name in pool:
+            return pool[name]
+    raise KeyError(name)
+
+
+def _w2g3_table(set_pool, *, hand=(), mine=(), theirs=(), my_library=(),
+                their_library=()):
+    """Two seats on seat 0's first main phase, costs not enforced; *mine* /
+    *theirs* placed and not summoning sick, libraries as listed (top first)."""
+    card = lambda name: _w2g3_card(set_pool, name)  # noqa: E731
+    game = _W2G3Game(players=[
+        _W2G3PlayerState(name="Alice", hand=[card(n) for n in hand],
+                         library=[card(n) for n in (my_library or ["Island"] * 6)]),
+        _W2G3PlayerState(name="Bob",
+                         library=[card(n) for n in (their_library or ["Island"] * 6)]),
+    ])
+    game.enforce_mana_costs = False
+    placed = {0: [], 1: []}
+    for seat, names in ((0, mine), (1, theirs)):
+        for name in names:
+            permanent = _W2G3Permanent(card=card(name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+            placed[seat].append(permanent)
+    game._sync_control()
+    game.start_turn(0)
+    _w2g3_settle(game)
+    return game, placed[0], placed[1]
+
+
+def _w2g3_names(cards):
+    return sorted(card.name for card in cards)
+
+
+def test_w2g3_reweave_replaces_a_permanent_with_the_next_permanent_card_sharing_a_type(set_pool):
+    """"Target permanent's controller sacrifices it. If the player does, they
+    reveal cards from the top of their library until they reveal a permanent
+    card that shares a card type with the sacrificed permanent, put that card
+    onto the battlefield, then shuffle."
+
+    Bob's Wall of Stone (a creature) is sacrificed by Bob; Bob turns over a
+    Bolt and a Giant Growth (not permanent cards) and an Island (no shared
+    type) and stops on Ornithopter, an artifact creature, which enters under
+    Bob's control; the rest is shuffled back."""
+    game, _mine, theirs = _w2g3_table(
+        set_pool, hand=["Reweave"], theirs=["Wall of Stone"],
+        their_library=[
+            "Lightning Bolt", "Giant Growth", "Island", "Ornithopter",
+            "Grizzly Bears",
+        ],
+    )
+    wall = theirs[0]
+    assert game.cast_from_hand(
+        0, "Reweave", target_permanent_ids=[wall.permanent_id],
+    ).supported
+    _w2g3_settle(game)
+    bob = game.players[1]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Ornithopter"]
+    assert [c.name for c in bob.graveyard] == ["Wall of Stone"]
+    assert _w2g3_names(bob.library) == [
+        "Giant Growth", "Grizzly Bears", "Island", "Lightning Bolt",
+    ]
+    assert "Reweave: Wall of Stone was sacrificed" in game.log
+
+
+def test_w2g3_reweave_uses_the_types_it_had_right_before_it_was_sacrificed(set_pool):
+    """The 2005-04-01 ruling: "When Reweave resolves it uses the type(s) that
+    the permanent had right before it was sacrificed." Mishra's Factory
+    animated is an artifact creature land, so the Bears on top share a type
+    with it; the same Factory unanimated is a land alone, and the run passes
+    the Bears for the Island beneath."""
+    for animated, found in ((True, "Grizzly Bears"), (False, "Island")):
+        game, mine, _theirs = _w2g3_table(
+            set_pool, hand=["Reweave"], mine=["Mishra's Factory"],
+            my_library=["Grizzly Bears", "Island", "Lightning Bolt"],
+        )
+        factory = mine[0]
+        if animated:
+            assert game.activate_permanent_ability(
+                0, "Mishra's Factory", permanent_index=0, ability_index=1,
+            ).supported
+            _w2g3_settle(game)
+            assert factory.is_creature
+        assert game.cast_from_hand(
+            0, "Reweave", target_permanent_ids=[factory.permanent_id],
+        ).supported
+        _w2g3_settle(game)
+        assert [p.card.name for p in game.controlled_by(0)] == [found]
+        assert [c.name for c in game.players[0].graveyard] == [
+            "Mishra's Factory", "Reweave",
+        ]
+
+
+def test_w2g3_reweave_finding_nothing_shuffles_the_library_back(set_pool):
+    """Alice's own Island, with no land in her library: she sacrifices it,
+    turns over her whole library, puts nothing onto the battlefield, and
+    shuffles it back."""
+    game, mine, _theirs = _w2g3_table(
+        set_pool, hand=["Reweave"], mine=["Island"],
+        my_library=["Lightning Bolt", "Grizzly Bears", "Ornithopter"],
+    )
+    assert game.cast_from_hand(
+        0, "Reweave", target_permanent_ids=[mine[0].permanent_id],
+    ).supported
+    _w2g3_settle(game)
+    alice = game.players[0]
+    assert list(game.controlled_by(0)) == []
+    assert _w2g3_names(alice.library) == ["Grizzly Bears", "Lightning Bolt", "Ornithopter"]
+    assert "Alice revealed their library and found nothing" in game.log
+
+
+def test_w2g3_reweave_whose_target_left_reveals_nothing(set_pool):
+    """The 2005-11-01 ruling: "The player reveals cards only if the targeted
+    permanent gets sacrificed." Bob's Bears bounced in response, Reweave's one
+    target is illegal and it does nothing (CR 608.2b): Bob's library is
+    exactly as it was, unshuffled."""
+    library = ["Lightning Bolt", "Ornithopter", "Craw Wurm", "Island"]
+    game, _mine, theirs = _w2g3_table(
+        set_pool, hand=["Reweave", "Unsummon"], theirs=["Grizzly Bears"],
+        their_library=library,
+    )
+    bears = theirs[0]
+    assert game.queue_from_hand(
+        0, "Reweave", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert game.queue_from_hand(
+        0, "Unsummon", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w2g3_settle(game)
+    bob = game.players[1]
+    assert list(game.controlled_by(1)) == []
+    assert [c.name for c in bob.hand] == ["Grizzly Bears"]
+    assert [c.name for c in bob.library] == library
+    assert not any("was sacrificed" in line for line in game.log)
+
+
+def test_w2g3_reweave_spliced_onto_an_arcane_host(set_pool):
+    """Splice onto Arcane {2}{U}{U}: Reach Through Mists gains Reweave's text
+    (CR 702.47c) — Alice draws, then Bob's Wall is sacrificed and his
+    Ornithopter enters — and Reweave stays in Alice's hand."""
+    game, _mine, theirs = _w2g3_table(
+        set_pool, hand=["Reach Through Mists", "Reweave"], theirs=["Wall of Stone"],
+        my_library=["Swamp"] * 3,
+        their_library=["Island", "Ornithopter", "Grizzly Bears"],
+    )
+    wall = theirs[0]
+    result = game.cast_from_hand(0, "Reach Through Mists", splice_cards=[
+        {"hand_index": 1, "target_permanent_ids": [wall.permanent_id]},
+    ])
+    assert result.supported, result.details
+    _w2g3_settle(game)
+    assert _w2g3_names(game.players[0].hand) == ["Reweave", "Swamp"]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Ornithopter"]
+    assert [c.name for c in game.players[1].graveyard] == ["Wall of Stone"]
+
+# ==== end W2G3 ====

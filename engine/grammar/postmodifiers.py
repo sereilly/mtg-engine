@@ -666,6 +666,16 @@ def _parse_postmodifiers(
             ) or stream.accept_phrase("shares", "a", "card", "type", "with", "it"):
                 d.shares_card_type_with_it = True
                 continue
+            # "…a permanent card **that shares a card type with the sacrificed
+            # permanent**" (Reweave). The relation above with its far end the
+            # permanent an earlier step sacrificed — recorded as printed, for
+            # the lowering that can name the record to resolve or refuse.
+            elif stream.accept_phrase(
+                "shares", "a", "card", "type", "with", "the", "sacrificed",
+                "permanent",
+            ):
+                d.shares_card_type_with_sacrificed = True
+                continue
             # "…creatures **that share a creature type with it**" (Mana
             # Echoes, the Crowns), "…**with the sacrificed creature**" (Endemic
             # Plague), "…a creature card **that shares a creature type with

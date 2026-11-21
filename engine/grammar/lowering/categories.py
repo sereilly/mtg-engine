@@ -355,6 +355,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.
     "sacrifice_bound_permanent": "destruction",
+    # ...and on the one permanent a spell targeted, by its controller
+    # ("Target permanent's controller sacrifices it", Reweave).
+    "sacrifice_target_permanent": "destruction",
     # ...and on the object a trigger's own event froze (Grafted Wargear:
     # "sacrifice that permanent"), beside `destroy_event_subject`.
     "sacrifice_event_subject": "destruction",

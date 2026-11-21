@@ -696,6 +696,13 @@ class ObjectFilter:
     #: reason: "it" is whatever the firing event was about. Emitted as an
     #: untestable key, so a lowering that does not lift it out refuses.
     shares_card_type_with_it: bool = False
+    #: "…until they reveal a permanent card **that shares a card type with the
+    #: sacrificed permanent**" (Reweave). The same relation with its far end
+    #: the permanent an earlier step of this effect sacrificed, read as it last
+    #: existed (``oracle_types.SACRIFICED_CARD_TYPES``). Emitted as an
+    #: untestable key, so only a lowering that names the record (the reveal's)
+    #: admits it.
+    shares_card_type_with_sacrificed: bool = False
     #: "…discards all cards **of each of the sacrificed creature's colors**."
     #: (Mind Extraction.) The same relation with a different referent: not
     #: the object an event was about but the permanent this spell's own

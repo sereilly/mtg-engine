@@ -223,6 +223,11 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     if self.shares_card_type_with_it:
         # Emitted for the reason directly above: outside every testable set.
         payload["shares_card_type_with_it"] = True
+    if self.shares_card_type_with_sacrificed:
+        # Emitted for the reason directly above: outside every testable set,
+        # so only the reveal's lowering, which names the sacrifice's record,
+        # admits it.
+        payload["shares_card_type_with_sacrificed"] = True
     if self.colors_of_sacrificed_for_cost:
         # Emitted for the reason directly above: outside every testable set,
         # so the phrase refuses unless a lowering lifts it out and names the

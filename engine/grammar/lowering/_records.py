@@ -86,6 +86,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              REVEALED_HAND_CARDS, REVEALED_LIBRARY_CARDS,
                              REVEALED_BY_SEAT, REVEALED_THIS_WAY,
                              REVEALED_TOP_CARDS_BY_SEAT,
+                             SACRIFICED_CARD_TYPES,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS, SECRET_NUMBERS_BY_SEAT,
                              TAPPED_THIS_WAY,
@@ -629,6 +630,16 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "sacrifice_bound_permanent": (
         "sacrificed_this_way", LAST_TARGET_CONTROLLER,
         _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
+    ),
+    # "Target permanent's controller sacrifices it. **If the player does**,
+    # **they** reveal … until they reveal a permanent card **that shares a card
+    # type with the sacrificed permanent** …" (Reweave.) The bound sacrifice's
+    # two questions — whether it happened, whose permanent it was — asked of a
+    # targeted one, and a third: what card types it had right before it went
+    # (the card's 2005-04-01 ruling), frozen because a moment later it is a card
+    # in a graveyard (CR 608.2h, 613.1).
+    "sacrifice_target_permanent": (
+        "sacrificed_this_way", LAST_TARGET_CONTROLLER, SACRIFICED_CARD_TYPES,
     ),
     # "Target creature you control can't be blocked this turn. **Destroy it**
     # and this creature at end of combat." (Goblin Sappers.) The grant records

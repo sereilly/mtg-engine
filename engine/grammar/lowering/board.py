@@ -236,6 +236,51 @@ def _bound_sacrifice_filter(
     return _filter_payload(filt)
 
 
+def _lower_target_controller_sacrifice(
+    node: ast.Sacrifice,
+) -> tuple[OracleInstruction, ...]:
+    """``Target <permanent>'s controller sacrifices it.`` (Reweave) as
+    ``sacrifice_target_permanent`` over the one target the spell announces.
+
+    One target, on the battlefield, narrowed only by what the matcher tests:
+    the printed noun is the picker's (``targets``) and is asked again at
+    resolution (CR 608.2b), and a narrowing nothing tests would offer a wider
+    set than the card prints. The handler records whose permanent it was, what
+    types it had and whether it went — the three things the "If the player
+    does, they reveal … a permanent card that shares a card type with the
+    sacrificed permanent" behind it reads (``_records._PRODUCES``).
+    """
+    subject = node.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "target"
+        and subject.targeted
+        and subject.count == 1
+        and subject.max_count is None
+    ):
+        raise LoweringError(
+            "the targeted permanent's controller sacrifices one target",
+            node=node,
+        )
+    filt = subject.filter
+    if (
+        filt.zone != "battlefield" or filt.is_card or filt.also_spell
+        or filt.also_ability
+    ):
+        raise LoweringError(
+            "only a permanent on the battlefield is sacrificed", node=node,
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, subject)
+    testable_filter_payload(
+        filt,
+        refusal="the targeted sacrifice cannot test this restriction",
+        node=node,
+        require_narrowing=False,
+    )
+    return (OracleInstruction("sacrifice_target_permanent", "", payload),)
+
+
 def _lower_sacrifice(
     node: ast.Sacrifice,
     event: str | None = None,
@@ -269,6 +314,13 @@ def _lower_sacrifice(
     # offered the wrong one to give up.
     if names_attached_permanent(node.subject, event):
         return (OracleInstruction("sacrifice_attached_permanent", "", {}),)
+    # "**Target permanent's controller sacrifices it.**" (Reweave.) One
+    # permanent the spell chose (CR 601.2c), sacrificed by whoever controls it
+    # as the spell resolves (CR 701.21a) — not a prompt: nothing is picked, so
+    # routed to the forced-sacrifice prompt below its controller would be asked
+    # to give up *any* permanent instead of the one targeted.
+    if node.player.kind == "target_controller":
+        return _lower_target_controller_sacrifice(node)
     from_chosen = _lower_sacrifice_one_of_chosen(node, produced)
     if from_chosen is not None:
         return from_chosen

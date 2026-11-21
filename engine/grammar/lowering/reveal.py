@@ -58,7 +58,8 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_HAND_CARDS_BY_SEAT,
                              LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
-                             REVEALED_THIS_WAY, X_FROM_COUNT)
+                             REVEALED_THIS_WAY, SACRIFICED_CARD_TYPES,
+                             X_FROM_COUNT)
 from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
@@ -113,6 +114,20 @@ def _lower_reveal_until(
             )
         filt = dataclasses.replace(filt, of_bound_type=False)
         bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+    # "…until they reveal a permanent card **that shares a card type with the
+    # sacrificed permanent**." (Reweave.) The types the step in front froze as
+    # it sacrificed (``SACRIFICED_CARD_TYPES``; the card's 2005-04-01 ruling),
+    # lifted off the filter and named by its record exactly as "of that type"
+    # is above. With no step that sacrificed one, the words name nothing and
+    # the line refuses rather than stopping on the first permanent card.
+    if filt.shares_card_type_with_sacrificed:
+        if SACRIFICED_CARD_TYPES not in produced:
+            raise LoweringError(
+                "'the sacrificed permanent' names a permanent no step of this "
+                "effect sacrificed", node=node,
+            )
+        filt = dataclasses.replace(filt, shares_card_type_with_sacrificed=False)
+        bound_type["shares_card_type_with_record"] = SACRIFICED_CARD_TYPES
     payload_filter = filt.to_payload()
     dropped = dropped_narrowings(filt, payload_filter)
     if dropped:
