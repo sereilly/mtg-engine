@@ -463,8 +463,12 @@ class CountersRemovedForCost:
     Its own node rather than a flag on the three above for their stated reason:
     each names a record a different payment wrote, and a card printing two of
     them would have them disagree.
+
+    *counter* is None where the sentence names no kind — "**For each counter
+    removed,** this creature gets +2/+0" (Blademane Baku), whose cost names it
+    ("Remove X ki counters") — and the record counts what the cost removed.
     """
-    counter: str
+    counter: str | None
 
 
 @dataclass(frozen=True)

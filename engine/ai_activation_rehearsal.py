@@ -436,7 +436,15 @@ def _sized_x_activation(
     # as the imprint it is (`ai_imprint.imprint_worth`): the card kept, and a
     # free cast of it every upkeep.
     imprint = empty_hand_imprint(game, permanent, ability)
-    for x_value in range(1, X_ACTIVATION_SIZES + 1):
+    # "{1}, Remove X ki counters from this creature: …" (the ki Baku): the X
+    # is counters as well as (or instead of) mana, and no X beyond what the
+    # source holds can be paid (CR 118.3) — the activation path refuses it.
+    largest = X_ACTIVATION_SIZES
+    if str(getattr(ability.cost, "remove_counter_count", "") or "").lower() == "x":
+        from .named_counters import counters_on
+
+        largest = min(largest, counters_on(permanent, str(ability.cost.remove_counter)))
+    for x_value in range(1, largest + 1):
         taps: tuple[int, ...] = ()
         tap_colors: tuple[str, ...] = ()
         if game.enforce_mana_costs:

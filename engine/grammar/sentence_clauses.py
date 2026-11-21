@@ -413,6 +413,50 @@ def _parse_leading_recorded_count(
     return _scale_by_recorded_count(body, counted, stream)
 
 
+def _parse_leading_cost_counters_removed(
+    parse_body, stream: TokenStream
+) -> "ast.Statement | None":
+    """``For each counter removed, <pump>`` — a leading rate over this
+    ability's **own counter-removal cost**.
+
+    "{1}, Remove X ki counters from this creature: **For each counter
+    removed,** this creature gets +2/+0 until end of turn." (Blademane Baku.)
+    :func:`_parse_leading_recorded_count`'s sibling with the record one store
+    over: the counters came off as the cost was paid (CR 601.2h), so the
+    number is the activation's record — ``ast.CountersRemovedForCost``, the
+    node "for each elixir counter removed this way" (Essence Bottle) already
+    reads — not a step of this effect. The sentence names no counter kind and
+    no "this way": "removed" with nothing in front of the colon but a removal
+    cost can mean only that payment, which the lowering checks
+    (``_cost_records.COUNTERS_REMOVED_FOR_COST`` in *produced*).
+
+    The body must be a pump with no count of its own, whose printed size
+    becomes the size of one repetition — the reading "+2/+0 for each …" has
+    everywhere else. Anything else raises: a rate silently dropped is a +2/+0
+    whatever was paid. Refuses without consuming on any other opening.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each", "counter", "removed"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    body = parse_body(stream)
+    if not isinstance(body, ast.Pump) or any((
+        body.per_each, body.per_each_recorded, body.per_each_milled,
+        body.per_each_counters, body.per_each_sacrificed,
+        body.per_each_tapped_this_way, body.x_definition,
+    )):
+        raise stream.error(
+            "no reading for a leading rate over a counter-removal cost on "
+            "this effect"
+        )
+    return dataclasses.replace(
+        body, per_each_recorded=ast.CountersRemovedForCost(None),
+    )
+
+
 def _scale_by_recorded_count(
     statement: "ast.Statement", counted: "ast.ThatMuch", stream: TokenStream
 ) -> "ast.Statement":

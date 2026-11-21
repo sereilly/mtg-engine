@@ -171,6 +171,87 @@ def test_w1g8_sakiko_adds_that_much_green_per_creature_dealing_combat_damage(set
     assert game.current_step == "postcombat_main"
 
 
+def _w1g8_accept(game, choice):
+    game.confirm_optional_pay(choice.player_index, accept=True)
+
+
+def _w1g8_decline(game, choice):
+    game.confirm_optional_pay(choice.player_index, accept=False)
+
+
+def test_w1g8_blademane_baku_gets_two_power_per_counter_its_cost_removed(set_pool):
+    """"{1}, Remove X ki counters from this creature: For each counter
+    removed, this creature gets +2/+0 until end of turn." Two Spirit casts,
+    the person at seat 0 taking the first ki counter and declining nothing
+    the second time; X=2 is paid and the Baku is 5/1 (1 + 2×2), the counters
+    gone; X=1 on a fresh counter is +2 more, and the pump ends at cleanup."""
+    from engine.named_counters import counters_on
+
+    bok = set_pool("BOK")
+    game, (blade,) = _w1g8_table([bok["Blademane Baku"]], [])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    for answer in (_w1g8_accept, _w1g8_accept, _w1g8_decline):
+        game.players[0].hand.append(bok["Petalmane Baku"])
+        assert game.cast_from_hand(0, "Petalmane Baku").supported
+        _w1g8_settle(game, answers={"optional_pay": answer})
+    assert counters_on(blade, "ki") == 2, "two taken, one declined"
+
+    pumped = game.activate_permanent_ability(0, "Blademane Baku", x_value=2)
+    _w1g8_settle(game)
+    assert pumped.supported, pumped.details
+    assert counters_on(blade, "ki") == 0
+    assert (blade.effective_power, blade.effective_toughness) == (5, 1)
+    assert "Blademane Baku gets +4/+0 until end of turn" in game.log
+    # No counter left: X=1 is unpayable and refused with nothing paid.
+    refused = game.activate_permanent_ability(0, "Blademane Baku", x_value=1)
+    assert not refused.supported
+    assert blade.effective_power == 5
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+    game.resolve_cleanup_step(0)
+    assert blade.effective_power == 1
+
+
+def test_w1g8_for_each_counter_removed_needs_a_removal_cost():
+    """The leading "For each counter removed," counts the ability's own
+    removal cost; on an ability whose cost removes nothing the words name
+    nothing, and the line refuses rather than pumping by zero."""
+    from engine.grammar import compile_line
+
+    line = "For each counter removed, this creature gets +2/+0 until end of turn."
+    assert compile_line("{1}, Remove X ki counters from this creature: " + line).instructions
+    assert not compile_line("{1}: " + line).instructions
+
+
+def test_w1g8_the_ai_announces_a_removal_x_and_never_one_it_cannot_pay(set_pool):
+    """The ki Baku's "Remove X ki counters" is an X the activator announces
+    (CR 107.3a via 602.2b). Skullmane Baku with two counters is proposed at
+    X=2 on the 2/2 it kills; Waxmane Baku, whose X sizes its target list, is
+    declined rather than proposed for an X of 0 and refused (the base's
+    activation-cost census red)."""
+    from engine.ai_abilities import choose_activation_action
+    from engine.named_counters import add_counters
+
+    bok, lea = set_pool("BOK"), set_pool("LEA")
+    for name, expected in (("Skullmane Baku", 2), ("Waxmane Baku", None)):
+        game, (baku, *_rest) = _w1g8_table(
+            [bok[name]] + [lea["Forest"]] * 3, [lea["Grizzly Bears"]],
+        )
+        game.interactive_seats = set()
+        game._set_phase_and_step("precombat_main", "precombat_main")
+        add_counters(baku, "ki", 2)
+        action = choose_activation_action(game, 0)
+        if expected is None:
+            assert action is None or action.permanent_name != name
+            continue
+        assert action is not None and action.permanent_name == name
+        assert action.x_value == expected
+        bears = game.players[1].battlefield[0]
+        assert action.target_permanent_ids == [bears.permanent_id]
+
+
 def test_w1g8_the_kept_sentence_names_the_pool_it_keeps():
     """"…**you** don't lose this mana" after "that player adds", or "**they**"
     after a bare "Add", names a pool the mana did not go into: refused, never

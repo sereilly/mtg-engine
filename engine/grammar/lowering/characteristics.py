@@ -44,6 +44,7 @@ from ._amounts import (
     _per_each_offset,
     _static_x_amount,
 )
+from ._cost_records import COUNTERS_REMOVED_FOR_COST
 from ._counted_pumps import (_TARGET_PUMP_DURATIONS, lower_counted_pump,
                              lower_pump_per_sacrificed, _x_definition_spec)
 from ._events import (binds_block_pair, _EVENT_SUBJECT_CONTROLLERS,
@@ -838,11 +839,28 @@ def _lower_pump_per_recorded(
             'a "this way" pump with no duration would be a continuous effect '
             "sized by a frozen record", node=node,
         )
-    if counted.source is None or counted.bonus or counted.source not in produced:
+    if isinstance(counted, ast.CountersRemovedForCost):
+        # "**For each counter removed,** this creature gets +2/+0 until end of
+        # turn." (Blademane Baku.) The activation's own record of what its
+        # removal cost took off (CR 601.2h, read as CR 608.2h's last-known
+        # number), counted by the spec Essence Bottle's gain reads — and only
+        # on an ability whose cost removes counters, which is what *produced*
+        # says (``_cost_records.COUNTERS_REMOVED_FOR_COST``).
+        if COUNTERS_REMOVED_FOR_COST not in produced:
+            raise LoweringError(
+                "a count of counters removed with no removal cost to count",
+                node=node,
+            )
+        count: dict[str, object] = {
+            "cost_counters_removed": counted.counter or "any",
+        }
+    elif counted.source is None or counted.bonus or counted.source not in produced:
         raise LoweringError(
             f"back-reference to {counted.source!r} with no producer in this "
             "effect", node=node,
         )
+    else:
+        count = {"back_reference": counted.source}
     stand_in = dataclasses.replace(
         node, per_each_recorded=None,
         per_each=ast.ObjectFilter(card_types=("creature",), controller="you"),
@@ -852,9 +870,7 @@ def _lower_pump_per_recorded(
         raise LoweringError(
             "no pump handler sizes this subject by a recorded count", node=node
         )
-    payload = {
-        **lowered[0].payload, "x_from_count": {"back_reference": counted.source},
-    }
+    payload = {**lowered[0].payload, "x_from_count": count}
     return (OracleInstruction(lowered[0].kind, "", payload),)
 
 
