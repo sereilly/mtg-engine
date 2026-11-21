@@ -303,6 +303,70 @@ def test_w1g8_wicked_akuba_targets_only_a_player_it_damaged_this_turn(set_pool):
     ).supported
 
 
+# --- Horobi, Death's Wail -----------------------------------------------------
+# "Whenever a creature becomes the target of a spell or ability, destroy that
+# creature." The targeted permanent is the object the becomes-target event
+# froze (CR 603.2, 603.10); the ruling (2023-04-14): "If the creature is the
+# only target of the spell or ability, that spell or ability won't resolve."
+
+
+def test_w1g8_horobi_destroys_a_creature_a_spell_targets(set_pool):
+    horobi = set_pool("CHK")["Horobi, Death's Wail"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    growth = set_pool("LEA")["Giant Growth"]
+    game, (bear,), (wail,) = _w1g8_table([bears], [horobi], hand=[growth])
+    queued = game.queue_from_hand(
+        0, "Giant Growth", target_permanent_ids=[bear.permanent_id]
+    )
+    assert queued.supported, queued.details
+    # The trigger sits above the spell that set it off.
+    assert [(item.card.name, item.ability_kind) for item in game.stack] == [
+        ("Giant Growth", None), ("Horobi, Death's Wail", "triggered"),
+    ]
+    _w1g8_settle(game)
+    assert not game.is_on_battlefield(bear)
+    assert _w1g8_zone_names(game, 0, "graveyard") == ["Grizzly Bears", "Giant Growth"]
+    assert any("every target is illegal" in line for line in game.log)
+    assert game.is_on_battlefield(wail)
+
+
+def test_w1g8_horobis_trigger_resolves_after_horobi_has_left(set_pool):
+    """The trigger is independent of its source once on the stack (CR
+    113.7a): Horobi sacrificed in response still destroys the creature."""
+    horobi = set_pool("CHK")["Horobi, Death's Wail"]
+    bears = set_pool("LEA")["Grizzly Bears"]
+    growth = set_pool("LEA")["Giant Growth"]
+    game, (bear,), (wail,) = _w1g8_table([bears], [horobi], hand=[growth])
+    assert game.queue_from_hand(
+        0, "Giant Growth", target_permanent_ids=[bear.permanent_id]
+    ).supported
+    game.sacrifice_permanent(wail)
+    assert not game.is_on_battlefield(wail)
+    _w1g8_settle(game)
+    assert not game.is_on_battlefield(bear)
+
+
+def test_w1g8_horobi_sees_an_abilitys_target_and_ignores_a_players(set_pool):
+    horobi = set_pool("CHK")["Horobi, Death's Wail"]
+    sorcerer = set_pool("LEA")["Prodigal Sorcerer"]
+    giant = set_pool("LEA")["Hill Giant"]
+    game, _, (_, hill) = _w1g8_table([sorcerer], [horobi, giant])
+    assert game.activate_permanent_ability(
+        0, "Prodigal Sorcerer", target_player_index=1
+    ).supported
+    _w1g8_settle(game)
+    assert game.players[1].life == 19 and game.is_on_battlefield(hill)
+    game.start_turn(0)
+    _w1g8_settle(game)
+    assert game.activate_permanent_ability(
+        0, "Prodigal Sorcerer", target_permanent_ids=[hill.permanent_id]
+    ).supported
+    _w1g8_settle(game)
+    assert not game.is_on_battlefield(hill)
+    assert _w1g8_zone_names(game, 1, "graveyard") == ["Hill Giant"]
+    assert any("every target is illegal" in line for line in game.log)
+
+
 def test_w1g8_the_dealt_damage_exile_reads_only_a_line_about_itself():
     """The subject is the card itself — "this creature" or its own name (CR
     201.5, the legend's short name included) — never another card's."""
