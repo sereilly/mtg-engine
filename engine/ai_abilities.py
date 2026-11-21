@@ -167,6 +167,17 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
                     game, player_index, permanent_index, permanent,
                     ability, ability_index,
                 )
+                # …and at sorcery speed only for what **outlasts the turn**
+                # (`_land_ability_worth`: a lasting reading above nothing, the
+                # fight read through first): a tapped or sick creature is in no
+                # fight of this turn, and a pump on one read as moving
+                # something — its "once each turn" record — so a Basking
+                # Rootwalla was pumped the turn it arrived (TOR, seed 7).
+                if (
+                    candidate is not None and held and not _AT_INSTANT_SPEED.get()
+                    and _land_ability_worth(game, player_index, candidate) is None
+                ):
+                    candidate = None
                 if candidate is not None and (
                     best is None or candidate.score > best.score
                 ):
