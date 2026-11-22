@@ -448,6 +448,33 @@ def test_w1g4_genju_of_the_fields_gains_life_once_per_activation(set_pool):
     assert game.players[0].life == 24, game.log
 
 
+@_w1g4_pytest.mark.parametrize("host_seat", [0, 1])
+def test_w1g4_the_ai_animates_only_its_own_genju_land(set_pool, host_seat):
+    """The Genju's ability is its controller's (CR 303.4e) and lands on the
+    host whoever controls it: the AI's own-board chooser proposes it for its
+    own Forest and never for an opponent's (``ai_target_sides.HOST_KINDS``).
+    Asked with the rehearsed "moves nothing" gate off, as the host census
+    asks it, so the side is the only question."""
+    from unittest import mock
+
+    from engine import ai_abilities
+    from engine.ai_abilities import _activation_candidate
+
+    game, mine, theirs = _w1g4_table(
+        set_pool, mine=["Genju of the Cedars", "Forest"], theirs=["Forest"],
+    )
+    genju = mine[0]
+    host = (mine[1], theirs[0])[host_seat]
+    _w1g4_attach_aura(genju, host)
+    game._recompute_continuous_effects()
+    usable = game.usable_abilities_of(genju)
+    with mock.patch.object(ai_abilities, "_moves_something", lambda *a, **k: True):
+        candidate = _activation_candidate(
+            game, 0, game.battlefield_index_of(genju), genju, usable[0], None,
+        )
+    assert (candidate is not None) is (host_seat == 0)
+
+
 # --- Supported on arrival, driven -------------------------------------------
 
 def test_w1g4_blessing_of_leeches_regenerates_and_bleeds_its_controller(set_pool):
