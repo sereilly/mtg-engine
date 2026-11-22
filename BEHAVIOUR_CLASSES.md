@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **7180**
 - Distinct behaviours: **6530**
 - Cards sharing a behaviour with another: **948** in **298** classes
-- Unverified cards covered by a verified peer: **270**
+- Unverified cards covered by a verified peer: **271**
 
 | Size | Cards |
 | --- | --- |
@@ -231,7 +231,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Island**, Snow-Covered Island |
 | 2 | Jackal Pup, Shinka Gatekeeper |
 | 2 | Jacques le Vert, Kaysa |
-| 2 | Jetting Glasskite, Shimmering Glasskite |
+| 2 | **Jetting Glasskite**, Shimmering Glasskite |
 | 2 | Johtull Wurm, Jungle Wurm |
 | 2 | Juniper Order Druid, **Ley Druid** |
 | 2 | **Juzám Djinn**, Nettletooth Djinn |
