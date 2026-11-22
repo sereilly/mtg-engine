@@ -334,6 +334,38 @@ def test_shining_shoal_names_the_bolt_and_sends_its_damage_back(_w2g5_cards):
     assert any("the next 3 damage Lightning Bolt would deal" in line for line in game.log)
 
 
+def test_kor_chant_names_the_bolt_as_its_source(set_pool):
+    """The chosen-source chooser reads the cast spec, not the card: Kor Chant
+    (Exodus) asks for "a source of your choice" too, and with an opposing
+    Lightning Bolt aimed at the seat's Grizzly Bears it names the Bolt, so
+    the Bears live and the other creature named takes the damage."""
+    cards = {**set_pool("LEA"), **set_pool("EXO")}
+    game = _w2g5_table(
+        cards, ["Kor Chant"], ["Plains"] * 3 + ["Grizzly Bears"],
+        theirs=["Mountain", "Hill Giant", "Grizzly Bears"],
+    )
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.players[1].hand.append(cards["Lightning Bolt"])
+    bears = _on(game, 0, "Grizzly Bears")
+    game.tap_land_for_mana(1, "Mountain", chosen_color="R")
+    queued = game.queue_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_ids=[bears.permanent_id],
+    )
+    assert queued.supported, queued.details
+
+    action = choose_combat_instant_cast_action(game, 0)
+
+    assert action is not None and action.card_name == "Kor Chant"
+    assert action.chosen_source_stack_index == 0
+    tap_planned_lands(game, 0, action)
+    result = game.queue_from_hand(0, action.card_name, **cast_announcement(action))
+    assert result.supported, result.details
+    settle(game)
+    assert bears in game.controlled_by(0)
+    assert len(game.players[1].graveyard) == 2  # the Bolt, and the creature it hit
+
+
 # --- Kentaro, the Smiling Cat ----------------------------------------------
 
 
