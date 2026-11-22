@@ -1009,8 +1009,19 @@ def _activation_candidate(
     # And (kg4) every ability named by its index: a land's, and a non-land's
     # later ability (`_abilities_weighed`), which nothing had ever weighed —
     # and a rescue at instant speed (above).
+    #
+    # **Except an equip** (CR 702.6a; BOK W2G4): its creature was chosen
+    # above by `_choose_equip_target`, which declines where the Equipment is
+    # already on the best one — the judgement an equip printed first gets —
+    # and what an attachment buys is often nothing a standing reads before
+    # the fight: Umezawa's Jitte's worth is the counters its combat trigger
+    # puts on it, so behind its three modes its equip never cleared the
+    # lasting-gain gate and the Jitte was cast three times in six games and
+    # never equipped (BOK W1G9). It is asked the question an equip in first
+    # position is (`_moves_something`, below).
+    later_index = ability_index is not None and not _judged_by_its_target(ability)
     if (
-        ability_index is not None or hampers or rescue
+        later_index or hampers or rescue
         or _sets_only_what_its_source_is(ability.instruction)
         or waits_on_a_later_draw(ability.instruction) or shields_only(ability.instruction)
         or (
@@ -1128,6 +1139,16 @@ def _sacrifice_is_weighed(cost) -> bool:
     is a search) nor "Sacrifice X lands" (an X this chooser does not
     announce beside a sacrifice)."""
     return cost.sacrifice_filter is not None and isinstance(cost.sacrifice_count, int)
+
+
+def _judged_by_its_target(ability) -> bool:
+    """Whether *ability* is one whose worth this chooser judges in choosing
+    what it names, wherever on its permanent it is printed: an equip
+    (``attach_source_to_target``, CR 702.6a), whose creature
+    `_choose_equip_target` picks — and declines to pick where the Equipment
+    is already on the best one. Read off the compiled instruction, so it
+    names no card."""
+    return ability.instruction is not None and ability.instruction.kind == "attach_source_to_target"
 
 
 def _exists_to_be_given_up(permanent) -> bool:

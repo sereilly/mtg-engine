@@ -288,6 +288,11 @@ class HandActivationAction:
     score: float
     # See `CastAction.land_tap_colors`.
     land_tap_colors: tuple[str, ...] = ()
+    # Which permanents pay a chosen return ("Return an unblocked attacker you
+    # control to hand", ninjutsu, CR 702.49a), by id — the hand door's
+    # ``cost_permanent_ids`` and `ActivationAction.cost_permanent_ids`' twin.
+    # Empty is the engine's deterministic pick (the first in board order).
+    cost_permanent_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
