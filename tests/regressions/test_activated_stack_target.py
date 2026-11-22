@@ -170,12 +170,44 @@ def _return_cost_permanents(card, by_name) -> list:
     return fixtures
 
 
+def _removal_cost_counters(card) -> dict[str, int]:
+    """The counters to put on *card*'s own permanent so a "Remove N <kind>
+    counter(s) from this <permanent>" cost can be paid — the most any one
+    ability's cost asks of each kind, read off the cost itself as
+    ``_tap_cost_creatures`` reads a tap cost.
+
+    Jaraku the Interloper (BOK; Callow Jushi flipped) is why: "Remove a ki
+    counter from Jaraku: Counter target spell unless its controller pays
+    {2}." Its picker offered every spell on the stack and the activation was
+    refused — "has no ki counters to remove", a Jaraku put onto this table
+    with none — which read as the gate refusing what the picker offers, at
+    Betrayers of Kamigawa's promotion rehearsal. With one ki counter the
+    picker and the gate agree on every spell. An X removal is paid as one
+    (X=1); a cost naming no kind fails loudly rather than guessing one."""
+    from engine.named_counters import ANY_COUNTER_KIND
+
+    wanted: dict[str, int] = {}
+    for ability in compile_card_oracle(card).activated_abilities:
+        cost = ability.cost
+        kind = getattr(cost, "remove_counter", None)
+        if not kind or getattr(cost, "remove_counter_filter", None) is not None:
+            continue
+        assert kind != ANY_COUNTER_KIND, (
+            f"{card.name}: no fixture here pays a removal cost naming no kind"
+        )
+        count = getattr(cost, "remove_counter_count", 1)
+        count = count if isinstance(count, int) and count > 0 else 1
+        wanted[str(kind)] = max(wanted.get(str(kind), 0), count)
+    return wanted
+
+
 def _table(card, by_name):
     """Seat 1 controls *card*, ready to activate, with what a cost may want
     (two cards in hand, a creature to sacrifice, the creatures a "tap N
-    untapped <type>" cost taps — ``_tap_cost_creatures`` — and the permanents
-    a "return N <noun> you control" cost returns, ``_return_cost_permanents``).
-    Returns ``(game, source)``."""
+    untapped <type>" cost taps — ``_tap_cost_creatures`` — the permanents
+    a "return N <noun> you control" cost returns, ``_return_cost_permanents``,
+    and the counters a "remove a <kind> counter from this" cost takes,
+    ``_removal_cost_counters``). Returns ``(game, source)``."""
     island = by_name["Island"]
     game = Game(players=[
         PlayerState(name=f"P{seat}", library=[island] * 8) for seat in range(2)
@@ -195,6 +227,12 @@ def _table(card, by_name):
     source = Permanent(card=card)
     game._put_permanent_onto_battlefield(1, source, None)
     source.metadata["summoning_sickness_turn"] = -99
+    # …and the counters a "Remove a <kind> counter from this" cost takes
+    # (``_removal_cost_counters``).
+    from engine.named_counters import add_counters
+
+    for kind, count in _removal_cost_counters(card).items():
+        add_counters(source, kind, count)
     game.players[1].hand.extend([island, island])
     return game, source
 
