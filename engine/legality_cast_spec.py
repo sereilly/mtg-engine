@@ -1031,6 +1031,10 @@ class CastTargetSpecMixin:
                     else {}
                 ),
             })
+            if offers[-1]["label"] == "offering":
+                offers[-1].update(self._offering_offer_wire(
+                    caster_index, card, cost, extra_generic=extra_generic,
+                ))
 
         every_offer = [
             offer
@@ -1099,6 +1103,53 @@ class CastTargetSpecMixin:
                 "times": answered.get(offer.symbols, 0),
             })
         return offers
+
+    def _offering_offer_wire(
+        self, caster_index: int, card: CardDefinition, cost, *,
+        extra_generic: int = 0,
+    ) -> dict:
+        """What an **offering**'s optional-cost offer adds for the client
+        (CR 702.48, ``engine/offering.py``; W2G2):
+
+        * ``offering_prices`` — each permanent the caster could offer, by id,
+          with ``mana_owed``, the mana the cast is then charged (CR 702.48c's
+          reduction for *that* permanent over CR 601.2f's total,
+          ``offering.offering_charges``), and ``payable``, whether the pool and
+          what the seat could tap pay it. The reduction is sized by which
+          permanent is sacrificed, so the card's own badge — the price of the
+          cast that offers nothing — cannot say it.
+        * ``required`` / ``required_reason`` — the cast that declines the
+          offering is refused now: it can begin at this time only because the
+          offering opens the window (CR 601.3c), and CR 601.2e makes it
+          illegal once the cost is not paid. The reason is the cast path's own
+          refusal (``offering_timing_refusal``), so the client says what the
+          engine would.
+        """
+        from .board_payment import board_can_pay
+        from .mana_payment import mana_cost_label
+        from .offering import offering_charges, offering_timing_refusal
+        from .restricted_mana import CAST, PaymentPurpose
+
+        prices = []
+        for permanent, owed in offering_charges(
+            self, caster_index, card, cost, extra_generic=extra_generic,
+        ):
+            payable = not self.enforce_mana_costs or not any(owed.values()) or board_can_pay(
+                self, caster_index, owed, purpose=PaymentPurpose(CAST, card=card),
+                nonland_sources=True,
+            )
+            prices.append({
+                "id": permanent.permanent_id,
+                "name": permanent.effective_card.name,
+                "mana_owed": mana_cost_label(owed) if any(owed.values()) else "{0}",
+                "payable": bool(payable),
+            })
+        wire: dict = {"offering_prices": prices}
+        refusal = offering_timing_refusal(self, caster_index, card, {})
+        if refusal is not None:
+            wire["required"] = True
+            wire["required_reason"] = refusal
+        return wire
 
     def _additional_cost_x_ceiling(
         self, caster_index: int, card: CardDefinition, *, from_zone: str,

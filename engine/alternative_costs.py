@@ -501,6 +501,14 @@ class AlternativeCost:
             parts.append(f"exile {count} {noun}s from your graveyard")
         if self.return_filter is not None:
             noun = board_noun(self.return_filter)
+            # "Splice onto Arcane—Return a **blue** creature you control to
+            # its owner's hand." (Veil of Secrecy.) The colour the payment is
+            # held to, spelled as the tap half below spells its own: the
+            # splice offer's ``cost_text`` read "return a creature you
+            # control" beside a choice list of blue creatures only (W2G2).
+            color = self.return_filter.get("color_filter")
+            if isinstance(color, str) and color:
+                noun = f"{_SYMBOL_TO_COLOR_WORD.get(color, color)} {noun}"
             parts.append(
                 f"return {_article(noun)} {noun} you control to its owner's hand"
                 if self.return_count == 1

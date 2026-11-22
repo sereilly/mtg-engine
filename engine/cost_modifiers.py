@@ -1110,6 +1110,7 @@ def reduce_cost(required: dict[str, int], reduction: CostReduction) -> dict[str,
 def cast_mana_charge(
     game, caster_index: int, card, *, extra_generic: int = 0,
     x_value: int = 0, x_allocation: "dict[str, int] | None" = None,
+    reduction_bought: "CostReduction | None" = None,
 ) -> dict[str, int]:
     """The mana a cast of *card* for its own mana cost is charged, X at
     *x_value* (0 — the price before X is announced — by default): CR
@@ -1122,6 +1123,12 @@ def cast_mana_charge(
     commander tax). *x_allocation* is how much of X is paid in each colour
     ("Spend only black mana on X", the cast path's
     ``_x_color_allocations``); the rest of X is generic.
+
+    *reduction_bought* is a reduction one cast buys on top of the board's —
+    an offering's sacrificed permanent (CR 702.48c,
+    ``offering.offering_reduction``) — joined to the others as the cast path
+    joins it (``CostReduction.plus``, CR 601.2f), so the price the wire shows
+    for "offer this Fox" is the price that cast is charged.
 
     **One reader for every price a client is shown**, because the client
     drew three and only one of them was right: the castable highlight and a
@@ -1137,6 +1144,8 @@ def cast_mana_charge(
     tax, _taxing = spell_cost_tax(game, caster_index, card)
     pips, _pip_taxing = spell_symbol_tax(game, caster_index, card)
     reduction, _reducing = cost_reduction_for_cast(game, caster_index, card)
+    if reduction_bought is not None:
+        reduction = reduction.plus(reduction_bought)
     # …and CR 601.2f's last step over the finished total (Trinisphere,
     # ``engine/cost_floors.py``), which the payment applies too.
     return floored_spell_cost(game, reduce_cost(

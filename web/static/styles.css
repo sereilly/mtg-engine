@@ -2461,6 +2461,13 @@ h2.targeting-valid {
   white-space: normal;
 }
 
+/* What pays a picked card's splice cost when it is not mana (BOK): a heading
+   per half of the price, its candidates as buttons under it. */
+.splice-price-row {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+
 /* The cards spliced onto a spell, in the viewer (the stack item's `spliced`). */
 .preview-spliced {
   display: inline-block;
