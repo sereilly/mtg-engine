@@ -118,13 +118,22 @@ def _tribes(_pool, catalog):
             ):
                 wanted.append(subtype)
     found = []
+    # The **cheapest** two of each tribe: a row narrows by a mana value
+    # ceiling as well as by the tribe, and the lowest one any row prints or
+    # counts is what the pile has to answer. Kodama of the Center Tree (at
+    # Betrayers of Kamigawa's promotion rehearsal) has "soulshift X, where X is
+    # the number of Spirits you control", counted as the trigger is put on
+    # the stack; fired here beside no other Spirit it is X 1, and the first
+    # two Spirits by name cost 2 — so CR 603.3d took the trigger off the stack
+    # and the census read "nobody was asked" for a trigger that asks
+    # (``tests/sets/test_bok_creatures_later_groups.py``, W2G1).
     for subtype in wanted:
         tribe = sorted(
             (
                 card for card in catalog
                 if card.name not in subjects and subtype in _printed_subtypes(card)
             ),
-            key=lambda card: card.name,
+            key=lambda card: (int(card.cmc or 0), card.name),
         )
         assert len(tribe) >= 2, subtype
         found.extend(tribe[:2])

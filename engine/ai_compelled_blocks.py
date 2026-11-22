@@ -413,7 +413,7 @@ def gang_block_pumps(game: "Game", attacker: "Permanent", members) -> dict:
         else:
             firings = members[:1]
         for blocker in firings:
-            _add_block_pumps(found, trigger, attacker, blocker, len(members))
+            _add_block_pumps(game, found, trigger, attacker, blocker, len(members))
     for member in members:
         member_seat = game.controller_index_of(member)
         for trigger in matching_triggers(
@@ -425,11 +425,11 @@ def gang_block_pumps(game: "Game", attacker: "Permanent", members) -> dict:
                 ) else [],
             ):
                 continue
-            _add_block_pumps(found, trigger, member, attacker, 1)
+            _add_block_pumps(game, found, trigger, member, attacker, 1)
     return {key: tuple(value) for key, value in found.items()}
 
 
-def _add_block_pumps(found: dict, trigger, source, other, blockers: int) -> None:
+def _add_block_pumps(game: "Game", found: dict, trigger, source, other, blockers: int) -> None:
     """Add one firing of *trigger* (printed on *source*, about *other*) to
     *found*: ``pump_self`` on *source*, ``pump_block_pair`` on *other*."""
     for step in _plain_steps(trigger.instruction):
@@ -440,8 +440,13 @@ def _add_block_pumps(found: dict, trigger, source, other, blockers: int) -> None
             receiver = other
         else:
             continue
-        power = _one_on_one(payload.get("power"), payload, blockers)
-        toughness = _one_on_one(payload.get("toughness"), payload, blockers)
+        counted = _counted_x(game, source, payload)
+        power = _one_on_one(payload.get("power"), payload, blockers, counted)
+        toughness = _one_on_one(payload.get("toughness"), payload, blockers, counted)
+        if counted is not None and payload.get("power") == "x" and payload.get("power_negative"):
+            power = -power
+        if counted is not None and payload.get("toughness") == "x" and payload.get("toughness_negative"):
+            toughness = -toughness
         if power is not None and toughness is not None:
             found[id(receiver)][0] += power
             found[id(receiver)][1] += toughness
@@ -465,13 +470,34 @@ def pumped_toughness(creature: "Permanent", pumps: dict) -> int:
     return creature.effective_toughness + pumps.get(id(creature), (0, 0))[1]
 
 
-def _one_on_one(amount, payload: dict, blockers: int = 1) -> "int | None":
+def _counted_x(game: "Game", source, payload: dict) -> "int | None":
+    """The X a pump's where-clause counts, taken now for *source* — "it gets
+    +X/+X until end of turn, where X is the number of attacking creatures"
+    (Fumiko the Lowblood's bushido X): attackers are declared before any
+    block, and the block's trigger resolves before damage, so the count the
+    engine fights with is the count on the board the forecast is asked of.
+    ``handlers/_amounts.count_now_for``, the reader Takeno's "for each point of
+    bushido it has" asks too. None for a pump with no such count, or one that
+    needs a resolution to name its board."""
+    spec = payload.get("x_from_count")
+    if not isinstance(spec, dict) or spec.get("blocking_source"):
+        return None
+    from .handlers._amounts import count_now_for
+
+    return count_now_for(game, source, spec)
+
+
+def _one_on_one(amount, payload: dict, blockers: int = 1,
+                counted: "int | None" = None) -> "int | None":
     """A pump's printed amount, or "+1/+1 … for each creature blocking it"
     (Elvish Berserker: ``times_x`` over a ``blocking_source`` count) with the
     *blockers* the fight has — "…beyond the first" (Johtull Wurm) the count's
-    ``offset`` less, never below none. None for any other amount."""
+    ``offset`` less, never below none — or a bare X its where-clause
+    *counted* (:func:`_counted_x`). None for any other amount."""
     if isinstance(amount, int) and not isinstance(amount, bool):
         return amount
+    if amount == "x" and counted is not None:
+        return counted
     count = payload.get("x_from_count") or {}
     if isinstance(amount, dict) and isinstance(amount.get("times_x"), int) and count.get(
         "blocking_source"

@@ -18,6 +18,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...extra_triggers import additional_triggers
+from ...frozen_trigger_x import frozen_trigger_x
 from ...game_types import as_graveyard_stamps, as_target_slots, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
@@ -101,6 +102,16 @@ class TriggeredAbilitiesMixin:
         is not the only fire site: a dies-trigger enqueues from
         ``_permanent_to_graveyard`` one ability at a time, and a creature
         sacrificed to pay a cost dies exactly there."""
+        # A where-clause whose X bounds the ability's target is counted now,
+        # as the ability triggers (CR 603.3d), looking back at the board a
+        # departure left (CR 603.10a) — before a held trigger loses the open
+        # departure it would have looked back at. Kodama of the Center Tree's
+        # soulshift X; ``engine/frozen_trigger_x.py``.
+        if x_value is None:
+            x_value = frozen_trigger_x(
+                self, instruction, controller_index=controller_index,
+                source_permanent=source_permanent, card=card,
+            )
         if self.deferred_triggers is not None:
             self.deferred_triggers.append(dict(
                 controller_index=controller_index,

@@ -68,6 +68,7 @@ from .lowering._events import LOOP_BOUND_OBJECT, LOOP_BOUND_PLAYER
 from .lowering._record_keys import LOOP_BOUND_TARGET
 from .lowering.loops import ANY_NUMBER_OF_TARGETS_LOOP
 from .lowering._record_keys import BOARD_LOOP_OBJECT
+from .lowering._record_keys import X_DEFINED_BY_TRIGGER_CLAUSE
 from .lowering._prevented_riders import _guard_is_the_arms_own_precondition
 from .lowering._roles import (plan_another_target_roles,
                               stamp_another_target_roles)
@@ -616,10 +617,21 @@ def lower_statement(
         # down: every one of its productions only checks that the sentence reads
         # an X and stamps the definition onto it, and none of them cares how it
         # was lowered.
+        #
+        # Under a trigger the wrapped sentence is told the clause is there
+        # (``X_DEFINED_BY_TRIGGER_CLAUSE``): a trigger announces no X, so a
+        # target bounded by one ("…with mana value **X** or less", Kodama of
+        # the Center Tree) refuses unless this clause defines it — and the
+        # clause, lowered second, is what freezes the count as the ability
+        # triggers (``where_x.lower_where_x``).
+        inner_produced = (
+            produced | {X_DEFINED_BY_TRIGGER_CLAUSE} if event is not None
+            else produced
+        )
         return lower_where_x(
             statement,
             lower_statement(
-                statement.statement, produced,
+                statement.statement, inner_produced,
                 event=event, event_subject=event_subject, whole_effect=False,
             ),
             produced,

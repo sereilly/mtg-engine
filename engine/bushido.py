@@ -164,7 +164,7 @@ def expand_bushido_x_lines(oracle_text: str, card_name: str | None) -> str:
     )
 
 
-def bushido_points(card) -> int:
+def bushido_points(card, *, game=None, permanent=None) -> int:
     """How many points of bushido *card* has: the N of every instance its
     keyword lines state, summed (Takeno, Samurai General's "for each point of
     bushido it has").
@@ -176,8 +176,78 @@ def bushido_points(card) -> int:
     lines are the ones the compiler's keyword-line gate admits, read off the
     rewritten lines every reader of a card's lines starts from (CLAUDE.md), so
     what is counted is exactly what triggers.
+
+    **Bushido X counts its X** (CR 702.45a: "Fumiko the Lowblood has bushido
+    X, where X is the number of attacking creatures" — she *has* bushido X,
+    and X is a number). Its line is rewritten to the triggered ability the
+    rule says it is (:func:`expand_bushido_x_line`), so the keyword lines
+    above never see it; what is added is that trigger's own where-clause
+    count (:func:`bushido_x_counts`), taken now off *game* for *permanent* —
+    the moment Takeno's layer-7c effect is applied (CR 613.4c), so two
+    attackers make it 2 and three make it 3. One count, the one the trigger
+    resolves with, not a second reading of the clause. Without a game there
+    is no board to count and only the numbered instances are summed.
     """
-    return _bushido_points(card.name, card.oracle_text or "", card.is_legendary)
+    points = _bushido_points(card.name, card.oracle_text or "", card.is_legendary)
+    if game is None or permanent is None:
+        return points
+    from .handlers._amounts import count_now_for
+
+    # The count a resolution of the trigger would take off this board now
+    # (``count_now_for``, the reader the AI's block forecast asks too); a
+    # scope only an announcement names counts nothing here.
+    return points + sum(
+        count_now_for(game, permanent, spec) or 0
+        for spec in bushido_x_counts(card)
+    )
+
+
+def bushido_x_counts(card) -> tuple[dict, ...]:
+    """The where-clause count spec of every "has bushido X, where X is …"
+    instance *card* has, as the trigger it is rewritten to carries it — or
+    nothing for a card with none.
+
+    Found by the rewritten sentence (:func:`expand_bushido_x_line` over the
+    printed lines, its short self-reference written out first), so a printed
+    sentence that only reads like bushido (Chub Toad's) is never counted as
+    points of the keyword: CR 702.45a's keyword is what Takeno asks about.
+    """
+    sentences = _bushido_x_sentences(
+        card.name, card.oracle_text or "", card.is_legendary
+    )
+    if not sentences:
+        return ()
+    from .oracle import compile_card_oracle
+    from .oracle_types import X_FROM_COUNT
+
+    return tuple(
+        trig.instruction.payload[X_FROM_COUNT]
+        for trig in compile_card_oracle(card).triggered_abilities
+        if trig.supported
+        and trig.source_line in sentences
+        and trig.instruction is not None
+        and isinstance(trig.instruction.payload.get(X_FROM_COUNT), dict)
+    )
+
+
+@lru_cache(maxsize=None)
+def _bushido_x_sentences(name: str, oracle_text: str, legendary: bool) -> tuple[str, ...]:
+    # Cached on the text, which is all the answer reads: the rewrite and the
+    # self-reference expansion are pure text, so nothing the compilation
+    # caches clear can change it (and ``test_front_end_safety`` holds a
+    # ``compilation_cache`` to reaching the compiler).
+    if "bushido x" not in oracle_text.lower():
+        return ()
+    from .self_reference import expand_short_self_references
+
+    written_out = expand_short_self_references(oracle_text, name, legendary=legendary)
+    return tuple(
+        sentence
+        for sentence in (
+            expand_bushido_x_line(line, name) for line in written_out.split("\n")
+        )
+        if sentence
+    )
 
 
 @compilation_cache
@@ -209,6 +279,7 @@ __all__ = [
     "bushido_amounts",
     "bushido_points",
     "bushido_triggers",
+    "bushido_x_counts",
     "expand_bushido_x_line",
     "expand_bushido_x_lines",
 ]

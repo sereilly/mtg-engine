@@ -39,6 +39,21 @@ the rewrite cannot read ("Soulshift X") stays as printed and
 and modular's shape test, wider than the reader, so a noncreature card whose
 other line compiles cannot report supported with the keyword dropped.
 
+**"<This card> has soulshift X, where X is <count>"** (Kodama of the Center
+Tree) is the one counted N, and it is a *sentence* rather than a keyword line:
+a card granting itself the keyword with an X its where-clause defines —
+``bushido.expand_bushido_x_line``'s shape (Fumiko the Lowblood), one keyword
+over. It is rewritten to CR 702.46a's sentence with X for N and the clause
+kept: "When this permanent is put into a graveyard from the battlefield, you
+may return target Spirit card with mana value X or less from your graveyard to
+your hand, where X is the number of Spirits you control." The grammar reads
+that as a dies trigger whose graveyard bound is an X the where-clause defines,
+and the X is counted **as the ability triggers**, looking back (CR 603.10a;
+the card's 2005-02-01 ruling: "the gamestate is referenced immediately before
+the Soulshift trigger to determine the value of X. Soulshift X includes Kodama
+of the Center Tree. So, X is always at least 1") —
+``engine/frozen_trigger_x.py``, read before CR 603.3d chooses the target.
+
 **The word itself is still an ability the permanent has** (CR 702.46a calls it
 a triggered ability), and the layer-6 seed reads it from the ingested keywords
 field (``printed_characteristics``), which lists "Soulshift" for every printed
@@ -117,13 +132,49 @@ def expand_soulshift_line(line: str) -> str | None:
     return "\n".join(SOULSHIFT_RULES_TEXT.format(count=count) for count in counts)
 
 
-def expand_soulshift_lines(oracle_text: str) -> str:
-    """*oracle_text* with every soulshift keyword line rewritten to its rules
-    text. Text without one is returned unchanged."""
+#: "Kodama of the Center Tree has soulshift X, where X is the number of
+#: Spirits you control." — a card granting itself soulshift with a counted N,
+#: once the short self-reference is written out (``engine/self_reference.py``)
+#: and the reminder text is stripped. The subject is the card's own name or
+#: "this creature"; the count clause is the grammar's to read.
+_SOULSHIFT_X_LINE = re.compile(
+    r"^(?P<subject>.+?) has soulshift x, where x is (?P<count>.+?)\.?$",
+    re.IGNORECASE,
+)
+
+
+def expand_soulshift_x_line(line: str, card_name: str | None) -> str | None:
+    """CR 702.46a's sentence for a card that has "soulshift X, where X is …",
+    or None for any other line.
+
+    The rule's own sentence with X for N and the where-clause kept, so the
+    grammar meets the dies trigger and the graveyard return every soulshift
+    line already becomes, with a mana value bound the clause defines. A count
+    the grammar cannot read refuses the rewritten line, naming it.
+    """
+    match = _SOULSHIFT_X_LINE.match(_stripped(line))
+    if match is None:
+        return None
+    subject = match.group("subject").strip().lower()
+    if subject != "this creature" and (
+        card_name is None or subject != card_name.strip().lower()
+    ):
+        return None
+    sentence = SOULSHIFT_RULES_TEXT.format(count="X")
+    return f"{sentence[:-1]}, where X is {match.group('count')}."
+
+
+def expand_soulshift_lines(oracle_text: str, card_name: str | None = None) -> str:
+    """*oracle_text* with every soulshift keyword line — and every "<this
+    card> has soulshift X, where X is …" self-grant, which needs *card_name* —
+    rewritten to its rules text. Text without one is returned unchanged."""
     if not oracle_text or "oulshift" not in oracle_text:
         return oracle_text
     return "\n".join(
-        expand_soulshift_line(line) or line for line in oracle_text.split("\n")
+        expand_soulshift_line(line)
+        or expand_soulshift_x_line(line, card_name)
+        or line
+        for line in oracle_text.split("\n")
     )
 
 
@@ -145,6 +196,7 @@ __all__ = [
     "SOULSHIFT_RULES_TEXT",
     "expand_soulshift_line",
     "expand_soulshift_lines",
+    "expand_soulshift_x_line",
     "is_soulshift_line",
     "soulshift_count",
     "soulshift_counts",

@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from ..oracle_types import OracleInstruction
 from ..death_tally import died_this_turn_count, is_game_death_tally
 from ..models import Permanent, PlayerState
+from ..oracle_types import X_COUNTED_AT_TRIGGER
 from ..target_roles import COUNTED_SEAT_ROLE
 from ._chosen import (_resolve_chosen_color, _resolve_chosen_subtype,
                       count_spec_in_resolution,
@@ -545,6 +546,34 @@ def _counted_seat_fails(game, context, spec: dict, instruction) -> bool:
     ) is None
 
 
+#: The scopes a count can be taken in with no resolution behind it — the ones
+#: :func:`evaluate_count` answers off the seat it is handed. A count of
+#: "target player's" board needs an announcement only a resolution holds.
+_SCOPES_COUNTED_WITHOUT_A_RESOLUTION = frozenset({"you", "all", "opponents"})
+
+
+def count_now_for(game: "Game", permanent: "Permanent", spec: dict) -> "int | None":
+    """A where-clause count *spec* taken **now**, for *permanent* — its
+    controller "you" (CR 109.5), itself the source "other" is measured from —
+    or None where no resolution-free answer exists (a scope only an
+    announcement names; a permanent no seat controls).
+
+    The number a resolution of *permanent*'s own ability would count off this
+    board, through the evaluator a resolution and a CR 604.3 recompute share,
+    for the two readers that need it before anything resolves: "the bushido
+    it has" (Takeno, Samurai General, counting Fumiko the Lowblood's bushido
+    X — ``bushido.bushido_points``) and the AI's forecast of what a block's
+    own pump adds (``ai_compelled_blocks._add_block_pumps``). One reader, so
+    the two cannot count Fumiko's "number of attacking creatures" apart.
+    """
+    seat = game.controller_index_of(permanent)
+    if seat is None or spec.get("owner", "you") not in _SCOPES_COUNTED_WITHOUT_A_RESOLUTION:
+        return None
+    return max(0, int(evaluate_count(
+        game, game.players[seat], spec, exclude=permanent, source=permanent,
+    )))
+
+
 def per_recipient_amount(game, context, spec: dict, face, *, source=None) -> int:
     """One seat's share of an ``x_from_count_per_recipient`` spec.
 
@@ -938,6 +967,16 @@ def _battlefield_matches(
         game.all_permanents() if every_seat or opponents_only
         else game.controlled_by(seat)
     )
+    # "…with mana value X or less …, where X is the number of Spirits you
+    # control" (Kodama of the Center Tree's soulshift X): a count taken as a
+    # leaves-the-battlefield ability triggers, which looks back (CR 603.10a)
+    # at the board immediately before the event — the dying permanent and
+    # everything the same event took off included, whichever of them the
+    # battlefield still lists (``Game.looked_back_permanents``). Only for a
+    # spec the lowering froze at the trigger, which admits these two scopes
+    # alone; outside a departure the look-back is empty and this is the scan.
+    if spec.get(X_COUNTED_AT_TRIGGER) and not opponents_only:
+        scanned = [*scanned, *game.looked_back_permanents(seat)]
     # Through ``subject_matches`` rather than the pure half, because the
     # pure half cannot answer a **keyword** (CR 613 layer 6, which needs
     # the game): "you gain 1 life for each creature you control with

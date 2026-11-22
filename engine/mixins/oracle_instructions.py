@@ -16,7 +16,8 @@ from ..game_types import (as_target_slots, OracleExecutionContext,
 from ..handlers import EFFECT_HANDLERS
 from ..handlers._amounts import count_from_payload
 from ..handlers._common import apply_damage_to_creature
-from ..oracle_types import X_FROM_COUNT, substitute_x_bounds
+from ..oracle_types import (X_COUNTED_AT_TRIGGER, X_FROM_COUNT,
+                            substitute_x_bounds)
 from ..models import CardDefinition, Permanent, PlayerState
 from ..auras import (AURA_REANIMATION_PHRASES, AURA_REANIMATION_TAPPED,
                      aura_land_type_change)
@@ -76,7 +77,16 @@ class OracleInstructionsMixin:
         # left a number, so a clause carrying the words on an ability with no
         # cast at all (which no card prints) falls back to counting rather than
         # to nothing.
-        if count_spec and not (count_spec.get("as_cast") and context.x_value is not None):
+        #
+        # The same for a count taken **as a triggered ability triggered**
+        # (``X_COUNTED_AT_TRIGGER``: Kodama of the Center Tree's soulshift X,
+        # whose X bounds the target CR 603.3d chose with it): the number is on
+        # the stack object (``engine/frozen_trigger_x.py``), and recounting
+        # here would judge the target against a board that has moved on.
+        if count_spec and not (
+            (count_spec.get("as_cast") or count_spec.get(X_COUNTED_AT_TRIGGER))
+            and context.x_value is not None
+        ):
             context = dataclasses.replace(
                 context, x_value=count_from_payload(self, context, count_spec, instruction)
             )

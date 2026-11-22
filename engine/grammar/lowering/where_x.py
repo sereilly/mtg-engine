@@ -34,7 +34,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction, X_FROM_COUNT
+from ...oracle_types import (OracleInstruction, X_COUNTED_AT_TRIGGER,
+                             X_FROM_COUNT, carries_x_bound)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
@@ -155,6 +156,8 @@ def lower_where_x(
     # cards.
     if isinstance(node.definition, ast.ChosenXAtMost):
         return _lower_chosen_x_ceiling(node, inner, event)
+    if event is not None and _bounds_by_x(inner):
+        return _lower_counted_at_trigger(node, inner, event)
     if node.as_cast and not _is_cast_time_countable(node.definition):
         raise LoweringError(
             "only a count of a zone can be taken as a spell is cast", node=node
@@ -235,6 +238,88 @@ def lower_where_x(
         # stays byte-identical.
         spec["as_cast"] = True
     return _stamp_x_from_count(inner, spec)
+
+
+def _bounds_by_x(instructions) -> bool:
+    """Whether a **target** anywhere in *instructions* — a nested step's
+    included — is bounded by the X (``oracle_types.X_BOUND``): its picker
+    description, or a targeted graveyard return's mana value bound
+    (``returns._graveyard_bounds``). A sweep's bound ("each artifact with
+    mana value X or less", Meltdown) chooses nothing and is not asked: its X
+    is counted as it resolves, like every other where-clause's."""
+    for instruction in instructions:
+        payload = instruction.payload
+        if carries_x_bound({
+            key: payload[key]
+            for key in ("targets", "graveyard_mana_value") if key in payload
+        }):
+            return True
+        for value in payload.values():
+            if (
+                isinstance(value, tuple) and value
+                and isinstance(value[0], OracleInstruction)
+                and _bounds_by_x(value)
+            ):
+                return True
+    return False
+
+
+#: The keys a count frozen as a trigger triggers may carry: a plain count of
+#: permanents and the printed arithmetic over it (``_scaled``'s keys). Anything
+#: else — a history, a record, a zone that is not the battlefield, a nested
+#: count — is a number the look-back below does not take.
+_AT_TRIGGER_SPEC_KEYS = frozenset({
+    "filter", "owner", "zone", "aggregate", "multiplier", "plus", "offset",
+    "half", "divide_by",
+})
+
+
+def _lower_counted_at_trigger(
+    node: ast.WhereX,
+    inner: tuple[OracleInstruction, ...],
+    event: str,
+) -> tuple[OracleInstruction, ...]:
+    """"When this permanent is put into a graveyard from the battlefield, you
+    may return target Spirit card with mana value **X** or less from your
+    graveyard to your hand, **where X is the number of Spirits you control**."
+    (Kodama of the Center Tree's soulshift X, ``engine/soulshift.py``.)
+
+    The clause bounds the trigger's **target**, and CR 603.3d chooses that as
+    the ability is put on the stack — so the count is taken then, not as it
+    resolves (where every other where-clause is counted), and the bound is
+    judged with that number by the picker and again by CR 608.2b's re-check.
+    A leaves-the-battlefield trigger counts the board it looks back at
+    (CR 603.10a; the card's 2005-02-01 ruling: "the gamestate is referenced
+    immediately before the Soulshift trigger to determine the value of X").
+    The flag (``oracle_types.X_COUNTED_AT_TRIGGER``) is what the fire path
+    reads to freeze it (``engine/frozen_trigger_x.py``), what the battlefield
+    count reads to add what the open departure took off, and what keeps the
+    dispatcher from counting again.
+
+    Only a count of **permanents** on a seat the trigger's controller names
+    ("you control", "on the battlefield") is admitted: the look-back is a
+    board's, and a count of a graveyard or a history taken at a death would
+    read the pile the death has already changed. Everything else refuses the
+    line rather than freeze a number the card does not print.
+    """
+    spec = counted_definition_spec(
+        node.definition, node,
+        rewrite=lambda filt: _count_filter_for(filt, inner, node, event),
+        event=event,
+    )
+    if (
+        spec is None
+        or not set(spec) <= _AT_TRIGGER_SPEC_KEYS
+        or spec.get("zone", "battlefield") != "battlefield"
+        or spec.get("owner", "you") not in ("you", "all")
+        or spec.get("aggregate", "count") != "count"
+    ):
+        raise LoweringError(
+            "a trigger's target bounded by X is counted as it triggers only "
+            "off the permanents it looks back at",
+            node=node,
+        )
+    return _stamp_x_from_count(inner, {**spec, X_COUNTED_AT_TRIGGER: True})
 
 
 def _is_cast_time_countable(definition: "ast.Amount") -> bool:

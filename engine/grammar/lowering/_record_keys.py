@@ -139,6 +139,21 @@ LOOP_BOUND_OBJECT = "loop_bound_object"
 #: where the other loops would hand it a card that has left.
 BOARD_LOOP_OBJECT = "board_loop_object"
 
+#: The marker a **triggered** ability's where-clause adds to *produced* while
+#: the sentence it wraps is lowered: "When this permanent is put into a
+#: graveyard from the battlefield, you may return target Spirit card with mana
+#: value **X** or less from your graveyard to your hand, **where X is** the
+#: number of Spirits you control." (Kodama of the Center Tree's soulshift X.)
+#: A trigger announces no X (CR 601.2b, 602.2b are a spell's and an activated
+#: ability's), so a target bounded by one refuses — unless the clause around
+#: the sentence defines it, which the inner lowering cannot see: the clause is
+#: lowered *after* what it wraps (``statement_dispatch``'s ``WhereX`` arm).
+#: This says it is there, and the clause then freezes the count as the ability
+#: triggers (``oracle_types.X_COUNTED_AT_TRIGGER``) so CR 603.3d has a number
+#: to choose the target against. A marker for :data:`LOOP_BOUND_OBJECT`'s
+#: reason: nothing is recorded under it.
+X_DEFINED_BY_TRIGGER_CLAUSE = "x_defined_by_trigger_clause"
+
 #: The per-object seat map a destroy or exile step freezes about what it took,
 #: read two ways: one entry per iteration inside an object loop ("its
 #: controller"), and as a per-seat tally outside one ("the number of artifacts

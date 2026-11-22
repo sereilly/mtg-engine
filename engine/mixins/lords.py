@@ -549,9 +549,12 @@ class LordBuffsMixin:
                     # layer 6 as pass 2a just completed it — so a bushido a
                     # Sensei Golden-Tail granted counts and one a "loses all
                     # abilities" took away does not. No points, no
-                    # contribution, for the branch above's reason.
+                    # contribution, for the branch above's reason. A bushido
+                    # X (Fumiko the Lowblood) is its X counted off this board
+                    # now (CR 613.4c), so the game and the creature go too.
                     scale = keyword_points(
-                        target_perm.effective_card, buff.per_point_of
+                        target_perm.effective_card, buff.per_point_of,
+                        game=self, permanent=target_perm,
                     )
                     if scale <= 0:
                         continue

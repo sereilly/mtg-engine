@@ -511,17 +511,20 @@ _PER_POINT_RE = re.compile(
 _POINTED_KEYWORDS = frozenset({"bushido"})
 
 
-def keyword_points(card, keyword: str) -> int:
+def keyword_points(card, keyword: str, *, game=None, permanent=None) -> int:
     """How many points of *keyword* *card* has — every instance's N, summed.
 
     *card* is what the permanent says (``Permanent.effective_card``), so a
     granted instance counts and a removed one does not. Asked only for a word
     in :data:`_POINTED_KEYWORDS`, which :func:`lord_buff_for` enforces.
+    *game* and *permanent* are for an instance whose N is counted ("bushido
+    X, where X is the number of attacking creatures", Fumiko the Lowblood):
+    the count is taken off that board for that permanent, now.
     """
     if keyword == "bushido":
         from .bushido import bushido_points
 
-        return bushido_points(card)
+        return bushido_points(card, game=game, permanent=permanent)
     raise ValueError(f"no reader counts points of {keyword!r}")
 
 

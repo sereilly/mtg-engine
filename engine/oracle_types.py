@@ -25,6 +25,20 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 # string agreed in two places is exactly the second copy that drifts.
 X_FROM_COUNT = "x_from_count"
 
+# The flag on an ``X_FROM_COUNT`` spec that says the count is taken **as the
+# triggered ability triggers**, not as it resolves: "…return target Spirit
+# card with mana value X or less …, where X is the number of Spirits you
+# control" (Kodama of the Center Tree's soulshift X). The X bounds the target,
+# and CR 603.3d chooses the target as the ability is put on the stack, so the
+# number has to exist then; a leaves-the-battlefield trigger counts the board
+# it looks back at (CR 603.10a; the card's 2005-02-01 ruling). Written by the
+# where-clause lowering, read by the fire path that freezes the count onto the
+# stack object (``engine/frozen_trigger_x.py``), by the battlefield count
+# that adds what the open departure took off (``handlers/_amounts``), and by
+# the dispatcher, which must not count again — ``as_cast``'s arrangement one
+# kind of ability over. Here for ``X_FROM_COUNT``'s reason.
+X_COUNTED_AT_TRIGGER = "at_trigger"
+
 # The value a filter's numeric bound carries when the card printed **X** rather
 # than a number: "each artifact with mana value **X** or less" (Meltdown),
 # "a creature card with mana value X or less" (Citanul Flute). The same string
