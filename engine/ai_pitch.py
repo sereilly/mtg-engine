@@ -19,13 +19,17 @@ cast's own builder (its targets chosen at that X, its rehearsal read at that
 X) while :func:`pitching` holds the pitch, and the best-scoring of all of
 them, the mana cast included, is the cast (:func:`best_of_the_pitches`).
 
-**What the pitched card costs** is the rehearsal's to weigh: the copy exiles
-it, and the standing (``ai_standing.seat_standing``) counts the card gone, so
-a pitch wins only where the larger X buys more than a card. **Which card of
-an X** is the one least worth holding (``ai_prompt_picks.held_worth``, hand
-order between equals) — the ordering ``ai_prompt_readers.
-graveyard_price_order`` gives a graveyard paid as a price, asked of a hand:
-a card exiled has no road back, so what holding it is worth is what it costs.
+**What the pitched card costs** is weighed twice over, once each for what
+each reading cannot see: the copy exiles it and the standing
+(``ai_standing.seat_standing``) counts a card gone — flat, a card is a card —
+and ``ai_cast_score.finished_cast_candidate`` subtracts what holding *that*
+card is worth beyond a card (:func:`pitched_card_price`), so a pitch wins only
+where the larger X buys more than the card, and of two that do the same job
+the cheaper card goes. **Which card of an X** is the one least worth holding
+(``ai_prompt_picks.held_worth``, hand order between equals) — the ordering
+``ai_prompt_readers.graveyard_price_order`` gives a graveyard paid as a
+price, asked of a hand: a card exiled has no road back, so what holding it is
+worth is what it costs.
 """
 
 from __future__ import annotations
