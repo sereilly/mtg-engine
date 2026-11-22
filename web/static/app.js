@@ -8689,6 +8689,14 @@ function copyCastExiledCard(info, state = currentState) {
   // hand is hidden in this viewer's state — so the offer carries the card
   // itself (`card`). Its exile fields are null.
   if (copyCastFromHand(info)) return info.card;
+  // "You may cast target instant card from your graveyard" (Toshiro Umezawa,
+  // Chandra, Flame's Catalyst's −2): the card itself, in the graveyard the
+  // offer names (`graveyard_seat` / `graveyard_index`); its exile fields are
+  // null. Read inline: the tests lift this function without its neighbours.
+  if (Number.isInteger(info?.graveyard_seat) && Number.isInteger(info?.graveyard_index)) {
+    const held = (state?.players?.[info.graveyard_seat]?.graveyard || [])[info.graveyard_index];
+    return held && typeof held === "object" ? held : null;
+  }
   const exile = state?.players?.[info?.exile_seat]?.exile || [];
   const card = Number.isInteger(info?.exile_index) ? exile[info.exile_index] : null;
   return card && typeof card === "object" ? card : null;
@@ -8716,6 +8724,9 @@ function copyCastWay(info) {
 // and division, asked exactly as a hand cast asks them — every body of which
 // goes out as `copy_cast_confirm` (`carryCopyCastAnswer`).
 async function beginCopyCast(info) {
+  // The graveyard offer pays its mana cost and casts the card where it lies
+  // (`beginGraveyardCopyCast`); every other offer is free, out of exile.
+  if (Number.isInteger(info?.graveyard_seat)) return beginGraveyardCopyCast(info);
   let card = copyCastExiledCard(info);
   if (!card) {
     updateActionHint(
@@ -8750,6 +8761,123 @@ async function beginCopyCast(info) {
   beginZoneCast(card, "exile", null, copyCastWay(info), { copyCastSlot: slot });
 }
 
+// ---------------------------------------------------------------------------
+// The graveyard cast offer (CR 608.2g): "You may cast target instant card from
+// your graveyard. If that spell would be put into a graveyard, exile it
+// instead." (Toshiro Umezawa; Chandra, Flame's Catalyst's −2 for a red instant
+// or sorcery.) A `copy_cast` offer whose card is the targeted card itself, in
+// a graveyard (`graveyard_seat` / `graveyard_index`, web/prompt_board.py),
+// cast during the resolution with its mana cost **paid** (`free: false`), and
+// exiled instead of going to a graveyard (`exile_instead`). The panel used to
+// look for it in exile and answer "no longer in exile".
+// ---------------------------------------------------------------------------
+
+// The way the card is cast: for its mana cost, as printed (a cost modifier in
+// force is the server's to charge — a refusal for mana opens the payment
+// dialog on what it asks). Not free, not an alternative cost: CR 601.2f with
+// nothing waived, and an X in that cost is announced as a hand cast's is.
+function graveyardCopyCastWay(info, card) {
+  return {
+    keyword: "", alternative_cost: false, free: false, land: false,
+    price: card?.mana_cost || "{0}", cost: "pay its mana cost",
+    source: info?.source_name || "an ability",
+  };
+}
+
+// "Cast it": the ordinary cast chain on the graveyard card — its targets, X,
+// modes, asked as a hand cast asks them, the spec judged as cast from that
+// graveyard by this seat (`card_target_spec`, `from_zone=graveyard`) — every
+// body of which goes out as `copy_cast_confirm` (`carryCopyCastAnswer`). The
+// pool pays; short, the hand-tapped payment dialog the madness cast uses
+// (`applyMadnessPaymentPrompt`) keeps the announcement until the lands are
+// tapped, since an auto-tap is a priority-window payment and this is a
+// resolution.
+async function beginGraveyardCopyCast(info) {
+  let card = copyCastExiledCard(info);
+  if (!card) {
+    updateActionHint(`${info.card_name || "The card"} is no longer in that graveyard, so it can't be cast.`, true);
+    return;
+  }
+  if (sessionId && seat !== null) {
+    try {
+      const params = new URLSearchParams({
+        card_name: info.card_name || normalizeCardName(card), seat: String(seat), from_zone: "graveyard",
+      });
+      const resp = await fetch(`/api/sessions/${sessionId}/card_target_spec?${params}`);
+      if (resp.ok) {
+        const payload = await resp.json();
+        if (payload?.target_spec) {
+          card = { ...card, target_spec: payload.target_spec, modes: payload.modes || card.modes,
+            modes_at_least: payload.modes_at_least ?? card.modes_at_least };
+        }
+      }
+    } catch { /* the payload's own spec; the engine still refuses a cast that names nothing it needs */ }
+  }
+  beginZoneCast(card, "graveyard", null, graveyardCopyCastWay(info, card), { copyCastSlot: info.graveyard_index });
+}
+
+// The offer's panel for a graveyard card: where it is, what it costs, that it
+// is exiled afterwards, and that lands are tapped by hand (the prompt takes a
+// land's tap while it is open). Fills the panel `applyCopyCastPrompt` opened.
+function applyGraveyardCastOfferPrompt(info, { title, body, steps }) {
+  const card = copyCastExiledCard(info);
+  const cardName = info.card_name || normalizeCardName(card) || "the card";
+  const source = info.source_name || "an ability";
+  const price = card?.mana_cost || "";
+  const me = getCurrentPlayerState();
+  const pool = me?.mana_pool || {};
+  const poolText = MANA_ORDER.some((symbol) => Number(pool[symbol] || 0) > 0)
+    ? formatManaSymbolsHtml(pool)
+    : "none";
+  const owner = info.graveyard_seat !== seat
+    ? `${currentState?.players?.[info.graveyard_seat]?.name || "Another player"}'s graveyard`
+    : "your graveyard";
+  const slot = Number.isInteger(info.graveyard_index) ? info.graveyard_index + 1 : null;
+  title.textContent = `Cast ${cardName} from ${owner === "your graveyard" ? "your" : "a"} graveyard`;
+  setSymbolsHtml(
+    body,
+    // renderSymbolsInline escapes the words itself.
+    `${source} lets you cast ${cardName} from ${owner} now, while its ` +
+      `ability resolves, paying its mana cost${price ? ` ${price}` : ""}. Auto-Tap cannot pay mid-resolution: ` +
+      `tap lands by clicking them, before or after you choose its targets.`,
+  );
+  steps.innerHTML = [
+    `<div id="copyCastCardSlot" class="prompt-card-row"></div>`,
+    `<div>In ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}: ${escapeHtml(cardName)}</div>`,
+    `<div>Mana cost: ${renderSymbolsInline(price || "{0}")}</div>`,
+    `<div>Your mana pool: ${poolText}</div>`,
+    info.exile_instead
+      ? `<div>If it would be put into a graveyard, it is exiled instead.</div>`
+      : "",
+    `<div class="prompt-choice-row">` +
+      `<button type="button" class="prompt-choice-btn" id="copyCastBtn">Cast ${escapeHtml(cardName)}${price ? ` for ${renderSymbolsInline(price)}` : ""}</button>` +
+      `<button type="button" class="prompt-choice-btn" id="copyCastDeclineBtn">Don't cast it</button>` +
+    `</div>`,
+  ].join("");
+  const imageUri = normalizeImageUri(card);
+  if (card && imageUri) {
+    const img = document.createElement("img");
+    img.src = imageUri;
+    img.alt = cardName;
+    img.title = card.oracle_text || cardName;
+    img.style.cssText = "width: 140px; border-radius: 7px; display: block; margin: 4px 0;";
+    img.addEventListener("mouseenter", () => showCardPreview(card));
+    img.addEventListener("mouseleave", () => scheduleHidePreview());
+    document.getElementById("copyCastCardSlot")?.appendChild(img);
+  }
+  document.getElementById("copyCastBtn")?.addEventListener("click", () => {
+    beginCopyCast(info).catch((e) => updateActionHint(e.message, true));
+  });
+  document.getElementById("copyCastDeclineBtn")?.addEventListener("click", async () => {
+    try {
+      await sendAction({ seat, action: "copy_cast_confirm", accept: false });
+      updateActionHint(`You did not cast ${cardName}.`);
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  });
+}
+
 function applyCopyCastPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -8766,6 +8894,13 @@ function applyCopyCastPrompt(info) {
   cancelBtn.classList.add("hidden");
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
+
+  // Toshiro Umezawa's graveyard offer: its own words (a paid cast, a
+  // graveyard, an exile after) — `applyGraveyardCastOfferPrompt`.
+  if (Number.isInteger(info?.graveyard_seat)) {
+    applyGraveyardCastOfferPrompt(info, { title, body, steps });
+    return;
+  }
 
   const card = copyCastExiledCard(info);
   const cardName = info.card_name || normalizeCardName(card) || "the exiled card";
@@ -8847,7 +8982,13 @@ function applyMadnessPaymentPrompt(pending, autoTapBtn) {
   // A copy cast (CR 707.12) owes no mana cost; what is refused for mana is
   // an additional cost's, and the same hand-tapping answers it.
   const copying = pendingCopyCast !== null;
-  title.textContent = copying
+  // …except the graveyard offer (Toshiro Umezawa, CR 608.2g): the card itself,
+  // cast from a graveyard for its **mana cost** (`beginGraveyardCopyCast`).
+  const fromGraveyard = copying && pendingCastFromZone === "graveyard";
+  const costWords = fromGraveyard ? "mana cost" : copying ? "additional cost" : "madness cost";
+  title.textContent = fromGraveyard
+    ? `Pay the mana cost — ${pending.cardName}`
+    : copying
     ? `Pay the additional cost — a copy of ${pending.cardName}`
     : `Pay the madness cost — ${pending.cardName}`;
   setSymbolsHtml(
@@ -8857,7 +8998,7 @@ function applyMadnessPaymentPrompt(pending, autoTapBtn) {
   );
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(pending.cardName)}</div>`,
-    `<div>Madness cost: ${renderSymbolsInline(price || "{0}")}</div>`,
+    `<div>${costWords.charAt(0).toUpperCase()}${costWords.slice(1)}: ${renderSymbolsInline(price || "{0}")}</div>`,
     `<div>Current mana: ${MANA_ORDER.some((symbol) => Number(pool[symbol] || 0) > 0) ? formatManaSymbolsHtml(pool) : "none"}</div>`,
   ].join("");
   if (autoTapBtn) {
@@ -8867,7 +9008,7 @@ function applyMadnessPaymentPrompt(pending, autoTapBtn) {
   }
   if (!pending.madnessHinted) {
     pending.madnessHinted = true;
-    updateActionHint(`Tap lands for ${pending.cardName}'s madness cost, then press Cast.`);
+    updateActionHint(`Tap lands for ${pending.cardName}'s ${costWords}, then press Cast.`);
   }
 }
 
@@ -25137,6 +25278,26 @@ const RESTRICTED_MANA_LABELS = {
   not_cast: ["not for spells", "This mana can't be spent to cast spells."],
 };
 
+// Mana kept until end of turn — CR 500.5's exception, Betrayers of Kamigawa's
+// Snake Shamans ("Add {G}. Until end of turn, you don't lose this mana as steps
+// and phases end."). The engine files it in a bucket of its own beside the
+// restricted ones (`engine/restricted_mana.py`'s kept row, `KEPT_KEYS`), and it
+// **pays for anything** — what differs is only when it empties (cleanup,
+// CR 514.2). So it is shown as pool mana with a "kept" badge and counted in
+// the total, never labelled "restricted", which told a player holding three
+// {G} from Sakiko that they could not spend them.
+const KEPT_MANA_KEYS = new Set(["kept_until_end_of_turn"]);
+const KEPT_MANA_LABEL = ["kept", "Until end of turn, you don't lose this mana as steps and phases end."];
+
+function keptManaCount(buckets) {
+  let count = 0;
+  for (const [key, bucket] of Object.entries(buckets || {})) {
+    if (!KEPT_MANA_KEYS.has(key)) continue;
+    for (const symbol of MANA_ORDER) count += Number((bucket || {})[symbol] || 0);
+  }
+  return count;
+}
+
 function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = null, restrictedWords = null) {
   const container = q(containerId);
   container.innerHTML = "";
@@ -25175,14 +25336,6 @@ function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = 
     }
     container.appendChild(chip);
   }
-  const totalChip = document.createElement("div");
-  totalChip.className = "mana-total" + (total > 0 ? " mana-total-active" : "");
-  totalChip.title = `${total} total mana available`;
-  totalChip.innerHTML =
-    `<span class="mana-total-num">${total}</span>` +
-    `<span class="mana-total-label">total</span>`;
-  container.appendChild(totalChip);
-
   // Restricted mana lives in its own bucket per restriction and can't pay for
   // anything but the spells that restriction admits, so each gets its own chips
   // rather than being added into the counts above (which would overstate what's
@@ -25191,19 +25344,35 @@ function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = 
     restrictedPools && !Array.isArray(restrictedPools) && MANA_ORDER.some((s) => s in restrictedPools)
       ? { creature: restrictedPools }
       : restrictedPools || {};
+  // …except mana that is only *kept* (`KEPT_MANA_KEYS`): it pays for anything,
+  // so it is part of what the total says is available.
+  const kept = keptManaCount(buckets);
+
+  const totalChip = document.createElement("div");
+  totalChip.className = "mana-total" + (total + kept > 0 ? " mana-total-active" : "");
+  totalChip.title = kept > 0
+    ? `${total + kept} total mana available (${kept} kept until end of turn)`
+    : `${total} total mana available`;
+  totalChip.innerHTML =
+    `<span class="mana-total-num">${total + kept}</span>` +
+    `<span class="mana-total-label">total</span>`;
+  container.appendChild(totalChip);
+
   for (const [key, restricted] of Object.entries(buckets)) {
+    const keptKey = KEPT_MANA_KEYS.has(key);
     // The words are the server's (`restricted_mana_words`, the card's own
     // sentence) wherever it sent them; the table above is the badge.
-    const [badge, fallbackTitle] = RESTRICTED_MANA_LABELS[key] || [
+    const [badge, fallbackTitle] = keptKey ? KEPT_MANA_LABEL : RESTRICTED_MANA_LABELS[key] || [
       "restricted",
       "This mana can only be spent on certain spells.",
     ];
-    const title = (restrictedWords || {})[key] || fallbackTitle;
+    const words = (restrictedWords || {})[key] || fallbackTitle;
+    const title = keptKey ? `Pays for anything. ${words}` : words;
     for (const symbol of MANA_ORDER) {
       const count = Number((restricted || {})[symbol] || 0);
       if (count <= 0) continue;
       const chip = document.createElement("div");
-      chip.className = `mana-symbol mana-${symbol} mana-symbol-filled mana-symbol-restricted`;
+      chip.className = `mana-symbol mana-${symbol} mana-symbol-filled ${keptKey ? "mana-symbol-kept" : "mana-symbol-restricted"}`;
       chip.title = title;
       const src = symbolSrc(`{${symbol}}`);
       const glyph = src
