@@ -15911,10 +15911,17 @@ function renderActivationPrompt() {
         + (button.text ? ` title="${escapeHtml(button.text)}"` : "")
         + `>${button.on ? "✓ " : ""}${renderSymbolsInline(button.label)}`
         + (button.text ? `<span class="splice-offer-text">${renderSymbolsInline(button.text)}</span>` : "")
-        + "</button>").join("") + "</div>";
+        + "</button>").join("") + "</div>"
+        // What pays each picked card's non-mana splice cost (CR 601.2h).
+        + (typeof splicePaymentRowsHtml === "function" ? splicePaymentRowsHtml(view.payRows) : "");
+      steps.querySelectorAll("[data-splice-pay]").forEach((btn) => {
+        btn.addEventListener("click", () => toggleSplicePayer(
+          Number(btn.dataset.splicePay), btn.dataset.splicePayKind, Number(btn.dataset.splicePayKey),
+        ));
+      });
       okBtn.classList.remove("hidden");
       okBtn.textContent = view.confirm;
-      okBtn.disabled = false;
+      okBtn.disabled = view.ready === false;
       cancelBtn.classList.remove("hidden");
       cancelBtn.disabled = false;
       customOkBtn.disabled = true;
@@ -16217,6 +16224,10 @@ function renderActivationPrompt() {
     title.textContent = `Pay for ${pending.cardName}?`;
     body.textContent = pending.refreshing
       ? "Recomputing what is still payable…"
+      // An offering the cast can't be made without now (CR 601.3c) is not
+      // optional, and the words say so.
+      : pending.offers.some((offer) => offer?.required)
+      ? "One of these prices is required to cast it now (see below). Choose what you are paying, then confirm."
       : "These prices are optional. Choose what you are paying, then confirm.";
     const rows = [];
     // A permanent-paid alternative cost named in part ("sacrifice two
@@ -16261,7 +16272,8 @@ function renderActivationPrompt() {
             const on = thisOne && pending.alternative === choice.index;
             buttons.push(
               `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
-              + ` data-alt-choice="${choice.index}" data-alt-index="${altIndex}">${verb} ${escapeHtml(choice.name)}</button>`,
+              + ` data-alt-choice="${choice.index}" data-alt-index="${altIndex}">`
+              + `${typeof alternativeHandChoiceLabel === "function" ? alternativeHandChoiceLabel(verb, offer, choice) : `${verb} ${escapeHtml(choice.name)}`}</button>`,
             );
           }
           // "…discard an Island card **and another card**" (Foil): once the
@@ -16322,6 +16334,14 @@ function renderActivationPrompt() {
         // there is no repeated spelling of one in the pool, and the payment
         // collects one permanent. The key rides on `symbols` like every other
         // offer's, so the counter handler below is shared.
+        // Offering (CR 702.48): each permanent's price, and whether the cast
+        // can be made now without it (`offeringOfferRowsHtml`).
+        const offeringRows = typeof offeringOfferRowsHtml === "function"
+          ? offeringOfferRowsHtml(offer, pending) : null;
+        if (offeringRows) {
+          rows.push(...offeringRows);
+          continue;
+        }
         const payable = Number(offer.max_times || 0) > 0;
         const on = Number(pending.taken[offer.symbols] || 0) > 0;
         rows.push(
@@ -16576,7 +16596,10 @@ function renderActivationPrompt() {
         : pendingCastTarget.alsoStack
         ? `Click a permanent on the battlefield, or a glowing ${stackObjectsNoun(pendingCastTarget.validStackIndices)} on the stack, to choose the target.`
         : "Click a glowing permanent on the battlefield to choose the target.";
-      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
+      // An offering's permanent: what the cast costs with each (CR 702.48c).
+      steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`
+        + (isSacrificeCost && typeof offeringPickerRowsHtml === "function"
+          ? offeringPickerRowsHtml(pendingCastTarget.card) : "");
     } else if (pendingCastTarget.targetKind === "any") {
       // What the picker is actually offering: "any target" enumerates creatures
       // beside the seats, "target player or planeswalker" enumerates
@@ -16909,14 +16932,26 @@ function renderActivationPrompt() {
       const xIsPaidInMana = pendingCastX.castAction === "activate"
         ? /\{x\}/i.test(pendingCastX.costString || "")
         : xLivesInManaCost(pendingCastX.card);
-      body.textContent = !xIsPaidInMana
+      // "Remove X ki counters" (the ki Baku): the counters bound it, and the
+      // prompt says how many there are (`counter_bound`).
+      const xFromCounterCost = pendingCastX.castAction === "activate" && !xIsPaidInMana
+        && typeof activationAnnouncesCounterX === "function"
+        && activationAnnouncesCounterX(pendingCastX.card, pendingCastX.activateAbilityIndex);
+      body.textContent = xFromCounterCost
+        ? counterXSentence(pendingCastX)
+          + (pendingCastX.thenTargets ? xBoundSentence(targetSpecOf(pendingCastX.card)) : "")
+        : !xIsPaidInMana
         // CR 107.3a: the X is in an *additional* cost (Fire Covenant pays X
         // life, Infernal Harvest returns X Swamps), so no amount of tapping
         // raises it and the ceiling came off a life total or a board. Saying
         // "tap more mana sources" here would send the caster looking for the
         // one thing that cannot help.
         ? `X is part of this spell's additional cost rather than its mana cost, so tapping lands won't raise it. You may announce up to ${pendingCastX.maxX}.`
-        : xPayableSentence(payable);
+        : xPayableSentence(payable)
+          // Minamo Sightbender, Stir the Grave: X first, then the targets it
+          // admits.
+          + (pendingCastX.thenTargets && typeof xBoundSentence === "function"
+            ? xBoundSentence(targetSpecOf(pendingCastX.card)) : "");
     }
     const choiceButtons = [];
     if (Array.isArray(pendingCastX.mvChoices)) {
@@ -18076,7 +18111,14 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
       && pendingActivationCost.fields.x_value != null;
     if (
       announcesTarget && !xAnswered && !cardRequiresSeveralTargets(card)
-      && /\{x\}/i.test(getActivatedAbilityCost(card, abilityIndex))
+      && (
+        /\{x\}/i.test(getActivatedAbilityCost(card, abilityIndex))
+        // "{1}, {T}, Remove X ki counters from this creature: Return target
+        // creature with mana value X or less…" (Quillmane Baku; Skullmane,
+        // Infused Arrows): an X with no {X} in the cost is announced too —
+        // it went out undeclared and resolved at X = 0.
+        || (typeof activationAnnouncesCounterX === "function" && activationAnnouncesCounterX(card, abilityIndex))
+      )
     ) {
       startActivationXPrompt(
         card, cardName, targetSeat, permanentIndex, abilityIndex, null, { thenTargets: true },
@@ -18355,6 +18397,15 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  // "{1}, Remove X ki counters from this creature: Add X mana of any one
+  // color." (Petalmane Baku.) A mana ability whose X is paid in counters is
+  // announced before its colour is chosen — the colour prompts below send the
+  // ability, and it went out with X undeclared (X = 0, so no mana at all).
+  if (
+    typeof startCounterXBeforeManaChoice === "function"
+    && startCounterXBeforeManaChoice(card, cardName, targetSeat, permanentIndex, abilityIndex)
+  ) return;
+
   // Both colour prompts below carry the ability the menu chose: a land's mana
   // abilities are separate abilities (CR 605), and a body sent without the
   // index made the server tap the land's *first* one — a Karplusan Forest
@@ -18393,6 +18444,8 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   if (ownMana && ownMana.choice && ownMana.symbols.length >= 5) {
     const anyOptions = manaOptionsFor(ownMana.symbols);
     pendingManaColor = {
+      // The permanent, for the auto-tap a cost the pool can't cover opens.
+      card,
       cardName,
       permanentIndex,
       targetSeat,
@@ -18626,7 +18679,23 @@ function resolvePendingManaColor(manaColor) {
   if (Number.isInteger(pending.abilityIndex)) colorBody.ability_index = pending.abilityIndex;
   sendAction(colorBody)
     .then(() => updateActionHint(`Activated ${pending.cardName} and chose ${manaColor}.`))
-    .catch((e) => updateActionHint(e.message, true));
+    .catch((e) => {
+      // "{1}, Remove X ki counters: Add X mana of any one color." (Petalmane
+      // Baku): a mana ability with a mana cost the pool can't cover opens the
+      // auto-tap every other activation opens, the colour (and the X the
+      // body carries, `pendingActivationCost`) kept for its retry.
+      if (isManaRefusal(e.message) && pending.card) {
+        pendingAutoTap = {
+          card: pending.card,
+          cardName: pending.cardName,
+          cost: getActivatedAbilityCost(pending.card, pending.abilityIndex),
+          actionBody: colorBody,
+        };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+    });
 }
 
 // Selectable modes of a "Choose one —" modal spell, as serialized by the server
@@ -19913,6 +19982,11 @@ function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
     if (announced.length > 1) { startAnnouncedSeatPrompt(card, castAction, announced); return true; }
     if (announced.length === 1) pendingAnnouncedSeat = announced[0];
   }
+  // "Return target creature card with mana value X or less…" (Stir the
+  // Grave): the X decides which targets are legal, so it is announced first
+  // (CR 601.2b before 601.2c) and the pickers below run on the spec it
+  // narrows (`startCastXBoundFirst`).
+  if (typeof startCastXBoundFirst === "function" && startCastXBoundFirst(card, castAction, targetSeat)) return true;
   if (cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card, castAction); return true; }
   // "Return **up to two** target creature cards from your graveyard" (Sanguine
   // Indulgence) names several targets and is still asked here rather than by
@@ -20099,6 +20173,121 @@ function alternativeOfferButtonText(offer) {
   return label ? label.charAt(0).toUpperCase() + label.slice(1) : "Take it";
 }
 
+// ---------------------------------------------------------------------------
+// Offering (CR 702.48) on the offer prompt — W2G2
+//
+// "Fox offering" is an optional cost offer like any other (`label:
+// "offering"`, key "sacrifice a fox"), with two things only it carries
+// (engine/legality_cast_spec._offering_offer_wire): `offering_prices`, each
+// permanent that could be offered with the mana the cast is then charged
+// (CR 702.48c's reduction for *that* permanent, `mana_owed`, and whether the
+// board pays it, `payable`) — the price the card's badge cannot say, because
+// it is sized by which one goes; and `required` / `required_reason` when the
+// cast can begin now only because the offering opens the window (CR 601.3c)
+// and is refused if it is declined (CR 601.2e). A required offer is taken
+// from the start and cannot be declined; which permanent goes is still asked
+// by the cost picker that follows.
+// ---------------------------------------------------------------------------
+
+// The offer prompt's rows for an offering offer, or null for any other offer.
+function offeringOfferRowsHtml(offer, pending) {
+  if (offer?.label !== "offering") return null;
+  const rows = [];
+  const payable = Number(offer.max_times || 0) > 0;
+  const on = Number(pending?.taken?.[offer.symbols] || 0) > 0;
+  rows.push(
+    `<div>Offering — ${escapeHtml(offer.symbols)}: the spell costs less by that permanent's mana cost`
+    + " (CR 702.48c)" + (payable ? "." : " — nothing you control can be offered right now.") + "</div>",
+  );
+  const prices = Array.isArray(offer.offering_prices) ? offer.offering_prices : [];
+  if (prices.length) {
+    rows.push(
+      '<div class="offering-prices">'
+      + prices.map((price) => (
+        `<div>${escapeHtml(price.name)} → ${renderSymbolsInline(price.mana_owed || "{0}")}`
+        + `${price.payable === false ? " (you can't pay that now)" : ""}</div>`
+      )).join("")
+      + "</div>",
+    );
+  }
+  if (offer.required) {
+    rows.push(
+      `<div class="ability-prohibition-note">${escapeHtml(offeringRequiredWords(offer))}</div>`,
+    );
+  }
+  if (payable) {
+    rows.push(
+      '<div class="prompt-choice-row">'
+      + `<button type="button" class="prompt-choice-btn${on ? "" : " selected"}"`
+      + ` data-offer-symbols="${escapeHtml(offer.symbols)}" data-offer-times="0"${offer.required ? " disabled" : ""}>Don't offer</button>`
+      + `<button type="button" class="prompt-choice-btn${on ? " selected" : ""}"`
+      + ` data-offer-symbols="${escapeHtml(offer.symbols)}" data-offer-times="1">Offer one</button>`
+      + "</div>",
+    );
+  }
+  return rows;
+}
+
+// The X an alternative cost's chosen hand card announces, or null: the
+// Shoals' "exile a red card with mana value X" offer
+// (`x_is_chosen_card_mana_value`) gives each hand choice its `x`.
+function pitchedCardX(offer, handIndex) {
+  if (!offer?.x_is_chosen_card_mana_value || !Number.isInteger(handIndex)) return null;
+  const choice = (offer.hand_choices || []).find((entry) => entry?.index === handIndex);
+  return Number.isInteger(choice?.x) ? choice.x : null;
+}
+
+// A hand choice's button words: the verb and the card, and the X it
+// announces where the card is the X (the Shoals).
+function alternativeHandChoiceLabel(verb, offer, choice) {
+  const x = offer?.x_is_chosen_card_mana_value && Number.isInteger(choice?.x) ? ` (X = ${choice.x})` : "";
+  return `${verb} ${escapeHtml(choice?.name || "")}${x}`;
+}
+
+// Why a required offer can't be declined, in the engine's words.
+function offeringRequiredWords(offer) {
+  const reason = String(offer?.required_reason || "");
+  return reason
+    ? `Required now: ${reason}.`
+    : "Required now: this spell can be cast at this time only by paying its offering (CR 601.3c).";
+}
+
+// Take every offer the cast can't be made without right now (an offering at
+// instant speed, CR 601.3c). True when one was taken, so the caller re-asks
+// the spec with it — the cost picker that follows reads the spec it returns.
+function takeRequiredCastOffers(pending) {
+  let took = false;
+  for (const offer of pending?.offers || []) {
+    if (!offer?.required || Number(offer.max_times || 0) <= 0) continue;
+    if (Number(pending.taken[offer.symbols] || 0) > 0) continue;
+    pending.taken[offer.symbols] = 1;
+    took = true;
+  }
+  return took;
+}
+
+// Whether *symbols* names a required offer of the cast being priced.
+function castOfferIsRequired(pending, symbols) {
+  return (pending?.offers || []).some((offer) => offer?.symbols === symbols && offer.required);
+}
+
+// The sacrifice picker's rows when the permanent it asks for is an offering:
+// what the cast costs with each candidate (`offering_prices`). Empty for any
+// other picker.
+function offeringPickerRowsHtml(card) {
+  const offer = (targetSpecOf(card)?.cost_offers || []).find(
+    (entry) => entry?.label === "offering" && Number(entry.times || 0) > 0,
+  );
+  const prices = Array.isArray(offer?.offering_prices) ? offer.offering_prices : [];
+  if (!prices.length) return "";
+  return '<div class="offering-prices">The spell then costs: '
+    + prices.map((price) => (
+      `${escapeHtml(price.name)} → ${renderSymbolsInline(price.mana_owed || "{0}")}`
+      + `${price.payable === false ? " (can't pay)" : ""}`
+    )).join(" · ")
+    + "</div>";
+}
+
 function startCastOfferPrompt(card, castAction = "cast") {
   const cardName = normalizeCardName(card);
   if (!cardName) return false;
@@ -20127,6 +20316,12 @@ function startCastOfferPrompt(card, castAction = "cast") {
   };
   renderActivationPrompt();
   updateActionHint(`Choose what you are paying for ${cardName}.`);
+  // CR 601.3c: an offer the cast can't be made without right now (an
+  // offering at instant speed) is taken from the start, and the spec re-asked
+  // with it — the cost picker after the confirm reads that spec.
+  if (typeof takeRequiredCastOffers === "function" && takeRequiredCastOffers(pendingCastOffers)) {
+    refreshCastOffers();
+  }
   return true;
 }
 
@@ -20167,6 +20362,12 @@ async function refreshCastOffers() {
 function setCastOfferTimes(symbols, times) {
   const pending = pendingCastOffers;
   if (!pending) return;
+  // A required offer (CR 601.3c) is not declined: the cast would be refused.
+  if (times <= 0 && typeof castOfferIsRequired === "function" && castOfferIsRequired(pending, symbols)) {
+    const offer = pending.offers.find((entry) => entry?.symbols === symbols);
+    updateActionHint(offeringRequiredWords(offer), true);
+    return;
+  }
   if (times > 0) pending.taken[symbols] = times;
   else delete pending.taken[symbols];
   refreshCastOffers();
@@ -20258,6 +20459,13 @@ function confirmCastOffers() {
       if ((pending.alternativeOthers || []).length) {
         announced.alternative_cost_other_hand_indices = pending.alternativeOthers.slice();
       }
+      // "…exile a red card **with mana value X** from your hand rather than
+      // pay this spell's mana cost" (the Shoals): the card chosen *is* the X
+      // announced (CR 107.3a), so its `x` is sent as the X and no X box is
+      // asked (`castXAnnouncedByCost`) — the box's own value was refused as
+      // a mismatch.
+      const pitchedX = typeof pitchedCardX === "function" ? pitchedCardX(chosenOffer, pending.alternative) : null;
+      if (pitchedX !== null) announced.x_value = pitchedX;
     }
     const permanentIds = altPermanentIds(pending.alternative);
     if (permanentIds.length) {
@@ -20574,6 +20782,9 @@ function spliceOfferRefusal(offer) {
   if (spec?.requires_target === true && Array.isArray(spec.valid_targets) && spec.valid_targets.length === 0) {
     return "no legal target";
   }
+  // …and a splice cost that is not mana the board can't pay now (CR 601.2h),
+  // in the server's words (`price.refusal`).
+  if (typeof splicePriceRefusal === "function") return splicePriceRefusal(offer);
   return "";
 }
 
@@ -20614,7 +20825,12 @@ function spliceOfferCard(offer, state = currentState) {
 function spliceChoiceView(choice) {
   const picked = choice?.picked || [];
   const offers = choice?.spliceChoice?.offers || [];
+  // What a picked card's non-mana splice cost still asks the caster to name
+  // (`splicePaymentRows`): the confirm waits for every row's count.
+  const payRows = typeof splicePaymentRows === "function" ? splicePaymentRows(choice) : [];
   return {
+    payRows,
+    ready: !payRows.some((row) => row.short),
     title: `Splice onto ${choice?.cardName || "this spell"}?`,
     body: "Reveal cards from your hand to splice onto it (CR 702.47): each one's text is added "
       + "to the spell and its splice cost is paid on top. Pick them in the order their text "
@@ -20626,7 +20842,11 @@ function spliceChoiceView(choice) {
         index,
         on: order >= 0,
         disabled: !!refusal,
-        label: `${order >= 0 ? `${order + 1}. ` : ""}${offer.name} — splice ${offer.cost || "{0}"}`
+        // A cost that is not mana is said in words ("splice: tap an
+        // untapped white creature you control"), never as "{0}".
+        label: `${order >= 0 ? `${order + 1}. ` : ""}${offer.name} — splice`
+          + (offer?.price?.cost_text && typeof spliceCostWords === "function"
+            ? `: ${spliceCostWords(offer)}` : ` ${offer.cost || "{0}"}`)
           + (refusal ? ` (${refusal})` : ""),
         // The text it would add — its splice line itself is the offer, said
         // already in the label, so only the effect lines are repeated here.
@@ -20651,8 +20871,14 @@ function toggleSpliceChoice(index) {
     return;
   }
   const at = choice.picked.indexOf(index);
-  if (at >= 0) choice.picked.splice(at, 1);
-  else choice.picked.push(index);
+  if (at >= 0) {
+    choice.picked.splice(at, 1);
+    // An unpicked card pays nothing: its payers are free for another.
+    if (choice.splicePayers) delete choice.splicePayers[index];
+  } else {
+    choice.picked.push(index);
+    if (typeof prefillSplicePayers === "function") prefillSplicePayers(choice, index);
+  }
   renderActivationPrompt();
 }
 
@@ -20660,13 +20886,31 @@ function toggleSpliceChoice(index) {
 function confirmSpliceChoice() {
   const choice = pendingModalChoice;
   if (!choice?.spliceChoice) return;
+  // A non-mana splice cost is paid in full (CR 601.2h): the prompt stays
+  // open until each picked card's payers are named.
+  const short = (typeof splicePaymentRows === "function" ? splicePaymentRows(choice) : [])
+    .find((row) => row.short);
+  if (short) {
+    updateActionHint(`Choose what pays ${short.head.split(": choose")[0]}.`, true);
+    return;
+  }
   pendingModalChoice = null;
   const chosen = choice.picked.map((index) => choice.spliceChoice.offers[index]).filter(Boolean);
+  // What pays each chosen card's non-mana splice cost, by its hand index —
+  // joined onto its splice choice once its targets are collected.
+  const payments = {};
+  if (typeof splicePaymentFields === "function") {
+    for (const index of choice.picked) {
+      const offer = choice.spliceChoice.offers[index];
+      if (offer) payments[offer.hand_index] = splicePaymentFields(choice, index);
+    }
+  }
   pendingSpliceCollection = {
     card: choice.card,
     cardName: choice.cardName,
     castAction: choice.castAction,
     chosen,
+    payments,
     collected: [],
     cursor: 0,
     done: false,
@@ -20727,7 +20971,12 @@ function finishSpliceCollection() {
   const run = pendingSpliceCollection;
   if (!run || run.done) return;
   run.done = true;
-  pendingCastSplice = { cardName: run.cardName, cards: run.collected.slice() };
+  // Each card's targets, and what pays its splice cost where that is not
+  // mana (`run.payments`, named in the splice prompt).
+  pendingCastSplice = {
+    cardName: run.cardName,
+    cards: run.collected.map((entry) => ({ ...entry, ...((run.payments || {})[entry.hand_index] || {}) })),
+  };
   setTimeout(() => {
     if (pendingSpliceCollection !== run) return;
     pendingSpliceCollection = null;
@@ -20810,6 +21059,186 @@ function carrySpliceCards(body, actionBody) {
     actionBody.splice_cards = body.splice_cards.map((entry) => ({ ...entry }));
   }
   return body;
+}
+
+// ---------------------------------------------------------------------------
+// A splice cost that is not mana (CR 702.47a; Betrayers of Kamigawa: "tap an
+// untapped white creature you control", "exile four cards from your
+// graveyard", "an opponent gains 5 life", "sacrifice two Mountains", "return a
+// blue creature you control to its owner's hand")
+//
+// Such an offer carries `price` (web/offers._splice_price_choices):
+// `cost_text`, `cost_permanents {verb, count, choices[{permanent_id, name}]}`,
+// `cost_graveyard {count, choices[{graveyard_index, name}]}`, `payable` and
+// `refusal`. The splice prompt says the price, greys an offer whose price the
+// board can't pay with the server's reason, and — once a priced card is
+// picked — asks which permanents or graveyard cards pay it, exactly `count`
+// of them (CR 601.2h: a cost is paid in full, never in part). The cast sends
+// them on that card's splice choice (`cost_permanent_ids`,
+// `cost_graveyard_indices`, web/schemas.SpliceChoice). One permanent or card
+// pays one splice cost (engine/splice.py), so one named for another picked
+// card is not offered again. Nothing here prices or judges the cost.
+// ---------------------------------------------------------------------------
+
+// The words an offer's splice cost is said in: its price's text when it is
+// not mana, else the mana.
+function spliceCostWords(offer) {
+  const words = String(offer?.price?.cost_text || "");
+  return words || String(offer?.cost || "") || "{0}";
+}
+
+// Why an offer's price can't be paid now, or "": the server's refusal, its
+// "X can't be spliced onto Y: " head dropped (the prompt already says both).
+function splicePriceRefusal(offer) {
+  const price = offer?.price;
+  if (!price || typeof price !== "object" || price.payable !== false) return "";
+  const said = String(price.refusal || "");
+  const cut = said.indexOf(": ");
+  const reason = said.startsWith(`${offer?.name || ""} can't be spliced`) && cut >= 0
+    ? said.slice(cut + 2) : said;
+  return reason || "its splice cost can't be paid now";
+}
+
+// What a priced offer asks the caster to name: one entry per half of the
+// price with payers to choose — `permanent` (by id) and `graveyard` (by place
+// in the pile) — each with its verb, the printed count and the candidates.
+// Empty for a price with nothing to choose (life, an opponent's life gain)
+// and for a splice cost that is mana.
+function splicePriceAsks(offer) {
+  const price = offer?.price;
+  if (!price || typeof price !== "object") return [];
+  const asks = [];
+  const permanents = price.cost_permanents;
+  if (permanents && Array.isArray(permanents.choices) && Number(permanents.count) > 0) {
+    asks.push({
+      kind: "permanent",
+      verb: String(permanents.verb || "sacrifice"),
+      count: Number(permanents.count),
+      choices: permanents.choices
+        .filter((choice) => Number.isInteger(choice?.permanent_id))
+        .map((choice) => ({ key: choice.permanent_id, name: String(choice.name || "") })),
+    });
+  }
+  const graveyard = price.cost_graveyard;
+  if (graveyard && Array.isArray(graveyard.choices) && Number(graveyard.count) > 0) {
+    asks.push({
+      kind: "graveyard",
+      verb: "exile",
+      count: Number(graveyard.count),
+      choices: graveyard.choices
+        .filter((choice) => Number.isInteger(choice?.graveyard_index))
+        .map((choice) => ({ key: choice.graveyard_index, name: String(choice.name || "") })),
+    });
+  }
+  return asks;
+}
+
+// The payers named so far for the offer at *index* (`{permanent, graveyard}`,
+// keys), created on first ask.
+function splicePayersOf(choice, index) {
+  if (!choice.splicePayers) choice.splicePayers = {};
+  if (!choice.splicePayers[index]) choice.splicePayers[index] = { permanent: [], graveyard: [] };
+  return choice.splicePayers[index];
+}
+
+// The keys of *kind* another picked offer has named: one payer, one splice
+// cost.
+function splicePayersTakenElsewhere(choice, index, kind) {
+  const taken = new Set();
+  for (const other of choice?.picked || []) {
+    if (other === index) continue;
+    for (const key of choice?.splicePayers?.[other]?.[kind] || []) taken.add(key);
+  }
+  return taken;
+}
+
+// A card just picked: a half whose free candidates are exactly its count is
+// named at once — it is the only answer there is.
+function prefillSplicePayers(choice, index) {
+  const offer = choice?.spliceChoice?.offers?.[index];
+  for (const ask of splicePriceAsks(offer)) {
+    const payers = splicePayersOf(choice, index);
+    if (payers[ask.kind].length) continue;
+    const taken = splicePayersTakenElsewhere(choice, index, ask.kind);
+    const free = ask.choices.filter((candidate) => !taken.has(candidate.key));
+    if (free.length === ask.count) payers[ask.kind] = free.map((candidate) => candidate.key);
+  }
+}
+
+// One candidate in or out of a picked offer's payment, up to its count; at a
+// count of one a second click swaps rather than refusing.
+function toggleSplicePayer(index, kind, key) {
+  const choice = pendingModalChoice;
+  if (!choice?.spliceChoice || !(choice.picked || []).includes(index)) return;
+  const ask = splicePriceAsks(choice.spliceChoice.offers[index]).find((entry) => entry.kind === kind);
+  if (!ask || !ask.choices.some((candidate) => candidate.key === key)) return;
+  if (splicePayersTakenElsewhere(choice, index, kind).has(key)) return;
+  const payers = splicePayersOf(choice, index);
+  let named = payers[kind].slice();
+  if (named.includes(key)) named = named.filter((each) => each !== key);
+  else if (ask.count <= 1) named = [key];
+  else if (named.length < ask.count) named.push(key);
+  payers[kind] = named;
+  renderActivationPrompt();
+}
+
+// The prompt's payment rows: one per half a picked priced offer asks, in pick
+// order, each with its heading, its buttons and whether its count is met
+// (`short` holds the confirm).
+function splicePaymentRows(choice) {
+  const rows = [];
+  for (const index of choice?.picked || []) {
+    const offer = choice.spliceChoice?.offers?.[index];
+    for (const ask of splicePriceAsks(offer)) {
+      const named = choice.splicePayers?.[index]?.[ask.kind] || [];
+      const taken = splicePayersTakenElsewhere(choice, index, ask.kind);
+      const verb = ask.verb.charAt(0).toUpperCase() + ask.verb.slice(1);
+      rows.push({
+        index,
+        kind: ask.kind,
+        short: named.length !== ask.count,
+        head: `${offer.name} — ${spliceCostWords(offer)}: choose ${ask.count}`
+          + ` (${named.length} of ${ask.count} chosen)`,
+        buttons: ask.choices.map((candidate) => ({
+          key: candidate.key,
+          label: `${verb} ${candidate.name}`,
+          on: named.includes(candidate.key),
+          disabled: taken.has(candidate.key),
+        })),
+      });
+    }
+  }
+  return rows;
+}
+
+// The rows as the prompt shows them, under the offer buttons.
+function splicePaymentRowsHtml(rows) {
+  return (rows || []).map((row) => (
+    `<div class="splice-price-row">${escapeHtml(row.head)}</div>`
+    + '<div class="prompt-choice-row">'
+    + row.buttons.map((button) => (
+      `<button type="button" class="prompt-choice-btn${button.on ? " selected" : ""}"`
+      + ` data-splice-pay="${row.index}" data-splice-pay-kind="${row.kind}" data-splice-pay-key="${button.key}"`
+      + `${button.disabled ? " disabled" : ""}>${escapeHtml(button.label)}</button>`
+    )).join("")
+    + "</div>"
+  )).join("");
+}
+
+// The splice choice's fields for the offer at *index*: what the prompt named,
+// `cost_permanent_ids` / `cost_graveyard_indices` ({} for a price that names
+// nothing).
+function splicePaymentFields(choice, index) {
+  const offer = choice?.spliceChoice?.offers?.[index];
+  const named = choice?.splicePayers?.[index] || {};
+  const fields = {};
+  for (const ask of splicePriceAsks(offer)) {
+    const keys = (named[ask.kind] || []).slice();
+    if (!keys.length) continue;
+    if (ask.kind === "permanent") fields.cost_permanent_ids = keys;
+    else fields.cost_graveyard_indices = keys;
+  }
+  return fields;
 }
 
 function continueCastAfterCost(card, castAction = "cast", { targets = true } = {}) {
@@ -22288,6 +22717,13 @@ function manaValueXChoices(spec, onlyTarget = null) {
 // `valid_targets` narrowed to that mana value (CR 601.2c names a target the
 // announced X allows). Every other spec is returned as it was.
 function specNarrowedToManaValueX(spec, xValue) {
+  // "Target creature with power X or less" (Minamo Sightbender), "…with mana
+  // value X or less" (Quillmane Baku, Stir the Grave): the spec's `x_bound`
+  // (`{stat, op}`) and each target's `x_bound_value` (web/offers._mark_x_bound)
+  // — once X is announced, the targets it admits.
+  if (spec?.x_bound && Number.isInteger(xValue) && typeof specNarrowedToXBound === "function") {
+    return specNarrowedToXBound(spec, xValue);
+  }
   if (!spec?.x_is_target_mana_value || !Number.isInteger(xValue)) return spec;
   return {
     ...spec,
@@ -22295,6 +22731,113 @@ function specNarrowedToManaValueX(spec, xValue) {
       (entry) => !Number.isInteger(entry?.mana_value) || entry.mana_value === xValue,
     ),
   };
+}
+
+// ---------------------------------------------------------------------------
+// A target bounded by the announced X, and an X paid in counters — W2G2
+// ---------------------------------------------------------------------------
+
+// Whether `value <op> x` holds for an `x_bound` op (handlers/_filters'
+// spellings: le, lt, ge, gt, eq); an op this client does not know admits.
+function xBoundAdmits(op, value, x) {
+  switch (op) {
+    case "le": return value <= x;
+    case "lt": return value < x;
+    case "ge": return value >= x;
+    case "gt": return value > x;
+    case "eq": return value === x;
+    default: return true;
+  }
+}
+
+// *spec* with its `valid_targets` narrowed to the targets the announced X
+// admits (`x_bound_value <op> X`, CR 601.2c names a target the X allows); a
+// target the server gave no value keeps its place — the engine still judges
+// it. The spec's other fields ride along.
+function specNarrowedToXBound(spec, xValue) {
+  const op = spec?.x_bound?.op;
+  return {
+    ...spec,
+    valid_targets: (Array.isArray(spec?.valid_targets) ? spec.valid_targets : []).filter(
+      (entry) => !Number.isInteger(entry?.x_bound_value) || xBoundAdmits(op, entry.x_bound_value, xValue),
+    ),
+  };
+}
+
+// A cast whose target is bounded by its X (`x_bound`, Stir the Grave): ask X
+// before the target and come back through the cascade with it
+// (`resumeCastAfterXBound`). True when the X prompt opened. An X already
+// announced (a discard picker's, a pitched card's) is not asked again.
+function startCastXBoundFirst(card, castAction, targetSeat = null) {
+  if (castAction === "activate" || !targetSpecOf(card)?.x_bound) return false;
+  if (!hasXCost(card) || castXAnnouncedByCost() !== null) return false;
+  startCastXPrompt(
+    card,
+    Number.isInteger(targetSeat) ? targetSeat : getDefaultTargetSeat(normalizeCardName(card)),
+    null,
+    castAction,
+  );
+  if (!pendingCastX) return false;
+  pendingCastX.thenTargets = true;
+  renderActivationPrompt();
+  return true;
+}
+
+// The X just announced for such a cast: recorded where every cast body reads
+// its announcement (`pendingCastCost.x_value`, so no later X prompt asks
+// again), and the rest of the cast run on the spec that X narrows.
+function resumeCastAfterXBound(pending, xValue) {
+  pendingCastCost = { ...(pendingCastCost || {}), x_value: xValue };
+  const spec = targetSpecOf(pending.card);
+  const narrowed = specNarrowedToManaValueX(spec, xValue);
+  const card = narrowed !== spec ? { ...pending.card, target_spec: narrowed } : pending.card;
+  updateActionHint(`X = ${xValue} for ${pending.cardName}: choose a target it allows.`);
+  continueCastAfterCost(card, pending.castAction || "cast");
+}
+
+// The words the X prompt says about an X a target is bounded by, or "".
+function xBoundSentence(spec) {
+  const bound = spec?.x_bound;
+  if (!bound) return "";
+  const stat = bound.stat === "mana_value" ? "mana value" : String(bound.stat || "value");
+  const op = { le: "X or less", lt: "less than X", ge: "X or more", gt: "more than X", eq: "exactly X" }[bound.op] || "X";
+  return ` The target must have ${stat} ${op}; the targets offered next are the ones this X allows.`;
+}
+
+// "{1}, Remove X ki counters from this creature: …" (the ki Baku; Infused
+// Arrows, Mercadian Lift, Night Dealings): an X announced with no {X} in the
+// cost, paid in counters off the source. The server says so on the ability's
+// `ability_x_payable` (`counter_bound {kind, count}`); the cost's words are
+// the fallback for an ability the server could not price at all.
+function activationAnnouncesCounterX(card, abilityIndex) {
+  if (abilityXPayable(card, abilityIndex)?.counter_bound) return true;
+  return !!counterRemovalXKind(getActivatedAbilityCost(card, abilityIndex));
+}
+
+// A mana ability whose X is paid in counters (Petalmane Baku): open the X
+// prompt first, its answer recorded on `pendingActivationCost` and the
+// activation run again for its colour (`resumeActivationAfterCost`, through
+// the X prompt's `thenTargets` return). True when the prompt opened; false
+// once this ability's X is answered, or for any other ability.
+function startCounterXBeforeManaChoice(card, cardName, targetSeat, permanentIndex, abilityIndex) {
+  if (!chosenAbilityMana(card) || !activationAnnouncesCounterX(card, abilityIndex)) return false;
+  if (activationCostAnswered(permanentIndex, abilityIndex) && pendingActivationCost?.fields?.x_value != null) {
+    return false;
+  }
+  startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex, null, { thenTargets: true });
+  return true;
+}
+
+// The X prompt's sentence for an X paid in counters, from `counter_bound`
+// (or the cost's words and the permanent's counters): what is removed, from
+// what, and how many it holds.
+function counterXSentence(pending) {
+  const bound = liveXPayable(pending)?.counter_bound || abilityXPayable(pending?.card, pending?.activateAbilityIndex)?.counter_bound;
+  const kind = String(bound?.kind || counterRemovalXKind(pending?.costString || "") || "");
+  const count = Number.isInteger(bound?.count) ? bound.count : Number(pending?.card?.counters?.[kind] ?? 0);
+  const noun = kind ? `${kind} counter${count === 1 ? "" : "s"}` : `counter${count === 1 ? "" : "s"}`;
+  return `X ${kind ? `${kind} ` : ""}counters are removed from ${pending?.cardName || "this permanent"} to pay for this ability`
+    + ` (CR 118.3): it has ${count} ${noun}, so X can be at most ${Math.max(0, Number(pending?.maxX) || 0)}.`;
 }
 
 function startActivationXPrompt(
@@ -23000,6 +23543,11 @@ function resolvePendingCastX(xValue) {
   // creature." (Ballista Squad.) X first, then the target — the order CR 601.2b
   // and 601.2c announce them in — so the X rides `pendingActivationCost` and the
   // target prompt that runs next sends the body.
+  // …and a cast whose target the X bounds (Stir the Grave), the same order.
+  if (pending.castAction !== "activate" && pending.thenTargets && typeof resumeCastAfterXBound === "function") {
+    resumeCastAfterXBound(pending, selectedX);
+    return;
+  }
   if (pending.castAction === "activate" && pending.thenTargets) {
     resumeActivationAfterCost(
       pending.card,

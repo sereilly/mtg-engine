@@ -234,6 +234,31 @@ def offering_candidates(
     return game._additional_cost_candidates(seat, cost, giving_up="sacrifice")
 
 
+def offering_charges(
+    game: "Game", seat: int, card, cost: "AdditionalCost", *,
+    extra_generic: int = 0,
+) -> "list[tuple[Permanent, dict[str, int]]]":
+    """For each permanent *seat* could offer for *cost*, the mana a cast of
+    *card* is charged when that one is offered — CR 601.2f's total with CR
+    702.48c's reduction for it joined to the board's, through the one reader
+    of a cast's price (``cost_modifiers.cast_mana_charge``, the arithmetic the
+    cast path itself applies, ``CostReduction.plus``).
+
+    The offer a client is shown before it names the permanent (W2G2): "every
+    price the wire shows is the one the cast charges" holds for an offering
+    only per permanent, because the reduction is sized by which one goes.
+    *extra_generic* is what the zone adds (CR 903.8's commander tax)."""
+    from .cost_modifiers import cast_mana_charge
+
+    return [
+        (permanent, cast_mana_charge(
+            game, seat, card, extra_generic=extra_generic,
+            reduction_bought=offering_reduction(permanent),
+        ))
+        for permanent in offering_candidates(game, seat, cost)
+    ]
+
+
 def offering_opens_instant_timing(game: "Game", seat: int, card) -> bool:
     """Whether *card*'s offering lets *seat* begin to cast it as though it had
     flash right now (CR 601.3c) — it prints one and *seat* controls a
@@ -332,6 +357,7 @@ __all__ = [
     "is_offering_line",
     "offering_announcement",
     "offering_candidates",
+    "offering_charges",
     "offering_costs",
     "offering_opens_instant_timing",
     "offering_quality",

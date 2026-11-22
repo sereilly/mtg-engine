@@ -65,6 +65,7 @@ from engine.mana_payment import mana_cost_label
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.cost_modifiers import cast_mana_charge
 from engine.cast_costs import additional_costs
+from engine.offering import offering_charges, offering_costs
 from engine.face_down import is_face_down
 from engine.targeting import (derive_activation_spec, derive_cast_spec,
                               spec_roles, usable_activated_abilities)
@@ -542,6 +543,12 @@ def _card_castable_now(
             # ``extra_generic``: CR 118.9d applies the cost increases to the
             # alternative cost too, so the offer's ``payable`` prices the taxes
             # in force and has to be told the one the zone adds.
+            #
+            # …and an **offering** (CR 702.48c) takes the sacrificed
+            # permanent's mana cost off the total, so a Patron the board can
+            # pay for only with a Fox offered is castable (W2G2).
+            if _offering_pays_for(game, player_index, card, extra_generic):
+                return True
             return any(
                 offer.get("kind") == "alternative" and offer.get("payable")
                 for offer in game.cast_cost_offers(
@@ -551,6 +558,25 @@ def _card_castable_now(
             )
 
     return True
+
+
+def _offering_pays_for(game, player_index: int, card, extra_generic: int) -> bool:
+    """Whether *card*'s offering makes it payable: some permanent the seat
+    could offer leaves a price (CR 702.48c over CR 601.2f's total,
+    ``offering.offering_charges`` — the one the cast is charged) that the
+    pool plus what the seat could tap pays. False for a card with no
+    offering, before any board is read."""
+    costs = offering_costs(card)
+    if not costs:
+        return False
+    purpose = PaymentPurpose(CAST, card=card)
+    return any(
+        board_can_pay(game, player_index, owed, purpose=purpose, nonland_sources=True)
+        for cost in costs
+        for _offered, owed in offering_charges(
+            game, player_index, card, cost, extra_generic=extra_generic,
+        )
+    )
 
 
 def _band_forms(game) -> list[dict]:
