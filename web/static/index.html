@@ -603,6 +603,19 @@
                   </div>
                 </section>
                 <section class="settings-section">
+                  <h4 class="settings-subhead">Stops</h4>
+                  <!-- CR 702.49a: ninjutsu's window is the declare blockers
+                       step (nothing is unblocked before it, CR 509.1h). While
+                       a Ninja waits in hand on your turn the game stops there
+                       and lights its button; off, that step is auto-passed
+                       like every other unflagged one (app.js
+                       `ninjutsuStopSteps`). -->
+                  <label class="settings-toggle" title="Hold priority in your declare blockers step while a ninjutsu in your hand can be activated">
+                    <input id="ninjutsuStopToggle" type="checkbox" checked />
+                    Stop for ninjutsu after blockers are declared
+                  </label>
+                </section>
+                <section class="settings-section">
                   <h4 class="settings-subhead">Match</h4>
                   <div class="settings-actions">
                     <button id="restartMatchBtn" type="button" class="secondary-btn">Restart Match</button>
@@ -958,7 +971,7 @@
     <script src="/animations.js?v=20260818-handfly2"></script>
     <script src="/personal-decks.js?v=20260614-desc1"></script>
     <script src="/legality.js?v=20261004-splitcount1"></script>
-    <script src="/app.js?v=20261121-chk-closer-look-hankyu"></script>
+    <script src="/app.js?v=20261121-bok-w2g3b"></script>
     <script src="/deck-editor.js?v=20261013-odyp5"></script>
   </body>
 </html>

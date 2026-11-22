@@ -284,9 +284,15 @@ function opponentStopSteps() {
 // toggled to auto-pass). Sent so the server opens a priority window at steps it
 // would otherwise resolve itself (upkeep, draw) instead of skipping into the main phase.
 function selfStopSteps() {
-  return PHASE_RAIL
+  const steps = PHASE_RAIL
     .map((p) => p.key)
     .filter((key) => !NO_PRIORITY_STEPS.has(key) && !disabledPhases.has(key));
+  // …and the declare blockers step while a ninjutsu waits in hand
+  // (`ninjutsuStopSteps`, CR 702.49a / 509.2).
+  for (const step of ninjutsuStopSteps()) {
+    if (!steps.includes(step)) steps.push(step);
+  }
+  return steps;
 }
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
@@ -1747,6 +1753,9 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
   const isMyTurn = state.current_turn === seat;
   const shouldAutoPass = isMyTurn ? disabledPhases.has(activeKey) : opponentDisabledPhases.has(activeKey);
   if (!shouldAutoPass) return;
+  // The declare blockers window a ninjutsu asked the server to hold
+  // (`ninjutsuWindowHeld`): passing it here would undo the stop.
+  if (ninjutsuWindowHeld(state)) return;
 
   const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
   if (stackSize > 0) return;
@@ -19010,6 +19019,12 @@ function confirmPermanentCost() {
   }
   pendingPermanentCost = null;
   renderActivationPrompt();
+  if (pending.handAbility) {
+    // A hand ability's cost (ninjutsu's returned attacker, CR 702.49a): the
+    // ids ride the button's own body, sent by the button's own sender.
+    pending.handAbility.send({ ...pending.handAbility.actionBody, cost_permanent_ids: picked });
+    return;
+  }
   if (pending.graveyardAbility) {
     // An ability that also names a target asks for it next, the cost riding
     // along: both are announced together (CR 602.2b), in one body. A set
@@ -30323,6 +30338,15 @@ function renderHandAbilities(state, hasPriority) {
     button.textContent = `${entry.cost_text || "Activate"}: ${entry.name}`;
     button.title = entry.text || "An ability activated from your hand (CR 113.6).";
     button.disabled = entry.payable === false;
+    // CR 601.2h: a cost beside the mana that cannot be paid now, in the
+    // server's words (`unpayable`, `hand_cost_refusal`) — ninjutsu's "Return
+    // an unblocked attacker you control" has nothing to name before blockers
+    // are declared (CR 509.1h). Said on hover, before the line: a dead button
+    // that only *looked* unaffordable sent the player looking for mana.
+    if (typeof entry.unpayable === "string" && entry.unpayable) {
+      button.title = `Not now: ${entry.unpayable}.${entry.text ? ` ${entry.text}` : ""}`;
+      button.dataset.unpayable = entry.unpayable;
+    }
     // CR 602.5: forbidden outright (a City of Solitude on another player's
     // turn, a Hand to Hand during combat). The server sends its sentence as
     // `prohibited`; the button is dead and says why, on its face and on hover
@@ -30352,22 +30376,150 @@ function renderHandAbilities(state, hasPriority) {
       // refused whenever the mana is still on the board — and that refusal
       // used to be the end of it (the button did nothing until the lands were
       // tapped by hand). It opens the auto-tap dialog a cast opens.
-      sendAction(actionBody).catch((e) => {
+      const send = (body) => sendAction(body).catch((e) => {
         if (isManaRefusal(e.message)) {
           pendingAutoTap = {
             card: { name: entry.name, mana_cost: "" },
             cardName: `${entry.name} (${entry.cost_text || "ability"})`,
             cost: entry.cost_text || "",
-            actionBody,
+            actionBody: body,
           };
           renderActivationPrompt();
           return;
         }
         updateActionHint(e.message, true);
       });
+      // A cost that chooses (CR 601.2b) — ninjutsu's "Return an unblocked
+      // attacker you control to hand" — is asked first, on the set picker
+      // every return cost uses, and its answer rides `cost_permanent_ids`
+      // into the same body (`startHandAbilityCostPrompt`). Without it the
+      // engine chose the attacker itself.
+      if (entry.cost_spec && startHandAbilityCostPrompt(entry, actionBody, send)) return;
+      send(actionBody);
     });
     host.appendChild(button);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Ninjutsu (CR 702.49) from the browser
+//
+// "Ninjutsu {1}{U} ({1}{U}, Return an unblocked attacker you control to hand:
+// Put this card onto the battlefield from your hand tapped and attacking.)" is
+// a hand ability (CR 113.6j) whose cost *chooses* (CR 601.2b) and whose only
+// window is combat once blocks are declared — nothing is unblocked before
+// (CR 509.1h). The server says both: the entry's `cost_spec` is the return
+// picker (`return_cost`, narrowed by `filter.unblocked_only`), its
+// `valid_targets` the attackers the charger would take, and `unpayable` why
+// not yet. Two things were missing in the browser: a way to name the attacker,
+// and a moment to name it in — CR 509.2 gives the active player priority once
+// blocks are declared, but the server hands a person that priority only at a
+// step they flagged on the phase rail (`web/seats._self_should_hold`), and the
+// declare blockers step is unflagged by default, so combat went straight to
+// damage and the Ninja could only ever be offered afterwards.
+// ---------------------------------------------------------------------------
+
+// Whether a `hand_abilities` entry's cost returns an unblocked attacking
+// creature (ninjutsu's). Read off the server's picker, never the card's words.
+function handAbilityReturnsUnblockedAttacker(entry) {
+  const spec = entry?.cost_spec;
+  return !!spec && !!spec.return_cost && !!spec.filter?.unblocked_only;
+}
+
+// The Settings toggle "Stop for ninjutsu" (on unless the player turns it off),
+// remembered in this browser. Off, the stop below is never asked for and the
+// held window is auto-passed like any other unflagged step.
+const NINJUTSU_STOP_STORAGE_KEY = "mtg.ninjutsuStop";
+let ninjutsuStopOn = true;
+try {
+  ninjutsuStopOn = window.localStorage?.getItem(NINJUTSU_STOP_STORAGE_KEY) !== "off";
+} catch {
+  /* no storage: the default holds */
+}
+
+function setNinjutsuStop(on) {
+  ninjutsuStopOn = !!on;
+  try {
+    window.localStorage?.setItem(NINJUTSU_STOP_STORAGE_KEY, ninjutsuStopOn ? "on" : "off");
+  } catch {
+    /* no storage: this page remembers it */
+  }
+  autoPassDisabledPhaseRequestedStateKey = "";
+  if (currentState) maybeAutoPassDisabledPhase(currentState);
+}
+
+q("ninjutsuStopToggle")?.addEventListener("change", (event) => setNinjutsuStop(event.target.checked));
+if (q("ninjutsuStopToggle")) q("ninjutsuStopToggle").checked = ninjutsuStopOn;
+
+// The step the viewer's own turn asks the server to stop at while a ninjutsu
+// waits in hand: "declare_blockers", added to `selfStopSteps()` — the server's
+// existing hold (`game_flow`'s declare-blockers branch: the AI declares, then
+// the active person keeps CR 509.2's priority) — and nothing on another
+// player's turn, where no attacker is the viewer's to return. An AI seat is
+// never stopped by it: `_self_should_hold` asks for a human active seat.
+function ninjutsuStopSteps(state = currentState) {
+  if (!ninjutsuStopOn || !state || seat === null || state.current_turn !== seat) return [];
+  const entries = Array.isArray(state.hand_abilities) ? state.hand_abilities : [];
+  const waiting = entries.some(
+    (entry) => handAbilityReturnsUnblockedAttacker(entry) && !handAbilityProhibition(entry),
+  );
+  return waiting ? ["declare_blockers"] : [];
+}
+
+// Whether the state is the window that stop opened, with a ninjutsu that can
+// use it: the viewer's own declare blockers step, blocks declared, priority
+// held, the entry payable now. While it is, the unflagged-step auto-pass stands
+// down (`maybeAutoPassDisabledPhase`) and the button is lit; Next Phase or End
+// Turn passes it. A ninjutsu with nothing to return (every attacker blocked)
+// or no mana to pay is not a reason to stop, so that window is passed as
+// before — one round trip, unseen.
+function ninjutsuWindowHeld(state) {
+  if (!ninjutsuStopOn || !state || seat === null) return false;
+  if (state.current_turn !== seat || state.priority_player !== seat) return false;
+  if (!isCombatStep(state, "declare_blockers") || !getCombatState(state)?.blockers_locked) return false;
+  return (state.hand_abilities || []).some(
+    (entry) => handAbilityReturnsUnblockedAttacker(entry)
+      && entry.payable !== false && !handAbilityProhibition(entry),
+  );
+}
+
+// The hand ability's choosing cost (CR 601.2b): the permanent-set picker every
+// return cost opens (Quirion Ranger's, Arctic Merfolk's kicker), over the
+// server's candidates (`cost_spec.valid_targets`). `send` is the button's own
+// sender (its mana refusal opens the auto-tap dialog); the confirm hands it
+// the body with `cost_permanent_ids` (`confirmPermanentCost`). True when the
+// picker opened or said why it could not; false for a spec that is no cost.
+function startHandAbilityCostPrompt(entry, actionBody, send) {
+  const costSpec = entry?.cost_spec;
+  if (!costSpec || !specIsACost(costSpec)) return false;
+  const step = permanentCostStep(costSpec);
+  const words = permanentCostVerbLabel(step).toLowerCase();
+  if (!step.announcesX && step.options.length < step.count) {
+    // CR 601.2h: nothing to pay it with — before blocks, or every attacker
+    // blocked. The server's sentence where it sent one.
+    SFX.onError();
+    updateActionHint(
+      entry.unpayable ? `${entry.name}: ${entry.unpayable}.` : `${entry.name} has nothing to ${words} for its cost.`,
+      true,
+    );
+    return true;
+  }
+  pendingPermanentCost = {
+    card: { name: entry.name, mana_cost: "" },
+    cardName: entry.name,
+    ...step,
+    // "Return an unblocked attacker you control" says what it takes; the
+    // spec's kind alone ("creature") reads as any creature.
+    ...(handAbilityReturnsUnblockedAttacker(entry) ? { noun: "unblocked attacker" } : {}),
+    picked: [],
+    purpose: "activate",
+    handAbility: { actionBody, send },
+    remaining: [],
+    chosen: [],
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose what ${entry.name} will ${words} to pay its cost (${entry.cost_text || "ability"}).`);
+  return true;
 }
 
 // CR 113.6b — an activated ability of a card in the viewer's **graveyard**

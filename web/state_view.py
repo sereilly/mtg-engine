@@ -775,7 +775,10 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
             entries.append({
                 "prohibited": prohibited.details if prohibited is not None else None,
                 "unpayable": unpayable,
-                "cost_spec": spec if spec_is_a_cost(spec) else None,
+                "cost_spec": (
+                    _hand_cost_candidates(game, player_index, card, spec)
+                    if spec_is_a_cost(spec) else None
+                ),
                 "hand_index": hand_index,
                 "ability_index": ability_index,
                 "name": card.name,
@@ -791,6 +794,29 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
                 "payable": payable,
             })
     return entries
+
+
+def _hand_cost_candidates(game, player_index: int, card, cost_spec: dict) -> dict:
+    """*cost_spec* (a hand ability's cost picker) with what may pay it on this
+    board enumerated as ``valid_targets`` — the list the client's set picker
+    offers (``permanentCostStep``), as the battlefield road attaches it to an
+    activation's cost (``legality_abilities``' cost branch): over the payer's
+    own permanents, with no targeting legality (CR 601.2b chooses a cost, it
+    does not target), each later picker of a chain (``more_costs``) over its
+    own.
+
+    Ninjutsu's "Return an unblocked attacker you control" (CR 702.49a) is the
+    one such hand cost the pool prints: ``derive_activation_spec`` knows its
+    shape but not the board, and a picker with no candidates had nothing to
+    offer — the first unblocked attacker is chosen only once blockers are
+    declared (CR 509.1h), which the enumeration reads (``unblocked_only``).
+    Copied, because the derived spec's dicts are shared."""
+    spec = dict(cost_spec)
+    spec["valid_targets"] = game._enumerate_targets(
+        player_index, card, spec, for_cast=False,
+    )
+    game._attach_more_cost_targets(player_index, card, spec, None)
+    return spec
 
 
 def _compute_graveyard_abilities(session: Session, player_index: int) -> list[dict]:
