@@ -171,8 +171,9 @@ class SimulationReport:
     #: ``"offering"`` (CR 702.48a: a permanent sacrificed and the total
     #: reduced — `ai_offering`), ``"pitch"`` (an alternative cost paid with a
     #: card from hand that names the X, the Shoals — `ai_pitch`) and
-    #: ``"alternative cost"`` (any other CR 118.9 price: Force of Will's,
-    #: Kentaro's granted {X}). **The first two were empty in every run before
+    #: ``"alternative cost"`` (any other CR 118.9 price: flashback's, CR
+    #: 702.34a; Force of Will's; Kentaro's granted {X}). **The first two were
+    #: empty in every run before
     #: BOK's wave 2**: the policy could not price either, so every Patron and
     #: every Shoal was hard-cast or held — and the run read exactly as clean.
     prices_paid: Counter[str] = field(default_factory=Counter)
