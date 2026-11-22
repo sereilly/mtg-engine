@@ -43,8 +43,12 @@ count** in `SimulationReport` (`interaction_count`, `lands_played`,
 `rehearsals_raised`, `special_actions_taken`, `refused_special_actions`,
 `special_actions_in_response`, `cards_from_outside_game`, `face_down_casts`,
 `mulligans_taken`, `controlled_turns` (a seat's turn another seat decided,
-CR 723), `spliced_casts` (CR 702.47, `engine/ai_splice.py`), the combat
-counts). A run that
+CR 723), `spliced_casts` (CR 702.47, `engine/ai_splice.py`; a splice cost
+that is not mana names its payers, `engine/ai_splice_prices.py`),
+`prices_paid` (a cast's price other than its mana cost: an offering,
+`engine/ai_offering.py`; a pitch, `engine/ai_pitch.py`; another alternative
+cost), the combat counts). A cast asking for "a source of your choice" (CR
+609.7a) names one by rehearsal (`engine/ai_chosen_source.py`). A run that
 cast nothing exits 1. A new piece of the turn arrives with its count. CR 116
 special actions are weighed in `engine/ai_special_actions.py`, before the
 first combat and in response to another seat's object
@@ -155,7 +159,11 @@ first combat and in response to another seat's object
   then the hand
   (`ai_hand_activations.choose_hand_activation_action(at_instant_speed=True)`:
   a cycle whose trigger pays now; a cycle whose trigger finds nothing is held
-  at sorcery speed), then the graveyard chooser
+  at sorcery speed; ninjutsu in the attacking seat's declare-blockers
+  window, once blocks are declared, each unblocked attacker the cost could
+  return rehearsed as its own candidate, `HandActivationAction.cost_permanent_ids`
+  — the hand door's own `hand_cost_refusal` decides where it is weighed),
+  then the graveyard chooser
   (`ai_graveyard_activations.choose_graveyard_activation_action`, alone in
   the seat's own upkeep), each through its own executor; the web AI's own
   upkeep stops for it when the seat holds a graveyard ability. In the

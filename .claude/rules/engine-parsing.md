@@ -118,7 +118,10 @@ family independence and flat re-export.
   the colours the cast recorded spending, `StackItem.choices`'
   `mana_spent_to_cast`), soulshift (702.46a, `engine/soulshift.py` — the
   rule's own dies trigger returning a Spirit card, Gravedigger's return with
-  two narrowings, one line per instance, 702.46b), offering (702.48a,
+  two narrowings, one line per instance, 702.46b; a card's own "has soulshift
+  X, where X is …" keeps its where-clause, counted as the trigger is
+  enqueued and looking back at the departure, `engine/frozen_trigger_x.py`),
+  offering (702.48a,
   `engine/offering.py` — the optional additional sacrifice; the reduction and
   the instant window are read at the cast) and ninjutsu (702.49a,
   `engine/ninjutsu.py` — the rule's own sentence: a reveal-from-hand cost, so

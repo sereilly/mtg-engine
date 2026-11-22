@@ -131,7 +131,11 @@ and you can open this file directly whenever its subject is yours.
   step of CR 601.2f, applied in the one cast payment
   `pool_payment._pay_cast_cost`, free and alternative casts included, and by
   the AI's `ai_payment._cost_for`) is read by the hand badge, the castable
-  highlight and `ways`.
+  highlight and `ways`. An offering's reduction depends on the permanent
+  sacrificed, so it is priced per permanent (`reduction_bought=`,
+  `offering.offering_charges`): the offer lists each candidate's price
+  (`offering_prices`), the highlight and the AI read those, and the hand
+  badge stays the price of the cast that offers nothing.
 
 ## Targets
 

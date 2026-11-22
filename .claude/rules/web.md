@@ -81,7 +81,11 @@ default (`mana_combination.triggered_split`);
 decides; null for an ability that adds no mana), `ability_text_change` and a
 cast's `text_change` (the words a text change announces), `x_payable` /
 `ability_x_payable` (`{pool, board, colors}`: the payable X as the cast or
-activation path prices it), a spec's `x_is_target_mana_value` with each
+activation path prices it; `counter_bound {kind, count}` where X is a count
+of counters removed, so the client asks X without a printed `{X}`), a spec's
+`x_bound` (`{stat, op}`) with each target's `x_bound_value` (a target
+bounded by the announced X: Minamo Sightbender, Stir the Grave — the client
+asks X first and narrows the picker), a spec's `x_is_target_mana_value` with each
 target's `mana_value` (an X the target's mana value must equal: Hearth Kami,
 Gorilla Shaman, `offers.mark_mana_value_x`), `cast_mana`, a card's `cost_before_modifiers`
 beside its charged price, `ability_prices` (an ability's charged price where
@@ -99,7 +103,10 @@ graveyard ability's `target_spec`,
 `target_spec.cost_offers` (every applicable alternative cost by
 `alternative_index`, which the cast answers with `alternative_cost_index`, CR
 118.9a; a granted price identical to one already offered is not a second
-offer, `cast_alternative_costs._same_price`), a castable spell's
+offer, `cast_alternative_costs._same_price`; an offering's `optional_cost`
+offer lists `offering_prices` per candidate and says when it is `required`,
+with `required_reason`), a hand ability's `cost_spec.valid_targets` (the
+permanents its cost could return — ninjutsu's unblocked attackers), a castable spell's
 `mana_combination` when it makes mana in any
 combination (`count`, or `count_by_cost` per permanent that could pay its
 cost — `mana_combination.cast_split_offer`), the active seat's
