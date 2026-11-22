@@ -690,3 +690,28 @@ def test_w2g2_a_removal_x_is_asked_and_said_in_counters(set_pool):
     assert seen["xPrompts"] == [
         {"cardName": "Petalmane Baku", "abilityIndex": 0, "maxXOverride": None, "thenTargets": True},
     ]
+
+
+def test_w2g2_dominate_a_shipped_x_bounded_cast_asks_x_first_too(set_pool):
+    """Nemesis' Dominate ("Gain control of target creature with mana value X
+    or less") carries the same `x_bound` on its cast spec, so it is asked the
+    same way: X before the target, the picker narrowed to what the X admits —
+    it was asked target first, and an X below the target's mana value was
+    refused. X = 2 offers the Bears, never the Giant."""
+    sid, _game, _mine, _theirs = _w2g2_session(
+        set_pool, mine=("Island",), theirs=("Grizzly Bears", "Hill Giant"), hand=("Dominate",),
+    )
+    dominate = _w2g2_hand(_w2g2_state(sid), "Dominate")
+    assert dominate["target_spec"]["x_bound"] == {"stat": "mana_value", "op": "le"}
+    seen = run_app_js(
+        _W2G2_X_FUNCTIONS,
+        """
+        const opened = startCastXBoundFirst(INPUT, "cast", null);
+        resumeCastAfterXBound(pendingCastX, 2);
+        return {opened, continued};
+        """,
+        dominate,
+        prelude=_W2G2_X_PRELUDE,
+    )
+    assert seen["opened"] is True
+    assert seen["continued"] == [["Dominate", "cast", ["Grizzly Bears"]]]
