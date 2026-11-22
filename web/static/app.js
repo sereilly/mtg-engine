@@ -2098,8 +2098,19 @@ function expandCyclingLine(line) {
 // "**Exile this card from your hand**: Add {G}." (Elvish Spirit Guide) is the
 // rule's other spelling — a cost only a card in a hand can pay — and it was
 // listed on the battlefield as a dead entry the server refused.
+//
+// Ninjutsu is the third (CR 702.49a: "[Cost], **Reveal this card from your
+// hand**, Return an unblocked attacking creature you control…"). Its printed
+// line, "Ninjutsu {1}{U} ({1}{U}, Return an unblocked attacker you control to
+// hand: …)", splits at the reminder's colon into a cost half that starts with
+// the keyword, so the keyword is read as well as the reveal: listed here, it
+// took index 0 and every later ability's index named the one before it
+// (Higure's "{2}: Target Ninja creature can't be blocked" was sent as the
+// ninjutsu). Its button is the hand's (`renderHandAbilities`).
 function abilityFunctionsOnBattlefield(costHalf) {
-  return !/\b(discard this card|exile this card from your hand)\b/i.test(costHalf || "");
+  const cost = costHalf || "";
+  if (/^\s*(?:commander\s+)?ninjutsu\b/i.test(cost)) return false;
+  return !/\b(discard this card|exile this card from your hand|reveal this card from your hand)\b/i.test(cost);
 }
 
 function hasActivatedAbility(card) {
