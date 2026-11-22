@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 #: The most values of X a hand's pitches are weighed at, the largest kept:
 #: each is a whole candidate, its targets and rehearsal included.
-PITCHES_WEIGHED = 3
+PITCHES_WEIGHED = 4
 
 
 @dataclass(frozen=True)
@@ -118,7 +118,31 @@ def pitches_to_weigh(
                 card_name=held.name,
             )
             worth[x_value] = value
-    return [best[x] for x in sorted(best, reverse=True)[:PITCHES_WEIGHED]]
+    kept = sorted(best, reverse=True)[:PITCHES_WEIGHED]
+    # Weighed cheapest card first: a later pitch replaces an earlier one only
+    # when it scores more, so of two that do the same the cheaper card goes.
+    return [best[x] for x in sorted(kept, key=lambda x: (worth[x], -x))]
+
+
+def pitched_card_price(game: "Game", seat: int, action: "CastAction") -> float:
+    """What the card *action* pitches costs its seat **beyond the card**
+    the rehearsal already counts (``ai_standing.CARD_WORTH``, flat for every
+    card in a hand): what holding it is worth (``ai_prompt_picks.held_worth``,
+    the score casting it would get) over a card's worth, or 0 — the term
+    ``ai_cast_score.finished_cast_candidate`` subtracts, so a Shoal pitches a
+    spare two-drop before a Patron when both name an X that does the job,
+    and a bomb is pitched only for what outweighs it. 0 for a cast that
+    pitches nothing (``CastAction.alternative_cost_hand_index`` unnamed)."""
+    slot = getattr(action, "alternative_cost_hand_index", None)
+    if slot is None or action.from_zone != "hand":
+        return 0.0
+    hand = game.players[seat].hand
+    if not 0 <= slot < len(hand):
+        return 0.0
+    from .ai_prompt_picks import held_worth
+    from .ai_standing import CARD_WORTH
+
+    return max(0.0, held_worth(game, seat, hand[slot]) - CARD_WORTH)
 
 
 def best_of_the_pitches(
@@ -154,5 +178,6 @@ __all__ = [
     "Pitch",
     "best_of_the_pitches",
     "note_the_pitch",
+    "pitched_card_price",
     "pitches_to_weigh",
 ]

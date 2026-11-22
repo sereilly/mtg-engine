@@ -300,6 +300,25 @@ def test_of_two_cards_of_one_x_the_one_least_worth_holding_is_pitched(_w2g5_card
     assert action is not None and action.alternative_cost_hand_index == min(worth, key=worth.get)
 
 
+def test_a_shoal_pitches_the_spare_card_before_the_bomb(_w2g5_cards):
+    """Against Grizzly Bears X = 2 kills as surely as X = 7: the standing
+    counts a card in hand as a card whatever it is, so the card's own worth
+    beyond that (``ai_pitch.pitched_card_price``) decides — Drudge Skeletons
+    is exiled and Lord of the Pit stays in hand."""
+    game = _w2g5_table(
+        _w2g5_cards, ["Sickening Shoal", "Lord of the Pit", "Drudge Skeletons"], [],
+        theirs=["Grizzly Bears"],
+    )
+
+    action = choose_cast_action(game, 0)
+
+    assert action is not None and action.card_name == "Sickening Shoal"
+    assert action.alternative_cost_hand_index == 2 and action.x_value == 2
+    _w2g5_carry_out(game, action)
+    assert _names(game.players[1].graveyard) == ["Grizzly Bears"]
+    assert _names(game.players[0].hand) == ["Lord of the Pit"]
+
+
 def test_shining_shoal_names_the_bolt_and_sends_its_damage_back(_w2g5_cards):
     """CR 609.7a: the source is the caster's choice, announced with the cast.
     With an opposing Lightning Bolt aimed at its Grizzly Bears and no land,

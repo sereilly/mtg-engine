@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from . import ai_cast_trace as cast_trace
 from .ai_actions import weighed_at_instant_speed
+from .ai_pitch import pitched_card_price
 from .ai_scoring import cast_score_terms, summed_terms
 from .ai_weighed_cast import cast_weighed
 
@@ -133,6 +134,9 @@ def finished_cast_candidate(
     )
     terms.append(("zone bonus", zone_cast_bonus(action.from_zone, cast_weighed(card))))
     terms.append(("answering its own spell", stack_response_bonus(game, seat)))
+    # …and the card a pitch exiles, beyond the card the rehearsal counted
+    # (`ai_pitch.pitched_card_price`): a fact of the announcement, as the zone is.
+    terms.append(("the card pitched, beyond a card", -pitched_card_price(game, seat, action)))
     score = summed_terms(terms)
     finished = replace(action, score=score)
     cast_trace.scored(game, finished, terms, score, rehearsal)
