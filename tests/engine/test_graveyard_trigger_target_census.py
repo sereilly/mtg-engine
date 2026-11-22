@@ -41,6 +41,7 @@ import dataclasses
 import pytest
 
 from engine import Game, PlayerState
+from engine.copy_casts import FROM_GRAVEYARD_OF
 from engine.events import FUNCTIONS_FROM, graveyard_trigger_events
 from engine.faces import compilation_units
 from engine.handlers._filters import graveyard_card_matches
@@ -431,6 +432,28 @@ def _prompt(game, trigger):
     )
 
 
+def _resolve_to_graveyard_cast_offer(game, trigger):
+    """Resolve *trigger* at its asked table until it offers a cast of a
+    graveyard card during its resolution (CR 608.2g, ``copy_casts.
+    FROM_GRAVEYARD_OF``) — the offer, owed and holding the trigger on the
+    stack — or None once the trigger has left the stack without one, every
+    other row's road (then ``_drain`` carries on as it always did)."""
+    for _ in range(4):
+        offer = next(
+            (
+                choice for choice in game.pending_choices_of("copy_cast")
+                if choice.data.get(FROM_GRAVEYARD_OF) is not None
+            ),
+            None,
+        )
+        if offer is not None:
+            return offer
+        if _object(game, trigger) is None or game.pending_choices:
+            return None
+        game.resolve_top_of_stack()
+    return None
+
+
 def _offers(prompt) -> list[tuple[int, int, str]]:
     return [
         (entry["seat"], entry["graveyard_index"], entry["name"])
@@ -504,6 +527,41 @@ def test_a_seat_that_can_be_asked_is_asked_and_its_answer_is_the_card_that_moves
         named = ", ".join(names_)
         if f"targets {named} in {game.players[seat].name}'s graveyard" not in game.log[-1]:
             findings.append(f"{label}: the choice was not logged ({game.log[-1]!r})")
+        offer = _resolve_to_graveyard_cast_offer(game, trigger)
+        if offer is not None:
+            # "…you may cast target instant card from your graveyard."
+            # (Toshiro Umezawa.) The target does not move the card: CR 608.2g
+            # *offers a cast* of it as the trigger resolves, a second decision
+            # the seat may decline or be unable to make (no legal target, no
+            # mana), and ``_drain`` would take that decision's default — the
+            # AI declining a Blazing Shoal for +0/+0 at the promotion
+            # rehearsal, which read here as "nothing left". So the answer is
+            # honoured when the offer is about the very card the target
+            # named, in its pile; the seat then declines, and nothing may
+            # leave a graveyard. The cast itself is driven where its answer
+            # can be announced (``tests/sets/test_bok_creatures_later_groups.py``,
+            # ``test_w1g10_toshiro_casts_an_instant_from_the_graveyard_as_it_resolves``).
+            stamp = _stamps(item)[0] if _stamps(item) else None
+            if (
+                count != 1 or stamp is None or offer.data.get("_card") is not stamp.card
+                or offer.data.get(FROM_GRAVEYARD_OF) != seat
+            ):
+                findings.append(
+                    f"{label}: named {named} in pile {seat}; the cast offered is "
+                    f"{offer.data.get('card_name')!r} from pile "
+                    f"{offer.data.get(FROM_GRAVEYARD_OF)}"
+                )
+                continue
+            if not game.confirm_copy_cast(0, False):
+                findings.append(f"{label}: the cast offer could not be declined")
+                continue
+            _drain(game)
+            gone = _left(before, _yards(game))
+            if gone:
+                findings.append(f"{label}: the cast of {named} was declined; {gone} left a graveyard")
+            elif len(offers) > count:
+                off_default += 1
+            continue
         _drain(game)
         gone = _left(before, _yards(game))
         if sorted(gone) != sorted((name, seat) for name in names_):
