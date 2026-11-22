@@ -46,7 +46,12 @@ from .ai_weighed_cast import (
     casting_under,
     considering_mode,
     hand_waiver,
+    offering_victim_weighed,
+    pitch_weighed,
 )
+from .ai_chosen_source import cast_naming_its_source
+from .ai_offering import offering_weighed, offering_worth_taking
+from .ai_pitch import best_of_the_pitches, note_the_pitch
 from .ai_target_sides import activation_target_side, ability_target_side
 from .ai_rehearsal import deliberating
 from .ai_entwine import entwined_cast
@@ -56,6 +61,7 @@ from .ai_valuation import (
     OFFER_ALTERS,
     OFFER_ENTWINES,
     OFFER_KICKS,
+    OFFER_REDUCES,
     OFFER_RETURNS_SPELL,
     CastOffer,
     cast_offers,
@@ -354,9 +360,16 @@ def _times_worth_taking(
     * *other_effect* — declined. The paid spell is a different spell rather
       than a larger one (Undergrowth's paid Fog spares every red creature),
       and nothing here can tell which the board wants. One shipped card.
+    * *reduces_and_flashes* (offering) — taken where it opens the moment or
+      pays for a cast the mana cannot (`ai_offering.offering_worth_taking`),
+      the permanent named and the price weighed by the rehearsal.
     """
     if offer.from_zone not in (None, from_zone):
         return 0
+    if offer.buys == OFFER_REDUCES:
+        # CR 702.48a's offering: taken for the moment it opens or the mana it
+        # saves, never to save mana the seat has (`ai_offering`).
+        return 1 if offering_worth_taking(game, player_index, card, from_zone) else 0
     if offer.buys in (OFFER_ALTERS, OFFER_ENTWINES):
         # …and an entwine (CR 702.42a), which is no larger version of the mode
         # being weighed: it chooses every mode, and is weighed as a cast of its
@@ -764,9 +777,15 @@ def _cast_candidate_sized(
     before it (`_weighed_through_the_fight`), as for every other cast.
     """
     if not _pays_x_in_life(card):
-        return _cast_candidate_offering(
-            game, player_index, card, hand_index,
-            from_zone=from_zone, extra_generic=extra_generic,
+        # …and, for a spell whose X a pitched card names (the Shoals), the
+        # cast at each X the hand can pitch beside the one paid in mana
+        # (`ai_pitch.best_of_the_pitches`).
+        return best_of_the_pitches(
+            game, player_index, card, hand_index, from_zone=from_zone,
+            build=lambda: _cast_candidate_offering(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic,
+            ),
         )
     bound = _pick_x_value(
         game, game.players[player_index], card, extra_generic,
@@ -1113,8 +1132,11 @@ def _cast_candidate_announcing(
     (``ai_cast_trace.attempt``): the mode, the offers and the size of an X
     paid in life it is built at are the ones being weighed — and an "any
     number of" sacrifice's provisional victims, for its target choosers
-    (``ai_sacrifice_victims.sacrifices_weighed_provisionally``)."""
-    with sacrifices_weighed_provisionally(game, player_index, card, from_zone, offers):
+    (``ai_sacrifice_victims.sacrifices_weighed_provisionally``), and the
+    permanent an offering gives up, for every price read
+    (``ai_offering.offering_weighed``)."""
+    with sacrifices_weighed_provisionally(game, player_index, card, from_zone, offers), \
+            offering_weighed(game, player_index, card, offers):
         if cast_trace.silent():
             return _announced_candidate(
                 game, player_index, card, hand_index,
@@ -1208,6 +1230,12 @@ def _announced_candidate(
     x_value = _pick_x_value(
         game, player, card, extra_generic, hand_index=spell_hand_index,
     )
+    # …unless a card is pitched for it (`ai_pitch`): the card names the X
+    # (CR 107.3a), and the alternative cost pays where the lands need not.
+    pitch = pitch_weighed(card)
+    if pitch is not None:
+        note_the_pitch(pitch)
+        x_value = pitch.x_value
     if x_value == 0 and not aims_at_mana_value_zero(game, player_index, card):
         # …except a sunburst count aimed at mana value 0 (Engineered
         # Explosives over tokens, `ai_sunburst_x`), which is the X it wants.
@@ -1271,6 +1299,7 @@ def _announced_candidate(
     if (
         game.enforce_mana_costs
         and card.primary_type != "land"
+        and pitch is None
         and _plan_land_taps(
             game, player,
             _cost_for(game, player, card, x_value, extra_generic=extra_generic),
@@ -1510,7 +1539,20 @@ def _announced_candidate(
         return cast_trace.dropped(
             "an offer's X has no ceiling with mana costs unenforced"
         )
-    if game.enforce_mana_costs and card.primary_type != "land":
+    if pitch is not None:
+        # The pitch's alternative cost in place of the mana cost (CR 118.9),
+        # its mana the taxes alone (CR 118.9d).
+        plan = _alternative_cost_tap_plan(
+            game, player_index, card, extra_generic=extra_generic,
+            index=pitch.alternative_index,
+        )
+        if plan is None:
+            return cast_trace.dropped(
+                "the pitch's alternative cost owes mana the lands cannot pay (CR 118.9d)"
+            )
+        tap_indices, tap_colors = plan
+        alternative_cost = True
+    elif game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
         # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
         # mana clause of a price that is not only mana, which `_offers_taken`
@@ -1662,6 +1704,9 @@ def _announced_candidate(
                     tap_indices, tap_colors, _named = alternatives[0]
                     alternative_cost = True
 
+    # The permanent an offering gives up (CR 702.48b), which the cast path
+    # sizes the reduction by (`ai_offering.offering_victim`).
+    offered = offering_victim_weighed(card)
     action = CastAction(
         card_name=card.name,
         target_player_index=target,
@@ -1684,7 +1729,12 @@ def _announced_candidate(
         target_role_refs=role_refs,
         old_color=text_words[0],
         new_color=text_words[1],
-        alternative_cost_index=alternatives[0][2] if alternatives else None,
+        alternative_cost_index=(
+            alternatives[0][2] if alternatives
+            else pitch.alternative_index if pitch is not None else None
+        ),
+        alternative_cost_hand_index=pitch.hand_slot if pitch is not None else None,
+        cost_permanent_ids=[offered.permanent_id] if offered is not None else None,
     )
     if len(alternatives) > 1:
         action = _better_alternative(game, player_index, card, action, alternatives)
@@ -1695,6 +1745,8 @@ def _announced_candidate(
     action = cast_naming_its_sacrifices(game, player_index, card, action, offers)
     # …and the hand cards a printed discard is paid with.
     action = _cast_naming_its_discards(game, player_index, card, action, offers)
+    # …and "a source of your choice" (CR 609.7a), weighed by rehearsal.
+    action = cast_naming_its_source(game, player_index, card, action)
     # **What the cast would do, asked of the engine** — for a spell, whose
     # whole worth is its resolution. The finished announcement is carried out
     # on a scratch copy of the game (`_rehearse_announcement`) and three
@@ -1717,7 +1769,10 @@ def _announced_candidate(
     # where such a card is still worth a cast.
     rehearsal = None
     instant = weighed_at_instant_speed()
-    if card.primary_type in SPELL_TYPES or instant:
+    # …and a permanent whose cast **sacrifices one** for its offering
+    # (CR 702.48a): the body arriving is weighed against the one given up,
+    # and a cast that leaves the seat worse off is not proposed (`ai_offering`).
+    if card.primary_type in SPELL_TYPES or instant or offered is not None:
         rehearsal = _rehearse_announcement(
             game, player_index, card, cast_announcement(action), planned=action,
         )

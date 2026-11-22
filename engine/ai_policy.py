@@ -80,6 +80,8 @@ from .ai_scoring import (
     _pick_x_value,
 )
 from .ai_cast_gates import payable_alternative_indices
+from .ai_offering import offering_pays_for_it
+from .ai_pitch import pitches_to_weigh
 from .ai_abilities import (
     choose_activation_action,
     _abilities_weighed,
@@ -793,7 +795,8 @@ def holds_an_instant_it_could_pay_for(game: Game, player_index: int) -> bool:
     chooser's plan is, so restricted mana and a source that pays by being
     sacrificed count) — or a printed alternative cost it could pay instead
     (CR 118.9, `ai_cast_gates.payable_alternative_indices`: Force of Will with
-    no Island untapped).
+    no Island untapped), a card it could pitch for the X (`ai_pitch`) or an
+    offering whose reduction it can pay (`ai_offering.offering_pays_for_it`).
 
     **The cheap question asked before the dear one.** The chooser rehearses
     every spell it weighs on a copy of the game, and a table that gives
@@ -806,6 +809,15 @@ def holds_an_instant_it_could_pay_for(game: Game, player_index: int) -> bool:
     player = game.players[player_index]
     for offer in _instant_speed_offers(game, player_index):
         if not game.enforce_mana_costs:
+            return True
+        if offer.under is None and offer.zone == "hand" and (
+            # …or a card it could pitch for the X (`ai_pitch`: a Shoal with
+            # the lands tapped), or an offering whose reduction its sources
+            # pay (`ai_offering`: a Patron with four lands and a Fox) — each a
+            # candidate the chooser builds where the printed cost is not paid.
+            pitches_to_weigh(game, player_index, offer.spell, offer.index, from_zone="hand")
+            or offering_pays_for_it(game, player_index, offer.spell)
+        ):
             return True
         with casting_under(offer.under), _paying_for(offer.spell):
             x_value = _pick_x_value(game, player, offer.spell, offer.tax)

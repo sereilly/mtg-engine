@@ -31,6 +31,7 @@ from engine.ai_valuation import (
     OFFER_ADDS,
     OFFER_ALTERS,
     OFFER_KICKS,
+    OFFER_REDUCES,
     OFFER_RETURNS_SPELL,
     cast_offers,
 )
@@ -96,12 +97,14 @@ def test_w2g6_every_shipped_offer_is_read_and_classified(catalog):
     28 buybacks, the two "any number of times" spells and Undergrowth — and
     every one is classified by what the payment buys."""
     by_what: dict[str, list[str]] = {}
+    texts: dict[str, str] = {}
     examined = 0
     for whole in catalog:
         for card in castable_faces(whole):
             examined += 1
             for offer in cast_offers(card):
                 by_what.setdefault(offer.buys, []).append(card.name)
+                texts[card.name] = card.oracle_text or ""
                 assert (offer.mana is None) != (offer.price is None), card.name
 
     assert examined >= 4_300
@@ -114,6 +117,12 @@ def test_w2g6_every_shipped_offer_is_read_and_classified(catalog):
         "a second offer whose paid spell is a different spell rather than a "
         "larger one: the policy declines these, so decide whether it should"
     )
+    # An offering (CR 702.48a) is the same spell for less and at instant
+    # speed — classified apart, and taken by `ai_offering` (BOK's W2G5); the
+    # population is Betrayers of Kamigawa's five Patrons once it ships, and
+    # every member must print the keyword the class is read off.
+    for name in by_what.get(OFFER_REDUCES, ()):
+        assert " offering" in texts[name].lower(), name
 
 
 def test_w2g6_an_offer_is_classified_by_what_it_buys_not_by_its_name():

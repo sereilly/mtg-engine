@@ -167,6 +167,15 @@ class SimulationReport:
     #: run pinning splice cards and Arcane spells that reads empty is that
     #: coming back.
     spliced_casts: Counter[str] = field(default_factory=Counter)
+    #: Casts that paid something **other than their mana cost**, by what:
+    #: ``"offering"`` (CR 702.48a: a permanent sacrificed and the total
+    #: reduced — `ai_offering`), ``"pitch"`` (an alternative cost paid with a
+    #: card from hand that names the X, the Shoals — `ai_pitch`) and
+    #: ``"alternative cost"`` (any other CR 118.9 price: Force of Will's,
+    #: Kentaro's granted {X}). **The first two were empty in every run before
+    #: BOK's wave 2**: the policy could not price either, so every Patron and
+    #: every Shoal was hard-cast or held — and the run read exactly as clean.
+    prices_paid: Counter[str] = field(default_factory=Counter)
     #: Spells cast — and lands played — from a zone **other than the hand**
     #: (CR 601.3), by the zone: ``"graveyard"`` (flashback, CR 702.34a;
     #: Yawgmoth's Will), ``"exile"`` (an Elkin Bottle's card), ``"library"``
@@ -606,6 +615,7 @@ def _play_one_cast(
         report.modal_casts.update(index for index, _label in modes_named)
         if cast_action.splice_cards:
             report.spliced_casts[card_to_cast.name] += len(cast_action.splice_cards)
+        report.prices_paid.update(_prices_paid(card_to_cast, cast_action))
         if cast_action.from_zone != "hand":
             report.casts_from_zones[cast_action.from_zone] += 1
     if not result.supported:
@@ -652,6 +662,25 @@ def _zone_named(cast_action) -> str:
     if cast_action.from_zone == "hand":
         return ""
     return f" [from {cast_action.from_zone}]"
+
+
+def _prices_paid(card: CardDefinition, cast_action) -> list[str]:
+    """What *cast_action*'s cast of *card* paid besides or instead of its
+    mana cost (`SimulationReport.prices_paid`'s keys)."""
+    from .offering import offering_costs, offering_taken
+
+    paid = []
+    if any(
+        offering_taken(cost, getattr(cast_action, "optional_cost_payments", None))
+        for cost in offering_costs(card)
+    ):
+        paid.append("offering")
+    if getattr(cast_action, "alternative_cost", False):
+        paid.append(
+            "pitch" if getattr(cast_action, "alternative_cost_hand_index", None) is not None
+            else "alternative cost"
+        )
+    return paid
 
 
 def _splices_named(cast_action) -> str:
@@ -1076,6 +1105,7 @@ def _answer_priority(
     report.modal_casts.update(index for index, _label in modes_named)
     if action.splice_cards:
         report.spliced_casts[card.name] += len(action.splice_cards)
+    report.prices_paid.update(_prices_paid(card, action))
     if action.from_zone != "hand":
         report.casts_from_zones[action.from_zone] += 1
     return True

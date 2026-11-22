@@ -37,7 +37,7 @@ from contextvars import ContextVar
 from itertools import combinations, product
 from dataclasses import dataclass, replace
 
-from .ai_weighed_cast import cast_weighed
+from .ai_weighed_cast import cast_weighed, offering_victim_weighed
 from .cost_modifiers import (
     cost_reduction_for_cast,
     keyword_cost_modifiers,
@@ -462,6 +462,15 @@ def _cost_for(
     if more or less:
         tax += more
         reduction = reduction.plus_generic(less)
+    # "Fox offering": the cast being weighed sacrifices a permanent and its
+    # total is reduced by that permanent's mana cost (CR 702.48c), folded into
+    # the reductions as the cast path folds it (`offering.offering_reduction`;
+    # the permanent is `ai_offering.offering_weighed`'s).
+    offered = offering_victim_weighed(card)
+    if offered is not None:
+        from .offering import offering_reduction
+
+        reduction = reduction.plus(offering_reduction(offered))
     # The best split of X among the colours the card allows, which is the one
     # the cast path will try first (`pool_payment._x_color_allocations`). The AI is
     # sizing the cost, so it wants the payment that will actually be attempted;

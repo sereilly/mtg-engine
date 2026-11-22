@@ -39,6 +39,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from . import ai_cast_trace as cast_trace
+from .ai_splice_prices import describe_price_answer, splice_price_answer
 from .oracle import compile_card_oracle
 from .splice import (_X_WORD, splice_candidates, splice_cost_symbols,
                      spliced_text_card)
@@ -121,21 +122,27 @@ def _best_splice_of(
     heading = f"splicing {spliced.name} (hand #{hand_index})" + (
         f" after {len(chosen)} already spliced" if chosen else ""
     )
+    paid_with: dict = {}
     if offer.price is not None:
         # "Splice onto Arcane—Sacrifice two Mountains" (Betrayers of
-        # Kamigawa). This chooser prices a splice in mana only (the buyback
-        # rule, ``_splice_mana_is_spare``); a price paid in permanents, cards
-        # or an opponent's life is weighed by nothing here yet, so it is not
-        # proposed rather than taken for free.
-        with cast_trace.attempt(
-            game, player_index, card, variant="spliced",
-            from_zone=from_zone, zone_index=current.hand_index,
-        ):
-            cast_trace.note(heading)
-            return cast_trace.dropped(
-                f"{spliced.name}'s splice cost is not mana "
-                f"({offer.price.describe()}): this chooser prices mana only"
-            )
+        # Kamigawa): what pays is named now (CR 601.2b,
+        # ``ai_splice_prices``), so the rehearsal below pays the price on the
+        # copy and the standing weighs it against what the text adds.
+        paid_with = splice_price_answer(
+            game, player_index, card, current, chosen, spliced, offer,
+            named=_named_ids(current, chosen),
+        )
+        if isinstance(paid_with, str):
+            with cast_trace.attempt(
+                game, player_index, card, variant="spliced",
+                from_zone=from_zone, zone_index=current.hand_index,
+            ):
+                cast_trace.note(heading)
+                return cast_trace.dropped(paid_with)
+        heading += (
+            f", its cost ({offer.price.describe()}) paid with "
+            f"{describe_price_answer(game, paid_with)}"
+        )
     weighed = _splice_answers_and_plan(
         game, player_index, card, current, chosen, hand_index, spliced, offered,
         extra_generic=extra_generic,
@@ -150,9 +157,30 @@ def _best_splice_of(
     answers, (tap_indices, tap_colors) = weighed
     best_found: "CastAction | None" = None
     for answer in answers:
+        paid = paid_with
+        aimed = {each for each in (answer.get("target_permanent_ids") or ()) if isinstance(each, int)}
+        if aimed & set((paid_with or {}).get("cost_permanent_ids") or ()):
+            # The price would take the permanent this text aims at (Veil of
+            # Secrecy's blue creature, returned and targeted): named again
+            # with that one kept, or this aim is passed over.
+            paid = splice_price_answer(
+                game, player_index, card, current, chosen, spliced, offer,
+                named=_named_ids(current, chosen) | aimed,
+            )
+            if isinstance(paid, str) or aimed & set(paid.get("cost_permanent_ids") or ()):
+                with cast_trace.attempt(
+                    game, player_index, card, variant="spliced",
+                    from_zone=from_zone, zone_index=current.hand_index,
+                ):
+                    cast_trace.note(f"{heading}, its text aimed at {answer}")
+                    cast_trace.dropped(
+                        "its splice cost would take the permanent its text aims at,"
+                        " and nothing else can pay it"
+                    )
+                continue
         action = replace(
             current,
-            splice_cards=[*chosen, {"hand_index": hand_index, **answer}],
+            splice_cards=[*chosen, {"hand_index": hand_index, **answer, **paid}],
             land_tap_indices=tap_indices,
             land_tap_colors=tap_colors,
             score=0.0,

@@ -364,6 +364,66 @@ def cast_weighed(card: CardDefinition) -> "PermittedCast | None":
     return held
 
 
+#: The permanent the cast being weighed **offers** (CR 702.48a), with the
+#: spell: its mana cost comes off the total (CR 702.48c), so every price read
+#: while the candidate is built — the builder's gates, its plan — is the
+#: reduced one (``ai_payment._cost_for``). Held by :func:`weighing_an_offering`
+#: (``ai_offering.offering_weighed``), the permission's twin, for its reason.
+_OFFERING_WEIGHED: ContextVar["tuple[CardDefinition, object] | None"] = ContextVar(
+    "ai_offering_weighed", default=None
+)
+
+
+@contextmanager
+def weighing_an_offering(card: CardDefinition, victim):
+    """Weigh *card*'s cast as offering *victim* (a Permanent) for the length
+    of the block."""
+    token = _OFFERING_WEIGHED.set((card, victim))
+    try:
+        yield
+    finally:
+        _OFFERING_WEIGHED.reset(token)
+
+
+def offering_victim_weighed(card: CardDefinition):
+    """The permanent *card*'s cast being weighed offers
+    (:func:`weighing_an_offering`), or None."""
+    held = _OFFERING_WEIGHED.get()
+    if held is None or held[0] is not card:
+        return None
+    return held[1]
+
+
+#: The card the cast being weighed **pitches** — exiled from hand rather than
+#: paying the mana cost, naming X by its mana value (CR 118.9, 107.3a; the
+#: Shoals) — as an ``ai_pitch.Pitch``, with the spell. Held by
+#: :func:`pitching` (``ai_pitch.best_of_the_pitches``) and read by the
+#: builder (``ai_casts._announced_candidate``) for the X, the plan and the
+#: announcement.
+_PITCH_WEIGHED: ContextVar["tuple[CardDefinition, object] | None"] = ContextVar(
+    "ai_pitch_weighed", default=None
+)
+
+
+@contextmanager
+def pitching(card: CardDefinition, pitch):
+    """Weigh *card*'s cast as paid by *pitch* for the length of the block."""
+    token = _PITCH_WEIGHED.set((card, pitch))
+    try:
+        yield
+    finally:
+        _PITCH_WEIGHED.reset(token)
+
+
+def pitch_weighed(card: CardDefinition):
+    """The ``ai_pitch.Pitch`` *card*'s cast being weighed is paid by
+    (:func:`pitching`), or None."""
+    held = _PITCH_WEIGHED.get()
+    if held is None or held[0] is not card:
+        return None
+    return held[1]
+
+
 def _effect_steps(instruction: OracleInstruction) -> tuple[OracleInstruction, ...]:
     """*instruction*'s leaf steps, wrappers (``sequence``, ``if_then``,
     ``may``) opened and themselves left out."""
@@ -414,5 +474,9 @@ __all__ = [
     "castable_commanders",
     "casting_under",
     "hand_waiver",
+    "offering_victim_weighed",
     "permitted_casts",
+    "pitch_weighed",
+    "pitching",
+    "weighing_an_offering",
 ]

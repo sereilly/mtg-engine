@@ -1381,6 +1381,14 @@ OFFER_ALTERS = "other_effect"
 #: of the mode being weighed, so the per-mode offer loop declines it and
 #: ``ai_entwine.entwined_cast`` weighs it as a cast of its own.
 OFFER_ENTWINES = "entwines"
+#: The spell is the same spell **for less, and at any time an instant could
+#: be cast**: its total is reduced by what the payment gives up, and the
+#: payment opens instant timing (CR 702.48a, offering; CR 601.3c). Read off
+#: the engine's own reader of the cost (``offering.offering_costs``), and
+#: taken where the moment or the mana is what the cast lacks
+#: (``ai_offering.offering_worth_taking``) — never a different spell, so not
+#: ``OFFER_ALTERS``.
+OFFER_REDUCES = "reduces_and_flashes"
 
 
 @dataclass(frozen=True)
@@ -1423,9 +1431,13 @@ def _what_an_offer_buys(card: CardDefinition, key: str, price=None) -> str:
     from .cast_costs import buyback_paid, kicked
     from .entwine import entwine_offered
 
+    from .offering import offering_costs
+
     record = {"additional_costs_paid": {key: 1}}
     if entwine_offered(card, key):
         return OFFER_ENTWINES
+    if any(cost.optional_key == key for cost in offering_costs(card)):
+        return OFFER_REDUCES
     if buyback_paid(card, record):
         return OFFER_RETURNS_SPELL
     if kicked(card, record):

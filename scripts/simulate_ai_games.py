@@ -228,6 +228,15 @@ def main() -> int:
         )
         print(f"Cards spliced onto: {spliced}")
 
+    # What casts paid besides or instead of their mana cost: an offering
+    # (CR 702.48a), a pitch naming X (the Shoals), any other alternative cost
+    # (CR 118.9). Until BOK's wave 2 no seat took an offering or pitched.
+    if report.prices_paid:
+        paid = ", ".join(
+            f"{what} x{count}" for what, count in sorted(report.prices_paid.items())
+        )
+        print(f"Prices paid other than the mana cost: {paid}")
+
     # CR 601.3: spells cast and lands played from a zone other than the hand —
     # a flashback card out of a graveyard (CR 702.34a), a card an Elkin Bottle
     # lent out of exile, the top of a library. Until ODY's wave 2 no seat made
