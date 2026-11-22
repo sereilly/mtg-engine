@@ -755,6 +755,23 @@ TRIGGERED_LABELS: dict[str, str] = {
     # first time; Gauntlets of Chaos files the same kind `activated_steal`,
     # so the triggered twin of that bucket.
     "exchange_control_of_targets": "triggered_steal",
+    # --- Betrayers of Kamigawa ----------------------------------------------
+    # Ronin Warclub: "Whenever a creature enters under your control, attach
+    # this Equipment to that creature." Vulshok Battlemaster's bucket, the
+    # Equipment moving onto the creature rather than the creature collecting
+    # the Equipment (CR 701.3).
+    "attach_source_to_target": "triggered_attachments",
+    # Kyoki, Sanity's Eclipse: "…target opponent exiles a card from their
+    # hand." The activated table files the same kind `activated_discard`: a
+    # card leaving a hand by its owner's choice, so the triggered twin.
+    "exile_cards_from_hand": "triggered_discard",
+    # Ogre Recluse: "Whenever a player casts a spell, tap this creature." The
+    # source tapping itself, `tap_target_permanent`'s bucket.
+    "tap_self": "triggered_tap",
+    # Toshiro Umezawa: "…you may cast target instant card from your
+    # graveyard." A permission to cast, the activated table's
+    # `activated_permission` in the triggered position.
+    "grant_cast_permission": "triggered_permission",
 }
 
 # The wrapper kinds whose label depends on what triggered them: `may` wraps
@@ -981,4 +998,9 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # `spell_pattern`, a leaf's bucket too, so the condition names the moment:
     # a land entering, which is ("matching_permanent_enters", "may")'s word.
     ("land_enters", "may"): "triggered_etb",
+    # Patron of the Kitsune: "Whenever a creature attacks, you may gain 1
+    # life." The board-wide attack — the moment is a creature attacking, so the
+    # word is ("creature_attacks", "may")'s `triggered_combat`; a
+    # condition-blind `may` falls back to `spell_pattern`, a leaf's bucket.
+    ("matching_creature_attacks", "may"): "triggered_combat",
 }

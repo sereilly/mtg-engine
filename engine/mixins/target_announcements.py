@@ -871,6 +871,16 @@ class TargetAnnouncementsMixin:
         from ..turn_state import record_targeted
 
         self._announce_targeted_player(item)
+        # Which permanents this object **chose** (CR 115.1, 601.2c): the
+        # announcement below also names what the fields merely carry — a
+        # sacrificed cost (Renewal's land), a chosen source — the phantom
+        # ROADMAP records, which the watchers still hear. Only a chosen
+        # target is counted for "the first time each turn". None is "the
+        # engine cannot say", which counts as before.
+        chosen = chosen_targets(self, item)
+        chosen_ids = None if chosen is None else {
+            target.permanent_id for target in chosen if target.kind == "permanent"
+        }
         for permanent_id in target_ids(item.target_permanent_id):
             if not isinstance(permanent_id, int):
                 continue
@@ -879,8 +889,12 @@ class TargetAnnouncementsMixin:
                 continue
             # "…for the first time each turn" (Jetting Glasskite): counted for
             # every permanent targeted, before anything asks — the trigger
-            # that reads it fires on the announcement that makes it 1.
-            record_targeted(targeted)
+            # that reads it fires on the announcement that makes it 1, which
+            # rides the event (``targeted_count``; None for a phantom).
+            count = (
+                record_targeted(targeted)
+                if chosen_ids is None or permanent_id in chosen_ids else None
+            )
             emit(
                 self, "self_becomes_target",
                 subject=targeted,
@@ -908,6 +922,7 @@ class TargetAnnouncementsMixin:
                 # one card at one creature are equal. The key Psychic Battle's
                 # and Grip of Chaos's events carry the object under.
                 **{TARGETS_CHOSEN_ITEM: host if host is not None else item},
+                targeted_count=count,
             )
         # …and what the text spliced onto it targets (CR 702.47d): the same
         # spell's targets, each segment announced as the spell-shaped object

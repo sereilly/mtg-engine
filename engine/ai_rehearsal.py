@@ -40,6 +40,7 @@ from .ai_standing import CARD_WORTH, standing_swing, standings, swing_worth
 from .ai_weighed_cast import permitted_casts
 from . import state_check_witness
 from .text_changes import spell_text_card
+from .turn_state import TARGETED_THIS_TURN
 
 
 # --- Rehearsal: what a cast would do, asked of the engine ---------------------
@@ -104,6 +105,32 @@ _GAME_BOOKKEEPING = frozenset({
     # four rehearsals, no answer moved).
     "_w2g6_steps_left_owing",
 })
+
+#: The same for a permanent's own records: the per-turn ledger a targeted cast
+#: writes on what it targets whether or not it does anything
+#: (``turn_state.TARGETED_THIS_TURN``, read by "for the first time each turn",
+#: Jetting Glasskite), swept at cleanup. Read as a field it made every targeted
+#: spell a change: a lost-flip Fiery Gambit, which did nothing, "moved" its
+#: target. :func:`permanent_fields` is the reading, and a census comparing a
+#: cast with the same game a moment earlier asks it too.
+PERMANENT_METADATA_BOOKKEEPING = frozenset({TARGETED_THIS_TURN})
+
+
+def permanent_fields(permanent) -> list:
+    """Every field of *permanent* but its card, by name and repr, sorted — its
+    metadata less :data:`PERMANENT_METADATA_BOOKKEEPING`."""
+    fields = []
+    for key, value in vars(permanent).items():
+        if key == "card":
+            continue
+        if key == "metadata" and isinstance(value, dict):
+            value = {
+                name: held for name, held in value.items()
+                if name not in PERMANENT_METADATA_BOOKKEEPING
+            }
+        fields.append((key, repr(value)))
+    return sorted(fields)
+
 
 #: Rehearsals that **raised**, by what was being rehearsed and what the
 #: engine raised: ``"Lightning Bolt: KeyError: 'amount' (damage.py:212 in
@@ -692,10 +719,7 @@ def position_digest(game) -> dict:
             "battlefield": sorted(
                 (
                     permanent.permanent_id, permanent.card.name,
-                    repr(sorted(
-                        (key, repr(value))
-                        for key, value in vars(permanent).items() if key != "card"
-                    )),
+                    repr(permanent_fields(permanent)),
                     permanent.is_creature and permanent.effective_power,
                     permanent.is_creature and permanent.effective_toughness,
                 )

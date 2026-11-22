@@ -367,6 +367,14 @@ def offered_gift_lands_on_the_wrong_side(game, seat: int, entry: dict) -> bool:
     its own still names it (CR 603.3d), and "take gifts" then had its new
     creature shoot its own Spirit. Declined where every step that names the
     target hurts it (the side is "opponent") and the target is the seat's own.
+
+    **Only a free harm with nothing behind the refusal.** "Rhystic Lightning
+    deals 4 damage to any target unless that permanent's controller … pays
+    {2}. If they do, Rhystic Lightning deals 2 damage to the permanent." The
+    accept branch hurts the payer's own creature too — but it is a toll that
+    buys off a worse harm, and declining it killed the Hill Giant paying would
+    have saved. A priced offer, or one whose refusal carries a consequence, is
+    the other answers' to weigh, never this one's.
     """
     from .ai_target_sides import ability_target_side
     from .game_types import single_chosen_id
@@ -376,6 +384,14 @@ def offered_gift_lands_on_the_wrong_side(game, seat: int, entry: dict) -> bool:
         return False
     sides = {ability_target_side(step) for step in steps}
     if sides not in ({"you"}, {"opponent"}):
+        return False
+    if sides == {"opponent"} and (
+        entry.get("cost")
+        or entry.get("life_cost")
+        or entry.get("cost_alternatives")
+        or entry.get("_on_decline")
+        or int(entry.get("damage", 0) or 0)
+    ):
         return False
     context = entry.get("_context")
     announced = single_chosen_id(getattr(context, "target_permanent_id", None))

@@ -921,4 +921,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # position; the activated word for taking a permanent is
     # `gain_control_of_target`'s `activated_steal`, one duration over.
     "gain_control_until_eot": "activated_steal",
+    # Ninjutsu (CR 702.49), the eight Ninjas: "{cost}, Return an unblocked
+    # attacker you control to hand: Put this card onto the battlefield from
+    # your hand tapped and attacking." Activated only once blockers are
+    # declared, and what it puts down is an attacker — the moment is combat,
+    # so the word is `activated_combat`'s, never the `zones` category default.
+    "put_source_card_from_hand_onto_battlefield": "activated_combat",
 }

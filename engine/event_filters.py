@@ -396,9 +396,11 @@ def _self_becomes_target_filter(
         # finds 2, one spell naming it twice (CR 115.3) triggers once, and a
         # creature that gained the ability after it was first targeted finds
         # the first time already past. Godo's attack count, one event over.
-        from .turn_state import times_targeted_this_turn
-
-        if event.subject is None or times_targeted_this_turn(event.subject) != 1:
+        # Read off the announcement (``targeted_count``), which is None for a
+        # permanent the object carries but did not choose — a sacrificed
+        # cost, a combat trigger's own source — so a phantom never counts
+        # and never triggers.
+        if event.subject is None or event.payload.get("targeted_count") != 1:
             return False
     wanted = trig.condition.payload.get("targeted_by")
     if wanted in ("a spell", "an ability"):

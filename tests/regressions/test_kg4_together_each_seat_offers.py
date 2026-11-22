@@ -179,6 +179,35 @@ def _hired_giant(game: Game, observer_later: bool):
     return seat, _life(game)[seat] - before[seat], 1
 
 
+#: A legendary creature that observes creatures entering — invented, because
+#: Iwamori of the Open Fist offers only legendary creature cards and no
+#: legendary creature in the pool is a Soul Warden (Iwamori's row).
+LEGEND_WARDEN = CardDefinition(
+    name="Warden of Legends", mana_cost="", cmc=0.0,
+    type_line="Legendary Creature — Human Cleric",
+    oracle_text="Whenever another creature enters, you gain 1 life.",
+    colors=("W",), color_identity=("W",), keywords=(), produced_mana=(),
+    raw={"name": "Warden of Legends", "type_line": "Legendary Creature — Human Cleric",
+         "power": "1", "toughness": "1"},
+)
+
+
+def _iwamori(game: Game, observer_later: bool):
+    """"When Iwamori enters, each opponent may put a legendary creature card
+    from their hand onto the battlefield." (Its 2018-03-16 ruling: each
+    opponent chooses in turn order, "then all chosen cards are put onto the
+    battlefield at the same time.") Two opponents, an invented legendary
+    observer beside a vanilla legend (Jedit Ojanen)."""
+    puts = _two_newcomers([1, 2], observer_later, "warden", "Jedit Ojanen")
+    for seat, name in puts.items():
+        game.players[seat].hand = [LEGEND_WARDEN if name == "warden" else _CARDS[name]]
+    seat = next(s for s, name in puts.items() if name == "warden")
+    before = _life(game)
+    _place(game, 0, "Iwamori of the Open Fist")
+    settle(game)
+    return seat, _life(game)[seat] - before[seat], 1
+
+
 #: ``card -> (seats at the table, the row)``.
 ROWS = {
     "Show and Tell": (2, _show_and_tell),
@@ -192,6 +221,11 @@ ROWS = {
     "New Frontiers": (2, _new_frontiers),
     "Hired Giant": (3, _hired_giant),
 }
+# Iwamori of the Open Fist is Betrayers of Kamigawa's: a row while the set is
+# in the catalog (shipped, or read as shipped under MTG_PROMOTE=BOK), which is
+# exactly when the census below finds it.
+if "Iwamori of the Open Fist" in _CARDS:
+    ROWS["Iwamori of the Open Fist"] = (3, _iwamori)
 
 
 # -- the census ---------------------------------------------------------------

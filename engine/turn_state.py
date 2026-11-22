@@ -134,7 +134,9 @@ ATTACKS_THIS_TURN = "attacks_this_turn"
 #: spell or ability **for the first time each turn**" (Jetting Glasskite) is
 #: the announcement that makes it 1. Godo's attack count one event over:
 #: written by the one announcement seam (``Game._announce_targeting``) for
-#: **every** permanent targeted, whatever it says, so a creature that gains
+#: **every** permanent a spell or ability chose as a target (never one it
+#: only carries: a sacrificed cost, a chosen source), whatever the permanent
+#: says, so a creature that gains
 #: the ability after it was first targeted (Kira, Great Glass-Spinner arriving
 #: mid-turn) knows the first time has passed; swept at cleanup
 #: (``mixins/_constants._EOT_METADATA_KEYS``); a permanent that leaves and
@@ -148,11 +150,6 @@ def record_targeted(permanent) -> int:
     count = int(permanent.metadata.get(TARGETED_THIS_TURN, 0)) + 1
     permanent.metadata[TARGETED_THIS_TURN] = count
     return count
-
-
-def times_targeted_this_turn(permanent) -> int:
-    """How many times *permanent* has become a target this turn."""
-    return int(permanent.metadata.get(TARGETED_THIS_TURN, 0))
 
 
 def record_attacked_seat(permanent, seat: int | None) -> None:

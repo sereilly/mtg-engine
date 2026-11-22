@@ -78,6 +78,15 @@ SHARED_MOMENT_WORDS: dict[str, frozenset[str]] = {
     "triggered_untap": frozenset({"permanent_becomes_untapped"}),
     "triggered_tap": frozenset({"permanent_becomes_tapped"}),
 }
+# "Whenever a creature attacks, you may gain 1 life." (Patron of the Kitsune,
+# Betrayers of Kamigawa.) The board-wide attack is the combat moment, as
+# ``creature_attacks`` is. Declared while the set is in the catalog — shipped,
+# or read as shipped under MTG_PROMOTE=BOK — which is exactly when a row
+# reaches it, so the declaration is held to the pool both ways like the rest.
+if "Patron of the Kitsune" in CATALOG:
+    SHARED_MOMENT_WORDS["triggered_combat"] = (
+        SHARED_MOMENT_WORDS["triggered_combat"] | {"matching_creature_attacks"}
+    )
 
 
 @pytest.fixture(scope="module")
