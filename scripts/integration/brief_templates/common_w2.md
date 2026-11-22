@@ -23,7 +23,8 @@ Then your group's `BRIEF.md`. The pile your brief is cut from is
   sections as wave 1's "Finishing".
 - **Snapshot both differentials before your first edit**:
   `python scripts/oracle_diff.py snapshot --snapshot <scratch>\od.json` **and**
-  `python scripts/sim_fingerprint.py snapshot --workers 1` (twelve seeded games, ~4 min;
+  `python scripts/sim_fingerprint.py snapshot --rev <your base commit> --workers 1` (twelve seeded
+  games, ~4 min, of the base in a throwaway worktree — without `--rev` it plays your live tree;
   through `run_and_wait.sh`; its default is four processes at ~1.5 GB each, and a
   wave's groups snapshotting at once would exhaust the machine). Compare both at the end. Three wave-1 groups had
   to rebuild a base snapshot from an export because nobody asked for this one.

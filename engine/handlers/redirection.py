@@ -102,9 +102,10 @@ def _arm_chosen_source_point_pool(
     the damage would occur, the damage isn't redirected" (ruling 2005-02-01).
 
     X is the number announced as the spell was cast (CR 601.2b); 0 arms
-    nothing. With no source recorded — an AI or headless cast names none — the
-    pool answers to any source, the fallback every chosen-source record takes;
-    it is spent on X points either way.
+    nothing. With no source recorded — a headless cast that names none (the
+    AI names one by rehearsal, ``ai_chosen_source``) — the pool answers to any
+    source, the fallback every chosen-source record takes; it is spent on X
+    points either way.
     """
     from ..subject_filters import subject_matches
 
