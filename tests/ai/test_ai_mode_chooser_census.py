@@ -66,6 +66,7 @@ whole table.
 """
 from __future__ import annotations
 
+import copy
 import random
 import sys
 from collections import Counter
@@ -81,7 +82,9 @@ from engine.ai_policy import (choose_cast_action,
 from engine.ai_rehearsal import (
     combat_is_still_to_come,
     combats_planned,
+    PERMANENT_METADATA_BOOKKEEPING,
     forget_damage_history,
+    permanent_fields,
     position_digest,
     untap_for_the_next_turn,
     priced_by_the_fight,
@@ -559,10 +562,11 @@ def table_state(game, spell) -> str:
     # Every field of every permanent, by name: a dataclass's own repr leaves
     # out the ones declared ``repr=False``, and a redirect armed on a creature
     # (Sivvi's Valor) is one of those.
+    # Less the per-turn ledger a targeted cast writes on its target whatever
+    # it does (``ai_rehearsal.permanent_fields``): read, every targeted
+    # cast that did nothing "moved" (a lost-flip Fiery Gambit).
     fields = sorted(
-        (perm.permanent_id, sorted(
-            (key, repr(value)) for key, value in vars(perm).items() if key != "card"
-        ))
+        (perm.permanent_id, permanent_fields(perm))
         for perm in game.all_permanents()
     )
     return signature(game, spell) + repr(records) + damage + repr(fields)
@@ -1000,6 +1004,20 @@ _BOOKKEEPING = frozenset({
 _EMPTY_READINGS = frozenset({"None", "False", "0", "''", "[]", "()", "{}", "set()"})
 
 
+def _shown(perm) -> str:
+    """``repr(perm)`` less ``ai_rehearsal.PERMANENT_METADATA_BOOKKEEPING`` —
+    the turn's targeting ledger, which every targeted cast writes whether or
+    not it does anything."""
+    if not PERMANENT_METADATA_BOOKKEEPING & set(perm.metadata):
+        return repr(perm)
+    shown = copy.copy(perm)
+    shown.metadata = {
+        key: value for key, value in perm.metadata.items()
+        if key not in PERMANENT_METADATA_BOOKKEEPING
+    }
+    return repr(shown)
+
+
 def signature(game, spell) -> str:
     """Everything a resolution could have changed, with the spell's own trip
     from hand to graveyard taken out."""
@@ -1021,7 +1039,7 @@ def signature(game, spell) -> str:
         }
         parts.append((hand, yard, len(player.library), repr(sorted(rest.items(), key=lambda kv: kv[0]))))
         parts.append(sorted(
-            (perm.permanent_id, repr(perm), perm.is_creature and perm.effective_power,
+            (perm.permanent_id, _shown(perm), perm.is_creature and perm.effective_power,
              perm.is_creature and perm.effective_toughness)
             for perm in player.battlefield
         ))
