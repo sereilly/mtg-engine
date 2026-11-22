@@ -42,8 +42,8 @@
     },
     "<pool>": {
       "executed_pct": 62.0,
-      "lowered_pct": 89.0,
-      "parsed_pct": 89.5
+      "lowered_pct": 88.8,
+      "parsed_pct": 89.3
     },
     "ALL": {
       "executed_pct": 70.5,
@@ -64,6 +64,11 @@
       "executed_pct": 63.3,
       "lowered_pct": 90.8,
       "parsed_pct": 90.8
+    },
+    "BOK": {
+      "executed_pct": 61.8,
+      "lowered_pct": 78.1,
+      "parsed_pct": 78.1
     },
     "CHK": {
       "executed_pct": 61.9,

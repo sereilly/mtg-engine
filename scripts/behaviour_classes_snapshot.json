@@ -21,11 +21,13 @@
     "Femeref Scouts",
     "Fire Elemental",
     "Fresh Volunteers",
+    "Frost Ogre",
     "Fugitive Wizard",
     "Garruk's Gorehorn",
     "Giant Cockroach",
     "Giant Octopus",
     "Glory Seeker",
+    "Gnarled Mass",
     "Goblin Hero",
     "Gorilla Warrior",
     "Gray Ogre",
@@ -214,6 +216,15 @@
     "Wall of Wood"
   ],
   [
+    "Bonesplitter",
+    "Leonin Scimitar",
+    "Short Sword",
+    "Shuko",
+    "Slagwurm Armor",
+    "Vulshok Battlegear",
+    "Vulshok Morningstar"
+  ],
+  [
     "Cat Warriors",
     "Heartwood Treefolk",
     "Jukai Messenger",
@@ -263,14 +274,6 @@
     "Pale Bears",
     "Rootwater Commando",
     "Segovian Leviathan"
-  ],
-  [
-    "Bonesplitter",
-    "Leonin Scimitar",
-    "Short Sword",
-    "Slagwurm Armor",
-    "Vulshok Battlegear",
-    "Vulshok Morningstar"
   ],
   [
     "Burn Bright",
@@ -721,6 +724,10 @@
     "Glimmering Angel"
   ],
   [
+    "Akki Blizzard-Herder",
+    "Hurloon Shaman"
+  ],
+  [
     "Aladdin's Ring",
     "Rod of Ruin"
   ],
@@ -885,6 +892,10 @@
     "Stalking Tiger"
   ],
   [
+    "Child of Thorns",
+    "Shield Mate"
+  ],
+  [
     "Cinder Marsh",
     "Lantern-Lit Graveyard"
   ],
@@ -1037,6 +1048,10 @@
     "Slay"
   ],
   [
+    "Fallow Earth",
+    "Uproot"
+  ],
+  [
     "Feral Instinct",
     "Fevered Strength"
   ],
@@ -1089,6 +1104,10 @@
     "Myr Enforcer"
   ],
   [
+    "Fugue",
+    "Three Tragedies"
+  ],
+  [
     "Fylamarid",
     "Metathran Transport"
   ],
@@ -1115,6 +1134,10 @@
   [
     "Goblin Clearcutter",
     "Orcish Lumberjack"
+  ],
+  [
+    "Goblin Cohort",
+    "Mogg Conscripts"
   ],
   [
     "Goblin Glider",
@@ -1201,8 +1224,16 @@
     "Snow-Covered Island"
   ],
   [
+    "Jackal Pup",
+    "Shinka Gatekeeper"
+  ],
+  [
     "Jacques le Vert",
     "Kaysa"
+  ],
+  [
+    "Jetting Glasskite",
+    "Shimmering Glasskite"
   ],
   [
     "Johtull Wurm",
@@ -1215,6 +1246,14 @@
   [
     "Juz\u00e1m Djinn",
     "Nettletooth Djinn"
+  ],
+  [
+    "Kami of False Hope",
+    "Spore Frog"
+  ],
+  [
+    "Kami of the Hunt",
+    "Scaled Hulk"
   ],
   [
     "Kashi-Tribe Warriors",

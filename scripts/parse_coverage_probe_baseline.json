@@ -304,6 +304,14 @@
   ]
  },
  {
+  "card": "Aura Barbs",
+  "clause": "each enchantment deals 2 damage to its controller, then each aura attached to a creature deals 2 damage to the creature it's attached to",
+  "ignored": [
+   "each",
+   "each"
+  ]
+ },
+ {
   "card": "Aura Graft",
   "clause": "gain control of target aura that's attached to a permanent. attach it to another permanent it can enchant",
   "ignored": [
@@ -615,6 +623,13 @@
   ]
  },
  {
+  "card": "Budoka Pupil",
+  "clause": "if there are two or more ki counters on this creature, you may flip it",
+  "ignored": [
+   "creature,"
+  ]
+ },
+ {
   "card": "Call of the Wild",
   "clause": "reveal the top card of your library. if it's a creature card, put it onto the battlefield. otherwise, put it into your graveyard",
   "ignored": [
@@ -633,6 +648,13 @@
   "clause": "reveal the top card of your library. if it's a land card, this creature gets +1/+0 and gains flying until end of turn",
   "ignored": [
    "card,"
+  ]
+ },
+ {
+  "card": "Callow Jushi",
+  "clause": "if there are two or more ki counters on this creature, you may flip it",
+  "ignored": [
+   "creature,"
   ]
  },
  {
@@ -876,6 +898,13 @@
   "clause": "return all enchantment cards from your graveyard to your hand",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Cunning Bandit",
+  "clause": "if there are two or more ki counters on this creature, you may flip it",
+  "ignored": [
+   "creature,"
   ]
  },
  {
@@ -1468,6 +1497,13 @@
   ]
  },
  {
+  "card": "Faithful Squire",
+  "clause": "if there are two or more ki counters on this creature, you may flip it",
+  "ignored": [
+   "creature,"
+  ]
+ },
+ {
   "card": "Falling Timber",
   "clause": "prevent all combat damage target creature would deal this turn. if this spell was kicked, prevent all combat damage another target creature would deal this turn",
   "ignored": [
@@ -1541,6 +1577,13 @@
  {
   "card": "Fight or Flight",
   "clause": "separate all creatures that player controls into two piles. only creatures in the pile of their choice can attack this turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Final Judgment",
+  "clause": "exile all creatures",
   "ignored": [
    "all"
   ]
@@ -1949,6 +1992,13 @@
   ]
  },
  {
+  "card": "Heartless Hidetsugu",
+  "clause": "heartless hidetsugu deals damage to each player equal to half that player's life total, rounded down",
+  "ignored": [
+   "down"
+  ]
+ },
+ {
   "card": "Heat Stroke",
   "clause": "destroy each creature that blocked or was blocked this turn",
   "ignored": [
@@ -2058,6 +2108,13 @@
   "clause": "all creatures get -2/-2 until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Hired Muscle",
+  "clause": "if there are two or more ki counters on this creature, you may flip it",
+  "ignored": [
+   "creature,"
   ]
  },
  {
@@ -2267,6 +2324,13 @@
  {
   "card": "Invigorating Falls",
   "clause": "you gain life equal to the number of creature cards in all graveyards",
+  "ignored": [
+   "cards"
+  ]
+ },
+ {
+  "card": "Ire of Kaminari",
+  "clause": "ire of kaminari deals damage to any target equal to the number of arcane cards in your graveyard",
   "ignored": [
    "cards"
   ]
@@ -2735,6 +2799,13 @@
   ]
  },
  {
+  "card": "Mannichi, the Fevered Dream",
+  "clause": "switch each creature's power and toughness until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "March of Souls",
   "clause": "destroy all creatures. they can't be regenerated. for each creature destroyed this way, its controller creates a 1/1 white spirit creature token with flying",
   "ignored": [
@@ -2771,6 +2842,13 @@
  },
  {
   "card": "Matsu-Tribe Decoy",
+  "clause": "tap that creature and it doesn't untap during its controller's next untap step",
+  "ignored": [
+   "controller's"
+  ]
+ },
+ {
+  "card": "Matsu-Tribe Sniper",
   "clause": "tap that creature and it doesn't untap during its controller's next untap step",
   "ignored": [
    "controller's"
@@ -3296,6 +3374,14 @@
   ]
  },
  {
+  "card": "Patron of the Orochi",
+  "clause": "untap all forests and all green creatures",
+  "ignored": [
+   "all",
+   "all"
+  ]
+ },
+ {
   "card": "Peat Bog",
   "clause": "add {b}{b}. if there are no depletion counters on this land, sacrifice it",
   "ignored": [
@@ -3627,6 +3713,13 @@
   ]
  },
  {
+  "card": "Reduce to Dreams",
+  "clause": "return all artifacts and enchantments to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Reins of Power",
   "clause": "untap all creatures you control and all creatures target opponent controls. you and that opponent each gain control of all creatures the other controls until end of turn. those creatures gain haste until end of turn",
   "ignored": [
@@ -3789,6 +3882,13 @@
   ]
  },
  {
+  "card": "Roar of Jukai",
+  "clause": "if you control a forest, each blocked creature gets +2/+2 until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Roar of Reclamation",
   "clause": "each player returns all artifact cards from their graveyard to the battlefield",
   "ignored": [
@@ -3821,6 +3921,13 @@
   "clause": "put a wage counter on this creature. you may pay {2} for each wage counter on it. if you don't, remove all wage counters from this creature and an opponent gains control of it",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Ronin Cliffrider",
+  "clause": "you may have it deal 1 damage to each creature defending player controls",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -4127,6 +4234,13 @@
   ]
  },
  {
+  "card": "Shirei, Shizo's Caretaker",
+  "clause": "you may return that card to the battlefield at the beginning of the next end step if shirei is still on the battlefield",
+  "ignored": [
+   "still"
+  ]
+ },
+ {
   "card": "Shivan Raptor",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{r}",
   "ignored": [
@@ -4223,6 +4337,13 @@
   "clause": "if this creature wasn't kicked, sacrifice it",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Skullsnatcher",
+  "clause": "exile up to two target cards from that player's graveyard",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -4478,6 +4599,13 @@
   "clause": "destroy all plains. for each land destroyed this way, stench of evil deals 1 damage to that land's controller unless they pay {2}",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Stream of Consciousness",
+  "clause": "target player shuffles up to four target cards from their graveyard into their library",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -4774,6 +4902,13 @@
   ]
  },
  {
+  "card": "Toshiro Umezawa",
+  "clause": "you may cast target instant card from your graveyard. if that spell would be put into a graveyard, exile it instead",
+  "ignored": [
+   "card"
+  ]
+ },
+ {
   "card": "Total War",
   "clause": "destroy all untapped non-wall creatures that player controls that didn't attack, except for creatures the player hasn't controlled continuously since the beginning of the turn",
   "ignored": [
@@ -4918,6 +5053,13 @@
  {
   "card": "Twilight's Call",
   "clause": "each player returns all creature cards from their graveyard to the battlefield",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Twist Allegiance",
+  "clause": "you and target opponent each gain control of all creatures the other controls until end of turn. untap those creatures. those creatures gain haste until end of turn",
   "ignored": [
    "all"
   ]
@@ -5324,6 +5466,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Yukora, the Prisoner",
+  "clause": "sacrifice all non-ogre creatures you control",
+  "ignored": [
+   "all"
   ]
  },
  {
