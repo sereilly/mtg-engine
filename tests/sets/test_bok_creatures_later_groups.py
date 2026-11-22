@@ -976,6 +976,44 @@ def test_w1g8_jaraku_counters_a_spell_unless_its_controller_pays_two(set_pool):
         assert ("Grizzly Bears" in [c.name for c in game.players[1].graveyard]) is countered
 
 
+def test_w1g8_jaraku_asks_the_spells_controller_whether_to_pay(set_pool):
+    """Both seats interactive. Jaraku's activation is offered the spell its
+    picker lists and accepted at it (the activation gate and the picker on one
+    list, ``derive_activation_spec``); the spell's controller, who can pay
+    {2} off two Forests, is asked (``mana_payment``) — declining loses the
+    spell, paying keeps it — and the ki counter is spent either way."""
+    from engine.named_counters import counters_on
+
+    lea = set_pool("LEA")
+    bok = set_pool("BOK")
+    for pay in (False, True):
+        game, jaraku = _w1g8_flipped(bok, "Callow Jushi")
+        game.enforce_mana_costs = True
+        game.interactive_seats = {0, 1}
+        for _ in range(2):
+            game._put_permanent_onto_battlefield(
+                1, _w1g8_Permanent(card=lea["Forest"]), None,
+            )
+        game._sync_control()
+        game.players[1].hand.append(lea["Grizzly Bears"])
+        game.players[1].mana_pool["G"] = 2
+        game.active_player_index = 1
+        assert game.queue_from_hand(1, "Grizzly Bears").supported
+        before = counters_on(jaraku, "ki")
+        assert game.activate_permanent_ability(
+            0, "Jaraku the Interloper", target_stack_index=0,
+        ).supported
+        assert counters_on(jaraku, "ki") == before - 1
+        owed = _w1g8_settle(game, defaults=False)
+        assert owed is not None and owed.kind == "mana_payment"
+        assert owed.player_index == 1 and owed.data["amount"] == 2
+        assert game.confirm_mana_payment(1, pay)
+        _w1g8_settle(game)
+        bears_out = any(p.card.name == "Grizzly Bears" for p in game.controlled_by(1))
+        assert bears_out is pay
+        assert ("Grizzly Bears" in [c.name for c in game.players[1].graveyard]) is not pay
+
+
 def test_w1g8_the_ki_baku_spend_x_counters_on_x(set_pool):
     """Petalmane, Skullmane and Waxmane Baku with three ki counters each, X=2:
     {G}{G} added; a 3/3 at 1/1; two creatures tapped — one counter left on
