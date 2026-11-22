@@ -284,9 +284,15 @@ function opponentStopSteps() {
 // toggled to auto-pass). Sent so the server opens a priority window at steps it
 // would otherwise resolve itself (upkeep, draw) instead of skipping into the main phase.
 function selfStopSteps() {
-  return PHASE_RAIL
+  const steps = PHASE_RAIL
     .map((p) => p.key)
     .filter((key) => !NO_PRIORITY_STEPS.has(key) && !disabledPhases.has(key));
+  // …and the declare blockers step while a ninjutsu waits in hand
+  // (`ninjutsuStopSteps`, CR 702.49a / 509.2).
+  for (const step of ninjutsuStopSteps()) {
+    if (!steps.includes(step)) steps.push(step);
+  }
+  return steps;
 }
 /** @type {BattlefieldCanvas|null} */
 let battlefieldCanvas = null;
@@ -1747,6 +1753,9 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
   const isMyTurn = state.current_turn === seat;
   const shouldAutoPass = isMyTurn ? disabledPhases.has(activeKey) : opponentDisabledPhases.has(activeKey);
   if (!shouldAutoPass) return;
+  // The declare blockers window a ninjutsu asked the server to hold
+  // (`ninjutsuWindowHeld`): passing it here would undo the stop.
+  if (ninjutsuWindowHeld(state)) return;
 
   const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
   if (stackSize > 0) return;
@@ -2089,8 +2098,19 @@ function expandCyclingLine(line) {
 // "**Exile this card from your hand**: Add {G}." (Elvish Spirit Guide) is the
 // rule's other spelling — a cost only a card in a hand can pay — and it was
 // listed on the battlefield as a dead entry the server refused.
+//
+// Ninjutsu is the third (CR 702.49a: "[Cost], **Reveal this card from your
+// hand**, Return an unblocked attacking creature you control…"). Its printed
+// line, "Ninjutsu {1}{U} ({1}{U}, Return an unblocked attacker you control to
+// hand: …)", splits at the reminder's colon into a cost half that starts with
+// the keyword, so the keyword is read as well as the reveal: listed here, it
+// took index 0 and every later ability's index named the one before it
+// (Higure's "{2}: Target Ninja creature can't be blocked" was sent as the
+// ninjutsu). Its button is the hand's (`renderHandAbilities`).
 function abilityFunctionsOnBattlefield(costHalf) {
-  return !/\b(discard this card|exile this card from your hand)\b/i.test(costHalf || "");
+  const cost = costHalf || "";
+  if (/^\s*(?:commander\s+)?ninjutsu\b/i.test(cost)) return false;
+  return !/\b(discard this card|exile this card from your hand|reveal this card from your hand)\b/i.test(cost);
 }
 
 function hasActivatedAbility(card) {
@@ -8669,6 +8689,14 @@ function copyCastExiledCard(info, state = currentState) {
   // hand is hidden in this viewer's state — so the offer carries the card
   // itself (`card`). Its exile fields are null.
   if (copyCastFromHand(info)) return info.card;
+  // "You may cast target instant card from your graveyard" (Toshiro Umezawa,
+  // Chandra, Flame's Catalyst's −2): the card itself, in the graveyard the
+  // offer names (`graveyard_seat` / `graveyard_index`); its exile fields are
+  // null. Read inline: the tests lift this function without its neighbours.
+  if (Number.isInteger(info?.graveyard_seat) && Number.isInteger(info?.graveyard_index)) {
+    const held = (state?.players?.[info.graveyard_seat]?.graveyard || [])[info.graveyard_index];
+    return held && typeof held === "object" ? held : null;
+  }
   const exile = state?.players?.[info?.exile_seat]?.exile || [];
   const card = Number.isInteger(info?.exile_index) ? exile[info.exile_index] : null;
   return card && typeof card === "object" ? card : null;
@@ -8696,6 +8724,9 @@ function copyCastWay(info) {
 // and division, asked exactly as a hand cast asks them — every body of which
 // goes out as `copy_cast_confirm` (`carryCopyCastAnswer`).
 async function beginCopyCast(info) {
+  // The graveyard offer pays its mana cost and casts the card where it lies
+  // (`beginGraveyardCopyCast`); every other offer is free, out of exile.
+  if (Number.isInteger(info?.graveyard_seat)) return beginGraveyardCopyCast(info);
   let card = copyCastExiledCard(info);
   if (!card) {
     updateActionHint(
@@ -8730,6 +8761,123 @@ async function beginCopyCast(info) {
   beginZoneCast(card, "exile", null, copyCastWay(info), { copyCastSlot: slot });
 }
 
+// ---------------------------------------------------------------------------
+// The graveyard cast offer (CR 608.2g): "You may cast target instant card from
+// your graveyard. If that spell would be put into a graveyard, exile it
+// instead." (Toshiro Umezawa; Chandra, Flame's Catalyst's −2 for a red instant
+// or sorcery.) A `copy_cast` offer whose card is the targeted card itself, in
+// a graveyard (`graveyard_seat` / `graveyard_index`, web/prompt_board.py),
+// cast during the resolution with its mana cost **paid** (`free: false`), and
+// exiled instead of going to a graveyard (`exile_instead`). The panel used to
+// look for it in exile and answer "no longer in exile".
+// ---------------------------------------------------------------------------
+
+// The way the card is cast: for its mana cost, as printed (a cost modifier in
+// force is the server's to charge — a refusal for mana opens the payment
+// dialog on what it asks). Not free, not an alternative cost: CR 601.2f with
+// nothing waived, and an X in that cost is announced as a hand cast's is.
+function graveyardCopyCastWay(info, card) {
+  return {
+    keyword: "", alternative_cost: false, free: false, land: false,
+    price: card?.mana_cost || "{0}", cost: "pay its mana cost",
+    source: info?.source_name || "an ability",
+  };
+}
+
+// "Cast it": the ordinary cast chain on the graveyard card — its targets, X,
+// modes, asked as a hand cast asks them, the spec judged as cast from that
+// graveyard by this seat (`card_target_spec`, `from_zone=graveyard`) — every
+// body of which goes out as `copy_cast_confirm` (`carryCopyCastAnswer`). The
+// pool pays; short, the hand-tapped payment dialog the madness cast uses
+// (`applyMadnessPaymentPrompt`) keeps the announcement until the lands are
+// tapped, since an auto-tap is a priority-window payment and this is a
+// resolution.
+async function beginGraveyardCopyCast(info) {
+  let card = copyCastExiledCard(info);
+  if (!card) {
+    updateActionHint(`${info.card_name || "The card"} is no longer in that graveyard, so it can't be cast.`, true);
+    return;
+  }
+  if (sessionId && seat !== null) {
+    try {
+      const params = new URLSearchParams({
+        card_name: info.card_name || normalizeCardName(card), seat: String(seat), from_zone: "graveyard",
+      });
+      const resp = await fetch(`/api/sessions/${sessionId}/card_target_spec?${params}`);
+      if (resp.ok) {
+        const payload = await resp.json();
+        if (payload?.target_spec) {
+          card = { ...card, target_spec: payload.target_spec, modes: payload.modes || card.modes,
+            modes_at_least: payload.modes_at_least ?? card.modes_at_least };
+        }
+      }
+    } catch { /* the payload's own spec; the engine still refuses a cast that names nothing it needs */ }
+  }
+  beginZoneCast(card, "graveyard", null, graveyardCopyCastWay(info, card), { copyCastSlot: info.graveyard_index });
+}
+
+// The offer's panel for a graveyard card: where it is, what it costs, that it
+// is exiled afterwards, and that lands are tapped by hand (the prompt takes a
+// land's tap while it is open). Fills the panel `applyCopyCastPrompt` opened.
+function applyGraveyardCastOfferPrompt(info, { title, body, steps }) {
+  const card = copyCastExiledCard(info);
+  const cardName = info.card_name || normalizeCardName(card) || "the card";
+  const source = info.source_name || "an ability";
+  const price = card?.mana_cost || "";
+  const me = getCurrentPlayerState();
+  const pool = me?.mana_pool || {};
+  const poolText = MANA_ORDER.some((symbol) => Number(pool[symbol] || 0) > 0)
+    ? formatManaSymbolsHtml(pool)
+    : "none";
+  const owner = info.graveyard_seat !== seat
+    ? `${currentState?.players?.[info.graveyard_seat]?.name || "Another player"}'s graveyard`
+    : "your graveyard";
+  const slot = Number.isInteger(info.graveyard_index) ? info.graveyard_index + 1 : null;
+  title.textContent = `Cast ${cardName} from ${owner === "your graveyard" ? "your" : "a"} graveyard`;
+  setSymbolsHtml(
+    body,
+    // renderSymbolsInline escapes the words itself.
+    `${source} lets you cast ${cardName} from ${owner} now, while its ` +
+      `ability resolves, paying its mana cost${price ? ` ${price}` : ""}. Auto-Tap cannot pay mid-resolution: ` +
+      `tap lands by clicking them, before or after you choose its targets.`,
+  );
+  steps.innerHTML = [
+    `<div id="copyCastCardSlot" class="prompt-card-row"></div>`,
+    `<div>In ${escapeHtml(owner)}${slot ? ` (card ${slot})` : ""}: ${escapeHtml(cardName)}</div>`,
+    `<div>Mana cost: ${renderSymbolsInline(price || "{0}")}</div>`,
+    `<div>Your mana pool: ${poolText}</div>`,
+    info.exile_instead
+      ? `<div>If it would be put into a graveyard, it is exiled instead.</div>`
+      : "",
+    `<div class="prompt-choice-row">` +
+      `<button type="button" class="prompt-choice-btn" id="copyCastBtn">Cast ${escapeHtml(cardName)}${price ? ` for ${renderSymbolsInline(price)}` : ""}</button>` +
+      `<button type="button" class="prompt-choice-btn" id="copyCastDeclineBtn">Don't cast it</button>` +
+    `</div>`,
+  ].join("");
+  const imageUri = normalizeImageUri(card);
+  if (card && imageUri) {
+    const img = document.createElement("img");
+    img.src = imageUri;
+    img.alt = cardName;
+    img.title = card.oracle_text || cardName;
+    img.style.cssText = "width: 140px; border-radius: 7px; display: block; margin: 4px 0;";
+    img.addEventListener("mouseenter", () => showCardPreview(card));
+    img.addEventListener("mouseleave", () => scheduleHidePreview());
+    document.getElementById("copyCastCardSlot")?.appendChild(img);
+  }
+  document.getElementById("copyCastBtn")?.addEventListener("click", () => {
+    beginCopyCast(info).catch((e) => updateActionHint(e.message, true));
+  });
+  document.getElementById("copyCastDeclineBtn")?.addEventListener("click", async () => {
+    try {
+      await sendAction({ seat, action: "copy_cast_confirm", accept: false });
+      updateActionHint(`You did not cast ${cardName}.`);
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  });
+}
+
 function applyCopyCastPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -8746,6 +8894,13 @@ function applyCopyCastPrompt(info) {
   cancelBtn.classList.add("hidden");
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
+
+  // Toshiro Umezawa's graveyard offer: its own words (a paid cast, a
+  // graveyard, an exile after) — `applyGraveyardCastOfferPrompt`.
+  if (Number.isInteger(info?.graveyard_seat)) {
+    applyGraveyardCastOfferPrompt(info, { title, body, steps });
+    return;
+  }
 
   const card = copyCastExiledCard(info);
   const cardName = info.card_name || normalizeCardName(card) || "the exiled card";
@@ -8827,7 +8982,13 @@ function applyMadnessPaymentPrompt(pending, autoTapBtn) {
   // A copy cast (CR 707.12) owes no mana cost; what is refused for mana is
   // an additional cost's, and the same hand-tapping answers it.
   const copying = pendingCopyCast !== null;
-  title.textContent = copying
+  // …except the graveyard offer (Toshiro Umezawa, CR 608.2g): the card itself,
+  // cast from a graveyard for its **mana cost** (`beginGraveyardCopyCast`).
+  const fromGraveyard = copying && pendingCastFromZone === "graveyard";
+  const costWords = fromGraveyard ? "mana cost" : copying ? "additional cost" : "madness cost";
+  title.textContent = fromGraveyard
+    ? `Pay the mana cost — ${pending.cardName}`
+    : copying
     ? `Pay the additional cost — a copy of ${pending.cardName}`
     : `Pay the madness cost — ${pending.cardName}`;
   setSymbolsHtml(
@@ -8837,7 +8998,7 @@ function applyMadnessPaymentPrompt(pending, autoTapBtn) {
   );
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(pending.cardName)}</div>`,
-    `<div>Madness cost: ${renderSymbolsInline(price || "{0}")}</div>`,
+    `<div>${costWords.charAt(0).toUpperCase()}${costWords.slice(1)}: ${renderSymbolsInline(price || "{0}")}</div>`,
     `<div>Current mana: ${MANA_ORDER.some((symbol) => Number(pool[symbol] || 0) > 0) ? formatManaSymbolsHtml(pool) : "none"}</div>`,
   ].join("");
   if (autoTapBtn) {
@@ -8847,7 +9008,7 @@ function applyMadnessPaymentPrompt(pending, autoTapBtn) {
   }
   if (!pending.madnessHinted) {
     pending.madnessHinted = true;
-    updateActionHint(`Tap lands for ${pending.cardName}'s madness cost, then press Cast.`);
+    updateActionHint(`Tap lands for ${pending.cardName}'s ${costWords}, then press Cast.`);
   }
 }
 
@@ -19010,6 +19171,13 @@ function confirmPermanentCost() {
   }
   pendingPermanentCost = null;
   renderActivationPrompt();
+  if (pending.handAbility) {
+    // A hand ability's cost (ninjutsu's returned attacker, CR 702.49a): the
+    // ids ride the button's own body, sent by the button's own sender.
+    pending.handAbility.actionBody.cost_permanent_ids = picked;
+    pending.handAbility.send();
+    return;
+  }
   if (pending.graveyardAbility) {
     // An ability that also names a target asks for it next, the cost riding
     // along: both are announced together (CR 602.2b), in one body. A set
@@ -25111,6 +25279,26 @@ const RESTRICTED_MANA_LABELS = {
   not_cast: ["not for spells", "This mana can't be spent to cast spells."],
 };
 
+// Mana kept until end of turn — CR 500.5's exception, Betrayers of Kamigawa's
+// Snake Shamans ("Add {G}. Until end of turn, you don't lose this mana as steps
+// and phases end."). The engine files it in a bucket of its own beside the
+// restricted ones (`engine/restricted_mana.py`'s kept row, `KEPT_KEYS`), and it
+// **pays for anything** — what differs is only when it empties (cleanup,
+// CR 514.2). So it is shown as pool mana with a "kept" badge and counted in
+// the total, never labelled "restricted", which told a player holding three
+// {G} from Sakiko that they could not spend them.
+const KEPT_MANA_KEYS = new Set(["kept_until_end_of_turn"]);
+const KEPT_MANA_LABEL = ["kept", "Until end of turn, you don't lose this mana as steps and phases end."];
+
+function keptManaCount(buckets) {
+  let count = 0;
+  for (const [key, bucket] of Object.entries(buckets || {})) {
+    if (!KEPT_MANA_KEYS.has(key)) continue;
+    for (const symbol of MANA_ORDER) count += Number((bucket || {})[symbol] || 0);
+  }
+  return count;
+}
+
 function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = null, restrictedWords = null) {
   const container = q(containerId);
   container.innerHTML = "";
@@ -25149,14 +25337,6 @@ function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = 
     }
     container.appendChild(chip);
   }
-  const totalChip = document.createElement("div");
-  totalChip.className = "mana-total" + (total > 0 ? " mana-total-active" : "");
-  totalChip.title = `${total} total mana available`;
-  totalChip.innerHTML =
-    `<span class="mana-total-num">${total}</span>` +
-    `<span class="mana-total-label">total</span>`;
-  container.appendChild(totalChip);
-
   // Restricted mana lives in its own bucket per restriction and can't pay for
   // anything but the spells that restriction admits, so each gets its own chips
   // rather than being added into the counts above (which would overstate what's
@@ -25165,19 +25345,35 @@ function renderMana(containerId, manaPool, targetSeat = null, restrictedPools = 
     restrictedPools && !Array.isArray(restrictedPools) && MANA_ORDER.some((s) => s in restrictedPools)
       ? { creature: restrictedPools }
       : restrictedPools || {};
+  // …except mana that is only *kept* (`KEPT_MANA_KEYS`): it pays for anything,
+  // so it is part of what the total says is available.
+  const kept = keptManaCount(buckets);
+
+  const totalChip = document.createElement("div");
+  totalChip.className = "mana-total" + (total + kept > 0 ? " mana-total-active" : "");
+  totalChip.title = kept > 0
+    ? `${total + kept} total mana available (${kept} kept until end of turn)`
+    : `${total} total mana available`;
+  totalChip.innerHTML =
+    `<span class="mana-total-num">${total + kept}</span>` +
+    `<span class="mana-total-label">total</span>`;
+  container.appendChild(totalChip);
+
   for (const [key, restricted] of Object.entries(buckets)) {
+    const keptKey = KEPT_MANA_KEYS.has(key);
     // The words are the server's (`restricted_mana_words`, the card's own
     // sentence) wherever it sent them; the table above is the badge.
-    const [badge, fallbackTitle] = RESTRICTED_MANA_LABELS[key] || [
+    const [badge, fallbackTitle] = keptKey ? KEPT_MANA_LABEL : RESTRICTED_MANA_LABELS[key] || [
       "restricted",
       "This mana can only be spent on certain spells.",
     ];
-    const title = (restrictedWords || {})[key] || fallbackTitle;
+    const words = (restrictedWords || {})[key] || fallbackTitle;
+    const title = keptKey ? `Pays for anything. ${words}` : words;
     for (const symbol of MANA_ORDER) {
       const count = Number((restricted || {})[symbol] || 0);
       if (count <= 0) continue;
       const chip = document.createElement("div");
-      chip.className = `mana-symbol mana-${symbol} mana-symbol-filled mana-symbol-restricted`;
+      chip.className = `mana-symbol mana-${symbol} mana-symbol-filled ${keptKey ? "mana-symbol-kept" : "mana-symbol-restricted"}`;
       chip.title = title;
       const src = symbolSrc(`{${symbol}}`);
       const glyph = src
@@ -30323,6 +30519,15 @@ function renderHandAbilities(state, hasPriority) {
     button.textContent = `${entry.cost_text || "Activate"}: ${entry.name}`;
     button.title = entry.text || "An ability activated from your hand (CR 113.6).";
     button.disabled = entry.payable === false;
+    // CR 601.2h: a cost beside the mana that cannot be paid now, in the
+    // server's words (`unpayable`, `hand_cost_refusal`) — ninjutsu's "Return
+    // an unblocked attacker you control" has nothing to name before blockers
+    // are declared (CR 509.1h). Said on hover, before the line: a dead button
+    // that only *looked* unaffordable sent the player looking for mana.
+    if (typeof entry.unpayable === "string" && entry.unpayable) {
+      button.title = `Not now: ${entry.unpayable}.${entry.text ? ` ${entry.text}` : ""}`;
+      button.dataset.unpayable = entry.unpayable;
+    }
     // CR 602.5: forbidden outright (a City of Solitude on another player's
     // turn, a Hand to Hand during combat). The server sends its sentence as
     // `prohibited`; the button is dead and says why, on its face and on hover
@@ -30352,7 +30557,10 @@ function renderHandAbilities(state, hasPriority) {
       // refused whenever the mana is still on the board — and that refusal
       // used to be the end of it (the button did nothing until the lands were
       // tapped by hand). It opens the auto-tap dialog a cast opens.
-      sendAction(actionBody).catch((e) => {
+      // Sent as written, so the request readers (tests/ui/js_requests.py)
+      // follow it to the literal above; a cost picker adds its answer to
+      // that same object before it calls `send`.
+      const send = () => sendAction(actionBody).catch((e) => {
         if (isManaRefusal(e.message)) {
           pendingAutoTap = {
             card: { name: entry.name, mana_cost: "" },
@@ -30365,9 +30573,138 @@ function renderHandAbilities(state, hasPriority) {
         }
         updateActionHint(e.message, true);
       });
+      // A cost that chooses (CR 601.2b) — ninjutsu's "Return an unblocked
+      // attacker you control to hand" — is asked first, on the set picker
+      // every return cost uses, and its answer rides `cost_permanent_ids`
+      // into the same body (`startHandAbilityCostPrompt`). Without it the
+      // engine chose the attacker itself.
+      if (entry.cost_spec && startHandAbilityCostPrompt(entry, actionBody, send)) return;
+      send();
     });
     host.appendChild(button);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Ninjutsu (CR 702.49) from the browser
+//
+// "Ninjutsu {1}{U} ({1}{U}, Return an unblocked attacker you control to hand:
+// Put this card onto the battlefield from your hand tapped and attacking.)" is
+// a hand ability (CR 113.6j) whose cost *chooses* (CR 601.2b) and whose only
+// window is combat once blocks are declared — nothing is unblocked before
+// (CR 509.1h). The server says both: the entry's `cost_spec` is the return
+// picker (`return_cost`, narrowed by `filter.unblocked_only`), its
+// `valid_targets` the attackers the charger would take, and `unpayable` why
+// not yet. Two things were missing in the browser: a way to name the attacker,
+// and a moment to name it in — CR 509.2 gives the active player priority once
+// blocks are declared, but the server hands a person that priority only at a
+// step they flagged on the phase rail (`web/seats._self_should_hold`), and the
+// declare blockers step is unflagged by default, so combat went straight to
+// damage and the Ninja could only ever be offered afterwards.
+// ---------------------------------------------------------------------------
+
+// Whether a `hand_abilities` entry's cost returns an unblocked attacking
+// creature (ninjutsu's). Read off the server's picker, never the card's words.
+function handAbilityReturnsUnblockedAttacker(entry) {
+  const spec = entry?.cost_spec;
+  return !!spec && !!spec.return_cost && !!spec.filter?.unblocked_only;
+}
+
+// The Settings toggle "Stop for ninjutsu" (on unless the player turns it off),
+// remembered in this browser. Off, the stop below is never asked for and the
+// held window is auto-passed like any other unflagged step.
+const NINJUTSU_STOP_STORAGE_KEY = "mtg.ninjutsuStop";
+let ninjutsuStopOn = true;
+try {
+  ninjutsuStopOn = window.localStorage?.getItem(NINJUTSU_STOP_STORAGE_KEY) !== "off";
+} catch {
+  /* no storage: the default holds */
+}
+
+function setNinjutsuStop(on) {
+  ninjutsuStopOn = !!on;
+  try {
+    window.localStorage?.setItem(NINJUTSU_STOP_STORAGE_KEY, ninjutsuStopOn ? "on" : "off");
+  } catch {
+    /* no storage: this page remembers it */
+  }
+  autoPassDisabledPhaseRequestedStateKey = "";
+  if (currentState) maybeAutoPassDisabledPhase(currentState);
+}
+
+q("ninjutsuStopToggle")?.addEventListener("change", (event) => setNinjutsuStop(event.target.checked));
+if (q("ninjutsuStopToggle")) q("ninjutsuStopToggle").checked = ninjutsuStopOn;
+
+// The step the viewer's own turn asks the server to stop at while a ninjutsu
+// waits in hand: "declare_blockers", added to `selfStopSteps()` — the server's
+// existing hold (`game_flow`'s declare-blockers branch: the AI declares, then
+// the active person keeps CR 509.2's priority) — and nothing on another
+// player's turn, where no attacker is the viewer's to return. An AI seat is
+// never stopped by it: `_self_should_hold` asks for a human active seat.
+function ninjutsuStopSteps(state = currentState) {
+  if (!ninjutsuStopOn || !state || seat === null || state.current_turn !== seat) return [];
+  const entries = Array.isArray(state.hand_abilities) ? state.hand_abilities : [];
+  const waiting = entries.some(
+    (entry) => handAbilityReturnsUnblockedAttacker(entry) && !handAbilityProhibition(entry),
+  );
+  return waiting ? ["declare_blockers"] : [];
+}
+
+// Whether the state is the window that stop opened, with a ninjutsu that can
+// use it: the viewer's own declare blockers step, blocks declared, priority
+// held, the entry payable now. While it is, the unflagged-step auto-pass stands
+// down (`maybeAutoPassDisabledPhase`) and the button is lit; Next Phase or End
+// Turn passes it. A ninjutsu with nothing to return (every attacker blocked)
+// or no mana to pay is not a reason to stop, so that window is passed as
+// before — one round trip, unseen.
+function ninjutsuWindowHeld(state) {
+  if (!ninjutsuStopOn || !state || seat === null) return false;
+  if (state.current_turn !== seat || state.priority_player !== seat) return false;
+  if (!isCombatStep(state, "declare_blockers") || !getCombatState(state)?.blockers_locked) return false;
+  return (state.hand_abilities || []).some(
+    (entry) => handAbilityReturnsUnblockedAttacker(entry)
+      && entry.payable !== false && !handAbilityProhibition(entry),
+  );
+}
+
+// The hand ability's choosing cost (CR 601.2b): the permanent-set picker every
+// return cost opens (Quirion Ranger's, Arctic Merfolk's kicker), over the
+// server's candidates (`cost_spec.valid_targets`). `send` is the button's own
+// sender of `actionBody` (its mana refusal opens the auto-tap dialog); the
+// confirm writes `cost_permanent_ids` onto that body and calls it
+// (`confirmPermanentCost`). True when the
+// picker opened or said why it could not; false for a spec that is no cost.
+function startHandAbilityCostPrompt(entry, actionBody, send) {
+  const costSpec = entry?.cost_spec;
+  if (!costSpec || !specIsACost(costSpec)) return false;
+  const step = permanentCostStep(costSpec);
+  const words = permanentCostVerbLabel(step).toLowerCase();
+  if (!step.announcesX && step.options.length < step.count) {
+    // CR 601.2h: nothing to pay it with — before blocks, or every attacker
+    // blocked. The server's sentence where it sent one.
+    SFX.onError();
+    updateActionHint(
+      entry.unpayable ? `${entry.name}: ${entry.unpayable}.` : `${entry.name} has nothing to ${words} for its cost.`,
+      true,
+    );
+    return true;
+  }
+  pendingPermanentCost = {
+    card: { name: entry.name, mana_cost: "" },
+    cardName: entry.name,
+    ...step,
+    // "Return an unblocked attacker you control" says what it takes; the
+    // spec's kind alone ("creature") reads as any creature.
+    ...(handAbilityReturnsUnblockedAttacker(entry) ? { noun: "unblocked attacker" } : {}),
+    picked: [],
+    purpose: "activate",
+    handAbility: { actionBody, send },
+    remaining: [],
+    chosen: [],
+  };
+  renderActivationPrompt();
+  updateActionHint(`Choose what ${entry.name} will ${words} to pay its cost (${entry.cost_text || "ability"}).`);
+  return true;
 }
 
 // CR 113.6b — an activated ability of a card in the viewer's **graveyard**

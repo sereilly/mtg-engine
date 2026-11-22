@@ -2688,6 +2688,21 @@ h2.targeting-valid {
   pointer-events: none;
 }
 
+/* Mana kept until end of turn (app.js `KEPT_MANA_KEYS`): spendable on
+   anything, so it reads as pool mana with a gold "kept" badge rather than the
+   green "restricted" ring. */
+.mana-symbol-kept {
+  cursor: help;
+  margin-left: 10px;
+  box-shadow: 0 0 0 2px rgba(240, 196, 92, 0.9),
+    0 0 13px 1px var(--mana-glow, rgba(255, 255, 255, 0.4));
+}
+
+.mana-symbol-kept .mana-orb-restricted-badge {
+  background: rgba(240, 196, 92, 0.95);
+  color: #1d1404;
+}
+
 .mana-symbol-addable {
   cursor: pointer;
   box-shadow: 0 0 0 2px rgba(120, 220, 255, 0.7);

@@ -1170,6 +1170,11 @@ def _copy_cast(ctx: PromptContext, choices: list) -> dict:
             "free": False,
             **({"exile_instead": True} if choice.data.get("_exile_instead") else {}),
         }
+        # The card is in that graveyard and in no exile. ``where`` is found by
+        # identity, and a card definition is one immutable object for every
+        # copy of it: with a Lightning Bolt already exiled (by an earlier
+        # Toshiro cast), the graveyard Bolt's offer named that exile slot too.
+        where = (None, None)
     prompt = (
         f"Cast {what} from your graveyard ({choice.data.get('source_name', '')})?"
         if graveyard_place else
