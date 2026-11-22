@@ -156,17 +156,34 @@ def _drive(game, driven):
                     seat, c.name, target_player_index=1 - seat))
                 return
 
+    def in_its_window(index, step):
+        # "Activate only during your upkeep" (Mtenda Griffin) is asked in the
+        # upkeep: CR 602.5 refuses it before its targets are chosen, so a drive
+        # in the main phase never reaches the Griffin card its target names.
+        # Every other ability is asked where it always was.
+        line = (program.activated_abilities[index].source_line or "").lower()
+        if "only during your upkeep" not in line:
+            step()
+            return
+        before = (game.current_turn_phase, game.current_step)
+        game.current_turn_phase = game.current_step = "upkeep"
+        try:
+            step()
+        finally:
+            game.current_turn_phase, game.current_step = before
+
     attempt(lambda: game.cast_from_hand(0, driven.name, target_player_index=1, x_value=2))
     if program.activated_abilities:
         if any(p.card.name == driven.name for p in game.all_permanents()):
             for index in range(len(program.activated_abilities)):
-                attempt(lambda i=index: game.activate_permanent_ability(
-                    0, driven.name, target_player_index=1, ability_index=i))
+                attempt(lambda i=index: in_its_window(i, lambda: game.activate_permanent_ability(
+                    0, driven.name, target_player_index=1, ability_index=i)))
     cast_a_creature(0)
     if program.activated_abilities:
         game.players[0].graveyard.append(driven)
         for index in range(len(program.activated_abilities)):
-            attempt(lambda i=index: game.activate_from_graveyard(0, driven.name, i))
+            attempt(lambda i=index: in_its_window(
+                i, lambda: game.activate_from_graveyard(0, driven.name, i)))
     attempt(game.start_next_turn)
     cast_a_creature(game.active_player_index)
     attempt(game.start_next_turn)
