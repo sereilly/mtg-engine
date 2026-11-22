@@ -1874,12 +1874,13 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   opponent's activated ability, which has no cast animation to hold during,
   cannot be answered at all except by holding priority on a spell of one's
   own first (Fifth Dawn's W2G1: Ouphe Vandals against the AI's Rod of Ruin,
-  three attempts), and a click-held stack item is released by a click on a
-  hand card, so the hold cannot carry a cast in response (Betrayers of
-  Kamigawa's W2G2, seen with a synthetic mouse only; it drove Disrupting
-  Shoal by setting the flag from the page)
-  <!-- bok integrator: Phase 5 --> — part: a hold-priority toggle that sets
-  it; and Leonin
+  three attempts); a click-hold, once made, carries a cast in response
+  (Betrayers of Kamigawa's Phase 5, real gestures: a hand click and a
+  battlefield click kept it, only a click on the held card released it — W2G2
+  had seen it released with a synthetic mouse), and the hover-hold can arm
+  itself: a stack cascade drawn under a pointer resting on a prompt's OK
+  button holds priority on the AI's turn until the mouse moves (Phase 5,
+  game 1) — part: a hold-priority toggle that sets it; and Leonin
   Battlemage's "you may untap" is asked on every cast while it is already
   untapped. (e) Not driven in a browser: Sundering
   Titan's leaves-the-battlefield trigger, Leonin Bola's and Surestrike
@@ -2100,7 +2101,30 @@ Angel already face down), and Legions' Phase 5 found Onslaught's own board
   hand (`price.cost_hand_choices`) is never asked (`splicePriceAsks` reads
   the permanents and the graveyard; the engine's deterministic pick pays; no
   pool card prints one). (d) Ninjutsu between two people is the client half
-  alone, never clicked with two browsers. *Clears:* a client round.
+  alone, never clicked with two browsers. (e) Phase 5 measured, in the
+  browser, and left: an untargeted activation with a mana cost (Genju of the
+  Cedars' {2}, Patron of the Moon's {1}) opens "Pay activation cost" with no
+  Auto-Tap (`shouldPromptForActivationCost` → `pendingActivation.awaitingApproval`),
+  where casts and targeted activations have it; after a graveyard cast is
+  paid in the payment dialog the hint says "for its madness cost"
+  (`retryMadnessCast` hard-codes it beside `applyMadnessPaymentPrompt`'s
+  `costWords`); `prompt_owed_by.doing` reads "cast a copy of the exiled card"
+  for a graveyard `copy_cast` offer (`copy: false`); an `optional_pay` quoting a
+  card's whole text runs its lines together (Kodama of the Center Tree: the
+  server's `card_text` keeps the newline, the client collapses it); the
+  `effect_order` option "Prevent the next N damage (Mending Hands)" leaves N
+  unfilled; clicking a Ninja in hand during the held window sends a cast ("only
+  during main phase") — only the rail button activates it — and the return
+  picker answers on the panel alone (a canvas click on the attacker says it
+  "has no activated ability"); the splice payer row shows four identical
+  "Sacrifice Mountain" buttons; a click on a dimmed card in a graveyard picker
+  (Stir the Grave at X = 3) is silent where a battlefield picker says "not a
+  valid target"; the log reads "dealt 0 damage" after an Opal-Eye redirect and
+  "drew 0 card(s)" under Tomorrow (consistent with it not being a draw);
+  Clash of Realities' granted trigger is served lowercased (Darksteel's (c)).
+  Not checked: whether Opal-Eye's source is chosen at activation by the
+  rules (the client asks it there, as for Reflect Damage). *Clears:* a client
+  round.
 
 - **`engine/ai_casts.py` is inside the 200-line band** (1,828 lines after
   W2G5's offering, pitch and chosen-source candidates; `headroom.py` names

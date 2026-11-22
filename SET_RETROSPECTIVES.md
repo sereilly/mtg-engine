@@ -2396,4 +2396,13 @@ asked prohibitions before targets (CR 602.5) — fixed in the test before
 `main` moved; the wrong-end insert turned only the printing-order guard red.
 Seeded BOK batches (seeds 7, 11, 42, and ten new cards pinned) exited 0 with
 no illegal interaction, the AI pitching Shoals.
-<!-- bok integrator: Phase 5 -->
+Phase 5 played two whole games against the AI with Betrayers of Kamigawa
+decks (the AI won the first on turn 30, the person the second on turn 14),
+four ninjutsu swaps among them, and drove every headline mechanic and
+prompt kind as a human seat and every client change since Champions of
+Kamigawa's promotion: 40 passes, 0 fails (1,153 passing). It found no card
+breaking a rule, and eleven client and wording defects — no Auto-Tap for an
+untargeted activation with a mana cost, "madness cost" on a graveyard cast,
+an unfilled N, a Ninja's hand click sending a cast — filed in Known gaps
+rather than closed, since no row failed; W2G2's stack-hold release did not
+reproduce with real gestures.

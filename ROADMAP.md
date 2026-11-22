@@ -2344,9 +2344,8 @@ the architecture needs it to.
 Parse coverage: 7,178 cards fully claimed, 2 acknowledged, **0 unclaimed**
 (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker (455
 of 665 tracked rules, 3,828 tests). `CARD_VERIFICATION.md` is a log, not a
-target: 1,113 passed (782 in-game, 331 auto), 85 equivalent, 0 failed, 5,982
-untested, before Betrayers of Kamigawa's Phase 5 recordings
-<!-- bok integrator: Phase 5 -->.
+target: 1,153 passed (822 in-game, 331 auto), 86 equivalent, 0 failed, 5,941
+untested, after Betrayers of Kamigawa's Phase 5 recorded forty.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
