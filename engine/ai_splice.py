@@ -31,6 +31,14 @@ no other spell in the hand needs — the buyback rule
 (``ai_casts._buyback_mana_is_spare``) for the same reason, the spliced cards
 themselves set aside: casting one alone later costs what splicing it does now,
 and splicing keeps it.
+
+**A splice cost that is not mana** ("Sacrifice two Mountains", "Tap an untapped
+white creature you control", "Exile four cards from your graveyard" — Betrayers
+of Kamigawa) has its payers named by ``ai_splice_prices`` (the entry's
+``cost_permanent_ids`` / ``cost_graveyard_indices``), never the permanent the
+gained text aims at, and is weighed by the same rehearsal, which pays it on the
+copy: a land or a returned creature gone, a tapped body missing, an opponent's
+life gained.
 """
 
 from __future__ import annotations
