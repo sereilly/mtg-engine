@@ -19174,7 +19174,8 @@ function confirmPermanentCost() {
   if (pending.handAbility) {
     // A hand ability's cost (ninjutsu's returned attacker, CR 702.49a): the
     // ids ride the button's own body, sent by the button's own sender.
-    pending.handAbility.send({ ...pending.handAbility.actionBody, cost_permanent_ids: picked });
+    pending.handAbility.actionBody.cost_permanent_ids = picked;
+    pending.handAbility.send();
     return;
   }
   if (pending.graveyardAbility) {
@@ -30556,13 +30557,16 @@ function renderHandAbilities(state, hasPriority) {
       // refused whenever the mana is still on the board — and that refusal
       // used to be the end of it (the button did nothing until the lands were
       // tapped by hand). It opens the auto-tap dialog a cast opens.
-      const send = (body) => sendAction(body).catch((e) => {
+      // Sent as written, so the request readers (tests/ui/js_requests.py)
+      // follow it to the literal above; a cost picker adds its answer to
+      // that same object before it calls `send`.
+      const send = () => sendAction(actionBody).catch((e) => {
         if (isManaRefusal(e.message)) {
           pendingAutoTap = {
             card: { name: entry.name, mana_cost: "" },
             cardName: `${entry.name} (${entry.cost_text || "ability"})`,
             cost: entry.cost_text || "",
-            actionBody: body,
+            actionBody,
           };
           renderActivationPrompt();
           return;
@@ -30575,7 +30579,7 @@ function renderHandAbilities(state, hasPriority) {
       // into the same body (`startHandAbilityCostPrompt`). Without it the
       // engine chose the attacker itself.
       if (entry.cost_spec && startHandAbilityCostPrompt(entry, actionBody, send)) return;
-      send(actionBody);
+      send();
     });
     host.appendChild(button);
   }
@@ -30666,8 +30670,9 @@ function ninjutsuWindowHeld(state) {
 // The hand ability's choosing cost (CR 601.2b): the permanent-set picker every
 // return cost opens (Quirion Ranger's, Arctic Merfolk's kicker), over the
 // server's candidates (`cost_spec.valid_targets`). `send` is the button's own
-// sender (its mana refusal opens the auto-tap dialog); the confirm hands it
-// the body with `cost_permanent_ids` (`confirmPermanentCost`). True when the
+// sender of `actionBody` (its mana refusal opens the auto-tap dialog); the
+// confirm writes `cost_permanent_ids` onto that body and calls it
+// (`confirmPermanentCost`). True when the
 // picker opened or said why it could not; false for a spec that is no cost.
 function startHandAbilityCostPrompt(entry, actionBody, send) {
   const costSpec = entry?.cost_spec;
