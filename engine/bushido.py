@@ -230,10 +230,12 @@ def bushido_x_counts(card) -> tuple[dict, ...]:
     )
 
 
-@compilation_cache
 @lru_cache(maxsize=None)
 def _bushido_x_sentences(name: str, oracle_text: str, legendary: bool) -> tuple[str, ...]:
-    # Cached on the text for ``_bushido_points``' reason below.
+    # Cached on the text, which is all the answer reads: the rewrite and the
+    # self-reference expansion are pure text, so nothing the compilation
+    # caches clear can change it (and ``test_front_end_safety`` holds a
+    # ``compilation_cache`` to reaching the compiler).
     if "bushido x" not in oracle_text.lower():
         return ()
     from .self_reference import expand_short_self_references

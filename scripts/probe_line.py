@@ -836,12 +836,33 @@ def _match_line(text: str, lines: list[str], aliases: list[set[str]],
     return holds[0] if holds else None
 
 
+def _nth_twin(subject: str, aliases: list[set[str]], asked: dict, reader: str) -> int | None:
+    """Which of several **identical** read lines a top-level call about
+    *subject* is about, or None when the text is one line's alone.
+
+    "Soulshift 4, soulshift 4" (Forked-Branch Garami) is two read lines of
+    one text, one per instance (CR 702.46b; ``expand_ability_lines``), and
+    the compiler hands each reader every line in order — so a reader's n-th
+    call about that text is about the n-th of them. Matched by text alone,
+    every call landed on the first, and the second read as never reached."""
+    twins = [i for i, spelled in enumerate(aliases) if subject.strip() in spelled]
+    if len(twins) < 2:
+        return None
+    key = (reader, subject.strip())
+    nth = asked.get(key, 0)
+    asked[key] = nth + 1
+    return twins[min(nth, len(twins) - 1)]
+
+
 def _attribute(events: list[Event], lines: list[str], card_name: str) -> None:
     aliases = [_aliases(line, card_name) for line in lines]
+    asked: dict = {}
     for event in events:
         parent = events[event.parent].line if event.parent is not None else None
         subject = _subject(event)
         if subject is not None:
+            if parent is None:
+                parent = _nth_twin(subject, aliases, asked, event.reader.name)
             event.line = _match_line(subject, lines, aliases, prefer=parent)
         elif event.reader.role == "gate" and isinstance(event.result, str):
             event.line = _match_line(event.result, lines, aliases)
