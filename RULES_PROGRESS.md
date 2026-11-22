@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**455 / 665 tracked rules covered (68%)** — 3823 tests, 0 unannotated.
+**455 / 665 tracked rules covered (68%)** — 3828 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -287,7 +287,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 117. Timing and Priority
 
 - [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(4 tests, subrules a)*
-- [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
+- [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(2 tests, subrules ac)*
 - [x] **117.3** Which player has priority is determined by the following rules: *(30 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(8 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(11 tests)*
@@ -691,14 +691,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(7 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(49 tests, subrules bcde)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(131 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(133 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(28 tests, subrules acde)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(51 tests, subrules abcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(40 tests, subrules a)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(43 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -918,7 +918,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.43** Modular *(10 tests, subrules ab)*
 - [x] **702.44** Sunburst *(12 tests, subrules abcd)*
 - [x] **702.45** Bushido *(10 tests, subrules ab)*
-- [x] **702.46** Soulshift *(7 tests, subrules ab)*
+- [x] **702.46** Soulshift *(9 tests, subrules ab)*
 - [x] **702.47** Splice *(24 tests, subrules abcde)*
 - [x] **702.48** Offering *(8 tests, subrules abc)*
 - [x] **702.49** Ninjutsu *(7 tests, subrules abc)*
