@@ -18236,6 +18236,15 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  // "{1}, Remove X ki counters from this creature: Add X mana of any one
+  // color." (Petalmane Baku.) A mana ability whose X is paid in counters is
+  // announced before its colour is chosen — the colour prompts below send the
+  // ability, and it went out with X undeclared (X = 0, so no mana at all).
+  if (
+    typeof startCounterXBeforeManaChoice === "function"
+    && startCounterXBeforeManaChoice(card, cardName, targetSeat, permanentIndex, abilityIndex)
+  ) return;
+
   // Both colour prompts below carry the ability the menu chose: a land's mana
   // abilities are separate abilities (CR 605), and a body sent without the
   // index made the server tap the land's *first* one — a Karplusan Forest
@@ -18274,6 +18283,8 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   if (ownMana && ownMana.choice && ownMana.symbols.length >= 5) {
     const anyOptions = manaOptionsFor(ownMana.symbols);
     pendingManaColor = {
+      // The permanent, for the auto-tap a cost the pool can't cover opens.
+      card,
       cardName,
       permanentIndex,
       targetSeat,
@@ -18507,7 +18518,23 @@ function resolvePendingManaColor(manaColor) {
   if (Number.isInteger(pending.abilityIndex)) colorBody.ability_index = pending.abilityIndex;
   sendAction(colorBody)
     .then(() => updateActionHint(`Activated ${pending.cardName} and chose ${manaColor}.`))
-    .catch((e) => updateActionHint(e.message, true));
+    .catch((e) => {
+      // "{1}, Remove X ki counters: Add X mana of any one color." (Petalmane
+      // Baku): a mana ability with a mana cost the pool can't cover opens the
+      // auto-tap every other activation opens, the colour (and the X the
+      // body carries, `pendingActivationCost`) kept for its retry.
+      if (isManaRefusal(e.message) && pending.card) {
+        pendingAutoTap = {
+          card: pending.card,
+          cardName: pending.cardName,
+          cost: getActivatedAbilityCost(pending.card, pending.abilityIndex),
+          actionBody: colorBody,
+        };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+    });
 }
 
 // Selectable modes of a "Choose one —" modal spell, as serialized by the server
@@ -22584,6 +22611,7 @@ function startCastXBoundFirst(card, castAction, targetSeat = null) {
   );
   if (!pendingCastX) return false;
   pendingCastX.thenTargets = true;
+  renderActivationPrompt();
   return true;
 }
 
@@ -22616,6 +22644,20 @@ function xBoundSentence(spec) {
 function activationAnnouncesCounterX(card, abilityIndex) {
   if (abilityXPayable(card, abilityIndex)?.counter_bound) return true;
   return !!counterRemovalXKind(getActivatedAbilityCost(card, abilityIndex));
+}
+
+// A mana ability whose X is paid in counters (Petalmane Baku): open the X
+// prompt first, its answer recorded on `pendingActivationCost` and the
+// activation run again for its colour (`resumeActivationAfterCost`, through
+// the X prompt's `thenTargets` return). True when the prompt opened; false
+// once this ability's X is answered, or for any other ability.
+function startCounterXBeforeManaChoice(card, cardName, targetSeat, permanentIndex, abilityIndex) {
+  if (!chosenAbilityMana(card) || !activationAnnouncesCounterX(card, abilityIndex)) return false;
+  if (activationCostAnswered(permanentIndex, abilityIndex) && pendingActivationCost?.fields?.x_value != null) {
+    return false;
+  }
+  startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex, null, { thenTargets: true });
+  return true;
 }
 
 // The X prompt's sentence for an X paid in counters, from `counter_bound`
