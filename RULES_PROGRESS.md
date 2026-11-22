@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**455 / 665 tracked rules covered (68%)** — 3822 tests, 0 unannotated.
+**455 / 665 tracked rules covered (68%)** — 3823 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -788,7 +788,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(95 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(15 tests)*
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(128 tests, subrules abdem)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(130 tests, subrules abdem)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(44 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
