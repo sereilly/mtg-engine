@@ -23,6 +23,7 @@ than of a permanent).
 from __future__ import annotations
 
 
+from ...activation_prohibitions import activation_prohibition
 from ...activation_cost_alternatives import (alternative_cost_refusal,
                                             default_alternative_index,
                                             has_alternative_costs,
@@ -553,6 +554,23 @@ class AbilityActivationMixin:
         combination_refusal = split_refusal(ability.instruction, mana_combination)
         if combination_refusal is not None:
             return refuse(permanent.card.name, "unsupported", combination_refusal)
+
+        # CR 602.5 before CR 601.2c: "A player can't begin to activate an
+        # ability that's prohibited from being activated" — so a prohibition
+        # (a board-wide ban, the line's own "Activate only …") is the refusal
+        # a player reads, never the target gate below that a prohibited
+        # ability would not have reached. Trap Runner's "Activate only during
+        # combat after blockers are declared" is the card: before the
+        # declaration no attacker is unblocked (CR 509.1h), so the target gate
+        # refused it first, naming no target instead of the window. The same
+        # table ``_activation_window`` asks again further down, where its rows
+        # stand among the cost checks; the answer cannot differ, since nothing
+        # between the two moves the board.
+        prohibited = activation_prohibition(
+            self, controller_index, permanent, ability
+        )
+        if prohibited is not None:
+            return refuse(permanent.card.name, "unsupported", prohibited.details)
 
         # CR 602.2b/601.2c, once, before any cost is paid: an ability that
         # targets is unactivatable with no legal target, and a named target

@@ -639,6 +639,20 @@ def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_c
     # Champions of Kamigawa ships, for Scion's reason above.
     if any(card.name == "Nighteyes the Desecrator" for card in supported_cards):
         reviewed.add("Nighteyes the Desecrator")
+    # Ink-Eyes, Servant of Oni (BOK) is the thirteenth, reviewed at Betrayers
+    # of Kamigawa's wave-1 follow-up (W1G1), and Scion of Darkness's shape
+    # exactly: "Whenever Ink-Eyes deals combat damage to a player, you may put
+    # target creature card from **that player's** graveyard onto the
+    # battlefield under your control." Its payload is Scion's to the key —
+    # `any_graveyard` with `that_player_only` — so the trigger picker fills it
+    # with the seat the damage event froze, one pile and never its
+    # controller's. Driven through a real combat damage step after ninjutsu
+    # (tests/sets/test_bok_creatures.py, W1G1): the damaged player's creature
+    # card arrives under Ink-Eyes' controller, and a creature card in the
+    # controller's own graveyard is not taken. A member only while Betrayers
+    # of Kamigawa ships, for Scion's reason above.
+    if any(card.name == "Ink-Eyes, Servant of Oni" for card in supported_cards):
+        reviewed.add("Ink-Eyes, Servant of Oni")
     assert widened == reviewed
 
 

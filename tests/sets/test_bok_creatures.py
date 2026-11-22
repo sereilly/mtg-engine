@@ -266,6 +266,21 @@ def test_w1g1_ink_eyes_reanimates_from_that_players_graveyard(set_pool):
     assert [c.name for c in game.players[0].graveyard] == ["Mine"]
     assert game.players[1].life == 15
 
+
+def test_w1g1_ink_eyes_never_reaches_its_controllers_own_graveyard(set_pool):
+    """The control for the test above: with a creature card only in P1's own
+    graveyard, "that player's graveyard" (P2's, the one the damage went to)
+    offers nothing, and P1's card stays where it is."""
+    game, mine, _ = _w1g1_ninjutsu_table(
+        set_pool, "Ink-Eyes, Servant of Oni",
+        my_graveyard=[_w1g1_creature("Mine", 1, 1)],
+    )
+    _w1g1_ninjutsu(game, "Ink-Eyes, Servant of Oni", mine[0])
+    _w1g1_drive_combat(game)
+    assert "Mine" not in [p.card.name for p in game.controlled_by(0)]
+    assert [c.name for c in game.players[0].graveyard] == ["Mine"]
+    assert game.players[1].life == 15
+
 # ==== end w1g1 ======================================================
 
 

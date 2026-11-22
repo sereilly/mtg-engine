@@ -1547,6 +1547,14 @@ def _w2g5_beauty_combat(set_pool, *, cast: bool, trample: bool = False):
 
     The attacker is not blocked by anything either way, so the only difference
     between the two arms is the spell.
+
+    The spell is cast **after** seat 1's (empty) declaration, in the declare
+    blockers step's priority window: blockers are declared as the step's
+    turn-based action, before anybody has priority (CR 509.1, 117.3a), and
+    until then no attacker is "unblocked" (CR 509.1h) for the spell to target.
+    This board used to cast in the step before the declaration — a moment no
+    player holds priority in — and passed only while "unblocked" read the
+    permanent alone.
     """
     pool = set_pool("MIR")
     text = "Trample" if trample else ""
@@ -1563,13 +1571,13 @@ def _w2g5_beauty_combat(set_pool, *, cast: bool, trample: bool = False):
     game.advance_combat_phase()
     assert game.declare_attackers(0, [0])[0]
     game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
     result = None
     if cast:
         result = game.cast_from_hand(
             1, "Dazzling Beauty", target_player_index=0, target_permanent_index=0
         )
         game.resolve_stack()
-    game.declare_blockers(1, {})
     game.advance_combat_phase()
     game.advance_combat_phase()
     return game, bear, result
@@ -1602,7 +1610,10 @@ def test_the_mark_survives_the_combat_state_rebuild(set_pool):
     """The combat phase rebuilds ``blocked`` from the block maps on every prune,
     and a creature blocked by nobody is in none of them — so the flag alone
     would be undone by the next prune. Asserted directly, because the life total
-    above would not tell a lost mark from a spell that never worked."""
+    above would not tell a lost mark from a spell that never worked.
+
+    Cast after the (empty) declaration, as ``_w2g5_beauty_combat`` explains:
+    before it nothing is unblocked (CR 509.1h)."""
     from engine.combat_assignment import BLOCKED_WITHOUT_BLOCKERS
 
     pool = set_pool("MIR")
@@ -1619,6 +1630,7 @@ def test_the_mark_survives_the_combat_state_rebuild(set_pool):
     game.advance_combat_phase()
     assert game.declare_attackers(0, [0])[0]
     game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
     assert game.cast_from_hand(
         1, "Dazzling Beauty", target_player_index=0, target_permanent_index=0
     ).supported
@@ -1634,9 +1646,10 @@ def test_a_creature_that_is_not_attacking_is_no_target(set_pool):
     without them this is a mark that can be put on anything, and the mark makes
     a creature that never attacked unable to deal combat damage.
 
-    Asserted inside a real declare-blockers step with an attacker beside the
-    idler, so the refusal is the *target description* and not the timing gate —
-    which is a different sentence and would pass this test for the wrong reason.
+    Asserted inside a real declare-blockers step — the (empty) declaration
+    made, so the attacker beside the idler *is* unblocked (CR 509.1h) — so the
+    refusal is the *target description* and not the timing gate, which is a
+    different sentence and would pass this test for the wrong reason.
     """
     pool = set_pool("MIR")
     raider = Permanent(card=_mk_card("Raider", "{1}{G}", "Creature - Bear", ""))
@@ -1653,6 +1666,7 @@ def test_a_creature_that_is_not_attacking_is_no_target(set_pool):
     game.advance_combat_phase()
     assert game.declare_attackers(0, [0])[0]
     game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
 
     cast = game.cast_from_hand(
         1, "Dazzling Beauty", target_player_index=0, target_permanent_index=1
