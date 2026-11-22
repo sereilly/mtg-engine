@@ -1216,6 +1216,11 @@ HOST_KINDS = frozenset({
     "phase_out_enchanted",
     "recolor_enchanted_chosen_color",
     "set_enchanted_creature_type",
+    # "{2}: Enchanted Forest becomes a 4/4 green Spirit creature until end of
+    # turn." (The Genju cycle.) A body for the land its controller attacks or
+    # blocks with — read as its category's ``pump``, so the controller's own
+    # land: a Genju on an opponent's Forest is not animated for them.
+    "animate_enchanted_until_eot",
 })
 
 #: …and the shared kinds a payload key points at the host instead of at a

@@ -215,6 +215,11 @@ _W2G4_DRIVEN_ELSEWHERE = {
     # (Shade's Breath, Onslaught — measured while this row was written).
     "recolor_each_until_eot":
         "test_w2g1_a_described_set_recolour_is_stamped_when_it_resolves",
+    # "{2}: Until end of turn, enchanted Swamp becomes a 2/2 black Spirit
+    # creature …" (the Genju cycle, Betrayers of Kamigawa): an Aura's ability
+    # animating its host, colour and all.
+    "animate_enchanted_until_eot":
+        "test_w1g4_a_genju_animation_is_stamped_when_it_resolves",
 }
 
 
@@ -648,6 +653,46 @@ def test_w2g4_every_other_recolouring_instruction_is_stamped_when_it_resolves(
     assert game.confirm_color_set_choice(0, ["W"])
     _w2g4_settle(game, None)
     assert _w2g4_colours(game, shyft) == ["W"]
+
+
+@pytest.mark.cr("613.7b", "613.7a")
+def test_w1g4_a_genju_animation_is_stamped_when_it_resolves(
+    catalog_by_name, set_pool,
+):
+    """Genju of the Fens' "{2}: Until end of turn, enchanted Swamp becomes a
+    2/2 black Spirit creature …" — the colour of an Aura's ability's
+    animation, written on its host when the ability resolves (CR 613.7b):
+
+    * under a Thran Lens that was already out ("All permanents are
+      colorless"), the later animation decides, and at cleanup the Lens
+      decides again;
+    * with no Lens, a Purelace cast on the animated Swamp is newer: white;
+    * activated once more after the Purelace, the new animation is newer
+      still: black — and when cleanup ends it, the indefinite Purelace
+      shows again (CR 611.2a, 514.2)."""
+    card = catalog_by_name.__getitem__
+    game = _w2g4_table()
+    swamp = _w2g4_enter(game, card("Swamp"))
+    lens = _w2g4_enter(game, card("Thran Lens"))
+    genju = _w2g4_cast(game, set_pool("BOK")["Genju of the Fens"], at=swamp)
+    assert genju.metadata["attached_to"] is swamp
+    assert _w2g4_colours(game, swamp) == []
+
+    _w2g4_activate(game, genju, 0)
+    assert swamp.is_creature and _w2g4_colours(game, swamp) == ["B"]
+    game.resolve_cleanup_step(0)
+    assert not swamp.is_creature and _w2g4_colours(game, swamp) == []
+
+    game.remove_from_battlefield(lens)
+    game._recompute_continuous_effects()
+    _w2g4_activate(game, genju, 0)
+    assert _w2g4_colours(game, swamp) == ["B"]
+    _w2g4_cast(game, card("Purelace"), at=swamp)
+    assert _w2g4_colours(game, swamp) == ["W"]
+    _w2g4_activate(game, genju, 0)
+    assert _w2g4_colours(game, swamp) == ["B"]
+    game.resolve_cleanup_step(0)
+    assert not swamp.is_creature and _w2g4_colours(game, swamp) == ["W"]
 
 
 @pytest.mark.cr("613.7b", "611.2c")
