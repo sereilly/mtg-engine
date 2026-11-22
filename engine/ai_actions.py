@@ -155,6 +155,13 @@ class CastAction:
     # it) or none is taken; named where several apply (a morph card's
     # face-down {3} beside Dream Halls' discard), or the cast is refused.
     alternative_cost_index: int | None = None
+    # Which card in hand the alternative cost exiles or discards (CR 601.2b),
+    # by its place in the hand with the spell still in it — the cast path's
+    # ``alternative_cost_hand_index``. None is the engine's default, the first
+    # card the phrase names; named for a **pitch** whose card names the X
+    # ("exile a red card with mana value X from your hand", the Shoals —
+    # `ai_pitch`), where which card is which X.
+    alternative_cost_hand_index: int | None = None
     # Which permanent pays a printed additional sacrifice (CR 601.2b), by id —
     # the cast path's ``cost_permanent_ids``. None is the engine's
     # deterministic pick (the smallest), every cast but one whose effect reads
@@ -177,6 +184,17 @@ class CastAction:
     # (CR 702.47d). None splices nothing, which every AI cast did until CHK
     # wave 2: each splice card was cast alone, spent. See `ai_splice`.
     splice_cards: list[dict] | None = None
+    # CR 609.7a's "a source of your choice", announced with the cast — the
+    # cast path's ``chosen_source_seat`` and ``chosen_source_permanent_index``
+    # (a battlefield permanent by its controller and its place in
+    # ``controlled_by``, the reader `game_types.chosen_damage_source` resolves
+    # it through) or ``chosen_source_stack_index`` (a spell, bottom-first).
+    # None names nothing, and the record falls back to the next damage from
+    # any source — every AI cast of Shining Shoal, Kor Chant and Honorable
+    # Passage until BOK's wave 2. See `ai_chosen_source`.
+    chosen_source_seat: int | None = None
+    chosen_source_permanent_index: int | None = None
+    chosen_source_stack_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -374,6 +392,8 @@ def cast_announcement(action: CastAction) -> dict:
         "new_color": action.new_color,
         # CR 118.9a: which alternative cost, where several apply.
         "alternative_cost_index": action.alternative_cost_index,
+        # …and the hand card it pitches (see `CastAction.alternative_cost_hand_index`).
+        "alternative_cost_hand_index": action.alternative_cost_hand_index,
         # CR 601.2b: which permanent pays the sacrifice (see
         # `CastAction.cost_permanent_ids`)…
         "cost_permanent_ids": action.cost_permanent_ids,
@@ -384,6 +404,10 @@ def cast_announcement(action: CastAction) -> dict:
         # the lands for the splice costs, and a cast that dropped it would
         # leave that mana in the pool and the gained text unannounced.
         "splice_cards": action.splice_cards,
+        # CR 609.7a's chosen source (see `CastAction.chosen_source_seat`).
+        "chosen_source_seat": action.chosen_source_seat,
+        "chosen_source_permanent_index": action.chosen_source_permanent_index,
+        "chosen_source_stack_index": action.chosen_source_stack_index,
     }
 
 

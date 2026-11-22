@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from . import ai_cast_trace as cast_trace
 from .ai_actions import weighed_at_instant_speed
+from .ai_pitch import pitched_card_price
 from .ai_scoring import cast_score_terms, summed_terms
 from .ai_weighed_cast import cast_weighed
 
@@ -117,7 +118,9 @@ def finished_cast_candidate(
     no builder adds for itself: the zone's bonus (`zone_cast_bonus`, read off
     the action's zone and the permission being weighed,
     ``ai_weighed_cast.cast_weighed``) and the stack's
-    (`stack_response_bonus`). Each was once added inline by one builder and
+    (`stack_response_bonus`) — and the card a pitch exiles, beyond the card
+    the rehearsal counted (``ai_pitch.pitched_card_price``, 0 for every cast
+    that pitches nothing). Each was once added inline by one builder and
     not its sibling: an entwined Wail of the Nim lost to its own best mode out
     of an opened graveyard for want of the zone's bonus (Mirrodin's
     promotion), and an instant weighed at instant speed never had it at all.
@@ -133,6 +136,9 @@ def finished_cast_candidate(
     )
     terms.append(("zone bonus", zone_cast_bonus(action.from_zone, cast_weighed(card))))
     terms.append(("answering its own spell", stack_response_bonus(game, seat)))
+    # …and the card a pitch exiles, beyond the card the rehearsal counted
+    # (`ai_pitch.pitched_card_price`): a fact of the announcement, as the zone is.
+    terms.append(("the card pitched, beyond a card", -pitched_card_price(game, seat, action)))
     score = summed_terms(terms)
     finished = replace(action, score=score)
     cast_trace.scored(game, finished, terms, score, rehearsal)
