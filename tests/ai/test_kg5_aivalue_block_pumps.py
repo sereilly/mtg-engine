@@ -24,7 +24,7 @@ from engine.game import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 
-from tests.helpers import _mk_creature_card, _nosick, drive_combat, stock_libraries
+from tests.helpers import _mk_creature_card, _nosick, drive_combat, settle, stock_libraries
 
 SIZES = ((1, 1), (2, 2), (3, 3), (2, 1), (1, 3))
 
@@ -71,6 +71,11 @@ def _fought(attacker_card, blocker_card):
     ok, _why = game.declare_attackers(0, [game.battlefield_index_of(attacker)], defending_player_index=1)
     if not ok:
         return None
+    # Every answer the attack's own triggers owe, given in the declare
+    # attackers step (Ronin Cliffrider's "you may have it deal 1 damage to
+    # each creature defending player controls"): a headless table leaves the
+    # step without waiting for it, and the damage landed after the blocks.
+    settle(game)
     game.advance_combat_phase()
     if game.current_step != "declare_blockers" or not (
         game.is_on_battlefield(blocker) and game.is_on_battlefield(attacker)
