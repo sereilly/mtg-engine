@@ -191,16 +191,15 @@ def bushido_points(card, *, game=None, permanent=None) -> int:
     points = _bushido_points(card.name, card.oracle_text or "", card.is_legendary)
     if game is None or permanent is None:
         return points
+    from .handlers._amounts import count_now_for
+
+    # The count a resolution of the trigger would take off this board now
+    # (``count_now_for``, the reader the AI's block forecast asks too); a
+    # scope only an announcement names counts nothing here.
     return points + sum(
-        _x_counted_now(game, permanent, spec) for spec in bushido_x_counts(card)
+        count_now_for(game, permanent, spec) or 0
+        for spec in bushido_x_counts(card)
     )
-
-
-#: The scopes a count can be taken in with no resolution behind it — the ones
-#: ``handlers/_amounts.evaluate_count`` answers off the seat it is handed. A
-#: count of "target player's" board needs the announcement a trigger makes,
-#: which a continuous read of "the bushido it has" never has.
-_CONTINUOUS_SCOPES = frozenset({"you", "all", "opponents"})
 
 
 def bushido_x_counts(card) -> tuple[dict, ...]:
@@ -229,20 +228,6 @@ def bushido_x_counts(card) -> tuple[dict, ...]:
         and trig.instruction is not None
         and isinstance(trig.instruction.payload.get(X_FROM_COUNT), dict)
     )
-
-
-def _x_counted_now(game, permanent, spec: dict) -> int:
-    """*spec* counted for *permanent*'s controller, now — the evaluator a
-    CR 604.3 recompute and a resolution share (``evaluate_count``), with the
-    permanent as the source "other" is measured from."""
-    seat = game.controller_index_of(permanent)
-    if seat is None or spec.get("owner", "you") not in _CONTINUOUS_SCOPES:
-        return 0
-    from .handlers._amounts import evaluate_count
-
-    return max(0, int(evaluate_count(
-        game, game.players[seat], spec, exclude=permanent, source=permanent,
-    )))
 
 
 @compilation_cache

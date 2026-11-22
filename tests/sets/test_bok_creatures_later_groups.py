@@ -1457,3 +1457,304 @@ def test_w1g10_shirei_gone_before_the_end_step_returns_nothing(set_pool):
     assert "Llanowar Elves" in [card.name for card in alice.graveyard]
 
 # ==== end w1g10 ======================================================
+
+
+# ==== W2G1 ==========================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+#
+# Kodama of the Center Tree's soulshift X, counted as the ability triggers
+# and looking back at the board its death left (CR 702.46a, 603.10a,
+# 603.3d), and Takeno, Samurai General counting Fumiko the Lowblood's
+# bushido X (CR 702.45a, 613.4c).
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine.bushido import bushido_points as _w2g1_bushido_points
+from engine.keywords import remove_all_abilities as _w2g1_remove_all_abilities
+from engine.models import Permanent as _W2G1Permanent
+from tests.helpers import declare_attack as _w2g1_declare_attack
+from tests.helpers import drive_combat as _w2g1_drive_combat
+from tests.helpers import settle as _w2g1_settle
+
+_W2G1_KODAMA = "Kodama of the Center Tree"
+
+
+def _w2g1_put(game, seat, card):
+    permanent = _W2G1Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game._sync_control()
+    return permanent
+
+
+def _w2g1_table(set_pool, *, hand=(), mine=(), theirs=(), graveyard=(),
+                interactive=()):
+    """Alice (seat 0) with *mine* on the battlefield, *graveyard* in her
+    graveyard and *hand* in hand; Bob with *theirs*. Costs are not charged."""
+    lea = set_pool("LEA")
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(name="Alice", hand=list(hand), graveyard=list(graveyard),
+                         library=[lea["Island"]] * 10),
+        _W2G1PlayerState(name="Bob", library=[lea["Island"]] * 10),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    placed = [_w2g1_put(game, 0, card) for card in mine]
+    placed += [_w2g1_put(game, 1, card) for card in theirs]
+    game.start_turn(0)
+    _w2g1_settle(game)
+    return game, placed
+
+
+def _w2g1_spirits(set_pool, *names):
+    chk, lea, bok = set_pool("CHK"), set_pool("LEA"), set_pool("BOK")
+    return [
+        chk[name] if name in chk else bok[name] if name in bok else lea[name]
+        for name in names
+    ]
+
+
+def _w2g1_names(cards):
+    return sorted(card.name for card in cards)
+
+
+def _w2g1_accept(game, _choice):
+    return game.confirm_optional_pay(0, accept=True)
+
+
+def _w2g1_offered(prompt):
+    assert prompt is not None and prompt.kind == "trigger_target", prompt
+    return sorted(target["name"] for target in prompt.data["targets"])
+
+
+def _w2g1_name(game, prompt, name):
+    target = next(t for t in prompt.data["targets"] if t["name"] == name)
+    assert game.confirm_trigger_target(
+        0, seat=target["seat"], graveyard_index=target["graveyard_index"],
+    )
+
+
+def test_w2g1_kodama_alone_soulshifts_one(set_pool):
+    """Kodama alone: X is 1 ("Soulshift X includes Kodama of the Center
+    Tree. So, X is always at least 1", 2005-02-01). A person is offered the
+    mana value 1 Spirit and not the 2; the default seat returns it too."""
+    lea = set_pool("LEA")
+    kodama_card, = _w2g1_spirits(set_pool, _W2G1_KODAMA)
+    for interactive in ((0,), ()):
+        game, (kodama,) = _w2g1_table(
+            set_pool, hand=[lea["Terror"]], mine=[kodama_card],
+            graveyard=_w2g1_spirits(set_pool, "Lantern Kami", "Kami of Ancient Law"),
+            interactive=interactive,
+        )
+        assert (kodama.effective_power, kodama.effective_toughness) == (1, 1)
+        assert game.queue_from_hand(
+            0, "Terror", target_permanent_ids=[kodama.permanent_id],
+        ).supported
+        if interactive:
+            prompt = _w2g1_settle(game, defaults=False)
+            assert _w2g1_offered(prompt) == ["Lantern Kami"], game.log
+            assert [item.x_value for item in game.stack] == [1]
+            _w2g1_name(game, prompt, "Lantern Kami")
+        _w2g1_settle(game, answers={"optional_pay": _w2g1_accept})
+        assert _w2g1_names(game.players[0].hand) == ["Lantern Kami"], game.log
+        assert "Kami of Ancient Law" in _w2g1_names(game.players[0].graveyard)
+
+
+def test_w2g1_kodama_with_four_other_spirits_can_return_itself(set_pool):
+    """Kodama and four other Spirits; Kodama dies alone. X is 5, and its
+    mana value is 5: "Kodama of the Center Tree can return itself to its
+    owner's hand if you control five or more Spirits" (2005-02-01)."""
+    lea = set_pool("LEA")
+    game, (kodama, *_others) = _w2g1_table(
+        set_pool, hand=[lea["Terror"]],
+        mine=_w2g1_spirits(
+            set_pool, _W2G1_KODAMA, "Lantern Kami", "Will-o'-the-Wisp",
+            "Wandering Ones", "Hana Kami",
+        ),
+        interactive=(0,),
+    )
+    assert (kodama.effective_power, kodama.effective_toughness) == (5, 5)
+    assert game.queue_from_hand(
+        0, "Terror", target_permanent_ids=[kodama.permanent_id],
+    ).supported
+    prompt = _w2g1_settle(game, defaults=False)
+    assert _w2g1_offered(prompt) == [_W2G1_KODAMA], game.log
+    _w2g1_name(game, prompt, _W2G1_KODAMA)
+    _w2g1_settle(game, answers={"optional_pay": _w2g1_accept})
+    assert _w2g1_names(game.players[0].hand) == [_W2G1_KODAMA], game.log
+
+
+def test_w2g1_kodama_counts_every_spirit_a_wrath_took_beside_it(set_pool):
+    """Wrath of God takes Kodama and two Spirits at once: each was there
+    immediately before the event (CR 603.10a), so X is 3 — Gnarled Mass
+    (mana value 3) is offered, Kodama (5) is not — though nothing is left
+    on the battlefield to count when the ability is put on the stack."""
+    lea = set_pool("LEA")
+    game, _placed = _w2g1_table(
+        set_pool, hand=[lea["Wrath of God"]],
+        mine=_w2g1_spirits(set_pool, _W2G1_KODAMA, "Lantern Kami", "Wandering Ones"),
+        graveyard=_w2g1_spirits(set_pool, "Gnarled Mass"),
+        interactive=(0,),
+    )
+    assert game.queue_from_hand(0, "Wrath of God").supported
+    prompt = _w2g1_settle(game, defaults=False)
+    assert _w2g1_offered(prompt) == [
+        "Gnarled Mass", "Lantern Kami", "Wandering Ones",
+    ], game.log
+    assert [item.x_value for item in game.stack] == [3]
+    _w2g1_name(game, prompt, "Gnarled Mass")
+    _w2g1_settle(game, answers={"optional_pay": _w2g1_accept})
+    assert _w2g1_names(game.players[0].hand) == ["Gnarled Mass"], game.log
+    assert not list(game.controlled_by(0))
+
+
+def test_w2g1_kodama_beside_another_soulshift_creature_each_its_own_x(set_pool):
+    """Kodama and Thief of Hope (soulshift 2) die to one Wrath beside a
+    third Spirit: two triggers, Kodama's X 3 and the Thief's printed 2, and
+    the seat nobody asks names a different card for each (W1G6's pair fix
+    still holds), so both come back."""
+    lea = set_pool("LEA")
+    game, _placed = _w2g1_table(
+        set_pool, hand=[lea["Wrath of God"]],
+        mine=_w2g1_spirits(set_pool, _W2G1_KODAMA, "Thief of Hope", "Lantern Kami"),
+        graveyard=_w2g1_spirits(set_pool, "Gnarled Mass", "Kami of Ancient Law"),
+    )
+    assert game.queue_from_hand(0, "Wrath of God").supported
+    _w2g1_settle(game)
+    assert sum("triggered (died)" in line for line in game.log) == 2, game.log
+    assert _w2g1_names(game.players[0].hand) == [
+        "Gnarled Mass", "Kami of Ancient Law",
+    ], game.log
+
+
+def test_w2g1_kodama_x_stays_what_it_was_as_it_triggered(set_pool):
+    """The X is taken as the ability triggers and rides the stack object
+    (CR 603.3d chose the target with it): two Spirits Bolted in response
+    leave no Spirit to count at resolution, and Gnarled Mass (mana value 3)
+    still comes back — recounted, it would be refused (CR 608.2b)."""
+    lea = set_pool("LEA")
+    game, (kodama, lantern, ones) = _w2g1_table(
+        set_pool, hand=[lea["Terror"], lea["Lightning Bolt"], lea["Lightning Bolt"]],
+        mine=_w2g1_spirits(set_pool, _W2G1_KODAMA, "Lantern Kami", "Wandering Ones"),
+        graveyard=_w2g1_spirits(set_pool, "Gnarled Mass"),
+        interactive=(0,),
+    )
+    assert game.queue_from_hand(
+        0, "Terror", target_permanent_ids=[kodama.permanent_id],
+    ).supported
+    prompt = _w2g1_settle(game, defaults=False)
+    assert _w2g1_offered(prompt) == ["Gnarled Mass"], game.log
+    _w2g1_name(game, prompt, "Gnarled Mass")
+    for spirit in (lantern, ones):
+        assert game.queue_from_hand(
+            0, "Lightning Bolt", target_permanent_ids=[spirit.permanent_id],
+        ).supported
+    assert [item.x_value for item in game.stack][:1] == [3]
+    _w2g1_settle(game, answers={"optional_pay": _w2g1_accept})
+    assert not list(game.controlled_by(0))
+    assert _w2g1_names(game.players[0].hand) == ["Gnarled Mass"], game.log
+
+
+def test_w2g1_kodama_sacrificed_as_a_cost_counts_itself(set_pool):
+    """Sacrificed to pay Sacrifice's additional cost, Kodama is off the
+    battlefield before its trigger is put on the stack — held until the cast
+    is announced (CR 117.2a) — and still counts itself: X is 2 beside one
+    Spirit, so the mana value 2 Spirit is offered and the 3 is not."""
+    lea = set_pool("LEA")
+    game, (kodama, _lantern) = _w2g1_table(
+        set_pool, hand=[lea["Sacrifice"]],
+        mine=_w2g1_spirits(set_pool, _W2G1_KODAMA, "Lantern Kami"),
+        graveyard=_w2g1_spirits(set_pool, "Gnarled Mass", "Kami of Ancient Law"),
+        interactive=(0,),
+    )
+    assert game.queue_from_hand(
+        0, "Sacrifice", cost_permanent_ids=[kodama.permanent_id],
+    ).supported
+    prompt = _w2g1_settle(game, defaults=False)
+    assert _w2g1_offered(prompt) == ["Kami of Ancient Law"], game.log
+    _w2g1_name(game, prompt, "Kami of Ancient Law")
+    _w2g1_settle(game, answers={"optional_pay": _w2g1_accept})
+    assert _w2g1_names(game.players[0].hand) == ["Kami of Ancient Law"], game.log
+
+
+def test_w2g1_kodama_put_into_the_graveyard_by_the_legend_rule(set_pool):
+    """A second Kodama: the legend rule puts one into the graveyard
+    (CR 704.5j). Immediately before, its controller had both Kodamas and a
+    Lantern Kami: X is 3, and Gnarled Mass comes back."""
+    kodama_card, lantern = _w2g1_spirits(set_pool, _W2G1_KODAMA, "Lantern Kami")
+    game, _placed = _w2g1_table(
+        set_pool, mine=[kodama_card, lantern],
+        graveyard=_w2g1_spirits(set_pool, "Gnarled Mass", "Kami of Ancient Law"),
+    )
+    _w2g1_put(game, 0, kodama_card)
+    _w2g1_settle(game)
+    assert any("704.5j" in line for line in game.log), game.log
+    assert _w2g1_names(game.players[0].hand) == ["Gnarled Mass"], game.log
+
+
+def _w2g1_takeno_table(set_pool, attackers):
+    lea = set_pool("LEA")
+    game, (_takeno, fumiko, *_bobs) = _w2g1_table(
+        set_pool,
+        mine=[set_pool("CHK")["Takeno, Samurai General"],
+              set_pool("BOK")["Fumiko the Lowblood"]],
+        theirs=[lea[name] for name in attackers],
+    )
+    return game, fumiko
+
+
+def test_w2g1_takeno_counts_fumikos_bushido_x(set_pool):
+    """Takeno: "Each other Samurai creature you control gets +1/+1 for each
+    point of bushido it has." Fumiko has bushido X, X the number of
+    attacking creatures (CR 702.45a), counted as Takeno's layer-7c effect is
+    applied (CR 613.4c): a 3/2 with none attacking, 5/4 with two, 6/5 with
+    three."""
+    game, fumiko = _w2g1_takeno_table(set_pool, ["Grizzly Bears", "Hill Giant"])
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (3, 2)
+    game.start_turn(1)
+    _w2g1_settle(game)
+    _w2g1_declare_attack(game, 1)
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (5, 4), game.log
+    assert _w2g1_bushido_points(fumiko.effective_card, game=game, permanent=fumiko) == 2
+
+    game, fumiko = _w2g1_takeno_table(
+        set_pool, ["Grizzly Bears", "Hill Giant", "Gray Ogre"],
+    )
+    game.start_turn(1)
+    _w2g1_settle(game)
+    _w2g1_declare_attack(game, 1)
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (6, 5), game.log
+    _w2g1_drive_combat(game)
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (3, 2), game.log
+
+
+def test_w2g1_takeno_beside_a_blocking_fumiko(set_pool):
+    """Fumiko blocks Hill Giant with two attackers: her bushido trigger gives
+    +2/+2 until end of turn and Takeno +2/+2 more while both attack; the
+    Giant dies, one attacker is left, and Takeno's share follows it to +1/+1.
+    After combat the trigger's +2/+2 is all that is left."""
+    game, fumiko = _w2g1_takeno_table(set_pool, ["Grizzly Bears", "Hill Giant"])
+    game.start_turn(1)
+    _w2g1_settle(game)
+    _w2g1_declare_attack(game, 1, blocks={1: 1})
+    _w2g1_settle(game)
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (7, 6), game.log
+    _w2g1_drive_combat(game, through="combat_damage")
+    assert "Hill Giant" in _w2g1_names(game.players[1].graveyard), game.log
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (6, 5), game.log
+    _w2g1_drive_combat(game)
+    assert (fumiko.effective_power, fumiko.effective_toughness) == (5, 4), game.log
+
+
+def test_w2g1_fumiko_without_her_abilities_has_no_bushido_to_count(set_pool):
+    """A Fumiko that lost all abilities has no bushido X (CR 613.1f), so
+    Takeno counts no points for her however many creatures attack."""
+    game, fumiko = _w2g1_takeno_table(set_pool, ["Grizzly Bears", "Hill Giant"])
+    game.start_turn(1)
+    _w2g1_settle(game)
+    _w2g1_declare_attack(game, 1)
+    assert _w2g1_bushido_points(fumiko.effective_card, game=game, permanent=fumiko) == 2
+    _w2g1_remove_all_abilities(fumiko, duration="end_of_turn")
+    assert _w2g1_bushido_points(fumiko.effective_card, game=game, permanent=fumiko) == 0
+    # Without a game there is no board to count the X off.
+    assert _w2g1_bushido_points(set_pool("BOK")["Fumiko the Lowblood"]) == 0
+
+# ==== end W2G1 ======================================================
