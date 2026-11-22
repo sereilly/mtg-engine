@@ -897,6 +897,32 @@ class ControlSeamMixin:
         the battlefield so far — empty outside one."""
         return list(self.departure_batch or ())
 
+    def looked_back_permanents(self, seat: int | None = None) -> list:
+        """What the departure under way has taken off the battlefield that the
+        battlefield no longer lists — the permanent being put into a graveyard
+        now (``Game.departing``) and everything the open event
+        (:meth:`leaving_together`) has removed — under the seat each last had
+        (*seat*'s alone when one is named; CR 608.2h's last-known controller).
+
+        CR 603.10a's "appearance of objects immediately prior to the event",
+        for a number a leaves-the-battlefield ability takes as it triggers:
+        "Soulshift X includes Kodama of the Center Tree. So, X is always at
+        least 1" (its 2005-02-01 ruling). The roads disagree about whether a
+        dying permanent is still listed when its trigger is announced — a
+        sweep moves it while listed, a sacrifice or a single destruction takes
+        it off first — and this is the half the listing lacks either way, so
+        a scan of the battlefield plus this is the same set on every road.
+        Empty outside a departure.
+        """
+        found: list = []
+        for gone in (*self.departing, *self.departed_in_this_event()):
+            if any(gone is seen for seen in found) or self.is_on_battlefield(gone):
+                continue
+            if seat is not None and self.controller_or_last_known(gone) != seat:
+                continue
+            found.append(gone)
+        return found
+
     def after_this_departure(self, then, *args) -> None:
         """Run ``then(game, *args)`` once the open departure event is over —
         at once when none is open.

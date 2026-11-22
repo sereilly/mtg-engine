@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from ..oracle_types import OracleInstruction
 from ..death_tally import died_this_turn_count, is_game_death_tally
 from ..models import Permanent, PlayerState
+from ..oracle_types import X_COUNTED_AT_TRIGGER
 from ..target_roles import COUNTED_SEAT_ROLE
 from ._chosen import (_resolve_chosen_color, _resolve_chosen_subtype,
                       count_spec_in_resolution,
@@ -938,6 +939,16 @@ def _battlefield_matches(
         game.all_permanents() if every_seat or opponents_only
         else game.controlled_by(seat)
     )
+    # "…with mana value X or less …, where X is the number of Spirits you
+    # control" (Kodama of the Center Tree's soulshift X): a count taken as a
+    # leaves-the-battlefield ability triggers, which looks back (CR 603.10a)
+    # at the board immediately before the event — the dying permanent and
+    # everything the same event took off included, whichever of them the
+    # battlefield still lists (``Game.looked_back_permanents``). Only for a
+    # spec the lowering froze at the trigger, which admits these two scopes
+    # alone; outside a departure the look-back is empty and this is the scan.
+    if spec.get(X_COUNTED_AT_TRIGGER) and not opponents_only:
+        scanned = [*scanned, *game.looked_back_permanents(seat)]
     # Through ``subject_matches`` rather than the pure half, because the
     # pure half cannot answer a **keyword** (CR 613 layer 6, which needs
     # the game): "you gain 1 life for each creature you control with

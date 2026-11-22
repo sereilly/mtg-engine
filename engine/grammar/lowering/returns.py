@@ -23,6 +23,7 @@ from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import CREATURE_TYPES, PERMANENT_CARD_TYPES
 from ._events import OTHER_CHOSEN_PERMANENT, _back_reference_payload
+from ._record_keys import X_DEFINED_BY_TRIGGER_CLAUSE
 from ._bound_returns import lower_untargeted_return
 from ._described_returns import (_graveyard_to_hand_payload,
                                  _reads_no_return_restriction,
@@ -105,7 +106,11 @@ def _graveyard_bounds(
     judge it with the announced number (``oracle_types.announcing_x``),
     the picker strips it, and the dispatcher substitutes it for the
     handler's own ``graveyard_card_matches``. A triggered ability
-    announces no X, so there it still refuses.
+    announces no X, so there it still refuses — unless a where-clause
+    around the sentence defines it (:func:`_x_known_to_bound`): then the
+    count is frozen as the ability triggers, and the trigger's target
+    picker and its CR 608.2b re-check judge the bound with that number
+    (Kodama of the Center Tree's soulshift X).
     """
     bounds: dict[str, object] = {}
     if filt.mana_value is not None:
@@ -130,6 +135,14 @@ def _graveyard_bounds(
     if filt.excluded_types:
         bounds["graveyard_excluded_types"] = list(filt.excluded_types)
     return bounds
+
+
+def _x_known_to_bound(event: str | None, produced: frozenset[str]) -> bool:
+    """Whether a graveyard return's "mana value **X**" has a number by the
+    time its target is chosen: a spell's or an activated ability's announced
+    X (no *event*, CR 601.2b / 602.2b), or a trigger's where-clause count,
+    frozen as it triggers (``X_DEFINED_BY_TRIGGER_CLAUSE``, CR 603.3d)."""
+    return event is None or X_DEFINED_BY_TRIGGER_CLAUSE in produced
 
 
 def _lower_for_each_color(node: ast.ForEach) -> tuple[OracleInstruction, ...]:
@@ -1053,7 +1066,9 @@ def _lower_return_to_zone(
             ):
                 raise LoweringError("this handler returns cards to your own hand", node=node)
             to_hand = _graveyard_to_hand_payload(filt)
-            to_hand.update(_graveyard_bounds(filt, node, announced_x=event is None))
+            to_hand.update(_graveyard_bounds(
+                filt, node, announced_x=_x_known_to_bound(event, produced),
+            ))
             if any_graveyard:
                 to_hand["any_graveyard"] = True
             if subject_names_another(subject):

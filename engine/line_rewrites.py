@@ -228,7 +228,9 @@ def expand_ability_lines(
       battlefield, you may return target Spirit card with mana value N or less
       from your graveyard to your hand." (``engine/soulshift.py``). From there
       it is an ordinary dies trigger over Gravedigger's graveyard return, none
-      of which knows the word.
+      of which knows the word. A card granting *itself* soulshift X with a
+      where-clause (Kodama of the Center Tree) gets the same sentence with X
+      for N and the clause kept, which needs the card's name.
     * an **offering** keyword line becomes the optional additional cost CR
       702.48a's first sentence says it means — "As an additional cost to cast
       this spell, you may sacrifice a [quality]." (``engine/offering.py``).
@@ -307,8 +309,11 @@ def expand_ability_lines(
     # CR 702.46a's, modular's shape with one line out: a soulshift keyword
     # line becomes the rule's own "put into a graveyard from the battlefield"
     # trigger returning a Spirit card (``engine/soulshift.py``). Read by none
-    # of the rewrites around it.
-    oracle_text = expand_soulshift_lines(oracle_text)
+    # of the rewrites around it. The card's name is for a self-grant with a
+    # counted N ("Kodama of the Center Tree has soulshift X, where X is …"),
+    # bushido X's arrangement below, written out in full by the
+    # self-reference rewrite above.
+    oracle_text = expand_soulshift_lines(oracle_text, card_name)
     # CR 702.45a's, for a card granting *itself* bushido with a counted N
     # ("Fumiko the Lowblood has bushido X, where X is the number of
     # attacking creatures"): the rule's own sentence with that X, which the

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from ...game_types import StackItem, target_ids, target_slots
 from ...oracle import OracleInstruction
+from ...oracle_types import announcing_x
 from ...modal_triggers import modal_trigger_modes
 from ...stack_targets import source_name
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
@@ -404,8 +405,17 @@ class TriggerTargetsMixin:
         :func:`announces_a_target` rather than the spec alone: the spec comes from
         a kind table that answers "player" for a whole family of instructions,
         including the ones whose seat the firing event already fixed.
+
+        A target bounded by an X — "return target Spirit card with mana value
+        **X** or less", Kodama of the Center Tree's soulshift X, whose X its
+        where-clause counted as the ability triggered
+        (``engine/frozen_trigger_x.py``) — is judged with the object's X
+        (``oracle_types.announcing_x``), the number the resolution's CR 608.2b
+        re-check judges it with again. An object with no X strips every such
+        bound; no trigger the lowering admits carries one but Kodama's.
         """
-        offer = self._trigger_target_candidates(item)
+        with announcing_x(item.x_value):
+            offer = self._trigger_target_candidates(item)
         if offer is None:
             # A target this picker does not choose — and one of those is a
             # card in a graveyard, which a trigger's handler finds for itself
