@@ -11,6 +11,19 @@ ability does (a cycle's draw), and carrying it out on a copy of the game
 it triggers — a harmful one is not proposed, and the swing is added to the
 score.
 
+**Ninjutsu** (CR 702.49a: "[Cost], Reveal this card from your hand, Return
+an unblocked attacking creature you control to its owner's hand: Put this
+card onto the battlefield from your hand tapped and attacking") is the
+hand's one cost that trades a permanent. It is weighed
+where the engine takes it — the attacking seat's priority in the
+declare-blockers step, once the blocks are in (CR 509.1h; the hand door's
+``hand_cost_refusal`` refuses it everywhere else) — and **each unblocked
+attacker the cost could return is a candidate of its own**
+(:func:`_return_choices`), rehearsed in that step with the combat run out
+through its damage, so the returned attacker's damage and body are weighed
+against the Ninja's and its payoff. Before BOK's wave 2 this was a floor and
+every Ninja an AI seat held was hard-cast (BOK W1G1).
+
 A module of its own rather than a second chooser in ``ai_abilities``,
 beside its graveyard twin (``ai_graveyard_activations``) and for that
 module's reason: the action shape is its own
@@ -137,8 +150,6 @@ def _choose_hand_activation_action(
     game: Game, player_index: int, *, at_instant_speed: bool = False,
 ) -> HandActivationAction | None:
     """:func:`choose_hand_activation_action` inside its deliberation."""
-    from dataclasses import replace
-
     player = game.players[player_index]
     best: HandActivationAction | None = None
     for hand_index, card in enumerate(player.hand):
@@ -178,11 +189,16 @@ def _choose_hand_activation_action(
             or cost.discard_cards
             or cost.pay_life
             or cost.exile_top_of_library
-            # Ninjutsu's "Return an unblocked attacking creature you control
-            # to its owner's hand" (CR 702.49a): a creature traded for the
-            # card, mid-combat — a policy of its own, not this one's.
-            or cost.return_to_hand_count
         ):
+            continue
+        # CR 601.2h through CR 602.2b, before anything is priced: the hand
+        # door's own question of every cost beside the mana
+        # (``card_activation.hand_cost_refusal``) — ninjutsu's return has
+        # nothing to return before the blocks (CR 509.1h), so it is weighed
+        # only in the declare-blockers step, where the engine takes it.
+        from .mixins.stack.card_activation import hand_activation_cost, hand_cost_refusal
+
+        if hand_cost_refusal(game, player_index, card, ability) is not None:
             continue
 
         land_taps: tuple[int, ...] = ()
@@ -190,8 +206,6 @@ def _choose_hand_activation_action(
         # ``Game.activate_from_hand`` charges: a Fluctuator on the board makes
         # a Cycling {2} free, and a policy pricing the printed cost would pass
         # over an ability the engine would let it take for nothing.
-        from .mixins.stack.card_activation import hand_activation_cost
-
         tap_colors: tuple[str, ...] = ()
         required = hand_activation_cost(game, player_index, card, ability)[0]
         if game.enforce_mana_costs and any(required.values()):
@@ -206,45 +220,103 @@ def _choose_hand_activation_action(
         score = _score_activation(game, player_index, ability.instruction, player_index)
         if score <= 0.0:
             continue
-        candidate = HandActivationAction(
-            card_name=card.name,
-            hand_index=hand_index,
-            ability_index=0,
-            land_tap_indices=land_taps,
-            score=score,
-            land_tap_colors=tap_colors,
-        )
-        rehearsal = _rehearse_hand_activation(game, player_index, candidate)
-        # A landcycle for a land the seat does not need gives a card up for
-        # a spare land, which no standing prices (kg4: Eternal Dragon
-        # returned for five and plainscycled for two, turn after turn).
-        price = spare_land_find_price(
-            game, player_index, land_searches(ability.instruction),
-        )
-        if price and rehearsal is None:
-            continue
-        if price:
-            rehearsal = replace(
-                rehearsal, now=rehearsal.now - price, lasting=rehearsal.lasting - price,
+        # One candidate per way of paying the chosen return (a single
+        # candidate with nothing named where the cost returns nothing): which
+        # unblocked attacker goes home for the Ninja is a choice each answer
+        # to which is rehearsed (:func:`_return_choices`).
+        for returned in _return_choices(game, player_index, cost):
+            candidate = HandActivationAction(
+                card_name=card.name,
+                hand_index=hand_index,
+                ability_index=0,
+                land_tap_indices=land_taps,
+                score=score,
+                land_tap_colors=tap_colors,
+                cost_permanent_ids=returned,
             )
-        if at_instant_speed and (
-            rehearsal is None or not _worth_proposing(rehearsal)
-            or rehearsal.lasting <= 0.0
-        ):
-            # At instant speed only what leaves the seat ahead once the turn
-            # is over, as `ai_policy.choose_instant_speed_activation` asks of
-            # a permanent's ability — and nothing nobody could weigh.
-            continue
-        if rehearsal is not None:
-            if not _worth_proposing(rehearsal):
-                continue
-            candidate = replace(
-                candidate,
-                score=score + max(-SWING_CAP, min(SWING_CAP, rehearsal.swing)),
+            candidate = _weighed_hand_candidate(
+                game, player_index, ability, candidate,
+                at_instant_speed=at_instant_speed,
             )
-        if best is None or candidate.score > best.score:
-            best = candidate
+            if candidate is not None and (best is None or candidate.score > best.score):
+                best = candidate
     return best
+
+
+def _return_choices(game: Game, player_index: int, cost) -> list[tuple[int, ...]]:
+    """Every set of permanents that could pay *cost*'s chosen return ("Return
+    an unblocked attacking creature you control to its owner's hand",
+    ninjutsu, CR 702.49a), by id
+    and in board order — the candidates the hand door itself charges from
+    (``Game._return_cost_candidates``) — or ``[()]`` for a cost that returns
+    nothing.
+
+    **Which attacker goes home is weighed, not taken by board order**: each
+    answer is a candidate of its own, rehearsed in the step the engine takes
+    it in (:func:`_weighed_hand_candidate`), so the one whose return leaves
+    the seat furthest ahead once the combat is fought is the one named — a
+    small attacker whose damage the Ninja's payoff out-values, never the
+    largest body on the table by default."""
+    from itertools import combinations
+
+    wanted = cost.return_to_hand_count or 0
+    if not wanted:
+        return [()]
+    ids = [
+        permanent.permanent_id
+        for permanent in game._return_cost_candidates(cost, player_index)
+        if permanent.permanent_id is not None
+    ]
+    return list(combinations(ids, wanted))
+
+
+def _weighed_hand_candidate(
+    game: Game, player_index: int, ability, candidate: HandActivationAction,
+    *, at_instant_speed: bool,
+) -> HandActivationAction | None:
+    """*candidate* rehearsed (:func:`_rehearse_hand_activation`) and scored
+    by what it set off, or None when it is not one to propose — the gates
+    :func:`choose_hand_activation_action` holds every hand ability to.
+
+    A chosen return (ninjutsu) is a creature traded for the card: only the
+    rehearsal can say whether it pays — the returned attacker's damage and
+    body against the Ninja's and its payoff, read once the combat it is made
+    in is fought (the copy is in the declare-blockers step with the blocks
+    locked, and ``ai_rehearsal`` runs it out through the damage) — so one
+    nobody could rehearse is not proposed."""
+    from dataclasses import replace
+
+    rehearsal = _rehearse_hand_activation(game, player_index, candidate)
+    if candidate.cost_permanent_ids and rehearsal is None:
+        return None
+    # A landcycle for a land the seat does not need gives a card up for
+    # a spare land, which no standing prices (kg4: Eternal Dragon
+    # returned for five and plainscycled for two, turn after turn).
+    price = spare_land_find_price(
+        game, player_index, land_searches(ability.instruction),
+    )
+    if price and rehearsal is None:
+        return None
+    if price:
+        rehearsal = replace(
+            rehearsal, now=rehearsal.now - price, lasting=rehearsal.lasting - price,
+        )
+    if at_instant_speed and (
+        rehearsal is None or not _worth_proposing(rehearsal)
+        or rehearsal.lasting <= 0.0
+    ):
+        # At instant speed only what leaves the seat ahead once the turn
+        # is over, as `ai_policy.choose_instant_speed_activation` asks of
+        # a permanent's ability — and nothing nobody could weigh.
+        return None
+    if rehearsal is not None:
+        if not _worth_proposing(rehearsal):
+            return None
+        candidate = replace(
+            candidate,
+            score=candidate.score + max(-SWING_CAP, min(SWING_CAP, rehearsal.swing)),
+        )
+    return candidate
 
 
 def activate_chosen_hand_ability(game: Game, seat: int, action: HandActivationAction):
@@ -257,6 +329,10 @@ def activate_chosen_hand_ability(game: Game, seat: int, action: HandActivationAc
     return game.activate_from_hand(
         seat, planned.card_name,
         ability_index=planned.ability_index, hand_index=planned.hand_index,
+        # The chosen return's payer, by id (ninjutsu's unblocked attacker);
+        # None is the engine's board-order pick, for a cost that returns
+        # nothing.
+        cost_permanent_ids=list(planned.cost_permanent_ids) or None,
     )
 
 
@@ -272,7 +348,11 @@ def _rehearse_hand_activation(
     The card leaving the hand is the activation's own cost, not a cast's trip,
     so it is **read as a change** (``leaves_hand=False``): a plain cycle is a
     card out and a card in, a swing of nothing, and what is left over is what
-    the cycle set off."""
+    the cycle set off. A ninjutsu's revealed Ninja is read the same way — out
+    of the hand and onto the battlefield, the returned attacker into it — and,
+    made in the declare-blockers step with the blocks locked, the copy's run
+    to the end of the turn deals the combat damage on both copies, so the
+    reading after it is the swap's outcome."""
 
     def perform(table):
         return activate_chosen_hand_ability(table, seat, action)
@@ -291,6 +371,7 @@ def _rehearse_hand_activation(
         key=(
             "hand_activation", seat, action.card_name, action.hand_index,
             action.ability_index, action.land_tap_indices, action.land_tap_colors,
+            action.cost_permanent_ids,
         ),
         without=paid_for if taps else None,
         without_key=(
