@@ -157,7 +157,9 @@ def act_at_priority(
     creature turned face up over another seat's spell, Mischievous Quanar
     copying it, Voidmage Apprentice countering it), then an ability of a card
     in the hand (`ai_hand_activations.choose_hand_activation_action`: a cycle whose
-    trigger pays now — Decree of Silence's counter in response to a spell),
+    trigger pays now — Decree of Silence's counter in response to a spell —
+    or, in the ``"combat"`` window, a ninjutsu swapping a Ninja in for the
+    unblocked attacker whose return its rehearsal says gains most),
     then one of a card in the graveyard
     (`ai_graveyard_activations.choose_graveyard_activation_action`) — and
     carry it out through the executor each chooser shares. None when nothing

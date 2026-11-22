@@ -1,6 +1,6 @@
-"""The AI takes ninjutsu (CR 702.49a): "{cost}, Return an unblocked attacker
-you control to hand: Put this card onto the battlefield from your hand tapped
-and attacking."
+"""The AI takes ninjutsu (CR 702.49a): "[Cost], Reveal this card from your
+hand, Return an unblocked attacking creature you control to its owner's hand:
+Put this card onto the battlefield from your hand tapped and attacking."
 
 Before BOK's wave 2 every Ninja an AI seat held was hard-cast: the hand
 chooser (``ai_hand_activations``) had a floor for a cost that returns a
@@ -129,7 +129,8 @@ def test_a_swap_that_loses_is_not_made(set_pool):
 
 
 def test_only_a_blocked_attacker_pays_nothing(set_pool):
-    """A blocked attacker is not "an unblocked attacker you control": with the
+    """A blocked attacker is not "an unblocked attacking creature you
+    control" (CR 509.1h): with the
     only one blocked there is nothing to return, and nothing is proposed — a
     refused activation would be the seat's priority spent on nothing."""
     game, _mine, _theirs = _table(

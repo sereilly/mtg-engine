@@ -11,9 +11,10 @@ ability does (a cycle's draw), and carrying it out on a copy of the game
 it triggers — a harmful one is not proposed, and the swing is added to the
 score.
 
-**Ninjutsu** (CR 702.49a: "{cost}, Return an unblocked attacker you control
-to hand: Put this card onto the battlefield from your hand tapped and
-attacking") is the hand's one cost that trades a permanent. It is weighed
+**Ninjutsu** (CR 702.49a: "[Cost], Reveal this card from your hand, Return
+an unblocked attacking creature you control to its owner's hand: Put this
+card onto the battlefield from your hand tapped and attacking") is the
+hand's one cost that trades a permanent. It is weighed
 where the engine takes it — the attacking seat's priority in the
 declare-blockers step, once the blocks are in (CR 509.1h; the hand door's
 ``hand_cost_refusal`` refuses it everywhere else) — and **each unblocked
@@ -244,7 +245,8 @@ def _choose_hand_activation_action(
 
 def _return_choices(game: Game, player_index: int, cost) -> list[tuple[int, ...]]:
     """Every set of permanents that could pay *cost*'s chosen return ("Return
-    an unblocked attacker you control to hand", ninjutsu, CR 702.49a), by id
+    an unblocked attacking creature you control to its owner's hand",
+    ninjutsu, CR 702.49a), by id
     and in board order — the candidates the hand door itself charges from
     (``Game._return_cost_candidates``) — or ``[()]`` for a cost that returns
     nothing.

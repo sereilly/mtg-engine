@@ -216,8 +216,10 @@ def _abilities_weighed(game: Game, permanent) -> list:
     it behind its untap, Mazemind Tome's draw behind its scry (179
     permanents in the shipped pool print two or more non-mana abilities,
     kg4). A later ability is proposed only where a rehearsal of it says it
-    pays (``_land_ability_worth``, asked of every indexed ability), so
-    a permanent whose first ability was what it always did keeps doing it.
+    pays (``_land_ability_worth``, asked of every indexed ability but an
+    equip, which `_choose_equip_target` judges wherever it is printed —
+    `_judged_by_its_target`), so a permanent whose first ability was what it
+    always did keeps doing it.
 
     For a land, **every ability that is not a mana ability**, each by its
     index — CR 605.1a asked of the engine's own predicate
