@@ -2,10 +2,13 @@
 
 CR 601.3: a player can begin to cast a spell only if a rule or effect allows
 it. The rule that allows the ordinary case is CR 601.3's reading of the hand;
-everything else — "you may play cards exiled this way", "you may cast target
-red instant or sorcery card from your graveyard", "you may cast spells from
-your hand without paying their mana costs" — is an *effect*, and this module
-is where such effects live. One :class:`CastPermission` per effect, on
+everything else — "you may play cards exiled this way", "you may cast spells
+from your hand without paying their mana costs" — is an *effect*, and this
+module is where such effects live. "You may cast target instant card from
+your graveyard" with no stated duration (Toshiro Umezawa; Chandra, Flame's
+Catalyst's −2) is not one of them: it is a cast during the ability's
+resolution (CR 608.2g), offered on the card itself
+(``copy_casts.arm_graveyard_cast``), and nothing is left to cast later. One :class:`CastPermission` per effect, on
 ``Game.cast_permissions``; the cast path asks :func:`permission_for` before it
 will look outside the hand, and :func:`consume` retires a one-card grant as it
 is used.

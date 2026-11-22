@@ -105,9 +105,12 @@ combination (`count`, or `count_by_cost` per permanent that could pay its
 cost — `mana_combination.cast_split_offer`), the active seat's
 `combat.attack_requirements` and a defending seat's `combat.block_requirements`
 (each with `most_obeyable`), a permanent's `can_block_while_tapped`, a hand
-card's `splice_offers` (each card that may be spliced onto it, its cost and
-the `target_spec` of the text it would add — `offers.splice_offers`; the cast
-and the `payment_plan` preview send `splice_cards`, and a stack item lists
+card's `splice_offers` (each card that may be spliced onto it, its cost, the
+`target_spec` of the text it would add and, for a cost that is not mana, its
+`price` — `cost_text`, `cost_permanents`, `cost_graveyard`, `payable`,
+`refusal` — `offers.splice_offers`; the cast and the `payment_plan` preview
+send `splice_cards`, each naming its payers in `cost_permanent_ids` /
+`cost_graveyard_indices`, and a stack item lists
 its `spliced` texts with their targets); and while a permanent's "as it enters" choice is
 owed, that permanent listed in its controller's `battlefield` as arriving
 (`player_view._serialize_arriving`, `entering: true`; the engine has it in

@@ -116,9 +116,16 @@ family independence and flat re-export.
   702.44c, is the same pair counting colours spent), sunburst (702.44a,
   `engine/sunburst.py` — CR 702.44a's own text on one line, read at entry off
   the colours the cast recorded spending, `StackItem.choices`'
-  `mana_spent_to_cast`) and soulshift (702.46a, `engine/soulshift.py` — the
+  `mana_spent_to_cast`), soulshift (702.46a, `engine/soulshift.py` — the
   rule's own dies trigger returning a Spirit card, Gravedigger's return with
-  two narrowings). Every
+  two narrowings, one line per instance, 702.46b), offering (702.48a,
+  `engine/offering.py` — the optional additional sacrifice; the reduction and
+  the instant window are read at the cast) and ninjutsu (702.49a,
+  `engine/ninjutsu.py` — the rule's own sentence: a reveal-from-hand cost, so
+  the ability exists only in hand, CR 113.6j, a return of an unblocked
+  attacker, and an entry tapped and attacking). A card's own "has bushido X,
+  where X is …" is rewritten too (`bushido.expand_bushido_x_lines`: Chub
+  Toad's pump with the where-X clause). Every
   reader of a card's lines (`legality.py`, `parse_coverage.py`,
   `hook_reliance.py`) must start from that function or it reads a different card.
 - **Ability words** (CR 207.2c) are dropped by `oracle_types.strip_ability_word`

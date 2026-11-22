@@ -63,8 +63,16 @@ and you can open this file directly whenever its subject is yours.
   card during its own resolution (CR 608.2g, `madness_cast`).
 - `engine/splice.py` — splice onto Arcane (CR 702.47): **cast machinery, not
   a line**. The cast announces `splice_cards` (each a hand card with its own
-  targets; the wire's `SpliceChoice`), each splice cost joins the total as an
-  additional cost before reductions, and the stack item carries one segment
+  targets; the wire's `SpliceChoice`), a splice cost's mana joins the total as
+  an additional cost before reductions, and a splice cost that is not mana
+  (Betrayers of Kamigawa's taps, sacrifices, returns, graveyard exiles and
+  "an opponent gains 5 life") is read by the alternative-cost clause reader
+  (`SpliceOffer.price`), settled at announcement (the choice's
+  `cost_permanent_ids` / `cost_graveyard_indices`, or the deterministic
+  pick; one object pays one splice cost), checked beside the spell's own
+  costs before mana is spent (`splice_cost_conflict`) and paid first among
+  the non-mana costs inside `leaving_together` (`pay_splice_costs`), and the
+  stack item carries one segment
   per spliced card (`StackItem.spliced`: a `StackItem` never put on the stack,
   whose card is the host with the gained text, `spliced_text_card`), so every
   gate, stamp and CR 608.2b check asks a segment what it asks a spell
@@ -72,6 +80,14 @@ and you can open this file directly whenever its subject is yours.
   main text, then each segment (`spliced_steps`); a copy carries them (CR
   707.10, `copied_segments`). The printed line compiles to nothing, so
   `unread_splice_line` is its support gate.
+- `engine/offering.py` — offering (CR 702.48), a rewrite keyword onto CR
+  702.48a's optional additional sacrifice ("you may sacrifice a Fox"): the
+  total is reduced by the sacrificed permanent's mana cost (702.48c,
+  `offering_reduction`), and the instant-speed window opens only for a cast
+  that takes it (CR 601.3c: `casts_at_instant_speed` asks
+  `offering_opens_instant_timing`, and the cast path refuses an untaken
+  offering outside sorcery timing, `offering_timing_refusal`).
+  `unread_offering_line` is its support gate.
 - `engine/refusals.py` — **a refused cast or activation is the actor's
   alone** (CR 733.1): `refuse(card_name, effect_kind, details)` is the only
   constructor of a refused result (a `Refusal`) and writes nothing; the four
@@ -90,7 +106,10 @@ and you can open this file directly whenever its subject is yours.
   highlight, hand/graveyard activations and a land's tap
   (`Game.land_tap_prohibition`); refusals reach the client as
   `ability_denials`. Whether a non-mana cost can be paid is one question,
-  `Game.unpayable_activation_cost` (CR 601.2h). The activation window's other
+  `Game.unpayable_activation_cost` (CR 601.2h); a hand ability's door asks
+  its own, `card_activation.hand_cost_refusal`, which refuses any cost field
+  it cannot charge rather than waiving it (ninjutsu's reveal and return), as
+  the graveyard door asks `_graveyard_cost_refusal`. The activation window's other
   pre-choice refusals are methods the wire asks too:
   `Game.loyalty_activation_refusal`, `tap_symbol_refusal` (CR 602.5a),
   `targeting_ban_activation_refusal`, `owner_only_activation_refusal`,
@@ -177,7 +196,12 @@ and you can open this file directly whenever its subject is yours.
   at announcement (Phyrexian Splicer's chosen keyword; the creature type a
   spell announces before its targets, Aphetto Dredging —
   `engine/announced_creature_type.py`) is asked with the word the cast or
-  activation announces and rides the stack object.
+  activation announces and rides the stack object. An announced X that
+  bounds a target ("power X or less", "mana value X or less": Minamo
+  Sightbender, Quillmane Baku, Stir the Grave) is the exception: it rides
+  `oracle_types.announcing_x` around the gates, the picker and the CR 608.2b
+  re-check (`announced_x_bounds`), and the wire says which statistic it
+  bounds (`x_bound`, each target's `x_bound_value`).
 - `engine/target_requirements.py` — a target an opponent **must** choose (the
   Flagbearers): two gates over a whole announcement, deliberately not a
   narrowing in `_enumerate_targets` (which also serves resolution, retargets and
