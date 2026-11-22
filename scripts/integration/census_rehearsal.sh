@@ -14,8 +14,11 @@
 #            these files take minutes.
 #   both     (default) catalog, then sampled.
 #
-# When: at each wave's close, beside gate.sh, and before the promotion's full
-# pass. A group can run its own families' censuses the same way in round:
+# When: on the ingest tree, beside tests_for_diff.py --ingest, which runs the
+# plain manifest (Betrayers of Kamigawa's Ronin Cliffrider, supported on
+# arrival, was red under the overlay from the ingest on and surfaced only at
+# the wave-1 close); at each wave's close, beside gate.sh; and before the
+# promotion's full pass. A group can run its own families' censuses the same way in round:
 # `MTG_PROMOTE=CODE pytest <files>` (scripts/tests_for_diff.py picks them).
 #
 # The shipped pool's guards fail on the set's unsupported cards until every one

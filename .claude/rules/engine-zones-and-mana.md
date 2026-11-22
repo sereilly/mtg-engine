@@ -144,11 +144,22 @@ and you can open this file directly whenever its subject is yours.
   (`generic_cost(n)`).
 - **Mana with a rider** (CR 106.6's second kind: Boseiju, Who Shelters All;
   Hall of the Bandit Lord) is `engine/mana_riders.py`: its units travel in a
-  restricted bucket whose row admits every payment
-  (`restricted_mana.RIDER_KEYS`), the cast measures which rider buckets
+  restricted bucket whose row admits every payment that names its purpose
+  (`restricted_mana.RIDER_KEYS`; a payment with none — an effect's "you may
+  pay" — is offered kept mana alone, SET_PLAYBOOK's Known gaps), the cast
+  measures which rider buckets
   `_pay_cast_mana` drew on, and the rider is written where the cast's other
   stamps are (`StackItem.uncounterable_by`; haste on the permanent, with no
   duration). Spent on anything else, it is plain mana.
+- **Mana kept until end of turn** (Sakura-Tribe Springcaller, Shizuko,
+  Sakiko) is a restricted row that restricts nothing
+  (`ManaRestriction.kept`, key `kept_until_end_of_turn`): it pays for
+  anything, a payment with no purpose included, and survives every step's
+  emptying but cleanup's (CR 500.5, 514.2: `Game.clear_mana_pools(ending_step=)`).
+  Every spender settles which mana paid through one order,
+  `restricted_mana.take_from_pool` (CR 601.2h): a restricted or rider bucket
+  first, then the pool, then kept mana, the one still there when the step
+  ends.
 - **What a mana ability is** is one predicate, `engine/mana_abilities.is_mana_ability` (CR 605.1a's
   four criteria, including "doesn't move a card to or from a library"), asked
   **fail-closed**: a zone-moving step beside an add-mana step is presumed to

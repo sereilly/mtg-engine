@@ -2278,3 +2278,122 @@ and client (the announcement seam: an activated ability naming no target
 announces none, CR 115.1c), and the Phase 5 agent re-watched and re-recorded
 both passing: 0 failing, 1,111 passing. Seeded CHK batches (seeds 7, 11, 42,
 and twelve new cards pinned) exited 0 with no illegal interaction.
+
+### BOK — 2026-11-21
+
+*The Kamigawa block's second set: 165 cards, 159 new, 54.5% on arrival and
+one of those carrying a sentence nothing claimed (That Which Was Taken), so
+76 to do; two new keywords, offering and ninjutsu, each a rewrite onto its
+rule's own sentence.* The ingest's `--ingest` run (514 tests in 229 files)
+named fourteen reds in eleven files — one a review fixed on the base (the
+self-reference ratchet naming Iwamori, Fumiko and Jaraku), seven of them one
+defect (the Shoals' pitch filter crashing on `int('x')`), each in its
+owner's brief before the fan-out; the full pass beside the wave (2h27m at
+`-n 3`) found the same fourteen. Wave 1's ten groups landed 75 with no hook:
+ninjutsu with the hand door asking its own cost question and one write for
+"enters attacking", shared with Basri Ket's tokens (W1G1); offering's
+reduction and instant-speed window, Kentaro's granted cost and the pitch's
+X read off the exiled card (W1G2); splice costs that are not mana, settled
+at announcement and paid inside `leaving_together` (W1G3); the Genju through
+the animation record and a dies trigger for a noncreature host, Threads,
+Kumano's Blessing and Twist Allegiance's opponent (W1G4); Opal-Eye, the
+counted redirect pools, Overblaze, Flames of the Blood Hand's life-gain
+replacement, Hidetsugu and Aura Barbs (W1G5); an announced X that bounds a
+target, Mannichi and Fumiko's bushido X (W1G6); the first-time-targeted
+counter, Kira, Clash of Realities and Mirror Gallery (W1G7); mana kept until
+end of turn through one spend order, Blademane's removed counters and
+Chisei (W1G8); the Jitte's modes, Shuriken's granter, Neko-Te and Ogre
+Marauder (W1G9); Tomorrow as a draw replacement, Sway of the Stars and
+Toshiro's cast during resolution (W1G10). Kodama of the Center Tree was
+declined with four parts named, and wave 2's five took it: W2G1 Kodama (its
+count frozen as the trigger is enqueued, looking back at the departure) and
+Takeno counting Fumiko's bushido X; W2G2 and W2G3 the client in a browser
+(splice prices, offering's per-Fox price and its required take at instant
+speed, the pitch's X, X-bounded pickers, a removal X; ninjutsu's stop,
+button and return picker, the graveyard cast offer, kept mana); W2G4 the
+AI's ninjutsu and an equip printed after other abilities (the Jitte from
+never equipped to 34 activations in six games); W2G5 the AI's offering,
+pitch, chosen source and splice payers. Shipped cards fixed beside them:
+Mirror Strike, Gossamer Chains and Forcefield reading "unblocked" before
+blocks; Somnophore's second lock releasing its first; Orb of Dreams'
+enter-tapped static inverted (CR 614.12); Chandra, Flame's Catalyst's −2 lasting
+the game; the AI shooting its own creature from a "may" gift; two soulshift
+triggers naming one card; the AI never announcing a removal X (Infused
+Arrows, Mercadian Lift, Kyren Toy, Night Dealings, Talon of Pain); Kor Chant
+and Honorable Passage naming no source for the AI; Dominate asking its
+target before X; Toils of Night and Day's nested "you may"; and in the
+client Infused Arrows activated with no X and Chandra's offer unanswerable.
+
+*What the integration learned.* Twenty links — ten wave-1, five follow-ups,
+five wave-2 — with conflicts at five, all unions but the last (two client
+groups' `index.html` build tags; the integrator named the merged build and
+ran `tests/ui` and `tests/regressions` whole on that link). Three links'
+meetings read their list from a `MEETING_BASE` computed after the commit,
+the branch's own tip, and left out those branches' own non-set files; every
+wave-1 branch had started at the round's base, so the next meetings read
+from it, cumulatively. The wave-1 close gate read eight reds no meeting had
+held, six of them in per-set files no branch touched (W1G1's "blockers
+declared", W1G7's offer reader), and its promoted rehearsal read
+twenty-seven in the catalog — the gate's eight, Kodama's expected guards
+and new ones (the label family, the Ninjas' parity rows, the Patrons' offer
+class, Fumiko's forecast) — and three in the sampled censuses (the arity
+census, Fiery Gambit, Garami's probe). Five follow-ups ran in
+worktrees of their own at the chain tip, each wave-1 agent resumed by a
+message naming it, every red bisected across the link worktrees first; wave
+2 launched on the close link beside its three runs with each red's owner
+and each fix's link, and two groups that met a red already fixed asked
+rather than fixing it twice. Ronin Cliffrider, supported on arrival, had
+been red under `MTG_PROMOTE` since the ingest — no rehearsal ran on the
+ingest tree — and was first routed as a shipped Champions card. The Shoal
+crash had cut three censuses short on every wave-1 branch. The briefs' CR
+numbers were checked before sending (500.5 for 500.4; 601.3c and 608.2k
+added); one wrong letter still reached its group (603.7e for a delayed
+ability a spell creates, 603.7d). Memory: ~47 GB free idle; ten wave-1
+agents beside the `-n 3` full pass, five wave-2 agents at ~28 GB beside the
+close runs. Agents' notes: `tests_for_diff --run` defaults to `-n 2` against
+the briefs' serial and its list can overflow the command line;
+`sim_fingerprint snapshot` without `--rev` plays the live tree;
+`simulate_ai_games.py` prints nothing until it exits.
+
+*Edits in place:* the meeting point's `MEETING_BASE`, computed while the
+merge is staged, and the round's base as the cumulative answer (and
+`meeting.sh`'s comment); blind spot 2 widened to combat timing and an AI
+offer reader; follow-ups in worktrees of their own at the chain tip;
+`sim_fingerprint snapshot --rev <base>` in the brief's differentials;
+Phase 1's nine ingests and a census rehearsal on the ingest tree (and
+`census_rehearsal.sh`'s "When"), with a card's set read off its file before
+a red is routed by it; Phase 3's moved refusal and the drive-everything
+censuses, and a census that records an exception per row; the memory
+reading. CLAUDE.md: none. The rule files: what `tests/ui/js_requests.py`
+can follow, a headless response through `queue_from_hand`, a rider bucket's
+purpose-less payment and kept mana's spend order; `board.py`'s docstring
+lists the `Game` entry points a probe drives. *Known gaps:* **drained** the
+toolkit's "entry points in `board.py`'s docstring" (written this phase) and
+none of the standing entries (every entry re-probed); **rewritten** the
+`DamageRedirect` entry (a second record never applies, W1G5's reach), the
+announcement gates' test count, Darksteel's lowercased grant (still so; its
+ordering consequence handled) and its priority hold (W2G2's click-hold
+observation), the noncreature any-line entry (the same fourteen; and
+`parse_coverage` crediting a derived line the compile drops), the Swirl
+sites, the Avarice Totem's field reader, and the toolkit entry with this
+set's wishes; **added** Betrayers of Kamigawa's engine, client and AI
+leftovers, and `ai_casts.py` inside the band for the next Phase 0. ROADMAP:
+the next set is Saviors of Kamigawa; BOK's row; the pool at the promotion;
+the keyword reading (offering and ninjutsu below the registry, fourteen
+rewrites); idioms 2 and 6 extended (a door's own cost question; a count
+frozen as its trigger is enqueued), idiom 47 (a stop the client asks for
+through the existing flag); Dominate's X clause drained, the phantom
+target's one gated reader, the later-ability gate's equip.
+*The promotion and Phase 5.* The promotion (`promote.py BOK`, index 42;
+7,180 cards) previewed its accepts first: 21 benign deletion-probe findings
+(Skullsnatcher's CR 603.3d deviation among them), BOK's grammar at 78.1%
+parsed and 61.8% executed with the All row down 0.2 on membership, no hook,
+298 behaviour classes (largest 87). The final rehearsal (quick and sampled,
+promoted) read only the behaviour-class snapshot; the full pass found one
+full-only census premise — the Conspiracy census drove Mtenda Griffin's
+upkeep-only ability in a main phase, refused there since W1G1's follow-up
+asked prohibitions before targets (CR 602.5) — fixed in the test before
+`main` moved; the wrong-end insert turned only the printing-order guard red.
+Seeded BOK batches (seeds 7, 11, 42, and ten new cards pinned) exited 0 with
+no illegal interaction, the AI pitching Shoals.
+<!-- bok integrator: Phase 5 -->

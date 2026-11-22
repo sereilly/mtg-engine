@@ -78,7 +78,11 @@ board after something resolves calls `tests.helpers.settle(game)` (prompts
 answered by default or by `answers=`, the stack resolved through
 `resolve_next_object`, state-based actions performed, until nothing moves;
 `defaults=False` returns the first owed prompt); `resolve_stack` is only the
-safe swap for a bare drain loop. A combat is walked with
+safe swap for a bare drain loop. `cast_from_hand` and
+`activate_permanent_ability` settle the whole stack before they return, so a
+response, or an answer owed before the next object resolves, is put on the
+stack with `queue_from_hand` / `queue_permanent_ability` and then settled
+(`scripts/integration/board.py`'s docstring lists the entry points). A combat is walked with
 `drive_combat(game, through=...)`, whose default leaves the end of combat step
 so combat is over (CR 511.3); the step's "at end of combat" triggers fire as
 it begins (CR 511.2), so every stop from the arrival on has resolved them.

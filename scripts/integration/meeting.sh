@@ -35,10 +35,15 @@ tests/regressions/test_derived_card_memo_identity.py"
 read_list() { [ -f "$1" ] && tr -d '\r' < "$1"; }
 # MEETING_BASE: the ref the "changed" list is read from (default main). Set it
 # to the staged branch's merge-base with the chain (git merge-base <link>
-# <branch>): that is the branch's own files plus every link merged since its
-# base — the playbook's blind-spot rule — and it does not accumulate while
-# main is held at the round's base (Mirrodin: 47 files at the first link,
-# 87 by the wave-2 chain, 230 s -> 504 s).
+# <branch>), computed while the merge is still staged: that is the branch's
+# own files plus every link merged since its base — the playbook's blind-spot
+# rule — and it does not accumulate while main is held at the round's base
+# (Mirrodin: 47 files at the first link, 87 by the wave-2 chain, 230 s ->
+# 504 s). Computed after chain_commit.sh, the link contains the branch, the
+# merge-base is the branch's own tip, and the list drops the branch's own
+# test files outside tests/sets (three Betrayers of Kamigawa links). When
+# every branch started at the round's base, that base is the cumulative
+# answer: MEETING_BASE=<round>/base.
 BASE="${MEETING_BASE:-main}"
 CHANGED=$(git diff --name-only --diff-filter=AM "$BASE" HEAD -- tests/; git diff --cached --name-only --diff-filter=AM -- tests/)
 SETS=$(ls tests/sets/test_"${ROUND}"_*.py 2>/dev/null)

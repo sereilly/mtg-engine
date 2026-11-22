@@ -8,8 +8,21 @@ probe from a tree's root so it imports that tree's engine::
     from board import card, table, tail
 
     game, mine, theirs = table(hand=["Shock"], mine=["Grizzly Bears"], theirs=["Wall of Stone"])
-    game.cast_spell(0, game.players[0].hand[0], targets=[...])   # whatever the probe asks
+    game.cast_from_hand(0, "Shock", target_permanent_ids=[theirs[0].permanent_id])
     tail(game)
+
+The ``Game`` entry points a probe drives, by the names the engine has (there
+is no ``cast_spell``): ``cast_from_hand(seat, name, ...)`` and
+``activate_permanent_ability(seat, name, permanent_index=...)`` settle the
+whole stack before they return, so a response — or a "you may" that has to be
+answered before the next object resolves — goes through ``queue_from_hand`` /
+``queue_permanent_ability``, which leave the object on the stack, and then
+``tests.helpers.settle(game)``; ``activate_from_hand(seat, name,
+cost_permanent_ids=...)`` (cycling, ninjutsu) leaves its ability on the stack
+too; a combat is ``tests.helpers.declare_attack`` then ``drive_combat``; the
+cleanup step is ``resolve_cleanup_step``. Betrayers of Kamigawa's W1G5 and
+W1G6 each lost a detour to the first rule (a Garami answer that landed after
+the next object had resolved read as a card returned it never targeted).
 
 Cards resolve by name over **both manifest roles** (a measured set's cards are
 the ones a probe is usually about); where printings differ, ``prefer="DST"``

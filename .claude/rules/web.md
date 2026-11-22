@@ -132,7 +132,15 @@ the card viewer, `serialization.flip_halves`) in every zone, and a permanent
 `flipped` (CR 710.3). Every request body the client builds
 is held to its route: presence (`tests/ui/test_kg_client_request_schemas.py`),
 each value's type (`test_kg3_wire_request_shapes.py`), and what an armed
-prompt's handler takes (`test_kg3_wire_prompt_state_bodies.py`). **Every
+prompt's handler takes (`test_kg3_wire_prompt_state_bodies.py`). They read
+the script without a JS engine (`tests/ui/js_requests.py`): a `sendAction`
+argument is followed to its binding, and a parameter of a named function (or
+of a block-bodied `const f = (…) => {…}`) to every caller's argument — never
+a parameter of an expression-bodied arrow or of a function handed round as a
+value, so a body sent that way reads as open and the presence and type
+censuses go red on it (Betrayers of Kamigawa's ninjutsu button,
+`send(body)`, cost a 32-minute `tests/ui` run): send the literal the
+function built. **Every
 automatic sender in the client re-asks by fetching the state when its
 in-flight flag clears** — one scheduled re-ask (`retryAutoAdvanceAfterFlight`)
 serves every sender, delayed only while the state key stays unchanged — and

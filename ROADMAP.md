@@ -1,9 +1,9 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **7,021** unique cards — forty-three sets,
+Target: grow the card pool from **7,180** unique cards — forty-four sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
 USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/APC/ODY/TOR/JUD/ONS/LGN/SCG/8ED/MRD/
-DST/5DN/CHK/M21, all shipped and all supported — to the full release line:
+DST/5DN/CHK/BOK/M21, all shipped and all supported — to the full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
@@ -655,14 +655,12 @@ one card prints this") reads as a work item long after it stopped being true.
 
 - **Smaller ones NEM measured and left, each with its parts named in the wave's
   merge commits** (Glyph of Delusion's lock on the Wall was closed by round 3's
-  J1):
+  J1, and Dominate's X refused below its target's mana value by Betrayers of
+  Kamigawa's W2G2, which asks X first and narrows the picker):
   the client's dual-land colour fan offers a land's whole colour summary
   rather than the chosen ability's symbols; a mana ability whose effect fails
   while resolving inline is reported as a refused activation after its costs
-  are paid, skipping the state-based check; Dominate's X prompt has no minimum,
-  so a too-small X is refused by the engine rather than prevented in the UI
-  (a spec can carry `min_x` since Odyssey, for a chosen-number cost only, and
-  `app.js` does not read it);
+  are paid, skipping the state-based check;
   and the AI still reads Conspiracy's and Disharmony's sides wrong (a
   `derived_static_rule` reading, and a pronoun walk across steps).
 
@@ -1031,14 +1029,21 @@ one card prints this") reads as a work item long after it stopped being true.
   * *Abilities at instant speed, the rest.* Since kg4 the chooser weighs
     every non-mana ability of a permanent (each turned-down one set aside
     alone), an own-source removal is a rescue at instant speed, and the
-    hand is asked (a cycle whose trigger pays now). Left: a Prodigal
+    hand is asked (a cycle whose trigger pays now; since Betrayers of
+    Kamigawa's W2G4, ninjutsu in the attacking seat's declare-blockers
+    window, where the hand door's own cost question,
+    `card_activation.hand_cost_refusal`, accepts it). Left: a Prodigal
     Sorcerer is not held up (`_play_activations` taps it in its own main
     phase first); foreign (CR 602.1b) activations are not asked at
     instant speed; a library-top rescue (Thalakos Mistfolk, Wayward Soul)
     is a card the standing does not count; rescues whose cost is a
     discard or a land (Ephemeron, Stormwatch Eagle) are kept out by the
     cost floors; a later ability is held to the land gate's `lasting >
-    0`, stricter than the first ability's cast rule.
+    0`, stricter than the first ability's cast rule — all but an equip,
+    which since Betrayers of Kamigawa's W2G4 is judged by its target
+    wherever it is printed (`ai_abilities._judged_by_its_target`; Umezawa's
+    Jitte, behind its three modes, went from never equipped to 34
+    activations in six seeded games).
   * *Web `ai_vs_ai` sessions do not use the seam*: they give nobody
     priority. The parts are a session-level driver that is not a closure
     over the game, so it can be re-bound after `game_history`'s undo
@@ -1092,10 +1097,17 @@ one card prints this") reads as a work item long after it stopped being true.
     blocking Goblin Elite Infantry is bounced. Part: gate
     `_announce_targeting` on `stack_targets.chosen_targets` — it changes all
     17 "becomes the target" watchers, which is why the closing round left it.
-    Beside it: 38 triggered abilities print a target and carry none as a
-    stack object (17 graveyard targets found at resolution, 7 with no picker,
-    14 narrowed by a seat only a real fire supplies), pinned in
-    `_UNANNOUNCED_TRIGGER_TARGETS`; and Psychic Battle leaves the targets
+    One reader is gated already: Betrayers of Kamigawa's "for the first time
+    each turn" count (the Glasskites, `turn_state.TARGETED_THIS_TURN`) is
+    written only for what `chosen_targets` lists, so a phantom never
+    triggers a Glasskite (W1G7's follow-up); the event and its other
+    watchers are unchanged.
+    Beside it: 39 triggered abilities print a target and carry none as a
+    stack object, pinned in `_UNANNOUNCED_TRIGGER_TARGETS` (the seventeen
+    graveyard targets once found at resolution are chosen as the trigger
+    goes on the stack now; Betrayers of Kamigawa's four Ninjas joined those
+    narrowed by a seat only a real fire supplies, each driven through a
+    combat damage step); and Psychic Battle leaves the targets
     alone where it cannot change them soundly — a modal spell (the cast gate
     reads mode 0) and an object printing "target" twice (9 casts, 3
     activations) — and pushes its trigger above each object rather than
@@ -1519,7 +1531,15 @@ before citing it.**
    "testable" for the nested one whatever it says. That is a gate and its
    dispatch reading two different things again, with the nesting hiding the
    difference; `untestable_filter_keys` recurses exactly where the matcher does
-   (round 35).
+   (round 35). **At run time the same question is a door's**: the hand door
+   charged mana, a self-discard and a self-exile and waived every other cost
+   field until ninjutsu's reveal and return reached it, and
+   `card_activation.hand_cost_refusal` now refuses any field it does not
+   charge (106 hand abilities measured unaffected), as the graveyard door's
+   `_graveyard_cost_refusal` does. The AI's hand chooser asks that same
+   function, so it weighs ninjutsu exactly where the engine accepts it — the
+   declare-blockers step, once blocks are declared — with no timing rule of
+   its own (Betrayers of Kamigawa's W1G1 and W2G4).
 3. **A fire site that enumerates instruction kinds cannot be complete** — it is
    only as complete as the last card that touched it. Onulet never gained a
    point of life across four shipped sets because its kind was not in a list
@@ -1550,7 +1570,15 @@ before citing it.**
    nothing off the battlefield touches, so it can be read at resolution. The
    longest gap between freezing and reading is Tawnos's Coffin's noted counters
    (ATQ 28) — a whole turn cycle, and what comes back is a new object (CR 400.7)
-   with none of its own.
+   with none of its own. **A count a trigger's own where-clause defines is
+   frozen as the trigger is enqueued**, one step past the fire site
+   (`engine/frozen_trigger_x.py`, called from `_enqueue_triggered_ability`:
+   Kodama of the Center Tree's soulshift X): a trigger held while a cast is
+   announced would lose its departure at the fire site (Kodama sacrificed as
+   a cost), and the battlefield count adds what the departure under way took
+   off it (CR 603.10a, `Game.looked_back_permanents()`), so Kodama counts
+   itself and the Spirits that died beside it, and a response that kills
+   another Spirit moves nothing (Betrayers of Kamigawa's W2G1).
 7. **A back-reference names its producer or refuses.** "That much" parses as
    `ThatMuch(None)`; lowering resolves it against `amount_from` (this
    resolution's scratchpad) or `amount_from_trigger` (the firing event's
@@ -1932,6 +1960,19 @@ before citing it.**
     needs a support gate of its own (`splice.unread_splice_line`): an
     instant is supported when any line compiles, and the thirteen splice
     cards arrived supported with the keyword dropped.
+47. **A stop a person needs is asked for by the client, through the flag the
+    server already honours — not a new server hold.** Ninjutsu's window is
+    the attacking seat's priority in the declare blockers step, which the
+    client passes unasked by default; a hold added on the server alone would
+    have been passed at once by that auto-pass. So the client adds
+    `"declare_blockers"` to the stops it sends while a hand entry's cost
+    returns an unblocked attacker, on the viewer's own turn
+    (`selfStopSteps`, `ninjutsuStopSteps`), the server's existing flagged
+    stop holds it (`web/seats._self_should_hold`, which holds only when the
+    active seat is a person's), and the auto-pass stands down only while
+    that window is open and payable (`ninjutsuWindowHeld`), with a Settings
+    toggle to turn it off (Betrayers of Kamigawa's W2G3). The person's
+    preference stays the client's, and the server keeps one hold.
 
 ---
 
@@ -1948,6 +1989,31 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
+Run on 2026-11-21, with Betrayers of Kamigawa promoted, it answers
+**Saviors of Kamigawa** (SOK, 2005-06-03, 165 cards, 165 new by the release
+line's count — re-measure against this pool), the earliest unshipped set by
+release date once FBB, SUM and 4BB are passed over as every answer has, and
+then Ninth Edition (9ED, 2005-07-29, 344 cards and none new by that count, a
+reprint core set); nothing of either is ingested or read yet. Saviors is the
+block's third set, so flip cards, bushido, soulshift, splice, offering and
+ninjutsu ship before it. **Betrayers of Kamigawa arrived at 54.5%** — 90 of
+165 read supported, and one of those (That Which Was Taken) carried a
+sentence nothing claimed, so the work list was 76; 159 of its cards were new
+to this pool, and its origin trap was empty. It brought two keywords, both
+rewrites onto the rule's own sentence: offering (CR 702.48, an optional
+additional sacrifice that reduces the cast by the sacrificed permanent's
+mana cost and opens the instant-speed window only for a cast that takes it)
+and ninjutsu (CR 702.49, a reveal-from-hand cost, so the ability exists only
+in hand) — beside splice costs that are not mana, the Genju, mana kept until
+end of turn, the first-time-targeted counter and soulshift X. Ten wave-1
+groups landed 75 with no hook and declined one, Kodama of the Center Tree,
+with its parts named; wave 2's five took it (a count frozen as its trigger
+is enqueued, idiom 6) beside two client groups in a browser and two AI
+groups. It promoted on 2026-11-21: the promotion's full pass found one red,
+a census premise (the Conspiracy census drove Mtenda Griffin's upkeep-only
+ability in a main phase, refused there since W1G1's follow-up asked
+prohibitions before targets, CR 602.5), fixed in the test; the wrong-end
+insert turned only the printing-order guard red.
 Run on 2026-11-21, with Champions of Kamigawa promoting, it answers
 **Betrayers of Kamigawa** (BOK, 2005-02-04, 165 cards, 159 new by the
 release line's count — re-measure against this pool), the earliest
@@ -2173,13 +2239,15 @@ Kamigawa: the top half everywhere and a flipped permanent's card its bottom
 half, `engine/flip_cards.py`; idiom 45). Double-faced, Saga, adventurer and
 omen cards (CR 712, 714, 715, 720) are none of them implemented, and the
 first already costs Origins 5 cards and M19 one. Second, keyword abilities stand at
-**33** of CR 702's 194 in the registry (re-read 2026-11-21: bushido, CR
-702.45, joined it as rampage's twin because a card grants it), with buyback,
+**33** of CR 702's 194 in the registry (re-read 2026-11-21 at Betrayers of
+Kamigawa's promotion: bushido, CR 702.45, joined it at Champions of Kamigawa
+as rampage's twin because a card grants it), with buyback,
 cumulative upkeep, equip, cycling (CR 702.29), echo (CR 702.30), fading,
 kicker (CR 702.33), flashback (CR 702.34), affinity, entwine, modular,
-sunburst and now **soulshift (CR 702.46)** implemented below it as rewrites
-or triggers, and **splice (CR 702.47)** read by its own module as cast
-machinery (`engine/splice.py`, idiom 46).
+sunburst, soulshift (CR 702.46) and now **offering (CR 702.48)** and
+**ninjutsu (CR 702.49)** implemented below it as rewrites or triggers, and
+**splice (CR 702.47)** read by its own module as cast machinery
+(`engine/splice.py`, idiom 46).
 **Read that number with the registry's actual question in mind**, which two USG
 groups had to work out independently because this line does not say it:
 `IMPLEMENTED_KEYWORDS` admits a keyword being *granted* or *named* ("gains
@@ -2190,7 +2258,8 @@ bare-keyword-card guard is what forces the choice: listing cycling would mean
 either failing that guard or admitting a costless cycling that charges nothing.
 So "33 in the registry" undercounts what the engine implements and always has;
 the honest reading is 33 granted-or-named, plus the keyword lines rewritten
-before any reader sees them (twelve in `line_rewrites.expand_ability_lines`),
+before any reader sees them (fourteen in `line_rewrites.expand_ability_lines`,
+beside a card's own "has bushido X" or "has soulshift X, where X is …"),
 those compiled to triggers (`keyword_lines.keyword_line_triggers`) and those
 the cast path reads (splice).
 Alternative costs (CR 118.9) were the third gap and
@@ -2244,6 +2313,7 @@ a wave is five parallel worktree groups integrated serially.
 | DST | 165 | 65.5% (108 read supported; 6 of them hollow) | 2 waves (nine groups landed all 63 with no hook and no decline; then three: the client in a browser, the AI pile with the promotion's last red, the engine pile with the whenever table's notes) + 2 follow-ups (the rehearsal's census reds, both in the censuses) |
 | 5DN | 165 | 69.1% (114 read supported; 8 of them dropping a line, 6 of those sunburst) | 2 waves (seven groups landed all 60 with no hook and no decline, and found a 61st supported while doing nothing; then four: that card with the engine pile, the client in a browser, the AI pile, the legend rule end to end) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds, each one commit on the chain tip) |
 | CHK | 291 | 57.4% (167 read supported; 18 of them carrying unclaimed or hollow text, 13 of those splice dropped; 282 new to the pool) | 2 waves (nine groups landed 135 of the 142 with no hook, flip cards and three keywords among them; then four: the last seven cards in two groups, the client in a browser, the AI pile) + 7 follow-ups (the wave-1 close gate's and rehearsal's reds: one commit each from six wave-1 groups on the chain tip, and the integrator's label rows) + 2 the final rehearsal found (Dokai's copy in the activation census, CR 707.3; Kenzo's double strike in the gang forecast and the Skirk Volcanist board) + 1 the promotion's full pass found (two full-only censuses reading right AI choices) |
+| BOK | 165 | 54.5% (90 read supported; 1 of them carrying an unclaimed sentence; 159 new to the pool, 6 reprints) | 2 waves (ten groups landed 75 of the 76 with no hook, offering and ninjutsu among them; then five: the last card with Takeno's count, two client groups in a browser, two AI groups) + 5 follow-ups (the wave-1 close gate's and rehearsal's reds: five wave-1 groups resumed, each in a worktree of its own at the chain tip) + 1 the promotion's full pass found (Mtenda Griffin's upkeep-only ability in the Conspiracy census, a census premise) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -2259,22 +2329,24 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-11-21 off the trackers at Champions of Kamigawa's promotion,
-`chk/int-fu9`): 7,021 unique cards over 43 sets, 9,904 printings, 100%
-supported. Grammar parses 89.5% of lines, lowers 89.0% and executes 62.0%
+2026-11-21 off the trackers at Betrayers of Kamigawa's promotion, `main` at
+`e98d39e81`): 7,180 unique cards over 44 sets, 10,069 printings, 100%
+supported. Grammar parses 89.3% of lines, lowers 88.8% and executes 62.0%
 (`GRAMMAR_COVERAGE.md`; the pool row's parse and lowering moved down 0.2 on
-membership alone — Champions of Kamigawa's own lines parse at 84.6%).
+membership alone — Betrayers of Kamigawa's own lines parse at 78.1%).
 **0.6%** of supported cards carry a name-keyed hook — 45 cards, 49 entries in
 6 registries (`HOOK_RELIANCE.md`) — and the projection that implies for the
-release line has fallen from 1,195 hand-written entries to **182**, across
-thirty consecutive sets that added no hook (Mirrodin's 268 new cards,
-Darksteel's 162, Fifth Dawn's 163 and Champions of Kamigawa's 282 added
-none). That is the measure moving the way the architecture needs it to.
-Parse coverage: 7,019 cards fully claimed, 2 acknowledged, **0 unclaimed**
-(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker (452
-of 663 tracked rules, 3,797 tests). `CARD_VERIFICATION.md` is a log, not a
-target: 1,065 passed (736 in-game, 329 auto), 80 equivalent, 0 failed, 5,876
-untested, before Champions of Kamigawa's Phase 5 recordings.
+release line has fallen from 1,195 hand-written entries to **178**, across
+thirty-one consecutive sets that added no hook (Mirrodin's 268 new cards,
+Darksteel's 162, Fifth Dawn's 163, Champions of Kamigawa's 282 and
+Betrayers of Kamigawa's 159 added none). That is the measure moving the way
+the architecture needs it to.
+Parse coverage: 7,178 cards fully claimed, 2 acknowledged, **0 unclaimed**
+(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker (455
+of 665 tracked rules, 3,828 tests). `CARD_VERIFICATION.md` is a log, not a
+target: 1,113 passed (782 in-game, 331 auto), 85 equivalent, 0 failed, 5,982
+untested, before Betrayers of Kamigawa's Phase 5 recordings
+<!-- bok integrator: Phase 5 -->.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
